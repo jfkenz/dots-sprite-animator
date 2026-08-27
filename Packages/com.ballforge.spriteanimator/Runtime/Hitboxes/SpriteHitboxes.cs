@@ -54,6 +54,7 @@ namespace BallForge.Sprites.DOTS
             public int     FrameIndex;
             public float2  Center;   // uv, origin bottom-left
             public float2  Extents;  // half-size in uv units
+            public float   Angle;    // degrees, y-up runtime UV
             public byte    Id;
             public SpriteColliderShape Shape;
             public FixedList128Bytes<float2> Polygon;
@@ -116,6 +117,7 @@ namespace BallForge.Sprites.DOTS
                         {
                             Center  = list[b].Center,
                             Extents = list[b].Extents,
+                            Angle   = list[b].Angle,
                             Id      = list[b].Id,
                             Shape   = list[b].Shape,
                             Polygon = list[b].Polygon,
@@ -144,6 +146,8 @@ namespace BallForge.Sprites.DOTS
                     string.IsNullOrEmpty(hb.ClipName) ? "clip" : hb.ClipName,
                     hb.FrameIndex, hb.RectUV, hb.Id);
                 input.Shape = hb.Shape;
+                // Authoring Angle is y-down; runtime UV is y-up, so the OBB sign flips.
+                input.Angle = -hb.Angle;
                 if (hb.Shape == SpriteColliderShape.Polygon)
                 {
                     Vector2[] polygon = hb.PolygonUV != null && hb.PolygonUV.Length >= 3

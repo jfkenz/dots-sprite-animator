@@ -176,6 +176,13 @@ namespace BallForge.Sprites.DOTS
         public SpriteColliderShape Shape = SpriteColliderShape.Square;
         // Normalized inside RectUV. Used only when Shape is Polygon.
         public Vector2[] PolygonUV;
+        /// <summary>
+        /// Rotation in degrees around RectUV center, authoring space (y-down).
+        /// 0 = axis-aligned. Preview and handles apply this; bake stores it on FrameBox.
+        /// </summary>
+        public float Angle;
+        /// <summary>Editor visibility only. Hidden colliders are not drawn in the preview; they still bake.</summary>
+        public bool Hidden;
 
         public void EnsurePolygon(int vertexCount = 6)
         {

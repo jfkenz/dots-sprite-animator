@@ -48,6 +48,13 @@ namespace BallForge.Sprites.DOTS
     {
         public float2 Center;                         // uv center
         public float2 Extents;                        // half-size / circle radii
+        /// <summary>
+        /// Rotation in degrees around Center, y-up runtime UV (authoring Angle is negated on bake).
+        /// SpriteHitboxActivationSystem copies this onto SpriteHitboxLive but still treats
+        /// Center/Extents as an AABB for consumers that have not been updated to OBB tests.
+        /// Do not drop this field — rotated boxes must survive bake/reload.
+        /// </summary>
+        public float Angle;
         public byte Id;                               // gameplay collider id
         public SpriteColliderShape Shape;
         public FixedList128Bytes<float2> Polygon;     // absolute cell UV points for polygons

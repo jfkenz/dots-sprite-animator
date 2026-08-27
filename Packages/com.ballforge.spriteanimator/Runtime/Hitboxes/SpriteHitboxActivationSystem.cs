@@ -59,6 +59,8 @@ namespace BallForge.Sprites.DOTS
                 for (int b = 0; b < nBoxes; b++)
                 {
                     if (boxes.Boxes[b].FrameIndex != drawIdx) continue;
+                    // Box.Angle is copied through for OBB-aware gameplay. This system
+                    // does not rotate the live AABB itself.
                     buffer.Add(new SpriteHitboxLive { Box = boxes.Boxes[b].Box });
                 }
             }

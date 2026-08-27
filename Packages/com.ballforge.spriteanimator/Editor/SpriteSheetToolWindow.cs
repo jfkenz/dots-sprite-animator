@@ -33,6 +33,21 @@ namespace BallForge.Sprites.DOTS.Editor
             Centered,
         }
 
+        enum ColliderHandleKind
+        {
+            None,
+            Body,
+            CornerTL,
+            CornerTR,
+            CornerBR,
+            CornerBL,
+            EdgeT,
+            EdgeR,
+            EdgeB,
+            EdgeL,
+            Rotate,
+        }
+
         readonly struct OnionGhostLayout
         {
             public readonly int Frame;
@@ -63,6 +78,9 @@ namespace BallForge.Sprites.DOTS.Editor
         const float PixelsPerSecond = 520f;
         const float DefaultPreviewSpeed = 1f;
         const float PivotHandleHitRadius = 14f;
+        const float ColliderHandleSize = 8f;
+        const float ColliderRotateHandleDistance = 26f;
+        const float ColliderMinScreenHalf = 6f;
         const string ClipRenameControl = "BallForgeSpriteAnimator.ClipRename";
         const string StringFieldControlPrefix = "BallForgeSpriteAnimator.Text.";
 
@@ -145,6 +163,16 @@ namespace BallForge.Sprites.DOTS.Editor
         bool _colliderMarqueeAdditive;
         Vector2 _colliderMarqueeStart;
         Rect _colliderMarqueeRect;
+        bool _draggingColliderTransform;
+        ColliderHandleKind _colliderHandleKind;
+        FrameBoxDef _colliderTransformBox;
+        Vector2 _colliderTransformStartMouse;
+        Vector2 _colliderTransformStartCenter;
+        float _colliderTransformStartAngle;
+        float _colliderTransformStartAtan;
+        bool _colliderTransformUndoRecorded;
+        readonly List<FrameBoxDef> _colliderMoveBoxes = new();
+        readonly List<Rect> _colliderMoveStartRects = new();
         int _selectedOnionFrame = -1;
         int _selectedOnionDelta;
         bool _draggingOnion;
@@ -857,12 +885,18 @@ namespace BallForge.Sprites.DOTS.Editor
                 foreach (var box in BoxesFor(clip, state.Frame))
                 {
                     bool selected = _selectedColliders.Contains(box);
-                    DrawColliderUV(box, cell,
-                        selected ? new Color(0.18f, 0.72f, 1f, 0.42f) : new Color(1f, 0.27f, 0.25f, 0.34f),
-                        selected);
+                    if (box.Hidden && !selected)
+                        continue;
+                    Color color = selected
+                        ? new Color(0.18f, 0.72f, 1f, box.Hidden ? 0.16f : 0.42f)
+                        : new Color(1f, 0.27f, 0.25f, 0.34f);
+                    DrawColliderUV(box, cell, color, selected);
                     if (selected)
                         DrawColliderSelectionBadge(box, cell);
                 }
+                FrameBoxDef gizmoBox = PrimarySelectedCollider();
+                if (gizmoBox != null && _colliderCreationMode == ColliderCreationMode.None)
+                    DrawColliderTransformGizmo(gizmoBox, cell);
                 if (_draggingBox)
                     DrawColliderShape(_liveBox, ColliderShapeOf(_colliderCreationMode),
                         null,
@@ -907,10 +941,15 @@ namespace BallForge.Sprites.DOTS.Editor
             }
             else
             {
-                if (_draggingPivot)
+                if (_draggingColliderTransform)
+                    HandleColliderTransformInput(previewControlId, cell, clip, state.Frame);
+                else if (_draggingPivot)
                     HandlePivotInput(previewControlId, cell);
                 else if (_draggingSocket)
                     HandleSocketManipulationInput(previewControlId, cell, clip, state.Frame);
+                else if (_showHitboxes && Event.current.type == EventType.MouseDown &&
+                         HitSelectedColliderHandle(cell, Event.current.mousePosition) != ColliderHandleKind.None)
+                    HandleColliderTransformInput(previewControlId, cell, clip, state.Frame);
                 else if (Event.current.type == EventType.MouseDown &&
                          FindSocketAt(clip, state.Frame, cell, Event.current.mousePosition) != null)
                     HandleSocketManipulationInput(previewControlId, cell, clip, state.Frame);
@@ -2412,7 +2451,10 @@ namespace BallForge.Sprites.DOTS.Editor
 
                 if (evt.button == 0)
                 {
+                    bool additive = evt.shift || evt.control || evt.command;
                     SelectCollider(found, evt.shift, evt.control || evt.command);
+                    if (!additive)
+                        BeginColliderTransform(controlId, found, ColliderHandleKind.Body, cell, evt.mousePosition);
                     evt.Use();
                     Repaint();
                     return true;
@@ -2471,8 +2513,12 @@ namespace BallForge.Sprites.DOTS.Editor
         {
             FrameBoxDef found = null;
             foreach (var box in BoxesFor(clip, frame))
+            {
+                if (box.Hidden)
+                    continue;
                 if (ColliderContains(box, cell, point))
                     found = box;
+            }
             return found;
         }
 
@@ -2494,8 +2540,12 @@ namespace BallForge.Sprites.DOTS.Editor
             if (!additive)
                 _selectedColliders.Clear();
             foreach (var box in BoxesFor(clip, frame))
-                if (marquee.Overlaps(UvToScreen(box.RectUV, cell), true))
+            {
+                if (box.Hidden)
+                    continue;
+                if (marquee.Overlaps(ColliderWorldAabb(box, cell), true))
                     _selectedColliders.Add(box);
+            }
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
             _status = $"Marquee selected {_selectedColliders.Count} collider{(_selectedColliders.Count == 1 ? string.Empty : "s")}";
@@ -3681,10 +3731,21 @@ namespace BallForge.Sprites.DOTS.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     Color previous = GUI.backgroundColor;
+                    if (GUILayout.Button(ColliderVisibilityContent(box.Hidden),
+                        EditorStyles.miniButton, GUILayout.Width(28f), GUILayout.Height(22f)))
+                    {
+                        RecordProfileUndo(box.Hidden ? "Show Sprite Collider" : "Hide Sprite Collider");
+                        box.Hidden = !box.Hidden;
+                        _status = box.Hidden
+                            ? $"Hid {box.Shape} collider #{box.Id}"
+                            : $"Showed {box.Shape} collider #{box.Id}";
+                        SaveDirty();
+                        Repaint();
+                    }
                     if (selected)
                         GUI.backgroundColor = AccentColor;
                     if (GUILayout.Button(new GUIContent(
-                            $"{i + 1}. {box.Shape}   •   ID {box.Id}",
+                            $"{i + 1}. {box.Shape}   •   ID {box.Id}{(box.Hidden ? "  (hidden)" : string.Empty)}",
                             "Select this collider. Shift adds; Ctrl/Cmd toggles."),
                         EditorStyles.miniButton, GUILayout.Height(22f)))
                     {
@@ -3703,6 +3764,32 @@ namespace BallForge.Sprites.DOTS.Editor
                     {
                         DeleteCollider(box);
                         return;
+                    }
+                }
+            }
+
+            FrameBoxDef primary = PrimarySelectedCollider();
+            if (primary != null)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    float nextAngle = EditorGUILayout.FloatField(
+                        new GUIContent("Angle (deg)", "Rotation around the collider center. Saved on the profile."),
+                        primary.Angle);
+                    if (!Mathf.Approximately(nextAngle, primary.Angle))
+                    {
+                        RecordProfileUndo("Rotate Sprite Collider");
+                        primary.Angle = nextAngle;
+                        _status = $"Collider angle {primary.Angle:0.##}°";
+                    }
+                    using (new EditorGUI.DisabledScope(Mathf.Approximately(primary.Angle, 0f)))
+                    {
+                        if (ResetValueButton("Reset this collider's rotation to 0°."))
+                        {
+                            RecordProfileUndo("Reset Sprite Collider Angle");
+                            primary.Angle = 0f;
+                            _status = "Reset collider angle to 0°";
+                        }
                     }
                 }
             }
@@ -3840,6 +3927,8 @@ namespace BallForge.Sprites.DOTS.Editor
                     Id = box.Id,
                     Shape = box.Shape,
                     PolygonUV = box.PolygonUV == null ? null : (Vector2[])box.PolygonUV.Clone(),
+                    Angle = box.Angle,
+                    Hidden = box.Hidden,
                 };
                 _profile.Hitboxes.Add(clone);
             }
@@ -3849,6 +3938,7 @@ namespace BallForge.Sprites.DOTS.Editor
         void ClearColliderSelection()
         {
             _selectedColliders.Clear();
+            ClearColliderTransform();
         }
 
         void PruneColliderSelection(SpriteClipDef clip, int frame)
@@ -4233,24 +4323,24 @@ namespace BallForge.Sprites.DOTS.Editor
                                 (box.PolygonUV == null || box.PolygonUV.Length < 3)
                 ? FrameBoxDef.CreateRegularPolygon()
                 : box.PolygonUV;
-            DrawColliderShape(UvToScreen(box.RectUV, cell), box.Shape, polygon, color, selected);
+            DrawColliderShape(UvToScreen(box.RectUV, cell), box.Shape, polygon, color, selected, box.Angle);
         }
 
         void DrawColliderSelectionBadge(FrameBoxDef box, Rect cell)
         {
-            Rect shape = UvToScreen(box.RectUV, cell);
-            var badge = new Rect(shape.xMin, Mathf.Max(cell.yMin, shape.yMin - 18f), 70f, 17f);
+            Vector2 top = ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeT);
+            var badge = new Rect(top.x - 35f, Mathf.Max(cell.yMin, top.y - 22f), 70f, 17f);
             EditorGUI.DrawRect(badge, new Color(0.06f, 0.12f, 0.18f, 0.94f));
             DrawBorder(badge, AccentColor, 1f);
             GUI.Label(badge, $" {box.Shape} #{box.Id}", _mutedStyle);
         }
 
         static void DrawColliderShape(Rect rect, SpriteColliderShape shape, Vector2[] polygon,
-                                      Color color, bool selected)
+                                      Color color, bool selected, float angle = 0f)
         {
             if (shape == SpriteColliderShape.Square)
             {
-                DrawScreenBox(rect, color, selected ? 2f : 1f);
+                DrawRotatedScreenBox(rect, angle, color, selected ? 2f : 1f);
                 return;
             }
 
@@ -4261,10 +4351,10 @@ namespace BallForge.Sprites.DOTS.Editor
                 var points = new Vector3[segments + 1];
                 for (int i = 0; i < segments; i++)
                 {
-                    float angle = Mathf.PI * 2f * i / segments;
+                    float a = Mathf.PI * 2f * i / segments;
                     points[i] = new Vector3(
-                        rect.center.x + Mathf.Cos(angle) * radius,
-                        rect.center.y + Mathf.Sin(angle) * radius);
+                        rect.center.x + Mathf.Cos(a) * radius,
+                        rect.center.y + Mathf.Sin(a) * radius);
                 }
                 points[segments] = points[0];
                 Handles.BeginGUI();
@@ -4277,7 +4367,7 @@ namespace BallForge.Sprites.DOTS.Editor
             }
 
             polygon ??= FrameBoxDef.CreateRegularPolygon();
-            var polygonOutline = PolygonScreenPoints(rect, polygon, true);
+            var polygonOutline = PolygonScreenPoints(rect, polygon, true, angle);
             Handles.BeginGUI();
             Handles.color = new Color(color.r, color.g, color.b, 0.98f);
             Handles.DrawAAPolyLine(selected ? 2.5f : 1.5f, polygonOutline);
@@ -4287,41 +4377,65 @@ namespace BallForge.Sprites.DOTS.Editor
         static bool ColliderContains(FrameBoxDef box, Rect cell, Vector2 point)
         {
             Rect rect = UvToScreen(box.RectUV, cell);
+            Vector2 local = UnrotateAround(point, rect.center, box.Angle);
             if (box.Shape == SpriteColliderShape.Square)
-                return rect.Contains(point);
+                return rect.Contains(local);
             if (box.Shape == SpriteColliderShape.Circle)
             {
                 float radius = Mathf.Min(rect.width, rect.height) * 0.5f;
-                return (point - rect.center).sqrMagnitude <= radius * radius;
+                return (local - rect.center).sqrMagnitude <= radius * radius;
             }
 
             Vector2[] polygon = box.PolygonUV != null && box.PolygonUV.Length >= 3
                 ? box.PolygonUV
                 : FrameBoxDef.CreateRegularPolygon();
-            var points = PolygonScreenPoints(rect, polygon, false);
+            var points = PolygonScreenPoints(rect, polygon, false, 0f);
             bool inside = false;
             for (int i = 0, previous = points.Length - 1; i < points.Length; previous = i++)
             {
                 Vector2 a = points[i];
                 Vector2 b = points[previous];
-                if ((a.y > point.y) != (b.y > point.y) &&
-                    point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x)
+                if ((a.y > local.y) != (b.y > local.y) &&
+                    local.x < (b.x - a.x) * (local.y - a.y) / (b.y - a.y) + a.x)
                     inside = !inside;
             }
             return inside;
         }
 
-        static Vector3[] PolygonScreenPoints(Rect rect, Vector2[] polygon, bool close)
+        static Vector3[] PolygonScreenPoints(Rect rect, Vector2[] polygon, bool close, float angle = 0f)
         {
             int count = polygon.Length;
             var points = new Vector3[count + (close ? 1 : 0)];
+            Vector2 center = rect.center;
             for (int i = 0; i < count; i++)
-                points[i] = new Vector3(
+            {
+                Vector2 p = new(
                     rect.x + polygon[i].x * rect.width,
                     rect.y + polygon[i].y * rect.height);
+                if (Mathf.Abs(angle) > 0.01f)
+                    p = RotateAround(p, center, angle);
+                points[i] = p;
+            }
             if (close)
                 points[count] = points[0];
             return points;
+        }
+
+        static void DrawRotatedScreenBox(Rect rect, float angle, Color color, float thickness)
+        {
+            if (Mathf.Abs(angle) < 0.01f)
+            {
+                DrawScreenBox(rect, color, thickness);
+                return;
+            }
+            var corners = RotatedRectCorners(rect, angle, false);
+            var closed = new Vector3[] { corners[0], corners[1], corners[2], corners[3], corners[0] };
+            Handles.BeginGUI();
+            Handles.color = color;
+            Handles.DrawAAConvexPolygon(corners);
+            Handles.color = new Color(color.r, color.g, color.b, 0.95f);
+            Handles.DrawAAPolyLine(Mathf.Max(1.5f, thickness + 0.5f), closed);
+            Handles.EndGUI();
         }
 
         static void DrawScreenBox(Rect rect, Color color, float thickness = 1f)
@@ -4329,6 +4443,438 @@ namespace BallForge.Sprites.DOTS.Editor
             EditorGUI.DrawRect(rect, color);
             var border = new Color(color.r, color.g, color.b, 0.95f);
             DrawBorder(rect, border, thickness);
+        }
+
+        static Vector3[] RotatedRectCorners(Rect rect, float angle, bool close)
+        {
+            Vector2 center = rect.center;
+            var local = new[]
+            {
+                new Vector2(rect.xMin, rect.yMin),
+                new Vector2(rect.xMax, rect.yMin),
+                new Vector2(rect.xMax, rect.yMax),
+                new Vector2(rect.xMin, rect.yMax),
+            };
+            var points = new Vector3[close ? 5 : 4];
+            for (int i = 0; i < 4; i++)
+                points[i] = RotateAround(local[i], center, angle);
+            if (close)
+                points[4] = points[0];
+            return points;
+        }
+
+        static Vector2 RotateAround(Vector2 point, Vector2 center, float degrees)
+        {
+            if (Mathf.Abs(degrees) < 0.01f)
+                return point;
+            float rad = degrees * Mathf.Deg2Rad;
+            float s = Mathf.Sin(rad);
+            float c = Mathf.Cos(rad);
+            Vector2 d = point - center;
+            return center + new Vector2(d.x * c - d.y * s, d.x * s + d.y * c);
+        }
+
+        static Vector2 UnrotateAround(Vector2 point, Vector2 center, float degrees)
+            => RotateAround(point, center, -degrees);
+
+        static Rect ColliderWorldAabb(FrameBoxDef box, Rect cell)
+        {
+            Rect rect = UvToScreen(box.RectUV, cell);
+            if (Mathf.Abs(box.Angle) < 0.01f)
+                return rect;
+            var corners = RotatedRectCorners(rect, box.Angle, false);
+            float xMin = corners[0].x, xMax = corners[0].x, yMin = corners[0].y, yMax = corners[0].y;
+            for (int i = 1; i < 4; i++)
+            {
+                xMin = Mathf.Min(xMin, corners[i].x);
+                xMax = Mathf.Max(xMax, corners[i].x);
+                yMin = Mathf.Min(yMin, corners[i].y);
+                yMax = Mathf.Max(yMax, corners[i].y);
+            }
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        FrameBoxDef PrimarySelectedCollider()
+        {
+            if (_selectedColliders.Count != 1)
+                return null;
+            foreach (var box in _selectedColliders)
+                return box;
+            return null;
+        }
+
+        static GUIContent ColliderVisibilityContent(bool hidden)
+        {
+            var icon = EditorGUIUtility.IconContent(hidden
+                ? "animationvisibilitytoggleoff"
+                : "animationvisibilitytoggleon");
+            if (icon != null && icon.image != null)
+            {
+                icon.tooltip = hidden
+                    ? "Show this collider in the preview"
+                    : "Hide this collider in the preview";
+                return icon;
+            }
+            return new GUIContent(hidden ? "Show" : "Hide",
+                hidden ? "Show this collider in the preview" : "Hide this collider in the preview");
+        }
+
+        static Vector2 ColliderHandlePosition(FrameBoxDef box, Rect cell, ColliderHandleKind kind)
+        {
+            Rect rect = UvToScreen(box.RectUV, cell);
+            Vector2 center = rect.center;
+            Vector2 local = kind switch
+            {
+                ColliderHandleKind.CornerTL => new Vector2(rect.xMin, rect.yMin),
+                ColliderHandleKind.CornerTR => new Vector2(rect.xMax, rect.yMin),
+                ColliderHandleKind.CornerBR => new Vector2(rect.xMax, rect.yMax),
+                ColliderHandleKind.CornerBL => new Vector2(rect.xMin, rect.yMax),
+                ColliderHandleKind.EdgeT => new Vector2(center.x, rect.yMin),
+                ColliderHandleKind.EdgeR => new Vector2(rect.xMax, center.y),
+                ColliderHandleKind.EdgeB => new Vector2(center.x, rect.yMax),
+                ColliderHandleKind.EdgeL => new Vector2(rect.xMin, center.y),
+                ColliderHandleKind.Rotate => new Vector2(center.x, rect.yMin - ColliderRotateHandleDistance),
+                _ => center,
+            };
+            return RotateAround(local, center, box.Angle);
+        }
+
+        ColliderHandleKind HitSelectedColliderHandle(Rect cell, Vector2 mouse)
+        {
+            var box = PrimarySelectedCollider();
+            if (box == null)
+            {
+                foreach (var selected in _selectedColliders)
+                {
+                    if (!selected.Hidden && ColliderContains(selected, cell, mouse))
+                        return ColliderHandleKind.Body;
+                }
+                return ColliderHandleKind.None;
+            }
+
+            var kinds = new[]
+            {
+                ColliderHandleKind.Rotate,
+                ColliderHandleKind.CornerTL, ColliderHandleKind.CornerTR,
+                ColliderHandleKind.CornerBR, ColliderHandleKind.CornerBL,
+                ColliderHandleKind.EdgeT, ColliderHandleKind.EdgeR,
+                ColliderHandleKind.EdgeB, ColliderHandleKind.EdgeL,
+            };
+            float rotateHit = 10f * 10f;
+            float knobHit = ColliderHandleSize * ColliderHandleSize;
+            foreach (var kind in kinds)
+            {
+                float limit = kind == ColliderHandleKind.Rotate ? rotateHit : knobHit;
+                if ((mouse - ColliderHandlePosition(box, cell, kind)).sqrMagnitude <= limit)
+                    return kind;
+            }
+            if (ColliderContains(box, cell, mouse))
+                return ColliderHandleKind.Body;
+            return ColliderHandleKind.None;
+        }
+
+        void DrawColliderTransformGizmo(FrameBoxDef box, Rect cell)
+        {
+            Rect rect = UvToScreen(box.RectUV, cell);
+            Vector2 center = rect.center;
+            var outline = RotatedRectCorners(rect, box.Angle, true);
+            Handles.BeginGUI();
+            Handles.color = Color.white;
+            Handles.DrawAAPolyLine(1.6f, outline);
+            Vector2 top = ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeT);
+            Vector2 rotate = ColliderHandlePosition(box, cell, ColliderHandleKind.Rotate);
+            Handles.DrawAAPolyLine(1.6f, top, rotate);
+            Handles.DrawSolidDisc(rotate, Vector3.forward, 5f);
+            Handles.color = AccentColor;
+            Handles.DrawWireDisc(rotate, Vector3.forward, 7f);
+            Handles.EndGUI();
+
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerTL));
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerTR));
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerBR));
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerBL));
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeT), true);
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeR), true);
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeB), true);
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeL), true);
+
+            EditorGUIUtility.AddCursorRect(HandleCursorRect(rotate, 10f), MouseCursor.RotateArrow);
+            EditorGUIUtility.AddCursorRect(HandleCursorRect(center, 12f), MouseCursor.MoveArrow);
+            AddScaleCursors(box, cell);
+        }
+
+        static void DrawHandleKnob(Vector2 pos, bool edge = false)
+        {
+            float s = edge ? 7f : 8f;
+            EditorGUI.DrawRect(new Rect(pos.x - s * 0.5f, pos.y - s * 0.5f, s, s), new Color(0.05f, 0.06f, 0.08f, 0.95f));
+            EditorGUI.DrawRect(new Rect(pos.x - s * 0.5f + 1f, pos.y - s * 0.5f + 1f, s - 2f, s - 2f), Color.white);
+        }
+
+        static Rect HandleCursorRect(Vector2 pos, float radius)
+            => new(pos.x - radius, pos.y - radius, radius * 2f, radius * 2f);
+
+        void AddScaleCursors(FrameBoxDef box, Rect cell)
+        {
+            float a = Mathf.Abs(Mathf.Repeat(box.Angle, 180f));
+            bool swapped = a > 45f && a < 135f;
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerTL), 8f),
+                swapped ? MouseCursor.ResizeUpRight : MouseCursor.ResizeUpLeft);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerTR), 8f),
+                swapped ? MouseCursor.ResizeUpLeft : MouseCursor.ResizeUpRight);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerBR), 8f),
+                swapped ? MouseCursor.ResizeUpRight : MouseCursor.ResizeUpLeft);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerBL), 8f),
+                swapped ? MouseCursor.ResizeUpLeft : MouseCursor.ResizeUpRight);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeT), 8f),
+                swapped ? MouseCursor.ResizeHorizontal : MouseCursor.ResizeVertical);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeB), 8f),
+                swapped ? MouseCursor.ResizeHorizontal : MouseCursor.ResizeVertical);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeL), 8f),
+                swapped ? MouseCursor.ResizeVertical : MouseCursor.ResizeHorizontal);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeR), 8f),
+                swapped ? MouseCursor.ResizeVertical : MouseCursor.ResizeHorizontal);
+        }
+
+        void HandleColliderTransformInput(int controlId, Rect cell, SpriteClipDef clip, int frame)
+        {
+            var evt = Event.current;
+            if (evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape && _draggingColliderTransform)
+            {
+                RestoreColliderTransform();
+                EndColliderTransform(controlId, save: false);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseDown && evt.button == 0)
+            {
+                var kind = HitSelectedColliderHandle(cell, evt.mousePosition);
+                if (kind == ColliderHandleKind.None)
+                    return;
+                FrameBoxDef box = PrimarySelectedCollider();
+                if (box == null)
+                {
+                    foreach (var selected in _selectedColliders)
+                    {
+                        if (!selected.Hidden && ColliderContains(selected, cell, evt.mousePosition))
+                        {
+                            box = selected;
+                            break;
+                        }
+                    }
+                }
+                if (box == null)
+                    return;
+                BeginColliderTransform(controlId, box, kind, cell, evt.mousePosition);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseDrag && _draggingColliderTransform &&
+                GUIUtility.hotControl == controlId)
+            {
+                ApplyColliderTransform(cell, evt.mousePosition, evt.shift);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseUp && evt.button == 0 && _draggingColliderTransform &&
+                GUIUtility.hotControl == controlId)
+            {
+                EndColliderTransform(controlId, save: true);
+                evt.Use();
+                Repaint();
+            }
+        }
+
+        void BeginColliderTransform(int controlId, FrameBoxDef box, ColliderHandleKind kind,
+                                    Rect cell, Vector2 mouse)
+        {
+            _draggingColliderTransform = true;
+            _colliderHandleKind = kind;
+            _colliderTransformBox = box;
+            _colliderTransformStartMouse = mouse;
+            _colliderTransformUndoRecorded = false;
+            Rect startRect = UvToScreen(box.RectUV, cell);
+            _colliderTransformStartCenter = startRect.center;
+            _colliderTransformStartAngle = box.Angle;
+            _colliderTransformStartAtan = Mathf.Atan2(
+                mouse.y - startRect.center.y, mouse.x - startRect.center.x);
+            _colliderMoveBoxes.Clear();
+            _colliderMoveStartRects.Clear();
+            if (kind == ColliderHandleKind.Body)
+            {
+                foreach (var selected in _selectedColliders)
+                {
+                    _colliderMoveBoxes.Add(selected);
+                    _colliderMoveStartRects.Add(selected.RectUV);
+                }
+            }
+            else
+            {
+                _colliderMoveBoxes.Add(box);
+                _colliderMoveStartRects.Add(box.RectUV);
+            }
+            GUIUtility.hotControl = controlId;
+            GUIUtility.keyboardControl = controlId;
+            _playing = false;
+            _selectedOnionFrame = -1;
+            _selectedEventFrame = -1;
+        }
+
+        void ApplyColliderTransform(Rect cell, Vector2 mouse, bool snap)
+        {
+            if (_colliderTransformBox == null || _colliderMoveBoxes.Count == 0)
+                return;
+            if (!_colliderTransformUndoRecorded)
+            {
+                RecordProfileUndo(_colliderHandleKind == ColliderHandleKind.Rotate
+                    ? "Rotate Sprite Collider"
+                    : _colliderHandleKind == ColliderHandleKind.Body
+                        ? "Move Sprite Collider"
+                        : "Scale Sprite Collider");
+                _colliderTransformUndoRecorded = true;
+            }
+
+            if (_colliderHandleKind == ColliderHandleKind.Body)
+            {
+                Vector2 deltaUv = new(
+                    (mouse.x - _colliderTransformStartMouse.x) / Mathf.Max(1f, cell.width),
+                    (mouse.y - _colliderTransformStartMouse.y) / Mathf.Max(1f, cell.height));
+                for (int i = 0; i < _colliderMoveBoxes.Count; i++)
+                {
+                    Rect start = _colliderMoveStartRects[i];
+                    _colliderMoveBoxes[i].RectUV = new Rect(
+                        start.x + deltaUv.x, start.y + deltaUv.y, start.width, start.height);
+                }
+                _status = "Moved collider";
+                return;
+            }
+
+            var box = _colliderTransformBox;
+            if (_colliderHandleKind == ColliderHandleKind.Rotate)
+            {
+                float atan = Mathf.Atan2(
+                    mouse.y - _colliderTransformStartCenter.y,
+                    mouse.x - _colliderTransformStartCenter.x);
+                float delta = (atan - _colliderTransformStartAtan) * Mathf.Rad2Deg;
+                float angle = _colliderTransformStartAngle + delta;
+                if (snap)
+                    angle = Mathf.Round(angle / 15f) * 15f;
+                box.Angle = angle;
+                _status = $"Collider angle {box.Angle:0.#}°";
+                return;
+            }
+
+            Vector2 local = UnrotateAround(mouse, _colliderTransformStartCenter, _colliderTransformStartAngle)
+                            - _colliderTransformStartCenter;
+            Rect startScreen = UvToScreen(_colliderMoveStartRects[0], cell);
+            float halfW = startScreen.width * 0.5f;
+            float halfH = startScreen.height * 0.5f;
+            Vector2 fixedLocal = _colliderHandleKind switch
+            {
+                ColliderHandleKind.CornerTL => new Vector2(halfW, halfH),
+                ColliderHandleKind.CornerTR => new Vector2(-halfW, halfH),
+                ColliderHandleKind.CornerBR => new Vector2(-halfW, -halfH),
+                ColliderHandleKind.CornerBL => new Vector2(halfW, -halfH),
+                ColliderHandleKind.EdgeT => new Vector2(0f, halfH),
+                ColliderHandleKind.EdgeB => new Vector2(0f, -halfH),
+                ColliderHandleKind.EdgeL => new Vector2(halfW, 0f),
+                ColliderHandleKind.EdgeR => new Vector2(-halfW, 0f),
+                _ => Vector2.zero,
+            };
+
+            float newHalfW = halfW;
+            float newHalfH = halfH;
+            Vector2 localCenter = Vector2.zero;
+            switch (_colliderHandleKind)
+            {
+                case ColliderHandleKind.CornerTL:
+                case ColliderHandleKind.CornerTR:
+                case ColliderHandleKind.CornerBR:
+                case ColliderHandleKind.CornerBL:
+                    newHalfW = Mathf.Max(ColliderMinScreenHalf, Mathf.Abs(local.x - fixedLocal.x) * 0.5f);
+                    newHalfH = Mathf.Max(ColliderMinScreenHalf, Mathf.Abs(local.y - fixedLocal.y) * 0.5f);
+                    localCenter = (local + fixedLocal) * 0.5f;
+                    break;
+                case ColliderHandleKind.EdgeT:
+                case ColliderHandleKind.EdgeB:
+                    newHalfH = Mathf.Max(ColliderMinScreenHalf, Mathf.Abs(local.y - fixedLocal.y) * 0.5f);
+                    localCenter = new Vector2(0f, (local.y + fixedLocal.y) * 0.5f);
+                    break;
+                case ColliderHandleKind.EdgeL:
+                case ColliderHandleKind.EdgeR:
+                    newHalfW = Mathf.Max(ColliderMinScreenHalf, Mathf.Abs(local.x - fixedLocal.x) * 0.5f);
+                    localCenter = new Vector2((local.x + fixedLocal.x) * 0.5f, 0f);
+                    break;
+            }
+
+            if (box.Shape == SpriteColliderShape.Circle)
+            {
+                float uniform = Mathf.Max(newHalfW, newHalfH);
+                newHalfW = uniform;
+                newHalfH = uniform;
+            }
+
+            Vector2 newCenter = _colliderTransformStartCenter +
+                RotateAround(localCenter, Vector2.zero, _colliderTransformStartAngle);
+            float uvW = (newHalfW * 2f) / Mathf.Max(1f, cell.width);
+            float uvH = (newHalfH * 2f) / Mathf.Max(1f, cell.height);
+            Vector2 uvCenter = ScreenToUvPoint(newCenter, cell);
+            box.RectUV = new Rect(uvCenter.x - uvW * 0.5f, uvCenter.y - uvH * 0.5f, uvW, uvH);
+            _status = "Scaled collider";
+        }
+
+        static Vector2 ScreenToUvPoint(Vector2 screen, Rect cell)
+        {
+            return new Vector2(
+                (screen.x - cell.x) / Mathf.Max(1f, cell.width),
+                (screen.y - cell.y) / Mathf.Max(1f, cell.height));
+        }
+
+        void RestoreColliderTransform()
+        {
+            for (int i = 0; i < _colliderMoveBoxes.Count; i++)
+                _colliderMoveBoxes[i].RectUV = _colliderMoveStartRects[i];
+            if (_colliderTransformBox != null)
+                _colliderTransformBox.Angle = _colliderTransformStartAngle;
+            _status = "Collider transform cancelled";
+        }
+
+        void EndColliderTransform(int controlId, bool save)
+        {
+            bool dirty = save && _colliderTransformUndoRecorded;
+            _draggingColliderTransform = false;
+            _colliderHandleKind = ColliderHandleKind.None;
+            _colliderTransformBox = null;
+            _colliderTransformUndoRecorded = false;
+            _colliderMoveBoxes.Clear();
+            _colliderMoveStartRects.Clear();
+            if (GUIUtility.hotControl == controlId)
+                GUIUtility.hotControl = 0;
+            if (dirty)
+                SaveDirty();
+        }
+
+        void ClearColliderTransform()
+        {
+            _draggingColliderTransform = false;
+            _colliderHandleKind = ColliderHandleKind.None;
+            _colliderTransformBox = null;
+            _colliderTransformUndoRecorded = false;
+            _colliderMoveBoxes.Clear();
+            _colliderMoveStartRects.Clear();
         }
 
         static void DrawPanel(Rect rect)
@@ -4568,11 +5114,13 @@ namespace BallForge.Sprites.DOTS.Editor
 
             if (evt.keyCode == KeyCode.Escape)
             {
+                if (_draggingColliderTransform)
+                    RestoreColliderTransform();
                 bool hadSelection = _selectedColliders.Count > 0 || _selectedEventFrame >= 0 ||
                                     _selectedOnionFrame >= 0 || _colliderCreationMode != ColliderCreationMode.None ||
                                     _colliderMarqueePending || _socketPlacementArmed ||
                                     !string.IsNullOrEmpty(_selectedSocketName) ||
-                                    _draggingPivot || _pivotSelected;
+                                    _draggingPivot || _pivotSelected || _draggingColliderTransform;
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
                 _selectedOnionFrame = -1;
@@ -4619,6 +5167,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _draggingSocket = false;
             _draggingPivot = false;
             _pivotSelected = false;
+            ClearColliderTransform();
             CancelSocketPlacement(null);
             _selectedSocketName = null;
             _socketDeleteArmed = false;
