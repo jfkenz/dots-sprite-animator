@@ -17,6 +17,7 @@ namespace BallForge.Sprites.DOTS.Editor
             Reorder,
             ResizeFrame,
             Event,
+            Marquee,
         }
 
         enum ColliderCreationMode
@@ -31,6 +32,21 @@ namespace BallForge.Sprites.DOTS.Editor
         {
             Authored,
             Centered,
+        }
+
+        enum ColliderHandleKind
+        {
+            None,
+            Body,
+            CornerTL,
+            CornerTR,
+            CornerBR,
+            CornerBL,
+            EdgeT,
+            EdgeR,
+            EdgeB,
+            EdgeL,
+            Rotate,
         }
 
         readonly struct OnionGhostLayout
@@ -63,6 +79,9 @@ namespace BallForge.Sprites.DOTS.Editor
         const float PixelsPerSecond = 520f;
         const float DefaultPreviewSpeed = 1f;
         const float PivotHandleHitRadius = 14f;
+        const float ColliderHandleSize = 8f;
+        const float ColliderRotateHandleDistance = 26f;
+        const float ColliderMinScreenHalf = 6f;
         const string ClipRenameControl = "BallForgeSpriteAnimator.ClipRename";
         const string StringFieldControlPrefix = "BallForgeSpriteAnimator.Text.";
 
@@ -81,6 +100,7 @@ namespace BallForge.Sprites.DOTS.Editor
         ScriptableSpriteSheetProfile _asset;
         int _selectedClip;
         int _selectedFrame;
+        readonly HashSet<int> _selectedFrames = new();
         int _selectedEventFrame = -1;
         int _newHitboxId = 1;
         ColliderCreationMode _colliderCreationMode = ColliderCreationMode.None;
@@ -88,9 +108,12 @@ namespace BallForge.Sprites.DOTS.Editor
         bool _socketPlacementArmed;
         string _selectedSocketName;
         bool _socketDeleteArmed;
+        readonly HashSet<string> _selectedSockets = new();
+        readonly List<string> _socketMoveNames = new();
+        readonly List<Vector2> _socketMoveStarts = new();
+        bool _socketMoveUndoRecorded;
         bool _draggingSocket;
         Vector2 _socketDragStart;
-        Vector2 _socketOffsetStart;
 
         bool _playing = false;
         bool _previewLoop = true;
@@ -130,6 +153,11 @@ namespace BallForge.Sprites.DOTS.Editor
         int _resizeFrameIndex = -1;
         float _resizeStartDuration;
         float _resizePixelsPerSecond;
+        Vector2 _timelineMarqueeStart;
+        Rect _timelineMarqueeRect;
+        bool _timelineMarqueeMoved;
+        bool _timelineMarqueeAdditive;
+        readonly HashSet<int> _timelineMarqueeBaseline = new();
         int _dragEventSourceFrame = -1;
         byte _dragEventId;
         float _dragEventAuthoredTime;
@@ -145,6 +173,18 @@ namespace BallForge.Sprites.DOTS.Editor
         bool _colliderMarqueeAdditive;
         Vector2 _colliderMarqueeStart;
         Rect _colliderMarqueeRect;
+        readonly HashSet<FrameBoxDef> _previewMarqueeColliderBaseline = new();
+        readonly HashSet<string> _previewMarqueeSocketBaseline = new();
+        bool _draggingColliderTransform;
+        ColliderHandleKind _colliderHandleKind;
+        FrameBoxDef _colliderTransformBox;
+        Vector2 _colliderTransformStartMouse;
+        Vector2 _colliderTransformStartCenter;
+        float _colliderTransformStartAngle;
+        float _colliderTransformStartAtan;
+        bool _colliderTransformUndoRecorded;
+        readonly List<FrameBoxDef> _colliderMoveBoxes = new();
+        readonly List<Rect> _colliderMoveStartRects = new();
         int _selectedOnionFrame = -1;
         int _selectedOnionDelta;
         bool _draggingOnion;
@@ -165,6 +205,13 @@ namespace BallForge.Sprites.DOTS.Editor
         readonly List<Texture2D> _styleTextures = new();
         readonly List<OnionGhostLayout> _onionGhostLayouts = new(16);
         readonly HashSet<FrameBoxDef> _selectedColliders = new();
+        Color32[] _sheetPixels;
+        int _sheetPixelsId = -1;
+        int _sheetPixelsWidth;
+        int _sheetPixelsHeight;
+        int _sheetPixelsColumns;
+        int _sheetPixelsRows;
+        bool[] _sheetCellEmpty;
 
         [MenuItem("Window/DOTS Sprite Animator")]
         public static void Open()
@@ -197,6 +244,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 if (texture != null)
                     DestroyImmediate(texture);
             _styleTextures.Clear();
+            InvalidateSheetPixelCache();
         }
 
         void TickPreview()
@@ -340,8 +388,68 @@ namespace BallForge.Sprites.DOTS.Editor
                 var clip = _profile.Clips[_selectedClip];
                 clip.EnsureFrameData();
                 _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
+                EnsureFrameSelection(clip.Frames.Length);
                 return clip;
             }
+        }
+
+        bool IsFrameSelected(int frame) => _selectedFrames.Contains(frame);
+
+        void EnsureFrameSelection(int frameCount)
+        {
+            if (frameCount <= 0)
+            {
+                _selectedFrames.Clear();
+                _selectedFrame = 0;
+                return;
+            }
+
+            _selectedFrame = Mathf.Clamp(_selectedFrame, 0, frameCount - 1);
+            _selectedFrames.RemoveWhere(index => index < 0 || index >= frameCount);
+            if (_selectedFrames.Count == 0)
+                _selectedFrames.Add(_selectedFrame);
+            else if (!_selectedFrames.Contains(_selectedFrame))
+                _selectedFrames.Add(_selectedFrame);
+        }
+
+        void SelectOnlyFrame(int frame)
+        {
+            _selectedFrame = Mathf.Max(0, frame);
+            _selectedFrames.Clear();
+            _selectedFrames.Add(_selectedFrame);
+        }
+
+        int LowestSelectedFrame()
+        {
+            int lowest = int.MaxValue;
+            foreach (int index in _selectedFrames)
+                if (index < lowest)
+                    lowest = index;
+            return lowest == int.MaxValue ? _selectedFrame : lowest;
+        }
+
+        void ApplyFrameModifierClick(int frame, bool additive, bool toggle)
+        {
+            frame = Mathf.Max(0, frame);
+            if (!additive)
+            {
+                SelectOnlyFrame(frame);
+                return;
+            }
+
+            if (toggle && _selectedFrames.Contains(frame))
+            {
+                if (_selectedFrames.Count > 1)
+                {
+                    _selectedFrames.Remove(frame);
+                    if (!_selectedFrames.Contains(_selectedFrame))
+                        _selectedFrame = LowestSelectedFrame();
+                }
+                return;
+            }
+
+            _selectedFrames.Add(frame);
+            _selectedFrame = frame;
         }
 
         void DrawToolbar(Rect rect)
@@ -451,7 +559,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _profile = new SpriteSheetProfile();
             EnsureProfile();
             _selectedClip = 0;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
             _previewTime = 0f;
@@ -492,7 +600,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (clip == null || clip.Frames.Length == 0)
                 return;
             int targetFrame = forward ? clip.Frames.Length - 1 : 0;
-            _selectedFrame = targetFrame;
+            SelectOnlyFrame(targetFrame);
             _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, targetFrame));
             _playing = false;
             ClearColliderSelection();
@@ -519,7 +627,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 next %= clip.Frames.Length;
             }
 
-            _selectedFrame = next;
+            SelectOnlyFrame(next);
             _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, next));
             _playing = false;
             ClearColliderSelection();
@@ -591,7 +699,7 @@ namespace BallForge.Sprites.DOTS.Editor
                         _selectedEventFrame = -1;
                     }
                     _selectedClip = i;
-                    _selectedFrame = 0;
+                    SelectOnlyFrame(0);
                     _previewTime = 0f;
                     BeginClipRename(i);
                     input.Use();
@@ -622,7 +730,7 @@ namespace BallForge.Sprites.DOTS.Editor
                             _selectedEventFrame = -1;
                         }
                         _selectedClip = i;
-                        _selectedFrame = 0;
+                        SelectOnlyFrame(0);
                         _previewTime = 0f;
                         GUI.FocusControl(null);
                         GUIUtility.keyboardControl = 0;
@@ -677,7 +785,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 CommitClipRename();
 
             _selectedClip = clipIndex;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -857,23 +965,24 @@ namespace BallForge.Sprites.DOTS.Editor
                 foreach (var box in BoxesFor(clip, state.Frame))
                 {
                     bool selected = _selectedColliders.Contains(box);
-                    DrawColliderUV(box, cell,
-                        selected ? new Color(0.18f, 0.72f, 1f, 0.42f) : new Color(1f, 0.27f, 0.25f, 0.34f),
-                        selected);
+                    if (box.Hidden && !selected)
+                        continue;
+                    Color color = selected
+                        ? new Color(0.18f, 0.72f, 1f, box.Hidden ? 0.16f : 0.42f)
+                        : new Color(1f, 0.27f, 0.25f, 0.34f);
+                    DrawColliderUV(box, cell, color, selected);
                     if (selected)
                         DrawColliderSelectionBadge(box, cell);
                 }
+                FrameBoxDef gizmoBox = PrimarySelectedCollider();
+                if (gizmoBox != null && _colliderCreationMode == ColliderCreationMode.None)
+                    DrawColliderTransformGizmo(gizmoBox, cell);
                 if (_draggingBox)
                     DrawColliderShape(_liveBox, ColliderShapeOf(_colliderCreationMode),
                         null,
                         new Color(1f, 0.45f, 0.25f, 0.38f), true);
                 if (_colliderCreationMode == ColliderCreationMode.Polygon)
                     DrawPolygonDraft(cell);
-                if (_draggingColliderMarquee)
-                {
-                    EditorGUI.DrawRect(_colliderMarqueeRect, new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.12f));
-                    DrawBorder(_colliderMarqueeRect, AccentColor, 1.5f);
-                }
             }
 
             if (_profile.OnionSkinEnabled)
@@ -883,6 +992,12 @@ namespace BallForge.Sprites.DOTS.Editor
             DrawPivot(cell);
             if (_socketPlacementArmed && _colliderCreationMode == ColliderCreationMode.None)
                 DrawSocketPlacementBalloon(canvas);
+            if (_draggingColliderMarquee)
+            {
+                EditorGUI.DrawRect(_colliderMarqueeRect,
+                    new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.12f));
+                DrawBorder(_colliderMarqueeRect, AccentColor, 1.5f);
+            }
 
             int previewControlId = GUIUtility.GetControlID(
                 "BallForgeSpriteAnimatorPreview".GetHashCode(), FocusType.Keyboard, canvas);
@@ -891,10 +1006,9 @@ namespace BallForge.Sprites.DOTS.Editor
                 _draggingPivot = false;
                 _pivotSelected = false;
             }
-            // Input arbitration: an armed creation tool owns the canvas. Otherwise precise
-            // collider hits win, then sockets, then an already-selected onion/badge, then marquee.
-            // A live collider tool must not lose clicks to socket placement. Pivot drag is
-            // allowed only when those tools are not armed and the handle itself is clicked.
+            // Input arbitration: an armed creation tool owns the canvas. Otherwise
+            // selected-collider handles, sockets, and pivot win, then preview marquee
+            // (colliders + sockets). Timeline marquee is a separate surface.
             if (_showHitboxes && _colliderCreationMode != ColliderCreationMode.None)
             {
                 EditorGUIUtility.AddCursorRect(cell, MouseCursor.ArrowPlus);
@@ -907,10 +1021,15 @@ namespace BallForge.Sprites.DOTS.Editor
             }
             else
             {
-                if (_draggingPivot)
+                if (_draggingColliderTransform)
+                    HandleColliderTransformInput(previewControlId, cell, clip, state.Frame);
+                else if (_draggingPivot)
                     HandlePivotInput(previewControlId, cell);
                 else if (_draggingSocket)
                     HandleSocketManipulationInput(previewControlId, cell, clip, state.Frame);
+                else if (_showHitboxes && Event.current.type == EventType.MouseDown &&
+                         HitSelectedColliderHandle(cell, Event.current.mousePosition) != ColliderHandleKind.None)
+                    HandleColliderTransformInput(previewControlId, cell, clip, state.Frame);
                 else if (Event.current.type == EventType.MouseDown &&
                          FindSocketAt(clip, state.Frame, cell, Event.current.mousePosition) != null)
                     HandleSocketManipulationInput(previewControlId, cell, clip, state.Frame);
@@ -919,15 +1038,13 @@ namespace BallForge.Sprites.DOTS.Editor
                     HandlePivotInput(previewControlId, cell);
                 else
                 {
-                    bool colliderConsumed = _showHitboxes &&
-                        HandleColliderSelectionInput(previewControlId, cell, clip, state.Frame, onionGhosts);
-                    if (!colliderConsumed)
+                    bool selectionConsumed = HandlePreviewObjectSelectionInput(
+                        previewControlId, cell, clip, state.Frame, onionGhosts);
+                    if (!selectionConsumed)
                     {
-                        bool socketConsumed = HandleSocketManipulationInput(
-                            previewControlId, cell, clip, state.Frame);
-                        bool pivotConsumed = !socketConsumed && _showPivot &&
+                        bool pivotConsumed = _showPivot &&
                             HandlePivotInput(previewControlId, cell);
-                        if (!socketConsumed && !pivotConsumed && _profile.OnionSkinEnabled)
+                        if (!pivotConsumed && _profile.OnionSkinEnabled)
                             HandleOnionInput(previewControlId, cell, clip, state.Frame, onionGhosts);
                     }
                     else if (_showPivot && Event.current.type == EventType.MouseDown)
@@ -1174,7 +1291,10 @@ namespace BallForge.Sprites.DOTS.Editor
                 EditorGUILayout.HelpBox(gpuReason, MessageType.None);
 
                 GUILayout.Space(9f);
-                SectionLabel($"FRAME {_selectedFrame + 1}");
+                int selectedCount = Mathf.Max(1, _selectedFrames.Count);
+                SectionLabel(selectedCount > 1
+                    ? $"FRAME {_selectedFrame + 1}  •  {selectedCount} selected"
+                    : $"FRAME {_selectedFrame + 1}");
                 clip.Frames[_selectedFrame] = Mathf.Clamp(
                     EditorGUILayout.IntField("Sheet Column", clip.Frames[_selectedFrame]),
                     0, Mathf.Max(0, _profile.Columns - 1));
@@ -1213,8 +1333,8 @@ namespace BallForge.Sprites.DOTS.Editor
                     if (GUILayout.Button("+ Frame After"))
                         InsertFrameAfter(clip);
                     using (new EditorGUI.DisabledScope(clip.Frames.Length <= 1))
-                        if (GUILayout.Button("Remove Frame"))
-                            RemoveSelectedFrame(clip);
+                        if (GUILayout.Button(selectedCount > 1 ? "Remove Frames" : "Remove Frame"))
+                            RemoveSelectedFrames(clip);
                 }
 
                 DrawEventMarkerInspector(clip);
@@ -1375,9 +1495,23 @@ namespace BallForge.Sprites.DOTS.Editor
             string markerSelection = _selectedEventFrame >= 0
                 ? $"   •   marker {EventAuthoredTime(clip, _selectedEventFrame):F3}s selected"
                 : string.Empty;
-            GUI.Label(new Rect(rect.x + 105f, rect.y + 10f, rect.width - 118f, 16f),
-                $"{clip.Frames.Length} frames   •   {total:F3}s   •   drag image = reorder   •   frame edge = duration   •   right-click lane = event{markerSelection}",
+            const float deleteEmptyWidth = 148f;
+            var deleteEmptyRect = new Rect(rect.xMax - deleteEmptyWidth - 8f, rect.y + 7f, deleteEmptyWidth, 20f);
+            GUI.Label(new Rect(rect.x + 105f, rect.y + 10f,
+                    Mathf.Max(40f, deleteEmptyRect.x - rect.x - 113f), 16f),
+                $"{clip.Frames.Length} frames   •   {total:F3}s   •   drag image = reorder   •   frame edge = duration   •   drag empty = marquee   •   right-click lane = event{markerSelection}",
                 _mutedStyle);
+            int emptyFrameCount = CountEmptyFrames(clip);
+            using (new EditorGUI.DisabledScope(clip.Frames.Length <= 1 || emptyFrameCount == 0))
+            {
+                if (GUI.Button(deleteEmptyRect,
+                    new GUIContent("Delete empty frames",
+                        emptyFrameCount == 0
+                            ? "No sheet cells in this clip are empty of opaque pixels."
+                            : $"Remove {emptyFrameCount} frame{(emptyFrameCount == 1 ? string.Empty : "s")} whose sheet cell has no opaque pixels."),
+                    EditorStyles.miniButton))
+                    DeleteEmptyFrames(clip);
+            }
 
             var viewport = new Rect(rect.x + 8f, rect.y + 34f, rect.width - 16f, rect.height - 42f);
             float contentWidth = Mathf.Max(viewport.width - 16f, total * pixelsPerSecond + 52f);
@@ -1425,7 +1559,8 @@ namespace BallForge.Sprites.DOTS.Editor
             EditorGUI.DrawRect(new Rect(0f, 27f, contentWidth, 27f), new Color(0.08f, 0.095f, 0.12f));
             GUI.Label(new Rect(6f, 31f, 48f, 18f), "EVENT", _mutedStyle);
             EditorGUIUtility.AddCursorRect(new Rect(0f, 0f, contentWidth, 27f), MouseCursor.SlideArrow);
-            EditorGUIUtility.AddCursorRect(new Rect(0f, 27f, contentWidth, 145f), MouseCursor.Pan);
+            EditorGUIUtility.AddCursorRect(new Rect(0f, 27f, contentWidth, 27f), MouseCursor.SlideArrow);
+            EditorGUIUtility.AddCursorRect(new Rect(0f, 54f, contentWidth, 118f), MouseCursor.Arrow);
 
             for (int i = 0; i < frameCount; i++)
             {
@@ -1456,19 +1591,20 @@ namespace BallForge.Sprites.DOTS.Editor
                 bool draggedSource = _timelineDragMode == TimelineDragMode.Reorder &&
                                      _reorderMoved && i == _dragFrameIndex;
 
-                Color cardColor = i == _selectedFrame
+                bool selected = IsFrameSelected(i);
+                Color cardColor = selected
                     ? new Color(0.16f, 0.4f, 0.56f)
                     : PanelAltColor;
                 if (draggedSource) cardColor.a = 0.35f;
                 EditorGUI.DrawRect(card, cardColor);
-                DrawBorder(card, i == _selectedFrame ? AccentColor : BorderColor, i == _selectedFrame ? 2f : 1f);
+                DrawBorder(card, selected ? AccentColor : BorderColor, selected ? 2f : 1f);
                 GUI.Label(new Rect(card.x + 6f, card.y + 4f, card.width - 12f, 16f),
                     $"F{i + 1}  •  {duration:F3}s", _mutedStyle);
                 var thumbArea = new Rect(card.x + 7f, 83f, card.width - 14f, 62f);
                 DrawCheckerboard(thumbArea, 9f);
                 DrawCell(_profile.Sheet, CellIndexOf(clip, i), thumb, 1f);
                 bool hovered = ThumbnailContains(thumb, Event.current.mousePosition);
-                DrawThumbnailHitShape(thumb, i == _selectedFrame, hovered);
+                DrawThumbnailHitShape(thumb, selected, hovered);
                 EditorGUIUtility.AddCursorRect(thumb, MouseCursor.MoveArrow);
                 GUI.Label(new Rect(card.x + 6f, card.y + 85f, card.width - 12f, 14f),
                     clip.EventIds[i] == 0 ? $"column {clip.Frames[i]}" : EventName(clip.EventIds[i]),
@@ -1507,6 +1643,13 @@ namespace BallForge.Sprites.DOTS.Editor
                 DrawCell(_profile.Sheet, CellIndexOf(clip, _dragFrameIndex), ghostThumb, 0.9f);
                 GUI.Label(new Rect(ghost.x + 7f, ghost.y + 86f, ghost.width - 14f, 14f),
                     "release to place", _mutedStyle);
+            }
+
+            if (_timelineDragMode == TimelineDragMode.Marquee && _timelineMarqueeMoved)
+            {
+                EditorGUI.DrawRect(_timelineMarqueeRect,
+                    new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.12f));
+                DrawBorder(_timelineMarqueeRect, AccentColor, 1.5f);
             }
             GUI.EndScrollView();
         }
@@ -1563,6 +1706,8 @@ namespace BallForge.Sprites.DOTS.Editor
             {
                 if (_timelineDragMode == TimelineDragMode.ResizeFrame && _resizeFrameIndex >= 0)
                     clip.FrameDurationScales[_resizeFrameIndex] = _resizeStartDuration * clip.FrameRate;
+                else if (_timelineDragMode == TimelineDragMode.Marquee)
+                    RestoreFrameSelectionFromBaseline();
                 EndTimelineDrag(controlId);
                 evt.Use();
                 Repaint();
@@ -1605,7 +1750,7 @@ namespace BallForge.Sprites.DOTS.Editor
                         _resizeFrameIndex = i;
                         _resizeStartDuration = durations[i];
                         _resizePixelsPerSecond = pixelsPerSecond;
-                        _selectedFrame = i;
+                        SelectOnlyFrame(i);
                         _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
@@ -1618,10 +1763,24 @@ namespace BallForge.Sprites.DOTS.Editor
                     for (int i = thumbnails.Length - 1; i >= 0; i--)
                     {
                         if (!ThumbnailContains(thumbnails[i], mouse)) continue;
+                        bool additive = evt.shift || evt.control || evt.command;
+                        if (additive)
+                        {
+                            ApplyFrameModifierClick(i, additive: true, toggle: evt.control || evt.command);
+                            BeginTimelineMarquee(controlId, mouse, additive: true);
+                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
+                            ClearColliderSelection();
+                            _selectedEventFrame = -1;
+                            _socketDeleteArmed = false;
+                            evt.Use();
+                            Repaint();
+                            return;
+                        }
+
                         BeginTimelineDrag(controlId, TimelineDragMode.Reorder, mouse);
                         _dragFrameIndex = i;
                         _dropFrameSlot = i;
-                        _selectedFrame = i;
+                        SelectOnlyFrame(i);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
                         _socketDeleteArmed = false;
@@ -1631,9 +1790,27 @@ namespace BallForge.Sprites.DOTS.Editor
                         Repaint();
                         return;
                     }
+
+                    if (mouse.y > 54f)
+                    {
+                        bool additive = evt.shift || evt.control || evt.command;
+                        int card = FrameCardAt(cards, mouse);
+                        if (card >= 0)
+                        {
+                            ApplyFrameModifierClick(card, additive, toggle: evt.control || evt.command);
+                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
+                        }
+                        BeginTimelineMarquee(controlId, mouse, additive);
+                        ClearColliderSelection();
+                        _selectedEventFrame = -1;
+                        _socketDeleteArmed = false;
+                        evt.Use();
+                        Repaint();
+                        return;
+                    }
                 }
 
-                if (evt.button == 0 && (mouse.y <= 27f || evt.shift))
+                if (evt.button == 0 && mouse.y <= 27f)
                 {
                     BeginTimelineDrag(controlId, TimelineDragMode.Scrub, mouse);
                     ScrubTimeline(clip, mouse.x, total, pixelsPerSecond);
@@ -1718,6 +1895,22 @@ namespace BallForge.Sprites.DOTS.Editor
                                 _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
                         }
                         break;
+
+                    case TimelineDragMode.Marquee:
+                        if (!_timelineMarqueeMoved &&
+                            Vector2.Distance(screenMouse, _timelineDragStartScreen) >= 4f)
+                            _timelineMarqueeMoved = true;
+                        if (_timelineMarqueeMoved)
+                        {
+                            _timelineMarqueeRect = RectFromPoints(_timelineMarqueeStart, mouse);
+                            ApplyTimelineMarqueeSelection(cards);
+                            const float edge = 34f;
+                            if (screenMouse.x < viewportScreen.xMin + edge)
+                                _timelineScroll.x = Mathf.Max(0f, _timelineScroll.x - 13f);
+                            else if (screenMouse.x > viewportScreen.xMax - edge)
+                                _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
+                        }
+                        break;
                 }
                 evt.Use();
                 Repaint();
@@ -1760,7 +1953,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 0f,
                 Mathf.Max(0f, total - 0.0001f));
             int frame = AuthoredFrameAtTime(clip, authoredTime, out float normalizedTime);
-            _selectedFrame = frame;
+            SelectOnlyFrame(frame);
             _selectedEventFrame = clip.EventIds[frame] == 0 ? -1 : frame;
             ClearColliderSelection();
             _selectedOnionFrame = -1;
@@ -1852,6 +2045,68 @@ namespace BallForge.Sprites.DOTS.Editor
             _eventDragMoved = false;
             _panMoved = false;
             _panClickPlacesPlayhead = false;
+            _timelineMarqueeMoved = false;
+            _timelineMarqueeAdditive = false;
+            _timelineMarqueeRect = default;
+            _timelineMarqueeBaseline.Clear();
+        }
+
+        void BeginTimelineMarquee(int controlId, Vector2 contentMouse, bool additive)
+        {
+            BeginTimelineDrag(controlId, TimelineDragMode.Marquee, contentMouse);
+            _timelineMarqueeStart = contentMouse;
+            _timelineMarqueeRect = new Rect(contentMouse, Vector2.zero);
+            _timelineMarqueeMoved = false;
+            _timelineMarqueeAdditive = additive;
+            _timelineMarqueeBaseline.Clear();
+            foreach (int index in _selectedFrames)
+                _timelineMarqueeBaseline.Add(index);
+        }
+
+        static int FrameCardAt(Rect[] cards, Vector2 point)
+        {
+            for (int i = cards.Length - 1; i >= 0; i--)
+                if (cards[i].Contains(point))
+                    return i;
+            return -1;
+        }
+
+        void ApplyTimelineMarqueeSelection(Rect[] cards)
+        {
+            _selectedFrames.Clear();
+            if (_timelineMarqueeAdditive)
+            {
+                foreach (int index in _timelineMarqueeBaseline)
+                    _selectedFrames.Add(index);
+            }
+
+            for (int i = 0; i < cards.Length; i++)
+            {
+                if (cards[i].Overlaps(_timelineMarqueeRect))
+                    _selectedFrames.Add(i);
+            }
+
+            if (_selectedFrames.Count == 0)
+            {
+                int fallback = Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, cards.Length - 1));
+                _selectedFrames.Add(fallback);
+                _selectedFrame = fallback;
+                return;
+            }
+
+            if (!_selectedFrames.Contains(_selectedFrame))
+                _selectedFrame = LowestSelectedFrame();
+        }
+
+        void RestoreFrameSelectionFromBaseline()
+        {
+            _selectedFrames.Clear();
+            foreach (int index in _timelineMarqueeBaseline)
+                _selectedFrames.Add(index);
+            if (_selectedFrames.Count == 0)
+                _selectedFrames.Add(Mathf.Max(0, _selectedFrame));
+            else if (!_selectedFrames.Contains(_selectedFrame))
+                _selectedFrame = LowestSelectedFrame();
         }
 
         bool ThumbnailContains(Rect thumbnail, Vector2 point)
@@ -1921,7 +2176,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 0f,
                 Mathf.Max(0f, total - 0.0001f));
             _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
-            _selectedFrame = AuthoredFrameAtTime(clip, authoredTime, out _);
+            SelectOnlyFrame(AuthoredFrameAtTime(clip, authoredTime, out _));
             ClearColliderSelection();
             _selectedEventFrame = -1;
         }
@@ -1979,7 +2234,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _selectedEventFrame = RemapIndexAfterMove(_selectedEventFrame, fromIndex, toIndex);
 
             clip.MoveFrame(fromIndex, toIndex);
-            _selectedFrame = toIndex;
+            SelectOnlyFrame(toIndex);
             float authoredTime = 0f;
             for (int i = 0; i < toIndex; i++)
                 authoredTime += FrameDuration(clip, i);
@@ -2360,7 +2615,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 cell.y + pointUV.y * cell.height);
         }
 
-        bool HandleColliderSelectionInput(int controlId, Rect cell, SpriteClipDef clip, int frame,
+        bool HandlePreviewObjectSelectionInput(int controlId, Rect cell, SpriteClipDef clip, int frame,
                                           List<OnionGhostLayout> ghosts)
         {
             var evt = Event.current;
@@ -2372,7 +2627,11 @@ namespace BallForge.Sprites.DOTS.Editor
                     Vector2.Distance(_colliderMarqueeStart, evt.mousePosition) >= 4f)
                     _draggingColliderMarquee = true;
                 if (_draggingColliderMarquee)
+                {
                     _colliderMarqueeRect = RectFromPoints(_colliderMarqueeStart, evt.mousePosition);
+                    SelectPreviewObjectsInMarquee(clip, frame, cell, _colliderMarqueeRect,
+                        _colliderMarqueeAdditive);
+                }
                 evt.Use();
                 Repaint();
                 return true;
@@ -2382,13 +2641,13 @@ namespace BallForge.Sprites.DOTS.Editor
             {
                 if (_draggingColliderMarquee)
                 {
-                    SelectCollidersInMarquee(clip, frame, cell, _colliderMarqueeRect,
+                    SelectPreviewObjectsInMarquee(clip, frame, cell, _colliderMarqueeRect,
                         _colliderMarqueeAdditive);
                 }
                 else
                 {
                     if (!_colliderMarqueeAdditive)
-                        ClearColliderSelection();
+                        ClearPreviewObjectSelection();
                     SelectOnionAtPoint(clip, ghosts, evt.mousePosition);
                 }
 
@@ -2401,7 +2660,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (evt.type != EventType.MouseDown || !cell.Contains(evt.mousePosition))
                 return false;
 
-            FrameBoxDef found = FindColliderAt(clip, frame, cell, evt.mousePosition);
+            FrameBoxDef found = _showHitboxes ? FindColliderAt(clip, frame, cell, evt.mousePosition) : null;
             if (found != null)
             {
                 _playing = false;
@@ -2412,7 +2671,10 @@ namespace BallForge.Sprites.DOTS.Editor
 
                 if (evt.button == 0)
                 {
+                    bool additive = evt.shift || evt.control || evt.command;
                     SelectCollider(found, evt.shift, evt.control || evt.command);
+                    if (!additive)
+                        BeginColliderTransform(controlId, found, ColliderHandleKind.Body, cell, evt.mousePosition);
                     evt.Use();
                     Repaint();
                     return true;
@@ -2424,6 +2686,7 @@ namespace BallForge.Sprites.DOTS.Editor
                     {
                         _selectedColliders.Clear();
                         _selectedColliders.Add(found);
+                        ClearSocketSelection();
                     }
                     ShowColliderContextMenu(clip, frame, found);
                     evt.Use();
@@ -2445,6 +2708,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _colliderMarqueeAdditive = evt.shift || evt.control || evt.command;
             _colliderMarqueeStart = evt.mousePosition;
             _colliderMarqueeRect = new Rect(evt.mousePosition, Vector2.zero);
+            CapturePreviewMarqueeBaseline();
             GUIUtility.hotControl = controlId;
             GUIUtility.keyboardControl = controlId;
             evt.Use();
@@ -2471,34 +2735,90 @@ namespace BallForge.Sprites.DOTS.Editor
         {
             FrameBoxDef found = null;
             foreach (var box in BoxesFor(clip, frame))
+            {
+                if (box.Hidden)
+                    continue;
                 if (ColliderContains(box, cell, point))
                     found = box;
+            }
             return found;
         }
 
         void SelectCollider(FrameBoxDef box, bool additive, bool toggle)
         {
             if (!additive && !toggle)
-                _selectedColliders.Clear();
+                ClearColliderSelection();
             if (toggle && _selectedColliders.Contains(box))
                 _selectedColliders.Remove(box);
             else
                 _selectedColliders.Add(box);
-            _status = _selectedColliders.Count == 0
-                ? "Collider selection cleared"
-                : $"Selected {_selectedColliders.Count} collider{(_selectedColliders.Count == 1 ? string.Empty : "s")}";
+            _status = PreviewSelectionStatus();
         }
 
-        void SelectCollidersInMarquee(SpriteClipDef clip, int frame, Rect cell, Rect marquee, bool additive)
+        void CapturePreviewMarqueeBaseline()
         {
-            if (!additive)
-                _selectedColliders.Clear();
-            foreach (var box in BoxesFor(clip, frame))
-                if (marquee.Overlaps(UvToScreen(box.RectUV, cell), true))
+            _previewMarqueeColliderBaseline.Clear();
+            foreach (var box in _selectedColliders)
+                _previewMarqueeColliderBaseline.Add(box);
+            _previewMarqueeSocketBaseline.Clear();
+            foreach (string name in _selectedSockets)
+                _previewMarqueeSocketBaseline.Add(name);
+        }
+
+        void SelectPreviewObjectsInMarquee(SpriteClipDef clip, int frame, Rect cell, Rect marquee, bool additive)
+        {
+            _selectedColliders.Clear();
+            _selectedSockets.Clear();
+            if (additive)
+            {
+                foreach (var box in _previewMarqueeColliderBaseline)
                     _selectedColliders.Add(box);
+                foreach (string name in _previewMarqueeSocketBaseline)
+                    _selectedSockets.Add(name);
+            }
+
+            if (_showHitboxes)
+            {
+                foreach (var box in BoxesFor(clip, frame))
+                {
+                    if (box.Hidden)
+                        continue;
+                    if (marquee.Overlaps(ColliderWorldAabb(box, cell), true))
+                        _selectedColliders.Add(box);
+                }
+            }
+
+            if (clip?.Sockets != null)
+            {
+                var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
+                for (int i = 0; i < names.Count; i++)
+                {
+                    string name = names[i];
+                    if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
+                            out var position, out _, out _))
+                        continue;
+                    if (marquee.Overlaps(SocketWorldAabb(position, cell, name), true))
+                        _selectedSockets.Add(SpriteSocketKeys.CanonicalName(name));
+                }
+            }
+
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
-            _status = $"Marquee selected {_selectedColliders.Count} collider{(_selectedColliders.Count == 1 ? string.Empty : "s")}";
+            SyncSocketPrimaryFromSelection();
+            _status = PreviewSelectionStatus("Marquee selected");
+        }
+
+        string PreviewSelectionStatus(string prefix = "Selected")
+        {
+            int colliders = _selectedColliders.Count;
+            int sockets = _selectedSockets.Count;
+            if (colliders == 0 && sockets == 0)
+                return "Preview selection cleared";
+            if (sockets == 0)
+                return $"{prefix} {colliders} collider{(colliders == 1 ? string.Empty : "s")}";
+            if (colliders == 0)
+                return $"{prefix} {sockets} socket{(sockets == 1 ? string.Empty : "s")}";
+            return $"{prefix} {colliders} collider{(colliders == 1 ? string.Empty : "s")} and {sockets} socket{(sockets == 1 ? string.Empty : "s")}";
         }
 
         void EndColliderMarquee(int controlId)
@@ -2506,6 +2826,8 @@ namespace BallForge.Sprites.DOTS.Editor
             _colliderMarqueePending = false;
             _draggingColliderMarquee = false;
             _colliderMarqueeRect = default;
+            _previewMarqueeColliderBaseline.Clear();
+            _previewMarqueeSocketBaseline.Clear();
             if (GUIUtility.hotControl == controlId)
                 GUIUtility.hotControl = 0;
         }
@@ -2840,9 +3162,9 @@ namespace BallForge.Sprites.DOTS.Editor
             clip.Sockets ??= new List<FrameSocketDef>();
             PruneSocketSelection(clip);
             var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
-            if (names.Count > 0 && string.IsNullOrEmpty(_selectedSocketName))
-                _selectedSocketName = names[0];
-            GUILayout.Label($"{names.Count} socket{(names.Count == 1 ? string.Empty : "s")}", _mutedStyle);
+            GUILayout.Label(
+                $"{names.Count} socket{(names.Count == 1 ? string.Empty : "s")} • {_selectedSockets.Count} selected",
+                _mutedStyle);
 
             Color previous = GUI.backgroundColor;
             if (_socketPlacementArmed)
@@ -2875,7 +3197,7 @@ namespace BallForge.Sprites.DOTS.Editor
             for (int i = 0; i < names.Count; i++)
             {
                 string name = names[i];
-                bool selected = SpriteSocketKeys.NamesEqual(name, _selectedSocketName);
+                bool selected = IsSocketSelected(name);
                 SpriteSocketKeys.TryGetPose(clip.Sockets, name, _selectedFrame,
                     out var pose, out var angle, out bool onFrame);
                 Color swatch = SpriteSocketKeys.ColorForIndex(i);
@@ -2888,12 +3210,13 @@ namespace BallForge.Sprites.DOTS.Editor
                         string rowLabel = onFrame ? $"{i}:{name}" : $"{i}:{name}  (other frame)";
                         if (GUILayout.Button(rowLabel, selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton))
                         {
-                            _selectedSocketName = name;
-                            _socketDeleteArmed = true;
+                            var click = Event.current;
+                            SelectPreviewSocket(name, click.shift,
+                                click.control || click.command);
                         }
                     }
 
-                    if (!selected)
+                    if (!selected || !SpriteSocketKeys.NamesEqual(name, _selectedSocketName))
                         continue;
 
                     if (!onFrame)
@@ -2937,8 +3260,10 @@ namespace BallForge.Sprites.DOTS.Editor
                             RecordProfileUndo("Delete Sprite Socket");
                             SpriteSocketKeys.DeleteIdentity(clip.Sockets, name);
                             _status = $"Deleted socket {name}";
-                            _selectedSocketName = null;
-                            _socketDeleteArmed = false;
+                            _selectedSockets.Remove(SpriteSocketKeys.CanonicalName(name));
+                            if (SpriteSocketKeys.NamesEqual(_selectedSocketName, name))
+                                _selectedSocketName = null;
+                            SyncSocketPrimaryFromSelection();
                             _draggingSocket = false;
                             SaveDirty();
                             GUIUtility.ExitGUI();
@@ -2968,21 +3293,83 @@ namespace BallForge.Sprites.DOTS.Editor
         void ClearSocketToolState()
         {
             _socketPlacementArmed = false;
+            ClearSocketSelection();
+            _draggingSocket = false;
+            _socketMoveNames.Clear();
+            _socketMoveStarts.Clear();
+        }
+
+        void ClearSocketSelection()
+        {
+            _selectedSockets.Clear();
             _selectedSocketName = null;
             _socketDeleteArmed = false;
-            _draggingSocket = false;
+        }
+
+        void ClearPreviewObjectSelection()
+        {
+            ClearColliderSelection();
+            ClearSocketSelection();
+        }
+
+        bool IsSocketSelected(string name)
+            => !string.IsNullOrEmpty(name) &&
+               _selectedSockets.Contains(SpriteSocketKeys.CanonicalName(name));
+
+        void SyncSocketPrimaryFromSelection()
+        {
+            if (_selectedSockets.Count == 0)
+            {
+                _selectedSocketName = null;
+                _socketDeleteArmed = false;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_selectedSocketName) ||
+                !_selectedSockets.Contains(SpriteSocketKeys.CanonicalName(_selectedSocketName)))
+            {
+                string first = null;
+                foreach (string name in _selectedSockets)
+                {
+                    first = name;
+                    break;
+                }
+                _selectedSocketName = first;
+            }
+            _socketDeleteArmed = true;
+        }
+
+        void SelectPreviewSocket(string name, bool additive, bool toggle)
+        {
+            name = SpriteSocketKeys.CanonicalName(name);
+            if (!additive && !toggle)
+                ClearColliderSelection();
+            if (toggle && _selectedSockets.Contains(name))
+                _selectedSockets.Remove(name);
+            else
+                _selectedSockets.Add(name);
+            _selectedSocketName = _selectedSockets.Contains(name) ? name : null;
+            SyncSocketPrimaryFromSelection();
+            _selectedEventFrame = -1;
+            _selectedOnionFrame = -1;
+            _status = PreviewSelectionStatus();
         }
 
         void PruneSocketSelection(SpriteClipDef clip)
         {
-            if (string.IsNullOrEmpty(_selectedSocketName) || clip == null)
-                return;
-            if (SpriteSocketKeys.IdentityIndex(clip.Sockets, _selectedSocketName) < 0)
+            if (clip?.Sockets == null)
             {
-                _selectedSocketName = null;
-                _socketDeleteArmed = false;
-                _draggingSocket = false;
+                ClearSocketSelection();
+                return;
             }
+
+            _selectedSockets.RemoveWhere(name => SpriteSocketKeys.IdentityIndex(clip.Sockets, name) < 0);
+            if (!string.IsNullOrEmpty(_selectedSocketName) &&
+                SpriteSocketKeys.IdentityIndex(clip.Sockets, _selectedSocketName) < 0)
+                _selectedSocketName = null;
+            SyncSocketPrimaryFromSelection();
+            if (_selectedSockets.Count == 0)
+                _draggingSocket = false;
         }
 
         void DrawSocketPlacementBalloon(Rect canvas)
@@ -3002,7 +3389,7 @@ namespace BallForge.Sprites.DOTS.Editor
             for (int i = 0; i < names.Count; i++)
             {
                 string name = names[i];
-                bool selected = SpriteSocketKeys.NamesEqual(name, _selectedSocketName);
+                bool selected = IsSocketSelected(name);
                 if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
                         out var position, out var angle, out bool onFrame))
                     continue;
@@ -3076,6 +3463,25 @@ namespace BallForge.Sprites.DOTS.Editor
             return PivotScreen(cell) + SourcePixelsToScreenOffset(localPixels, cell);
         }
 
+        Rect SocketWorldAabb(Vector2 localPixels, Rect cell, string label)
+        {
+            Vector2 center = SocketToScreen(localPixels, cell);
+            const float radius = 12f;
+            var bounds = new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f);
+            if (!string.IsNullOrEmpty(label) && _socketLabelStyle != null)
+            {
+                Vector2 labelSize = _socketLabelStyle.CalcSize(new GUIContent(label));
+                var labelRect = new Rect(center.x + radius - 3f, center.y - labelSize.y * 0.5f,
+                    labelSize.x + 2f, labelSize.y);
+                bounds = Rect.MinMaxRect(
+                    Mathf.Min(bounds.xMin, labelRect.xMin),
+                    Mathf.Min(bounds.yMin, labelRect.yMin),
+                    Mathf.Max(bounds.xMax, labelRect.xMax),
+                    Mathf.Max(bounds.yMax, labelRect.yMax));
+            }
+            return bounds;
+        }
+
         Vector2 ScreenToSocketLocal(Vector2 screen, Rect cell)
         {
             return ScreenToSourcePixelDelta(screen - PivotScreen(cell), cell);
@@ -3091,9 +3497,8 @@ namespace BallForge.Sprites.DOTS.Editor
             for (int i = 0; i < names.Count; i++)
             {
                 string name = names[i];
-                bool selected = SpriteSocketKeys.NamesEqual(name, _selectedSocketName);
                 if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
-                        out var position, out _, out bool onFrame))
+                        out var position, out _, out _))
                     continue;
                 if (Vector2.Distance(SocketToScreen(position, cell), point) <= hitRadius)
                     found = name;
@@ -3133,8 +3538,7 @@ namespace BallForge.Sprites.DOTS.Editor
             string hit = FindSocketAt(clip, frame, cell, evt.mousePosition);
             if (hit != null)
             {
-                _selectedSocketName = hit;
-                _socketDeleteArmed = true;
+                SelectPreviewSocket(hit, additive: false, toggle: false);
                 _socketPlacementArmed = false;
                 _status = $"Selected socket {hit}";
                 evt.Use();
@@ -3155,7 +3559,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (!placingExisting)
                 placed.LocalAngle = 0f;
             _selectedSocketName = name;
-            _socketDeleteArmed = true;
+            SelectPreviewSocket(name, additive: false, toggle: false);
             _socketPlacementArmed = false;
             _status = $"Placed {name} on frame {frame + 1}";
             SaveDirty();
@@ -3168,11 +3572,19 @@ namespace BallForge.Sprites.DOTS.Editor
             var evt = Event.current;
             if (evt.type == EventType.MouseDrag && _draggingSocket && GUIUtility.hotControl == controlId)
             {
+                if (!_socketMoveUndoRecorded)
+                {
+                    RecordProfileUndo(_socketMoveNames.Count == 1 ? "Move Sprite Socket" : "Move Sprite Sockets");
+                    _socketMoveUndoRecorded = true;
+                }
                 Vector2 sourceDelta = ScreenToSourcePixelDelta(evt.mousePosition - _socketDragStart, cell);
-                var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, _selectedSocketName, frame);
-                key.LocalPosition = new Vector2(
-                    Mathf.Round(_socketOffsetStart.x + sourceDelta.x),
-                    Mathf.Round(_socketOffsetStart.y + sourceDelta.y));
+                for (int i = 0; i < _socketMoveNames.Count; i++)
+                {
+                    var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, _socketMoveNames[i], frame);
+                    key.LocalPosition = new Vector2(
+                        Mathf.Round(_socketMoveStarts[i].x + sourceDelta.x),
+                        Mathf.Round(_socketMoveStarts[i].y + sourceDelta.y));
+                }
                 evt.Use();
                 Repaint();
                 return true;
@@ -3182,6 +3594,9 @@ namespace BallForge.Sprites.DOTS.Editor
                 GUIUtility.hotControl == controlId)
             {
                 _draggingSocket = false;
+                _socketMoveNames.Clear();
+                _socketMoveStarts.Clear();
+                _socketMoveUndoRecorded = false;
                 GUIUtility.hotControl = 0;
                 SaveDirty();
                 evt.Use();
@@ -3198,20 +3613,52 @@ namespace BallForge.Sprites.DOTS.Editor
 
             _playing = false;
             _selectedFrame = frame;
-            _selectedOnionFrame = -1;
-            _selectedSocketName = hit;
-            _socketDeleteArmed = true;
-            SpriteSocketKeys.TryGetPose(clip.Sockets, hit, frame, out var pose, out _, out _);
-            _draggingSocket = true;
-            _socketDragStart = evt.mousePosition;
-            _socketOffsetStart = pose;
-            RecordProfileUndo("Move Sprite Socket");
-            GUIUtility.hotControl = controlId;
-            GUIUtility.keyboardControl = controlId;
-            _status = $"Selected socket {hit}";
+            bool additive = evt.shift || evt.control || evt.command;
+            bool alreadySelected = IsSocketSelected(hit);
+            if (additive)
+            {
+                SelectPreviewSocket(hit, additive: true, toggle: evt.control || evt.command);
+                evt.Use();
+                Repaint();
+                return true;
+            }
+
+            if (!alreadySelected)
+                SelectPreviewSocket(hit, additive: false, toggle: false);
+            else
+            {
+                _selectedSocketName = SpriteSocketKeys.CanonicalName(hit);
+                _socketDeleteArmed = true;
+                _selectedOnionFrame = -1;
+            }
+
+            BeginSocketGroupMove(clip, frame, evt.mousePosition, controlId);
+            _status = PreviewSelectionStatus();
             evt.Use();
             Repaint();
             return true;
+        }
+
+        void BeginSocketGroupMove(SpriteClipDef clip, int frame, Vector2 mouse, int controlId)
+        {
+            _socketMoveNames.Clear();
+            _socketMoveStarts.Clear();
+            if (_selectedSockets.Count == 0 && !string.IsNullOrEmpty(_selectedSocketName))
+                _selectedSockets.Add(_selectedSocketName);
+            foreach (string name in _selectedSockets)
+            {
+                if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame, out var pose, out _, out _))
+                    continue;
+                _socketMoveNames.Add(name);
+                _socketMoveStarts.Add(pose);
+            }
+            if (_socketMoveNames.Count == 0)
+                return;
+            _draggingSocket = true;
+            _socketDragStart = mouse;
+            _socketMoveUndoRecorded = false;
+            GUIUtility.hotControl = controlId;
+            GUIUtility.keyboardControl = controlId;
         }
 
         void AddClip()
@@ -3226,7 +3673,7 @@ namespace BallForge.Sprites.DOTS.Editor
             clip.EnsureFrameData();
             _profile.Clips.Add(clip);
             _selectedClip = _profile.Clips.Count - 1;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -3274,7 +3721,7 @@ namespace BallForge.Sprites.DOTS.Editor
             }
             _profile.Clips.Insert(_selectedClip + 1, clone);
             _selectedClip++;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -3306,7 +3753,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 _renamingClip--;
             if (deletedSelected)
             {
-                _selectedFrame = 0;
+                SelectOnlyFrame(0);
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
                 _selectedOnionFrame = -1;
@@ -3361,71 +3808,328 @@ namespace BallForge.Sprites.DOTS.Editor
             foreach (var box in _profile.Hitboxes)
                 if (box.ClipName == clip.Name && box.FrameIndex >= insert)
                     box.FrameIndex++;
-            _selectedFrame = insert;
+            SelectOnlyFrame(insert);
             SaveDirty();
         }
 
-        void RemoveSelectedFrame(SpriteClipDef clip)
+        void RemoveSelectedFrames(SpriteClipDef clip)
+        {
+            if (clip == null)
+                return;
+            EnsureFrameSelection(clip.Frames.Length);
+            RemoveFrames(clip, new List<int>(_selectedFrames));
+        }
+
+        void RemoveFrames(SpriteClipDef clip, List<int> indices)
+        {
+            if (clip == null || indices == null)
+                return;
+            clip.EnsureFrameData();
+            if (clip.Frames.Length <= 1)
+            {
+                _status = "A clip must keep at least one frame";
+                return;
+            }
+
+            var remove = new HashSet<int>();
+            for (int i = 0; i < indices.Count; i++)
+            {
+                int index = indices[i];
+                if (index >= 0 && index < clip.Frames.Length)
+                    remove.Add(index);
+            }
+            if (remove.Count == 0)
+                return;
+
+            if (remove.Count >= clip.Frames.Length)
+                remove.Remove(0);
+            if (remove.Count == 0)
+            {
+                _status = "A clip must keep at least one frame";
+                return;
+            }
+
+            int oldCount = clip.Frames.Length;
+            var remap = new int[oldCount];
+            int newCount = 0;
+            for (int i = 0; i < oldCount; i++)
+            {
+                if (remove.Contains(i))
+                    remap[i] = -1;
+                else
+                    remap[i] = newCount++;
+            }
+
+            RecordProfileUndo(remove.Count == 1
+                ? "Remove Sprite Animation Frame"
+                : "Remove Sprite Animation Frames");
+
+            clip.Frames = CompactArray(clip.Frames, remap, newCount);
+            clip.FrameDurationScales = CompactArray(clip.FrameDurationScales, remap, newCount);
+            clip.EventIds = CompactArray(clip.EventIds, remap, newCount);
+            clip.EventNormalizedTimes = CompactArray(clip.EventNormalizedTimes, remap, newCount);
+            clip.OnionOffsets = CompactArray(clip.OnionOffsets, remap, newCount);
+            clip.FrameScales = CompactArray(clip.FrameScales, remap, newCount);
+            clip.FrameRotations = CompactArray(clip.FrameRotations, remap, newCount);
+            clip.FrameTweenModes = CompactArray(clip.FrameTweenModes, remap, newCount);
+
+            if (clip.Sockets != null)
+            {
+                clip.Sockets.RemoveAll(socket =>
+                    socket.FrameIndex < 0 || socket.FrameIndex >= oldCount || remap[socket.FrameIndex] < 0);
+                for (int i = 0; i < clip.Sockets.Count; i++)
+                {
+                    int mapped = remap[clip.Sockets[i].FrameIndex];
+                    if (mapped >= 0)
+                        clip.Sockets[i].FrameIndex = mapped;
+                }
+            }
+
+            if (_selectedOnionFrame >= 0 && _selectedOnionFrame < oldCount)
+                _selectedOnionFrame = remap[_selectedOnionFrame];
+            else
+                _selectedOnionFrame = -1;
+
+            if (_selectedEventFrame >= 0 && _selectedEventFrame < oldCount)
+                _selectedEventFrame = remap[_selectedEventFrame];
+            else
+                _selectedEventFrame = -1;
+
+            _profile.Hitboxes ??= new List<FrameBoxDef>();
+            _profile.Hitboxes.RemoveAll(box =>
+                box.ClipName == clip.Name &&
+                (box.FrameIndex < 0 || box.FrameIndex >= oldCount || remap[box.FrameIndex] < 0));
+            foreach (var box in _profile.Hitboxes)
+            {
+                if (box.ClipName == clip.Name && box.FrameIndex >= 0 && box.FrameIndex < oldCount)
+                    box.FrameIndex = remap[box.FrameIndex];
+            }
+
+            int landing = -1;
+            int primary = Mathf.Clamp(_selectedFrame, 0, oldCount - 1);
+            if (remap[primary] >= 0)
+            {
+                landing = remap[primary];
+            }
+            else
+            {
+                for (int i = primary + 1; i < oldCount; i++)
+                {
+                    if (remap[i] >= 0)
+                    {
+                        landing = remap[i];
+                        break;
+                    }
+                }
+                if (landing < 0)
+                {
+                    for (int i = primary - 1; i >= 0; i--)
+                    {
+                        if (remap[i] >= 0)
+                        {
+                            landing = remap[i];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            SelectOnlyFrame(Mathf.Clamp(landing, 0, newCount - 1));
+            _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, _selectedFrame));
+            PruneColliderSelection(clip, _selectedFrame);
+            SaveDirty();
+            _status = remove.Count == 1
+                ? $"Removed frame {FirstRemovedIndex(remove) + 1}  •  {clip.Frames.Length} remaining"
+                : $"Removed {remove.Count} frames  •  {clip.Frames.Length} remaining";
+            Repaint();
+        }
+
+        static T[] CompactArray<T>(T[] source, int[] remap, int newCount)
+        {
+            var dest = new T[newCount];
+            if (source == null)
+                return dest;
+            int limit = Mathf.Min(source.Length, remap.Length);
+            for (int i = 0; i < limit; i++)
+            {
+                int mapped = remap[i];
+                if (mapped >= 0)
+                    dest[mapped] = source[i];
+            }
+            return dest;
+        }
+
+        static int FirstRemovedIndex(HashSet<int> remove)
+        {
+            int first = int.MaxValue;
+            foreach (int index in remove)
+                if (index < first)
+                    first = index;
+            return first == int.MaxValue ? 0 : first;
+        }
+
+        void DeleteEmptyFrames(SpriteClipDef clip)
         {
             if (clip == null)
                 return;
             clip.EnsureFrameData();
-            if (clip.Frames.Length <= 1)
+            var empty = CollectEmptyFrameIndices(clip);
+            if (empty.Count == 0)
+            {
+                _status = "No empty frames in this clip";
+                return;
+            }
+
+            int before = clip.Frames.Length;
+            RemoveFrames(clip, empty);
+            int removed = before - clip.Frames.Length;
+            _status = removed == 0
+                ? "A clip must keep at least one frame"
+                : $"Deleted {removed} empty frame{(removed == 1 ? string.Empty : "s")}  •  {clip.Frames.Length} remaining";
+        }
+
+        int CountEmptyFrames(SpriteClipDef clip)
+            => CollectEmptyFrameIndices(clip).Count;
+
+        List<int> CollectEmptyFrameIndices(SpriteClipDef clip)
+        {
+            var empty = new List<int>();
+            if (clip?.Frames == null || !TryEnsureSheetPixelCache())
+                return empty;
+            for (int i = 0; i < clip.Frames.Length; i++)
+            {
+                if (IsClipFrameCellEmpty(clip, i))
+                    empty.Add(i);
+            }
+            return empty;
+        }
+
+        bool IsClipFrameCellEmpty(SpriteClipDef clip, int frame)
+        {
+            if (clip?.Frames == null || frame < 0 || frame >= clip.Frames.Length)
+                return false;
+            int columns = Mathf.Max(1, _profile.Columns);
+            int rows = Mathf.Max(1, _profile.Rows);
+            int row = Mathf.Clamp(clip.Row, 0, rows - 1);
+            int column = Mathf.Clamp(clip.Frames[frame], 0, columns - 1);
+            return IsSheetCellEmpty(column, row);
+        }
+
+        bool IsSheetCellEmpty(int column, int row)
+        {
+            if (_sheetCellEmpty == null)
+                return false;
+            int columns = Mathf.Max(1, _sheetPixelsColumns);
+            int rows = Mathf.Max(1, _sheetPixelsRows);
+            column = Mathf.Clamp(column, 0, columns - 1);
+            row = Mathf.Clamp(row, 0, rows - 1);
+            int index = row * columns + column;
+            return index >= 0 && index < _sheetCellEmpty.Length && _sheetCellEmpty[index];
+        }
+
+        bool TryEnsureSheetPixelCache()
+        {
+            var sheet = _profile?.Sheet;
+            if (sheet == null)
+            {
+                InvalidateSheetPixelCache();
+                return false;
+            }
+
+            int id = sheet.GetInstanceID();
+            int columns = Mathf.Max(1, _profile.Columns);
+            int rows = Mathf.Max(1, _profile.Rows);
+            bool sameTexture = _sheetPixels != null &&
+                _sheetPixelsId == id &&
+                _sheetPixelsWidth == sheet.width &&
+                _sheetPixelsHeight == sheet.height;
+            if (sameTexture && _sheetCellEmpty != null &&
+                _sheetPixelsColumns == columns &&
+                _sheetPixelsRows == rows)
+                return true;
+
+            if (sameTexture)
+            {
+                _sheetPixelsColumns = columns;
+                _sheetPixelsRows = rows;
+                RebuildSheetCellEmptyFlags();
+                return _sheetCellEmpty != null;
+            }
+
+            Texture2D readable = null;
+            bool destroy = false;
+            try
+            {
+                readable = sheet.isReadable ? sheet : DuplicateReadable(sheet);
+                destroy = readable != sheet;
+                _sheetPixels = readable.GetPixels32();
+                _sheetPixelsId = id;
+                _sheetPixelsWidth = readable.width;
+                _sheetPixelsHeight = readable.height;
+                _sheetPixelsColumns = columns;
+                _sheetPixelsRows = rows;
+                RebuildSheetCellEmptyFlags();
+                return _sheetCellEmpty != null;
+            }
+            catch
+            {
+                InvalidateSheetPixelCache();
+                return false;
+            }
+            finally
+            {
+                if (destroy && readable != null)
+                    DestroyImmediate(readable);
+            }
+        }
+
+        void RebuildSheetCellEmptyFlags()
+        {
+            int columns = Mathf.Max(1, _sheetPixelsColumns);
+            int rows = Mathf.Max(1, _sheetPixelsRows);
+            _sheetCellEmpty = new bool[columns * rows];
+            if (_sheetPixels == null)
                 return;
 
-            RecordProfileUndo("Remove Sprite Animation Frame");
-            int removed = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
-            var frames = new List<int>(clip.Frames);
-            frames.RemoveAt(removed);
-            var durations = new List<float>(clip.FrameDurationScales);
-            durations.RemoveAt(removed);
-            var events = new List<byte>(clip.EventIds);
-            events.RemoveAt(removed);
-            var eventTimes = new List<float>(clip.EventNormalizedTimes);
-            eventTimes.RemoveAt(removed);
-            var onionOffsets = new List<Vector2>(clip.OnionOffsets);
-            onionOffsets.RemoveAt(removed);
-            var frameScales = new List<Vector2>(clip.FrameScales);
-            frameScales.RemoveAt(removed);
-            var frameRotations = new List<float>(clip.FrameRotations);
-            frameRotations.RemoveAt(removed);
-            var frameTweens = new List<byte>(clip.FrameTweenModes);
-            frameTweens.RemoveAt(removed);
-            clip.Frames = frames.ToArray();
-            clip.FrameDurationScales = durations.ToArray();
-            clip.EventIds = events.ToArray();
-            clip.EventNormalizedTimes = eventTimes.ToArray();
-            clip.OnionOffsets = onionOffsets.ToArray();
-            clip.FrameScales = frameScales.ToArray();
-            clip.FrameRotations = frameRotations.ToArray();
-            clip.FrameTweenModes = frameTweens.ToArray();
-            if (clip.Sockets != null)
+            int cellWidth = _sheetPixelsWidth / columns;
+            int cellHeight = _sheetPixelsHeight / rows;
+            if (cellWidth <= 0 || cellHeight <= 0)
+                return;
+
+            const byte alphaThreshold = 8;
+            for (int row = 0; row < rows; row++)
             {
-                clip.Sockets.RemoveAll(socket => socket.FrameIndex == removed);
-                for (int i = 0; i < clip.Sockets.Count; i++)
+                int pixelY0 = (rows - 1 - row) * cellHeight;
+                for (int column = 0; column < columns; column++)
                 {
-                    if (clip.Sockets[i].FrameIndex > removed)
-                        clip.Sockets[i].FrameIndex--;
+                    int pixelX0 = column * cellWidth;
+                    bool empty = true;
+                    for (int y = 0; y < cellHeight && empty; y++)
+                    {
+                        int rowStart = (pixelY0 + y) * _sheetPixelsWidth + pixelX0;
+                        for (int x = 0; x < cellWidth; x++)
+                        {
+                            if (_sheetPixels[rowStart + x].a > alphaThreshold)
+                            {
+                                empty = false;
+                                break;
+                            }
+                        }
+                    }
+                    _sheetCellEmpty[row * columns + column] = empty;
                 }
             }
-            if (_selectedOnionFrame == removed)
-                _selectedOnionFrame = -1;
-            else if (_selectedOnionFrame > removed)
-                _selectedOnionFrame--;
-            if (_selectedEventFrame == removed)
-                _selectedEventFrame = -1;
-            else if (_selectedEventFrame > removed)
-                _selectedEventFrame--;
-            _profile.Hitboxes.RemoveAll(box => box.ClipName == clip.Name && box.FrameIndex == removed);
-            foreach (var box in _profile.Hitboxes)
-                if (box.ClipName == clip.Name && box.FrameIndex > removed)
-                    box.FrameIndex--;
-            _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
-            _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, _selectedFrame));
-            PruneColliderSelection(clip, _selectedFrame);
-            SaveDirty();
-            _status = $"Removed frame {removed + 1}  •  {clip.Frames.Length} remaining";
-            Repaint();
+        }
+
+        void InvalidateSheetPixelCache()
+        {
+            _sheetPixels = null;
+            _sheetPixelsId = -1;
+            _sheetPixelsWidth = 0;
+            _sheetPixelsHeight = 0;
+            _sheetPixelsColumns = 0;
+            _sheetPixelsRows = 0;
+            _sheetCellEmpty = null;
         }
 
         int[] CreateDefaultFrames()
@@ -3596,7 +4300,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 asset.Data = _profile;
             EnsureProfile();
             _selectedClip = 0;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -3681,10 +4385,21 @@ namespace BallForge.Sprites.DOTS.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     Color previous = GUI.backgroundColor;
+                    if (GUILayout.Button(ColliderVisibilityContent(box.Hidden),
+                        EditorStyles.miniButton, GUILayout.Width(28f), GUILayout.Height(22f)))
+                    {
+                        RecordProfileUndo(box.Hidden ? "Show Sprite Collider" : "Hide Sprite Collider");
+                        box.Hidden = !box.Hidden;
+                        _status = box.Hidden
+                            ? $"Hid {box.Shape} collider #{box.Id}"
+                            : $"Showed {box.Shape} collider #{box.Id}";
+                        SaveDirty();
+                        Repaint();
+                    }
                     if (selected)
                         GUI.backgroundColor = AccentColor;
                     if (GUILayout.Button(new GUIContent(
-                            $"{i + 1}. {box.Shape}   •   ID {box.Id}",
+                            $"{i + 1}. {box.Shape}   •   ID {box.Id}{(box.Hidden ? "  (hidden)" : string.Empty)}",
                             "Select this collider. Shift adds; Ctrl/Cmd toggles."),
                         EditorStyles.miniButton, GUILayout.Height(22f)))
                     {
@@ -3703,6 +4418,32 @@ namespace BallForge.Sprites.DOTS.Editor
                     {
                         DeleteCollider(box);
                         return;
+                    }
+                }
+            }
+
+            FrameBoxDef primary = PrimarySelectedCollider();
+            if (primary != null)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    float nextAngle = EditorGUILayout.FloatField(
+                        new GUIContent("Angle (deg)", "Rotation around the collider center. Saved on the profile."),
+                        primary.Angle);
+                    if (!Mathf.Approximately(nextAngle, primary.Angle))
+                    {
+                        RecordProfileUndo("Rotate Sprite Collider");
+                        primary.Angle = nextAngle;
+                        _status = $"Collider angle {primary.Angle:0.##}°";
+                    }
+                    using (new EditorGUI.DisabledScope(Mathf.Approximately(primary.Angle, 0f)))
+                    {
+                        if (ResetValueButton("Reset this collider's rotation to 0°."))
+                        {
+                            RecordProfileUndo("Reset Sprite Collider Angle");
+                            primary.Angle = 0f;
+                            _status = "Reset collider angle to 0°";
+                        }
                     }
                 }
             }
@@ -3740,9 +4481,41 @@ namespace BallForge.Sprites.DOTS.Editor
             _selectedColliders.Clear();
             foreach (var box in BoxesFor(clip, frame))
                 _selectedColliders.Add(box);
+            ClearSocketSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
-            _status = $"Selected all {_selectedColliders.Count} colliders on frame {frame + 1}";
+            _status = $"Selected all {_selectedColliders.Count} collider{(_selectedColliders.Count == 1 ? string.Empty : "s")} on frame {frame + 1}";
+            Repaint();
+        }
+
+        void SelectAllPreviewObjects(SpriteClipDef clip, int frame)
+        {
+            if (clip == null)
+                return;
+            _playing = false;
+            _selectedFrame = frame;
+            _previewTime = PreviewTimeAtFrame(clip, frame);
+            _selectedColliders.Clear();
+            if (_showHitboxes)
+            {
+                foreach (var box in BoxesFor(clip, frame))
+                    _selectedColliders.Add(box);
+            }
+            _selectedSockets.Clear();
+            if (clip.Sockets != null)
+            {
+                var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
+                for (int i = 0; i < names.Count; i++)
+                {
+                    if (!SpriteSocketKeys.TryGetPose(clip.Sockets, names[i], frame, out _, out _, out _))
+                        continue;
+                    _selectedSockets.Add(SpriteSocketKeys.CanonicalName(names[i]));
+                }
+            }
+            SyncSocketPrimaryFromSelection();
+            _selectedEventFrame = -1;
+            _selectedOnionFrame = -1;
+            _status = PreviewSelectionStatus("Selected all");
             Repaint();
         }
 
@@ -3763,11 +4536,49 @@ namespace BallForge.Sprites.DOTS.Editor
             PruneColliderSelection(CurrentClip, _selectedFrame);
             if (_selectedColliders.Count == 0)
                 return;
-            int selectedCount = _selectedColliders.Count;
-            RecordProfileUndo(selectedCount == 1 ? "Delete Sprite Collider" : "Delete Sprite Colliders");
-            _profile.Hitboxes.RemoveAll(box => _selectedColliders.Contains(box));
+            DeleteSelectedPreviewObjects(includeSockets: false);
+        }
+
+        void DeleteSelectedPreviewObjects(bool includeSockets = true)
+        {
+            var clip = CurrentClip;
+            PruneColliderSelection(clip, _selectedFrame);
+            if (includeSockets)
+                PruneSocketSelection(clip);
+            int colliderCount = _selectedColliders.Count;
+            int socketCount = includeSockets ? _selectedSockets.Count : 0;
+            if (colliderCount == 0 && socketCount == 0)
+                return;
+
+            string undoName;
+            if (colliderCount > 0 && socketCount > 0)
+                undoName = "Delete Sprite Colliders and Sockets";
+            else if (socketCount > 0)
+                undoName = socketCount == 1 ? "Delete Sprite Socket" : "Delete Sprite Sockets";
+            else
+                undoName = colliderCount == 1 ? "Delete Sprite Collider" : "Delete Sprite Colliders";
+            RecordProfileUndo(undoName);
+
+            if (colliderCount > 0)
+                _profile.Hitboxes.RemoveAll(box => _selectedColliders.Contains(box));
             _selectedColliders.Clear();
-            _status = $"Deleted {selectedCount} collider{(selectedCount == 1 ? string.Empty : "s")}";
+
+            if (socketCount > 0 && clip?.Sockets != null)
+            {
+                var names = new List<string>(_selectedSockets);
+                for (int i = 0; i < names.Count; i++)
+                    SpriteSocketKeys.DeleteIdentity(clip.Sockets, names[i]);
+            }
+            if (includeSockets)
+                ClearSocketSelection();
+            _draggingSocket = false;
+            _socketMoveNames.Clear();
+            _socketMoveStarts.Clear();
+            _status = colliderCount > 0 && socketCount > 0
+                ? $"Deleted {colliderCount} collider{(colliderCount == 1 ? string.Empty : "s")} and {socketCount} socket{(socketCount == 1 ? string.Empty : "s")}"
+                : socketCount > 0
+                    ? $"Deleted {socketCount} socket{(socketCount == 1 ? string.Empty : "s")}"
+                    : $"Deleted {colliderCount} collider{(colliderCount == 1 ? string.Empty : "s")}";
             SaveDirty();
             Repaint();
         }
@@ -3840,6 +4651,8 @@ namespace BallForge.Sprites.DOTS.Editor
                     Id = box.Id,
                     Shape = box.Shape,
                     PolygonUV = box.PolygonUV == null ? null : (Vector2[])box.PolygonUV.Clone(),
+                    Angle = box.Angle,
+                    Hidden = box.Hidden,
                 };
                 _profile.Hitboxes.Add(clone);
             }
@@ -3849,6 +4662,8 @@ namespace BallForge.Sprites.DOTS.Editor
         void ClearColliderSelection()
         {
             _selectedColliders.Clear();
+            ClearColliderTransform();
+            ClearSocketSelection();
         }
 
         void PruneColliderSelection(SpriteClipDef clip, int frame)
@@ -4233,24 +5048,24 @@ namespace BallForge.Sprites.DOTS.Editor
                                 (box.PolygonUV == null || box.PolygonUV.Length < 3)
                 ? FrameBoxDef.CreateRegularPolygon()
                 : box.PolygonUV;
-            DrawColliderShape(UvToScreen(box.RectUV, cell), box.Shape, polygon, color, selected);
+            DrawColliderShape(UvToScreen(box.RectUV, cell), box.Shape, polygon, color, selected, box.Angle);
         }
 
         void DrawColliderSelectionBadge(FrameBoxDef box, Rect cell)
         {
-            Rect shape = UvToScreen(box.RectUV, cell);
-            var badge = new Rect(shape.xMin, Mathf.Max(cell.yMin, shape.yMin - 18f), 70f, 17f);
+            Vector2 top = ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeT);
+            var badge = new Rect(top.x - 35f, Mathf.Max(cell.yMin, top.y - 22f), 70f, 17f);
             EditorGUI.DrawRect(badge, new Color(0.06f, 0.12f, 0.18f, 0.94f));
             DrawBorder(badge, AccentColor, 1f);
             GUI.Label(badge, $" {box.Shape} #{box.Id}", _mutedStyle);
         }
 
         static void DrawColliderShape(Rect rect, SpriteColliderShape shape, Vector2[] polygon,
-                                      Color color, bool selected)
+                                      Color color, bool selected, float angle = 0f)
         {
             if (shape == SpriteColliderShape.Square)
             {
-                DrawScreenBox(rect, color, selected ? 2f : 1f);
+                DrawRotatedScreenBox(rect, angle, color, selected ? 2f : 1f);
                 return;
             }
 
@@ -4261,10 +5076,10 @@ namespace BallForge.Sprites.DOTS.Editor
                 var points = new Vector3[segments + 1];
                 for (int i = 0; i < segments; i++)
                 {
-                    float angle = Mathf.PI * 2f * i / segments;
+                    float a = Mathf.PI * 2f * i / segments;
                     points[i] = new Vector3(
-                        rect.center.x + Mathf.Cos(angle) * radius,
-                        rect.center.y + Mathf.Sin(angle) * radius);
+                        rect.center.x + Mathf.Cos(a) * radius,
+                        rect.center.y + Mathf.Sin(a) * radius);
                 }
                 points[segments] = points[0];
                 Handles.BeginGUI();
@@ -4277,7 +5092,7 @@ namespace BallForge.Sprites.DOTS.Editor
             }
 
             polygon ??= FrameBoxDef.CreateRegularPolygon();
-            var polygonOutline = PolygonScreenPoints(rect, polygon, true);
+            var polygonOutline = PolygonScreenPoints(rect, polygon, true, angle);
             Handles.BeginGUI();
             Handles.color = new Color(color.r, color.g, color.b, 0.98f);
             Handles.DrawAAPolyLine(selected ? 2.5f : 1.5f, polygonOutline);
@@ -4287,41 +5102,65 @@ namespace BallForge.Sprites.DOTS.Editor
         static bool ColliderContains(FrameBoxDef box, Rect cell, Vector2 point)
         {
             Rect rect = UvToScreen(box.RectUV, cell);
+            Vector2 local = UnrotateAround(point, rect.center, box.Angle);
             if (box.Shape == SpriteColliderShape.Square)
-                return rect.Contains(point);
+                return rect.Contains(local);
             if (box.Shape == SpriteColliderShape.Circle)
             {
                 float radius = Mathf.Min(rect.width, rect.height) * 0.5f;
-                return (point - rect.center).sqrMagnitude <= radius * radius;
+                return (local - rect.center).sqrMagnitude <= radius * radius;
             }
 
             Vector2[] polygon = box.PolygonUV != null && box.PolygonUV.Length >= 3
                 ? box.PolygonUV
                 : FrameBoxDef.CreateRegularPolygon();
-            var points = PolygonScreenPoints(rect, polygon, false);
+            var points = PolygonScreenPoints(rect, polygon, false, 0f);
             bool inside = false;
             for (int i = 0, previous = points.Length - 1; i < points.Length; previous = i++)
             {
                 Vector2 a = points[i];
                 Vector2 b = points[previous];
-                if ((a.y > point.y) != (b.y > point.y) &&
-                    point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x)
+                if ((a.y > local.y) != (b.y > local.y) &&
+                    local.x < (b.x - a.x) * (local.y - a.y) / (b.y - a.y) + a.x)
                     inside = !inside;
             }
             return inside;
         }
 
-        static Vector3[] PolygonScreenPoints(Rect rect, Vector2[] polygon, bool close)
+        static Vector3[] PolygonScreenPoints(Rect rect, Vector2[] polygon, bool close, float angle = 0f)
         {
             int count = polygon.Length;
             var points = new Vector3[count + (close ? 1 : 0)];
+            Vector2 center = rect.center;
             for (int i = 0; i < count; i++)
-                points[i] = new Vector3(
+            {
+                Vector2 p = new(
                     rect.x + polygon[i].x * rect.width,
                     rect.y + polygon[i].y * rect.height);
+                if (Mathf.Abs(angle) > 0.01f)
+                    p = RotateAround(p, center, angle);
+                points[i] = p;
+            }
             if (close)
                 points[count] = points[0];
             return points;
+        }
+
+        static void DrawRotatedScreenBox(Rect rect, float angle, Color color, float thickness)
+        {
+            if (Mathf.Abs(angle) < 0.01f)
+            {
+                DrawScreenBox(rect, color, thickness);
+                return;
+            }
+            var corners = RotatedRectCorners(rect, angle, false);
+            var closed = new Vector3[] { corners[0], corners[1], corners[2], corners[3], corners[0] };
+            Handles.BeginGUI();
+            Handles.color = color;
+            Handles.DrawAAConvexPolygon(corners);
+            Handles.color = new Color(color.r, color.g, color.b, 0.95f);
+            Handles.DrawAAPolyLine(Mathf.Max(1.5f, thickness + 0.5f), closed);
+            Handles.EndGUI();
         }
 
         static void DrawScreenBox(Rect rect, Color color, float thickness = 1f)
@@ -4329,6 +5168,438 @@ namespace BallForge.Sprites.DOTS.Editor
             EditorGUI.DrawRect(rect, color);
             var border = new Color(color.r, color.g, color.b, 0.95f);
             DrawBorder(rect, border, thickness);
+        }
+
+        static Vector3[] RotatedRectCorners(Rect rect, float angle, bool close)
+        {
+            Vector2 center = rect.center;
+            var local = new[]
+            {
+                new Vector2(rect.xMin, rect.yMin),
+                new Vector2(rect.xMax, rect.yMin),
+                new Vector2(rect.xMax, rect.yMax),
+                new Vector2(rect.xMin, rect.yMax),
+            };
+            var points = new Vector3[close ? 5 : 4];
+            for (int i = 0; i < 4; i++)
+                points[i] = RotateAround(local[i], center, angle);
+            if (close)
+                points[4] = points[0];
+            return points;
+        }
+
+        static Vector2 RotateAround(Vector2 point, Vector2 center, float degrees)
+        {
+            if (Mathf.Abs(degrees) < 0.01f)
+                return point;
+            float rad = degrees * Mathf.Deg2Rad;
+            float s = Mathf.Sin(rad);
+            float c = Mathf.Cos(rad);
+            Vector2 d = point - center;
+            return center + new Vector2(d.x * c - d.y * s, d.x * s + d.y * c);
+        }
+
+        static Vector2 UnrotateAround(Vector2 point, Vector2 center, float degrees)
+            => RotateAround(point, center, -degrees);
+
+        static Rect ColliderWorldAabb(FrameBoxDef box, Rect cell)
+        {
+            Rect rect = UvToScreen(box.RectUV, cell);
+            if (Mathf.Abs(box.Angle) < 0.01f)
+                return rect;
+            var corners = RotatedRectCorners(rect, box.Angle, false);
+            float xMin = corners[0].x, xMax = corners[0].x, yMin = corners[0].y, yMax = corners[0].y;
+            for (int i = 1; i < 4; i++)
+            {
+                xMin = Mathf.Min(xMin, corners[i].x);
+                xMax = Mathf.Max(xMax, corners[i].x);
+                yMin = Mathf.Min(yMin, corners[i].y);
+                yMax = Mathf.Max(yMax, corners[i].y);
+            }
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        FrameBoxDef PrimarySelectedCollider()
+        {
+            if (_selectedColliders.Count != 1)
+                return null;
+            foreach (var box in _selectedColliders)
+                return box;
+            return null;
+        }
+
+        static GUIContent ColliderVisibilityContent(bool hidden)
+        {
+            var icon = EditorGUIUtility.IconContent(hidden
+                ? "animationvisibilitytoggleoff"
+                : "animationvisibilitytoggleon");
+            if (icon != null && icon.image != null)
+            {
+                icon.tooltip = hidden
+                    ? "Show this collider in the preview"
+                    : "Hide this collider in the preview";
+                return icon;
+            }
+            return new GUIContent(hidden ? "Show" : "Hide",
+                hidden ? "Show this collider in the preview" : "Hide this collider in the preview");
+        }
+
+        static Vector2 ColliderHandlePosition(FrameBoxDef box, Rect cell, ColliderHandleKind kind)
+        {
+            Rect rect = UvToScreen(box.RectUV, cell);
+            Vector2 center = rect.center;
+            Vector2 local = kind switch
+            {
+                ColliderHandleKind.CornerTL => new Vector2(rect.xMin, rect.yMin),
+                ColliderHandleKind.CornerTR => new Vector2(rect.xMax, rect.yMin),
+                ColliderHandleKind.CornerBR => new Vector2(rect.xMax, rect.yMax),
+                ColliderHandleKind.CornerBL => new Vector2(rect.xMin, rect.yMax),
+                ColliderHandleKind.EdgeT => new Vector2(center.x, rect.yMin),
+                ColliderHandleKind.EdgeR => new Vector2(rect.xMax, center.y),
+                ColliderHandleKind.EdgeB => new Vector2(center.x, rect.yMax),
+                ColliderHandleKind.EdgeL => new Vector2(rect.xMin, center.y),
+                ColliderHandleKind.Rotate => new Vector2(center.x, rect.yMin - ColliderRotateHandleDistance),
+                _ => center,
+            };
+            return RotateAround(local, center, box.Angle);
+        }
+
+        ColliderHandleKind HitSelectedColliderHandle(Rect cell, Vector2 mouse)
+        {
+            var box = PrimarySelectedCollider();
+            if (box == null)
+            {
+                foreach (var selected in _selectedColliders)
+                {
+                    if (!selected.Hidden && ColliderContains(selected, cell, mouse))
+                        return ColliderHandleKind.Body;
+                }
+                return ColliderHandleKind.None;
+            }
+
+            var kinds = new[]
+            {
+                ColliderHandleKind.Rotate,
+                ColliderHandleKind.CornerTL, ColliderHandleKind.CornerTR,
+                ColliderHandleKind.CornerBR, ColliderHandleKind.CornerBL,
+                ColliderHandleKind.EdgeT, ColliderHandleKind.EdgeR,
+                ColliderHandleKind.EdgeB, ColliderHandleKind.EdgeL,
+            };
+            float rotateHit = 10f * 10f;
+            float knobHit = ColliderHandleSize * ColliderHandleSize;
+            foreach (var kind in kinds)
+            {
+                float limit = kind == ColliderHandleKind.Rotate ? rotateHit : knobHit;
+                if ((mouse - ColliderHandlePosition(box, cell, kind)).sqrMagnitude <= limit)
+                    return kind;
+            }
+            if (ColliderContains(box, cell, mouse))
+                return ColliderHandleKind.Body;
+            return ColliderHandleKind.None;
+        }
+
+        void DrawColliderTransformGizmo(FrameBoxDef box, Rect cell)
+        {
+            Rect rect = UvToScreen(box.RectUV, cell);
+            Vector2 center = rect.center;
+            var outline = RotatedRectCorners(rect, box.Angle, true);
+            Handles.BeginGUI();
+            Handles.color = Color.white;
+            Handles.DrawAAPolyLine(1.6f, outline);
+            Vector2 top = ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeT);
+            Vector2 rotate = ColliderHandlePosition(box, cell, ColliderHandleKind.Rotate);
+            Handles.DrawAAPolyLine(1.6f, top, rotate);
+            Handles.DrawSolidDisc(rotate, Vector3.forward, 5f);
+            Handles.color = AccentColor;
+            Handles.DrawWireDisc(rotate, Vector3.forward, 7f);
+            Handles.EndGUI();
+
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerTL));
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerTR));
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerBR));
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerBL));
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeT), true);
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeR), true);
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeB), true);
+            DrawHandleKnob(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeL), true);
+
+            EditorGUIUtility.AddCursorRect(HandleCursorRect(rotate, 10f), MouseCursor.RotateArrow);
+            EditorGUIUtility.AddCursorRect(HandleCursorRect(center, 12f), MouseCursor.MoveArrow);
+            AddScaleCursors(box, cell);
+        }
+
+        static void DrawHandleKnob(Vector2 pos, bool edge = false)
+        {
+            float s = edge ? 7f : 8f;
+            EditorGUI.DrawRect(new Rect(pos.x - s * 0.5f, pos.y - s * 0.5f, s, s), new Color(0.05f, 0.06f, 0.08f, 0.95f));
+            EditorGUI.DrawRect(new Rect(pos.x - s * 0.5f + 1f, pos.y - s * 0.5f + 1f, s - 2f, s - 2f), Color.white);
+        }
+
+        static Rect HandleCursorRect(Vector2 pos, float radius)
+            => new(pos.x - radius, pos.y - radius, radius * 2f, radius * 2f);
+
+        void AddScaleCursors(FrameBoxDef box, Rect cell)
+        {
+            float a = Mathf.Abs(Mathf.Repeat(box.Angle, 180f));
+            bool swapped = a > 45f && a < 135f;
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerTL), 8f),
+                swapped ? MouseCursor.ResizeUpRight : MouseCursor.ResizeUpLeft);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerTR), 8f),
+                swapped ? MouseCursor.ResizeUpLeft : MouseCursor.ResizeUpRight);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerBR), 8f),
+                swapped ? MouseCursor.ResizeUpRight : MouseCursor.ResizeUpLeft);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.CornerBL), 8f),
+                swapped ? MouseCursor.ResizeUpLeft : MouseCursor.ResizeUpRight);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeT), 8f),
+                swapped ? MouseCursor.ResizeHorizontal : MouseCursor.ResizeVertical);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeB), 8f),
+                swapped ? MouseCursor.ResizeHorizontal : MouseCursor.ResizeVertical);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeL), 8f),
+                swapped ? MouseCursor.ResizeVertical : MouseCursor.ResizeHorizontal);
+            EditorGUIUtility.AddCursorRect(
+                HandleCursorRect(ColliderHandlePosition(box, cell, ColliderHandleKind.EdgeR), 8f),
+                swapped ? MouseCursor.ResizeVertical : MouseCursor.ResizeHorizontal);
+        }
+
+        void HandleColliderTransformInput(int controlId, Rect cell, SpriteClipDef clip, int frame)
+        {
+            var evt = Event.current;
+            if (evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape && _draggingColliderTransform)
+            {
+                RestoreColliderTransform();
+                EndColliderTransform(controlId, save: false);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseDown && evt.button == 0)
+            {
+                var kind = HitSelectedColliderHandle(cell, evt.mousePosition);
+                if (kind == ColliderHandleKind.None)
+                    return;
+                FrameBoxDef box = PrimarySelectedCollider();
+                if (box == null)
+                {
+                    foreach (var selected in _selectedColliders)
+                    {
+                        if (!selected.Hidden && ColliderContains(selected, cell, evt.mousePosition))
+                        {
+                            box = selected;
+                            break;
+                        }
+                    }
+                }
+                if (box == null)
+                    return;
+                BeginColliderTransform(controlId, box, kind, cell, evt.mousePosition);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseDrag && _draggingColliderTransform &&
+                GUIUtility.hotControl == controlId)
+            {
+                ApplyColliderTransform(cell, evt.mousePosition, evt.shift);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseUp && evt.button == 0 && _draggingColliderTransform &&
+                GUIUtility.hotControl == controlId)
+            {
+                EndColliderTransform(controlId, save: true);
+                evt.Use();
+                Repaint();
+            }
+        }
+
+        void BeginColliderTransform(int controlId, FrameBoxDef box, ColliderHandleKind kind,
+                                    Rect cell, Vector2 mouse)
+        {
+            _draggingColliderTransform = true;
+            _colliderHandleKind = kind;
+            _colliderTransformBox = box;
+            _colliderTransformStartMouse = mouse;
+            _colliderTransformUndoRecorded = false;
+            Rect startRect = UvToScreen(box.RectUV, cell);
+            _colliderTransformStartCenter = startRect.center;
+            _colliderTransformStartAngle = box.Angle;
+            _colliderTransformStartAtan = Mathf.Atan2(
+                mouse.y - startRect.center.y, mouse.x - startRect.center.x);
+            _colliderMoveBoxes.Clear();
+            _colliderMoveStartRects.Clear();
+            if (kind == ColliderHandleKind.Body)
+            {
+                foreach (var selected in _selectedColliders)
+                {
+                    _colliderMoveBoxes.Add(selected);
+                    _colliderMoveStartRects.Add(selected.RectUV);
+                }
+            }
+            else
+            {
+                _colliderMoveBoxes.Add(box);
+                _colliderMoveStartRects.Add(box.RectUV);
+            }
+            GUIUtility.hotControl = controlId;
+            GUIUtility.keyboardControl = controlId;
+            _playing = false;
+            _selectedOnionFrame = -1;
+            _selectedEventFrame = -1;
+        }
+
+        void ApplyColliderTransform(Rect cell, Vector2 mouse, bool snap)
+        {
+            if (_colliderTransformBox == null || _colliderMoveBoxes.Count == 0)
+                return;
+            if (!_colliderTransformUndoRecorded)
+            {
+                RecordProfileUndo(_colliderHandleKind == ColliderHandleKind.Rotate
+                    ? "Rotate Sprite Collider"
+                    : _colliderHandleKind == ColliderHandleKind.Body
+                        ? "Move Sprite Collider"
+                        : "Scale Sprite Collider");
+                _colliderTransformUndoRecorded = true;
+            }
+
+            if (_colliderHandleKind == ColliderHandleKind.Body)
+            {
+                Vector2 deltaUv = new(
+                    (mouse.x - _colliderTransformStartMouse.x) / Mathf.Max(1f, cell.width),
+                    (mouse.y - _colliderTransformStartMouse.y) / Mathf.Max(1f, cell.height));
+                for (int i = 0; i < _colliderMoveBoxes.Count; i++)
+                {
+                    Rect start = _colliderMoveStartRects[i];
+                    _colliderMoveBoxes[i].RectUV = new Rect(
+                        start.x + deltaUv.x, start.y + deltaUv.y, start.width, start.height);
+                }
+                _status = "Moved collider";
+                return;
+            }
+
+            var box = _colliderTransformBox;
+            if (_colliderHandleKind == ColliderHandleKind.Rotate)
+            {
+                float atan = Mathf.Atan2(
+                    mouse.y - _colliderTransformStartCenter.y,
+                    mouse.x - _colliderTransformStartCenter.x);
+                float delta = (atan - _colliderTransformStartAtan) * Mathf.Rad2Deg;
+                float angle = _colliderTransformStartAngle + delta;
+                if (snap)
+                    angle = Mathf.Round(angle / 15f) * 15f;
+                box.Angle = angle;
+                _status = $"Collider angle {box.Angle:0.#}°";
+                return;
+            }
+
+            Vector2 local = UnrotateAround(mouse, _colliderTransformStartCenter, _colliderTransformStartAngle)
+                            - _colliderTransformStartCenter;
+            Rect startScreen = UvToScreen(_colliderMoveStartRects[0], cell);
+            float halfW = startScreen.width * 0.5f;
+            float halfH = startScreen.height * 0.5f;
+            Vector2 fixedLocal = _colliderHandleKind switch
+            {
+                ColliderHandleKind.CornerTL => new Vector2(halfW, halfH),
+                ColliderHandleKind.CornerTR => new Vector2(-halfW, halfH),
+                ColliderHandleKind.CornerBR => new Vector2(-halfW, -halfH),
+                ColliderHandleKind.CornerBL => new Vector2(halfW, -halfH),
+                ColliderHandleKind.EdgeT => new Vector2(0f, halfH),
+                ColliderHandleKind.EdgeB => new Vector2(0f, -halfH),
+                ColliderHandleKind.EdgeL => new Vector2(halfW, 0f),
+                ColliderHandleKind.EdgeR => new Vector2(-halfW, 0f),
+                _ => Vector2.zero,
+            };
+
+            float newHalfW = halfW;
+            float newHalfH = halfH;
+            Vector2 localCenter = Vector2.zero;
+            switch (_colliderHandleKind)
+            {
+                case ColliderHandleKind.CornerTL:
+                case ColliderHandleKind.CornerTR:
+                case ColliderHandleKind.CornerBR:
+                case ColliderHandleKind.CornerBL:
+                    newHalfW = Mathf.Max(ColliderMinScreenHalf, Mathf.Abs(local.x - fixedLocal.x) * 0.5f);
+                    newHalfH = Mathf.Max(ColliderMinScreenHalf, Mathf.Abs(local.y - fixedLocal.y) * 0.5f);
+                    localCenter = (local + fixedLocal) * 0.5f;
+                    break;
+                case ColliderHandleKind.EdgeT:
+                case ColliderHandleKind.EdgeB:
+                    newHalfH = Mathf.Max(ColliderMinScreenHalf, Mathf.Abs(local.y - fixedLocal.y) * 0.5f);
+                    localCenter = new Vector2(0f, (local.y + fixedLocal.y) * 0.5f);
+                    break;
+                case ColliderHandleKind.EdgeL:
+                case ColliderHandleKind.EdgeR:
+                    newHalfW = Mathf.Max(ColliderMinScreenHalf, Mathf.Abs(local.x - fixedLocal.x) * 0.5f);
+                    localCenter = new Vector2((local.x + fixedLocal.x) * 0.5f, 0f);
+                    break;
+            }
+
+            if (box.Shape == SpriteColliderShape.Circle)
+            {
+                float uniform = Mathf.Max(newHalfW, newHalfH);
+                newHalfW = uniform;
+                newHalfH = uniform;
+            }
+
+            Vector2 newCenter = _colliderTransformStartCenter +
+                RotateAround(localCenter, Vector2.zero, _colliderTransformStartAngle);
+            float uvW = (newHalfW * 2f) / Mathf.Max(1f, cell.width);
+            float uvH = (newHalfH * 2f) / Mathf.Max(1f, cell.height);
+            Vector2 uvCenter = ScreenToUvPoint(newCenter, cell);
+            box.RectUV = new Rect(uvCenter.x - uvW * 0.5f, uvCenter.y - uvH * 0.5f, uvW, uvH);
+            _status = "Scaled collider";
+        }
+
+        static Vector2 ScreenToUvPoint(Vector2 screen, Rect cell)
+        {
+            return new Vector2(
+                (screen.x - cell.x) / Mathf.Max(1f, cell.width),
+                (screen.y - cell.y) / Mathf.Max(1f, cell.height));
+        }
+
+        void RestoreColliderTransform()
+        {
+            for (int i = 0; i < _colliderMoveBoxes.Count; i++)
+                _colliderMoveBoxes[i].RectUV = _colliderMoveStartRects[i];
+            if (_colliderTransformBox != null)
+                _colliderTransformBox.Angle = _colliderTransformStartAngle;
+            _status = "Collider transform cancelled";
+        }
+
+        void EndColliderTransform(int controlId, bool save)
+        {
+            bool dirty = save && _colliderTransformUndoRecorded;
+            _draggingColliderTransform = false;
+            _colliderHandleKind = ColliderHandleKind.None;
+            _colliderTransformBox = null;
+            _colliderTransformUndoRecorded = false;
+            _colliderMoveBoxes.Clear();
+            _colliderMoveStartRects.Clear();
+            if (GUIUtility.hotControl == controlId)
+                GUIUtility.hotControl = 0;
+            if (dirty)
+                SaveDirty();
+        }
+
+        void ClearColliderTransform()
+        {
+            _draggingColliderTransform = false;
+            _colliderHandleKind = ColliderHandleKind.None;
+            _colliderTransformBox = null;
+            _colliderTransformUndoRecorded = false;
+            _colliderMoveBoxes.Clear();
+            _colliderMoveStartRects.Clear();
         }
 
         static void DrawPanel(Rect rect)
@@ -4495,6 +5766,50 @@ namespace BallForge.Sprites.DOTS.Editor
                 return;
             }
 
+            if (evt.keyCode is KeyCode.Delete or KeyCode.Backspace)
+            {
+                if (IsEditingStringTextField())
+                    return;
+
+                if (evt.keyCode == KeyCode.Backspace &&
+                    _colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
+                {
+                    RemoveLastPolygonVertex();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                ReleaseShortcutKeyboardFocus();
+                PruneColliderSelection(CurrentClip, _selectedFrame);
+                PruneSocketSelection(CurrentClip);
+                if (_selectedColliders.Count > 0 || _selectedSockets.Count > 0)
+                {
+                    DeleteSelectedPreviewObjects();
+                    evt.Use();
+                    return;
+                }
+                PruneEventSelection(CurrentClip);
+                if (_selectedEventFrame >= 0)
+                {
+                    DeleteSelectedEventMarker();
+                    evt.Use();
+                    return;
+                }
+
+                var clip = CurrentClip;
+                if (clip != null)
+                {
+                    if (clip.Frames.Length > 1)
+                        RemoveSelectedFrames(clip);
+                    else
+                        _status = "A clip must keep at least one frame";
+                }
+                evt.Use();
+                Repaint();
+                return;
+            }
+
             if (IsEditingAnyTextField())
                 return;
 
@@ -4507,80 +5822,31 @@ namespace BallForge.Sprites.DOTS.Editor
             }
 
             bool actionModifier = evt.control || evt.command;
-            if (actionModifier && evt.keyCode == KeyCode.A && CurrentClip != null && _showHitboxes)
+            if (actionModifier && evt.keyCode == KeyCode.A && CurrentClip != null)
             {
-                SelectAllFrameColliders(CurrentClip, _selectedFrame);
+                SelectAllPreviewObjects(CurrentClip, _selectedFrame);
                 evt.Use();
                 return;
-            }
-
-            if (evt.keyCode == KeyCode.Backspace &&
-                _colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
-            {
-                RemoveLastPolygonVertex();
-                evt.Use();
-                Repaint();
-                return;
-            }
-
-            if (evt.keyCode is KeyCode.Delete or KeyCode.Backspace)
-            {
-                PruneColliderSelection(CurrentClip, _selectedFrame);
-                if (_selectedColliders.Count > 0)
-                {
-                    DeleteSelectedColliders();
-                    evt.Use();
-                    return;
-                }
-                PruneEventSelection(CurrentClip);
-                if (_selectedEventFrame >= 0)
-                {
-                    DeleteSelectedEventMarker();
-                    evt.Use();
-                    return;
-                }
-                if (_socketDeleteArmed && !string.IsNullOrEmpty(_selectedSocketName) && CurrentClip != null)
-                {
-                    RecordProfileUndo("Delete Sprite Socket");
-                    SpriteSocketKeys.DeleteIdentity(CurrentClip.Sockets, _selectedSocketName);
-                    _status = $"Deleted socket {_selectedSocketName}";
-                    _selectedSocketName = null;
-                    _socketDeleteArmed = false;
-                    _draggingSocket = false;
-                    SaveDirty();
-                    evt.Use();
-                    Repaint();
-                    return;
-                }
-
-                var clip = CurrentClip;
-                if (clip != null)
-                {
-                    if (clip.Frames.Length > 1)
-                        RemoveSelectedFrame(clip);
-                    else
-                        _status = "A clip must keep at least one frame";
-                    evt.Use();
-                    Repaint();
-                    return;
-                }
             }
 
             if (evt.keyCode == KeyCode.Escape)
             {
-                bool hadSelection = _selectedColliders.Count > 0 || _selectedEventFrame >= 0 ||
+                if (_draggingColliderTransform)
+                    RestoreColliderTransform();
+                bool hadSelection = _selectedColliders.Count > 0 || _selectedSockets.Count > 0 ||
+                                    _selectedEventFrame >= 0 ||
                                     _selectedOnionFrame >= 0 || _colliderCreationMode != ColliderCreationMode.None ||
                                     _colliderMarqueePending || _socketPlacementArmed ||
                                     !string.IsNullOrEmpty(_selectedSocketName) ||
-                                    _draggingPivot || _pivotSelected;
+                                    _draggingPivot || _pivotSelected || _draggingColliderTransform;
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
                 _selectedOnionFrame = -1;
                 CancelColliderCreation("Selection and active tools cleared");
                 CancelSocketPlacement(null);
-                _selectedSocketName = null;
-                _socketDeleteArmed = false;
                 _draggingSocket = false;
+                _socketMoveNames.Clear();
+                _socketMoveStarts.Clear();
                 _draggingOnion = false;
                 _draggingPivot = false;
                 _pivotSelected = false;
@@ -4609,7 +5875,10 @@ namespace BallForge.Sprites.DOTS.Editor
             _selectedClip = Mathf.Clamp(_selectedClip, 0, Mathf.Max(0, _profile.Clips.Count - 1));
             var clip = CurrentClip;
             if (clip != null)
+            {
                 _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
+                EnsureFrameSelection(clip.Frames.Length);
+            }
             ClearColliderSelection();
             PruneEventSelection(clip);
             _colliderMarqueePending = false;
@@ -4619,6 +5888,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _draggingSocket = false;
             _draggingPivot = false;
             _pivotSelected = false;
+            ClearColliderTransform();
             CancelSocketPlacement(null);
             _selectedSocketName = null;
             _socketDeleteArmed = false;
