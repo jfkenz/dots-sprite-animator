@@ -77,6 +77,7 @@ namespace BallForge.Sprites.DOTS.Editor
         const float MinInspectorPanelWidth = 260f;
         const float Gap = 8f;
         const float PixelsPerSecond = 520f;
+        const float TimelineDragMoveThreshold = 3f;
         const float DefaultPreviewSpeed = 1f;
         const float PivotHandleHitRadius = 14f;
         const float ColliderHandleSize = 8f;
@@ -153,6 +154,10 @@ namespace BallForge.Sprites.DOTS.Editor
         int _resizeFrameIndex = -1;
         float _resizeStartDuration;
         float _resizePixelsPerSecond;
+        bool _timelineResizeCommitted;
+        Rect _timelineViewportGui;
+        float _timelineContentWidth;
+        Vector2 _timelineDragStartContent;
         Vector2 _timelineMarqueeStart;
         Rect _timelineMarqueeRect;
         bool _timelineMarqueeMoved;
@@ -230,6 +235,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 LoadAsset(selected);
             EnsureProfile();
             wantsMouseMove = true;
+            wantsMouseEnterLeaveWindow = true;
             EditorApplication.update += TickPreview;
             Undo.undoRedoPerformed -= OnUndoRedo;
             Undo.undoRedoPerformed += OnUndoRedo;
@@ -269,6 +275,9 @@ namespace BallForge.Sprites.DOTS.Editor
             HandleGlobalShortcuts();
             if (Event.current.type == EventType.MouseDown)
                 Focus();
+            int timelineControlId = GUIUtility.GetControlID(
+                "BallForgeSpriteAnimatorTimeline".GetHashCode(), FocusType.Passive);
+            HandleActiveTimelineDrag(timelineControlId);
             EditorGUI.DrawRect(new Rect(Vector2.zero, position.size), WindowColor);
 
             DrawToolbar(new Rect(0f, 0f, position.width, ToolbarHeight));
@@ -302,7 +311,7 @@ namespace BallForge.Sprites.DOTS.Editor
             DrawInspector(inspectorRect);
             DrawPanelSplitter(leftSplitter, true, workRect.width);
             DrawPanelSplitter(rightSplitter, false, workRect.width);
-            DrawTimeline(timelineRect);
+            DrawTimeline(timelineRect, timelineControlId);
         }
 
         void ClampPanelWidths(float workWidth)
@@ -663,7 +672,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 }
             }
             else if (_renamingClip < 0 && input.type == EventType.KeyDown && input.keyCode == KeyCode.F2 &&
-                     CurrentClip != null)
+                     CurrentClip != null && !IsEditingStringTextField())
             {
                 BeginClipRename(_selectedClip);
                 input.Use();
@@ -687,23 +696,6 @@ namespace BallForge.Sprites.DOTS.Editor
                 var deleteRect = new Rect(itemRect.xMax - 27f, itemRect.y + 8f, 21f, 22f);
                 var selectRect = new Rect(itemRect.x, itemRect.y, itemRect.width - 31f, itemRect.height);
                 var nameRect = new Rect(itemRect.x + 10f, itemRect.y + 4f, itemRect.width - 48f, 19f);
-                bool renameClick = _renamingClip < 0 && input.type == EventType.MouseDown && input.button == 0 &&
-                                   (nameRect.Contains(input.mousePosition) ||
-                                    (input.clickCount >= 2 && selectRect.Contains(input.mousePosition)));
-                if (renameClick)
-                {
-                    if (_selectedClip != i)
-                    {
-                        _selectedOnionFrame = -1;
-                        ClearColliderSelection();
-                        _selectedEventFrame = -1;
-                    }
-                    _selectedClip = i;
-                    SelectOnlyFrame(0);
-                    _previewTime = 0f;
-                    BeginClipRename(i);
-                    input.Use();
-                }
 
                 bool isRenaming = i == _renamingClip;
                 if (isRenaming)
@@ -721,25 +713,16 @@ namespace BallForge.Sprites.DOTS.Editor
                 {
                     GUI.Box(itemRect, GUIContent.none,
                         i == _selectedClip ? _clipSelectedStyle : _clipStyle);
-                    if (GUI.Button(selectRect, GUIContent.none, GUIStyle.none))
+                    if (input.type == EventType.MouseDown && input.button == 0 &&
+                        selectRect.Contains(input.mousePosition) &&
+                        !deleteRect.Contains(input.mousePosition))
                     {
-                        if (_selectedClip != i)
-                        {
-                            _selectedOnionFrame = -1;
-                            ClearColliderSelection();
-                            _selectedEventFrame = -1;
-                        }
-                        _selectedClip = i;
-                        SelectOnlyFrame(0);
-                        _previewTime = 0f;
-                        GUI.FocusControl(null);
-                        GUIUtility.keyboardControl = 0;
-                        Focus();
+                        SelectClipCard(i);
+                        input.Use();
                     }
                     string clipName = string.IsNullOrWhiteSpace(clip.Name) ? $"Clip {i + 1}" : clip.Name;
-                    GUI.Label(nameRect, new GUIContent(clipName, "Click the name to rename. Double-click the card or press F2."),
+                    GUI.Label(nameRect, new GUIContent(clipName, "Select this clip. Press F2 to rename."),
                         EditorStyles.boldLabel);
-                    EditorGUIUtility.AddCursorRect(nameRect, MouseCursor.Text);
                 }
                 GUI.Label(new Rect(itemRect.x + 10f, itemRect.y + 22f, itemRect.width - 48f, 14f),
                     $"{clip.Frames.Length} frames   {clip.FrameRate:F1} fps", _mutedStyle);
@@ -774,6 +757,24 @@ namespace BallForge.Sprites.DOTS.Editor
                     DeleteClip();
                 }
             }
+        }
+
+        void SelectClipCard(int index)
+        {
+            if (_profile?.Clips == null || index < 0 || index >= _profile.Clips.Count)
+                return;
+            if (_renamingClip >= 0 && _renamingClip != index)
+                CancelClipRename();
+            if (_selectedClip != index)
+            {
+                _selectedOnionFrame = -1;
+                ClearColliderSelection();
+                _selectedEventFrame = -1;
+            }
+            _selectedClip = index;
+            SelectOnlyFrame(0);
+            _previewTime = 0f;
+            ReleaseShortcutKeyboardFocus();
         }
 
         void BeginClipRename(int clipIndex)
@@ -1478,19 +1479,23 @@ namespace BallForge.Sprites.DOTS.Editor
             GUI.EndScrollView();
         }
 
-        void DrawTimeline(Rect rect)
+        void DrawTimeline(Rect rect, int controlId)
         {
             GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, 140f, 20f), "TIMELINE", _sectionStyle);
             var clip = CurrentClip;
             if (clip == null)
             {
+                if (_timelineDragMode != TimelineDragMode.None)
+                    EndTimelineDrag();
                 GUI.Label(new Rect(rect.x + 12f, rect.y + 34f, rect.width - 24f, 30f),
                     "Add a clip to build its timeline.", _mutedStyle);
                 return;
             }
 
-            float total = TotalAuthoredDuration(clip);
-            float pixelsPerSecond = TimelinePixelsPerSecond(clip);
+            BuildTimelineMetrics(clip, out float total, out float pixelsPerSecond,
+                out Rect[] cards, out Rect[] thumbnails, out float[] frameTimes,
+                out float[] durations, out float[] eventXs);
+            int frameCount = cards.Length;
             PruneEventSelection(clip);
             string markerSelection = _selectedEventFrame >= 0
                 ? $"   •   marker {EventAuthoredTime(clip, _selectedEventFrame):F3}s selected"
@@ -1514,44 +1519,22 @@ namespace BallForge.Sprites.DOTS.Editor
             }
 
             var viewport = new Rect(rect.x + 8f, rect.y + 34f, rect.width - 16f, rect.height - 42f);
+            _timelineViewportGui = viewport;
             float contentWidth = Mathf.Max(viewport.width - 16f, total * pixelsPerSecond + 52f);
+            _timelineContentWidth = contentWidth;
             var content = new Rect(0f, 0f, contentWidth, 172f);
             Vector2 viewportScreenPosition = GUIUtility.GUIToScreenPoint(viewport.position);
             var viewportScreen = new Rect(viewportScreenPosition, viewport.size);
 
-            int frameCount = clip.Frames.Length;
-            var frameTimes = new float[frameCount];
-            var durations = new float[frameCount];
-            var cards = new Rect[frameCount];
-            var thumbnails = new Rect[frameCount];
-            var eventXs = new float[frameCount];
-            float time = 0f;
-            for (int i = 0; i < frameCount; i++)
-            {
-                float duration = clip.FrameDurationScales[i] / clip.FrameRate;
-                float x = 48f + time * pixelsPerSecond;
-                float width = Mathf.Max(54f, duration * pixelsPerSecond - 5f);
-                frameTimes[i] = time;
-                durations[i] = duration;
-                cards[i] = new Rect(x, 60f, width, 102f);
-                thumbnails[i] = TimelineSpriteRect(new Rect(x + 7f, 83f, width - 14f, 62f));
-                eventXs[i] = 48f + (time + Mathf.Clamp01(clip.EventNormalizedTimes[i]) * duration) *
-                    pixelsPerSecond;
-                time += duration;
-            }
-
             var preview = EvaluatePreview(clip, _previewTime);
             float playheadX = SpriteAnimPlayback.PlayheadX(preview.TimelineTime, 48f, pixelsPerSecond);
             _timelineScroll = GUI.BeginScrollView(viewport, _timelineScroll, content);
-            int controlId = GUIUtility.GetControlID(
-                "BallForgeSpriteAnimatorTimeline".GetHashCode(), FocusType.Passive, content);
             HandleTimelineInput(controlId, clip, total, pixelsPerSecond,
                 contentWidth, viewport.width, viewportScreen, cards, thumbnails,
                 frameTimes, durations, eventXs, playheadX);
             preview = EvaluatePreview(clip, _previewTime);
             playheadX = SpriteAnimPlayback.PlayheadX(preview.TimelineTime, 48f, pixelsPerSecond);
-            if (GUIUtility.hotControl == controlId &&
-                _timelineDragMode is TimelineDragMode.Scrub or TimelineDragMode.Reorder or
+            if (_timelineDragMode is TimelineDragMode.Scrub or TimelineDragMode.Reorder or
                     TimelineDragMode.ResizeFrame or TimelineDragMode.Event)
                 playheadX = Mathf.Max(48f, _timelineDragContentMouse.x);
 
@@ -1655,6 +1638,242 @@ namespace BallForge.Sprites.DOTS.Editor
             GUI.EndScrollView();
         }
 
+        void BuildTimelineMetrics(SpriteClipDef clip, out float total, out float pixelsPerSecond,
+                                  out Rect[] cards, out Rect[] thumbnails, out float[] frameTimes,
+                                  out float[] durations, out float[] eventXs)
+        {
+            total = TotalAuthoredDuration(clip);
+            pixelsPerSecond = TimelinePixelsPerSecond(clip);
+            int frameCount = clip.Frames.Length;
+            frameTimes = new float[frameCount];
+            durations = new float[frameCount];
+            cards = new Rect[frameCount];
+            thumbnails = new Rect[frameCount];
+            eventXs = new float[frameCount];
+            float time = 0f;
+            for (int i = 0; i < frameCount; i++)
+            {
+                float duration = clip.FrameDurationScales[i] / clip.FrameRate;
+                float x = 48f + time * pixelsPerSecond;
+                float width = Mathf.Max(54f, duration * pixelsPerSecond - 5f);
+                frameTimes[i] = time;
+                durations[i] = duration;
+                cards[i] = new Rect(x, 60f, width, 102f);
+                thumbnails[i] = TimelineSpriteRect(new Rect(x + 7f, 83f, width - 14f, 62f));
+                eventXs[i] = 48f + (time + Mathf.Clamp01(clip.EventNormalizedTimes[i]) * duration) *
+                    pixelsPerSecond;
+                time += duration;
+            }
+        }
+
+        Vector2 TimelineContentMouse(Vector2 windowMouse)
+            => windowMouse - _timelineViewportGui.position + _timelineScroll;
+
+        Rect TimelineViewportScreenRect()
+        {
+            Vector2 screenPos = GUIUtility.GUIToScreenPoint(_timelineViewportGui.position);
+            return new Rect(screenPos, _timelineViewportGui.size);
+        }
+
+        void HandleActiveTimelineDrag(int controlId)
+        {
+            if (_timelineDragMode == TimelineDragMode.None)
+                return;
+
+            if (GUIUtility.hotControl != controlId)
+                GUIUtility.hotControl = controlId;
+
+            var clip = CurrentClip;
+            if (clip == null)
+            {
+                EndTimelineDrag();
+                return;
+            }
+
+            var evt = Event.current;
+            EventType raw = evt.rawType;
+            Vector2 contentMouse = TimelineContentMouse(evt.mousePosition);
+
+            if (raw == EventType.MouseDown && evt.button == 0)
+            {
+                CommitTimelineDrag(clip, contentMouse);
+                return;
+            }
+
+            if (raw == EventType.KeyDown && evt.keyCode == KeyCode.Escape)
+            {
+                CancelTimelineDrag();
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if ((raw == EventType.MouseUp && evt.button == 0) || raw == EventType.MouseLeaveWindow)
+            {
+                CommitTimelineDrag(clip, contentMouse);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (raw != EventType.MouseDrag)
+                return;
+
+            BuildTimelineMetrics(clip, out float total, out float pixelsPerSecond,
+                out Rect[] cards, out _, out _, out _, out _);
+            float maxScroll = Mathf.Max(0f, _timelineContentWidth - _timelineViewportGui.width);
+            Vector2 screenMouse = GUIUtility.GUIToScreenPoint(evt.mousePosition);
+            Rect viewportScreen = TimelineViewportScreenRect();
+            _timelineDragContentMouse = contentMouse;
+
+            switch (_timelineDragMode)
+            {
+                case TimelineDragMode.Pan:
+                    if (!_panMoved &&
+                        Vector2.Distance(screenMouse, _timelineDragStartScreen) >= TimelineDragMoveThreshold)
+                        _panMoved = true;
+                    if (_panMoved)
+                        _timelineScroll.x = Mathf.Clamp(
+                            _timelineDragStartScrollX - (screenMouse.x - _timelineDragStartScreen.x),
+                            0f, maxScroll);
+                    break;
+
+                case TimelineDragMode.Scrub:
+                    ScrubTimeline(clip, contentMouse.x, total, pixelsPerSecond);
+                    break;
+
+                case TimelineDragMode.Reorder:
+                    if (!_reorderMoved &&
+                        Vector2.Distance(screenMouse, _timelineDragStartScreen) >= TimelineDragMoveThreshold)
+                        _reorderMoved = true;
+                    if (_reorderMoved)
+                    {
+                        _dropFrameSlot = DropSlotAtX(contentMouse.x, cards);
+                        AutoScrollTimelineAtScreenEdge(screenMouse, viewportScreen, maxScroll);
+                    }
+                    break;
+
+                case TimelineDragMode.ResizeFrame:
+                    if (_resizeFrameIndex >= 0)
+                    {
+                        Vector2 delta = screenMouse - _timelineDragStartScreen;
+                        if (!_timelineResizeCommitted)
+                        {
+                            if (delta.magnitude < TimelineDragMoveThreshold)
+                                break;
+                            if (Mathf.Abs(delta.x) >= Mathf.Abs(delta.y))
+                            {
+                                RecordProfileUndo("Resize Sprite Animation Frame");
+                                _timelineResizeCommitted = true;
+                            }
+                            else
+                            {
+                                ConvertTimelineResizeToMarquee(contentMouse, cards,
+                                    evt.shift || evt.control || evt.command);
+                                AutoScrollTimelineAtScreenEdge(screenMouse, viewportScreen, maxScroll);
+                                break;
+                            }
+                        }
+
+                        float deltaSeconds = delta.x / Mathf.Max(1f, _resizePixelsPerSecond);
+                        float duration = Mathf.Max(0.02f, _resizeStartDuration + deltaSeconds);
+                        clip.FrameDurationScales[_resizeFrameIndex] = duration * clip.FrameRate;
+                        float edgeTime = AuthoredStartTime(clip, _resizeFrameIndex) + duration;
+                        float currentTotal = TotalAuthoredDuration(clip);
+                        _previewTime = PreviewTimeForAuthoredTime(clip,
+                            Mathf.Clamp(edgeTime, 0f, Mathf.Max(0f, currentTotal - 0.0001f)));
+                        _status = $"Frame {_resizeFrameIndex + 1} hold: {duration:F3}s";
+                    }
+                    break;
+
+                case TimelineDragMode.Event:
+                    _dragEventAuthoredTime = Mathf.Clamp(
+                        (contentMouse.x - 48f) / pixelsPerSecond,
+                        0f,
+                        Mathf.Max(0f, total - 0.0001f));
+                    if (!_eventDragMoved &&
+                        Vector2.Distance(screenMouse, _timelineDragStartScreen) >= TimelineDragMoveThreshold)
+                        _eventDragMoved = true;
+                    _previewTime = PreviewTimeForAuthoredTime(clip, _dragEventAuthoredTime);
+                    _selectedFrame = AuthoredFrameAtTime(clip, _dragEventAuthoredTime, out _);
+                    if (_eventDragMoved)
+                        AutoScrollTimelineAtScreenEdge(screenMouse, viewportScreen, maxScroll);
+                    break;
+
+                case TimelineDragMode.Marquee:
+                    if (!_timelineMarqueeMoved &&
+                        Vector2.Distance(screenMouse, _timelineDragStartScreen) >= TimelineDragMoveThreshold)
+                        _timelineMarqueeMoved = true;
+                    if (_timelineMarqueeMoved)
+                    {
+                        _timelineMarqueeRect = RectFromPoints(_timelineMarqueeStart, contentMouse);
+                        ApplyTimelineMarqueeSelection(cards);
+                        AutoScrollTimelineAtScreenEdge(screenMouse, viewportScreen, maxScroll);
+                    }
+                    break;
+            }
+
+            evt.Use();
+            Repaint();
+        }
+
+        void AutoScrollTimelineAtScreenEdge(Vector2 screenMouse, Rect viewportScreen, float maxScroll)
+        {
+            const float edge = 34f;
+            if (screenMouse.x < viewportScreen.xMin + edge)
+                _timelineScroll.x = Mathf.Max(0f, _timelineScroll.x - 13f);
+            else if (screenMouse.x > viewportScreen.xMax - edge)
+                _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
+        }
+
+        void ConvertTimelineResizeToMarquee(Vector2 contentMouse, Rect[] cards, bool additive)
+        {
+            _resizeFrameIndex = -1;
+            _timelineResizeCommitted = false;
+            _timelineDragMode = TimelineDragMode.Marquee;
+            _timelineMarqueeStart = _timelineDragStartContent;
+            _timelineMarqueeMoved = true;
+            _timelineMarqueeAdditive = additive;
+            _timelineMarqueeBaseline.Clear();
+            foreach (int index in _selectedFrames)
+                _timelineMarqueeBaseline.Add(index);
+            _timelineMarqueeRect = RectFromPoints(_timelineMarqueeStart, contentMouse);
+            ApplyTimelineMarqueeSelection(cards);
+        }
+
+        void CommitTimelineDrag(SpriteClipDef clip, Vector2 contentMouse)
+        {
+            if (_timelineDragMode == TimelineDragMode.None)
+                return;
+            if (clip != null)
+            {
+                if (_timelineDragMode == TimelineDragMode.Reorder && _reorderMoved)
+                    CommitFrameReorder(clip, _dragFrameIndex, _dropFrameSlot);
+                else if (_timelineDragMode == TimelineDragMode.ResizeFrame &&
+                         _timelineResizeCommitted && _resizeFrameIndex >= 0)
+                    SaveDirty();
+                else if (_timelineDragMode == TimelineDragMode.Event && _eventDragMoved)
+                    CommitEventMove(clip, _dragEventSourceFrame, _dragEventId,
+                        _dragEventAuthoredTime);
+                else if (_timelineDragMode == TimelineDragMode.Pan && !_panMoved &&
+                         _panClickPlacesPlayhead)
+                    ScrubTimeline(clip, contentMouse.x, TotalAuthoredDuration(clip),
+                        TimelinePixelsPerSecond(clip));
+            }
+            EndTimelineDrag();
+        }
+
+        void CancelTimelineDrag()
+        {
+            var clip = CurrentClip;
+            if (_timelineDragMode == TimelineDragMode.ResizeFrame && clip != null &&
+                _resizeFrameIndex >= 0 && _timelineResizeCommitted)
+                clip.FrameDurationScales[_resizeFrameIndex] = _resizeStartDuration * clip.FrameRate;
+            else if (_timelineDragMode == TimelineDragMode.Marquee)
+                RestoreFrameSelectionFromBaseline();
+            EndTimelineDrag();
+        }
+
         void HandleTimelineInput(int controlId, SpriteClipDef clip, float total,
                                  float pixelsPerSecond, float contentWidth,
                                  float viewportWidth, Rect viewportScreen,
@@ -1665,11 +1884,14 @@ namespace BallForge.Sprites.DOTS.Editor
             var evt = Event.current;
             Vector2 mouse = evt.mousePosition;
             float maxScroll = Mathf.Max(0f, contentWidth - viewportWidth);
+            _ = viewportScreen;
 
             int markerFrame = EventMarkerAt(clip, eventXs, mouse);
 
             if (evt.type == EventType.MouseDown && evt.button == 0 && markerFrame >= 0)
             {
+                if (_timelineDragMode != TimelineDragMode.None)
+                    CommitTimelineDrag(clip, mouse);
                 float markerTime = EventAuthoredTime(clip, markerFrame);
                 SelectEventMarker(clip, markerFrame, markerTime);
                 BeginTimelineDrag(controlId, TimelineDragMode.Event, mouse);
@@ -1702,21 +1924,11 @@ namespace BallForge.Sprites.DOTS.Editor
                 return;
             }
 
-            if (evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape &&
-                GUIUtility.hotControl == controlId)
-            {
-                if (_timelineDragMode == TimelineDragMode.ResizeFrame && _resizeFrameIndex >= 0)
-                    clip.FrameDurationScales[_resizeFrameIndex] = _resizeStartDuration * clip.FrameRate;
-                else if (_timelineDragMode == TimelineDragMode.Marquee)
-                    RestoreFrameSelectionFromBaseline();
-                EndTimelineDrag(controlId);
-                evt.Use();
-                Repaint();
-                return;
-            }
-
             if (evt.type == EventType.MouseDown && (evt.button == 0 || evt.button == 2))
             {
+                if (_timelineDragMode != TimelineDragMode.None)
+                    CommitTimelineDrag(clip, mouse);
+
                 ReleaseShortcutKeyboardFocus();
                 if (evt.button == 0 && mouse.y >= 27f && mouse.y <= 54f)
                 {
@@ -1743,24 +1955,6 @@ namespace BallForge.Sprites.DOTS.Editor
 
                 if (evt.button == 0)
                 {
-                    for (int i = cards.Length - 1; i >= 0; i--)
-                    {
-                        if (!FrameResizeHandle(cards[i]).Contains(mouse)) continue;
-                        RecordProfileUndo("Resize Sprite Animation Frame");
-                        BeginTimelineDrag(controlId, TimelineDragMode.ResizeFrame, mouse);
-                        _resizeFrameIndex = i;
-                        _resizeStartDuration = durations[i];
-                        _resizePixelsPerSecond = pixelsPerSecond;
-                        SelectOnlyFrame(i);
-                        _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
-                        ClearColliderSelection();
-                        _selectedEventFrame = -1;
-                        _socketDeleteArmed = false;
-                        evt.Use();
-                        Repaint();
-                        return;
-                    }
-
                     for (int i = thumbnails.Length - 1; i >= 0; i--)
                     {
                         if (!evt.alt || !ThumbnailContains(thumbnails[i], mouse)) continue;
@@ -1776,6 +1970,27 @@ namespace BallForge.Sprites.DOTS.Editor
                         evt.Use();
                         Repaint();
                         return;
+                    }
+
+                    if (!evt.alt)
+                    {
+                        for (int i = cards.Length - 1; i >= 0; i--)
+                        {
+                            if (!FrameResizeHandle(cards[i]).Contains(mouse)) continue;
+                            BeginTimelineDrag(controlId, TimelineDragMode.ResizeFrame, mouse);
+                            _resizeFrameIndex = i;
+                            _resizeStartDuration = durations[i];
+                            _resizePixelsPerSecond = pixelsPerSecond;
+                            _timelineResizeCommitted = false;
+                            SelectOnlyFrame(i);
+                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
+                            ClearColliderSelection();
+                            _selectedEventFrame = -1;
+                            _socketDeleteArmed = false;
+                            evt.Use();
+                            Repaint();
+                            return;
+                        }
                     }
 
                     if (mouse.y > 54f)
@@ -1812,115 +2027,6 @@ namespace BallForge.Sprites.DOTS.Editor
                 evt.Use();
                 return;
             }
-
-            if (evt.type == EventType.MouseDrag && GUIUtility.hotControl == controlId)
-            {
-                Vector2 screenMouse = GUIUtility.GUIToScreenPoint(mouse);
-                _timelineDragContentMouse = mouse;
-                switch (_timelineDragMode)
-                {
-                    case TimelineDragMode.Pan:
-                        if (!_panMoved &&
-                            Vector2.Distance(screenMouse, _timelineDragStartScreen) >= 4f)
-                            _panMoved = true;
-                        if (_panMoved)
-                            _timelineScroll.x = Mathf.Clamp(
-                                _timelineDragStartScrollX - (screenMouse.x - _timelineDragStartScreen.x),
-                                0f, maxScroll);
-                        break;
-
-                    case TimelineDragMode.Scrub:
-                        ScrubTimeline(clip, mouse.x, total, pixelsPerSecond);
-                        break;
-
-                    case TimelineDragMode.Reorder:
-                        if (!_reorderMoved &&
-                            Vector2.Distance(screenMouse, _timelineDragStartScreen) >= 4f)
-                            _reorderMoved = true;
-                        if (_reorderMoved)
-                        {
-                            _dropFrameSlot = DropSlotAtX(mouse.x, cards);
-                            const float edge = 34f;
-                            if (screenMouse.x < viewportScreen.xMin + edge)
-                                _timelineScroll.x = Mathf.Max(0f, _timelineScroll.x - 13f);
-                            else if (screenMouse.x > viewportScreen.xMax - edge)
-                                _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
-                        }
-                        break;
-
-                    case TimelineDragMode.ResizeFrame:
-                        if (_resizeFrameIndex >= 0)
-                        {
-                            float deltaSeconds = (screenMouse.x - _timelineDragStartScreen.x) /
-                                Mathf.Max(1f, _resizePixelsPerSecond);
-                            float duration = Mathf.Max(0.02f, _resizeStartDuration + deltaSeconds);
-                            clip.FrameDurationScales[_resizeFrameIndex] = duration * clip.FrameRate;
-                            float edgeTime = AuthoredStartTime(clip, _resizeFrameIndex) + duration;
-                            float currentTotal = TotalAuthoredDuration(clip);
-                            _previewTime = PreviewTimeForAuthoredTime(clip,
-                                Mathf.Clamp(edgeTime, 0f, Mathf.Max(0f, currentTotal - 0.0001f)));
-                            _status = $"Frame {_resizeFrameIndex + 1} hold: {duration:F3}s";
-                        }
-                        break;
-
-                    case TimelineDragMode.Event:
-                        _dragEventAuthoredTime = Mathf.Clamp(
-                            (mouse.x - 48f) / pixelsPerSecond,
-                            0f,
-                            Mathf.Max(0f, total - 0.0001f));
-                        if (!_eventDragMoved &&
-                            Vector2.Distance(screenMouse, _timelineDragStartScreen) >= 3f)
-                            _eventDragMoved = true;
-                        _previewTime = PreviewTimeForAuthoredTime(clip, _dragEventAuthoredTime);
-                        _selectedFrame = AuthoredFrameAtTime(clip, _dragEventAuthoredTime, out _);
-                        if (_eventDragMoved)
-                        {
-                            const float edge = 34f;
-                            if (screenMouse.x < viewportScreen.xMin + edge)
-                                _timelineScroll.x = Mathf.Max(0f, _timelineScroll.x - 13f);
-                            else if (screenMouse.x > viewportScreen.xMax - edge)
-                                _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
-                        }
-                        break;
-
-                    case TimelineDragMode.Marquee:
-                        if (!_timelineMarqueeMoved &&
-                            Vector2.Distance(screenMouse, _timelineDragStartScreen) >= 4f)
-                            _timelineMarqueeMoved = true;
-                        if (_timelineMarqueeMoved)
-                        {
-                            _timelineMarqueeRect = RectFromPoints(_timelineMarqueeStart, mouse);
-                            ApplyTimelineMarqueeSelection(cards);
-                            const float edge = 34f;
-                            if (screenMouse.x < viewportScreen.xMin + edge)
-                                _timelineScroll.x = Mathf.Max(0f, _timelineScroll.x - 13f);
-                            else if (screenMouse.x > viewportScreen.xMax - edge)
-                                _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
-                        }
-                        break;
-                }
-                evt.Use();
-                Repaint();
-                return;
-            }
-
-            if (evt.type == EventType.MouseUp && GUIUtility.hotControl == controlId)
-            {
-                if (_timelineDragMode == TimelineDragMode.Reorder && _reorderMoved)
-                    CommitFrameReorder(clip, _dragFrameIndex, _dropFrameSlot);
-                else if (_timelineDragMode == TimelineDragMode.ResizeFrame && _resizeFrameIndex >= 0)
-                    SaveDirty();
-                else if (_timelineDragMode == TimelineDragMode.Event && _eventDragMoved)
-                    CommitEventMove(clip, _dragEventSourceFrame, _dragEventId,
-                        _dragEventAuthoredTime);
-                else if (_timelineDragMode == TimelineDragMode.Pan && !_panMoved &&
-                         _panClickPlacesPlayhead)
-                    ScrubTimeline(clip, mouse.x, TotalAuthoredDuration(clip),
-                        TimelinePixelsPerSecond(clip));
-                EndTimelineDrag(controlId);
-                evt.Use();
-                Repaint();
-            }
         }
 
         void BeginTimelineDrag(int controlId, TimelineDragMode mode, Vector2 contentMouse)
@@ -1928,7 +2034,9 @@ namespace BallForge.Sprites.DOTS.Editor
             GUIUtility.hotControl = controlId;
             _timelineDragMode = mode;
             _timelineDragContentMouse = contentMouse;
+            _timelineDragStartContent = contentMouse;
             _timelineDragStartScreen = GUIUtility.GUIToScreenPoint(contentMouse);
+            _timelineResizeCommitted = false;
             _playing = false;
         }
 
@@ -2015,9 +2123,9 @@ namespace BallForge.Sprites.DOTS.Editor
             return 0;
         }
 
-        void EndTimelineDrag(int controlId)
+        void EndTimelineDrag()
         {
-            if (GUIUtility.hotControl == controlId)
+            if (_timelineDragMode != TimelineDragMode.None)
                 GUIUtility.hotControl = 0;
             _timelineDragMode = TimelineDragMode.None;
             _dragFrameIndex = -1;
@@ -2026,6 +2134,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _resizeFrameIndex = -1;
             _resizeStartDuration = 0f;
             _resizePixelsPerSecond = 0f;
+            _timelineResizeCommitted = false;
             _dragEventSourceFrame = -1;
             _dragEventId = 0;
             _dragEventAuthoredTime = 0f;
@@ -2278,7 +2387,7 @@ namespace BallForge.Sprites.DOTS.Editor
         }
 
         static Rect FrameResizeHandle(Rect card)
-            => new(card.xMax - 6f, card.y, 12f, card.height);
+            => new(card.xMax - 6f, card.y, 6f, card.height);
 
         Rect TimelineSpriteRect(Rect area)
         {
@@ -5746,6 +5855,16 @@ namespace BallForge.Sprites.DOTS.Editor
                 return;
             }
 
+            if (evt.keyCode == KeyCode.F2)
+            {
+                if (IsEditingStringTextField() || CurrentClip == null)
+                    return;
+                BeginClipRename(_selectedClip);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
             if (evt.keyCode is KeyCode.Delete or KeyCode.Backspace)
             {
                 if (IsEditingStringTextField())
@@ -5785,6 +5904,14 @@ namespace BallForge.Sprites.DOTS.Editor
                     else
                         _status = "A clip must keep at least one frame";
                 }
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.keyCode == KeyCode.Escape && _timelineDragMode != TimelineDragMode.None)
+            {
+                CancelTimelineDrag();
                 evt.Use();
                 Repaint();
                 return;
@@ -5873,6 +6000,8 @@ namespace BallForge.Sprites.DOTS.Editor
             _selectedSocketName = null;
             _socketDeleteArmed = false;
             ClearPolygonDraft();
+            if (_timelineDragMode != TimelineDragMode.None)
+                EndTimelineDrag();
             _status = "Undo/Redo applied";
             Repaint();
         }
