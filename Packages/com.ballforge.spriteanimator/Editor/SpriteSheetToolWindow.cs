@@ -62,7 +62,9 @@ namespace BallForge.Sprites.DOTS.Editor
         const float Gap = 8f;
         const float PixelsPerSecond = 520f;
         const float DefaultPreviewSpeed = 1f;
+        const float PivotHandleHitRadius = 14f;
         const string ClipRenameControl = "BallForgeSpriteAnimator.ClipRename";
+        const string StringFieldControlPrefix = "BallForgeSpriteAnimator.Text.";
 
         static readonly Color WindowColor = new(0.075f, 0.086f, 0.105f);
         static readonly Color PanelColor = new(0.105f, 0.12f, 0.145f);
@@ -85,6 +87,7 @@ namespace BallForge.Sprites.DOTS.Editor
         bool _continuousColliderPlacement;
         bool _socketPlacementArmed;
         string _selectedSocketName;
+        bool _socketDeleteArmed;
         bool _draggingSocket;
         Vector2 _socketDragStart;
         Vector2 _socketOffsetStart;
@@ -95,11 +98,15 @@ namespace BallForge.Sprites.DOTS.Editor
         float _speed = 1f;
         [SerializeField] float _previewZoom = 1f;
         [SerializeField] Vector2 _previewPan = Vector2.zero;
+        [SerializeField] bool _showPivot = true;
         Vector2 _previewScroll;
         bool _previewPanning;
         Vector2 _previewPanStartMouse;
         Vector2 _previewPanStartOffset;
+        bool _draggingPivot;
+        bool _pivotSelected;
         double _lastEditorTime;
+        double _lastSpaceToggleTime = -1d;
         float _previewTime;
 
         Vector2 _clipScroll;
@@ -752,7 +759,13 @@ namespace BallForge.Sprites.DOTS.Editor
             GUI.Label(new Rect(rect.x + 186f, rect.y + 9f, 36f, 20f), "Zoom", _mutedStyle);
             _previewZoom = GUI.HorizontalSlider(new Rect(rect.x + 222f, rect.y + 14f, 86f, 14f), _previewZoom, 0.25f, 8f);
             GUI.Label(new Rect(rect.x + 312f, rect.y + 9f, 46f, 20f), $"{_previewZoom:F2}x", _mutedStyle);
-            using (new EditorGUI.DisabledScope(Mathf.Approximately(_previewZoom, 1f) && _previewPan.sqrMagnitude < 0.01f))
+            var canvas = new Rect(rect.x + 10f, rect.y + 54f, rect.width - 20f, rect.height - 66f);
+            var localCanvas = new Rect(0f, 0f, canvas.width, canvas.height);
+            TryComputePreviewLayout(localCanvas, out _, out float contentW, out float contentH);
+            Vector2 centeredScroll = CenteredPreviewScroll(contentW, contentH, localCanvas);
+            bool zoomAtDefault = Mathf.Approximately(_previewZoom, 1f);
+            bool panAtDefault = _previewPan.sqrMagnitude < 0.01f && _previewScroll.sqrMagnitude < 1f;
+            using (new EditorGUI.DisabledScope(zoomAtDefault && panAtDefault))
             {
                 if (GUI.Button(new Rect(rect.x + 356f, rect.y + 7f, 52f, 22f),
                         new GUIContent("Reset", "Reset preview zoom and pan."),
@@ -761,6 +774,19 @@ namespace BallForge.Sprites.DOTS.Editor
                     _previewZoom = 1f;
                     _previewPan = Vector2.zero;
                     _previewScroll = Vector2.zero;
+                    _status = "Reset preview zoom and pan";
+                }
+            }
+            bool alreadyCentered = (_previewScroll - centeredScroll).sqrMagnitude < 1f &&
+                                   _previewPan.sqrMagnitude < 0.01f;
+            using (new EditorGUI.DisabledScope(_profile.Sheet == null || alreadyCentered))
+            {
+                if (GUI.Button(new Rect(rect.x + 412f, rect.y + 7f, 68f, 22f),
+                        new GUIContent("Recenter",
+                            "Keep zoom and center the sprite in the preview pane."),
+                        EditorStyles.miniButton))
+                {
+                    RecenterPreview(localCanvas);
                 }
             }
             var offsetModeRect = new Rect(rect.xMax - 126f, rect.y + 7f, 114f, 22f);
@@ -795,7 +821,6 @@ namespace BallForge.Sprites.DOTS.Editor
                 frameText += $"   •   {_polygonDraftUV.Count} vertices";
             GUI.Label(new Rect(rect.x + 12f, rect.y + 31f, rect.width - 24f, 16f), frameText, _mutedStyle);
 
-            var canvas = new Rect(rect.x + 10f, rect.y + 54f, rect.width - 20f, rect.height - 66f);
             HandlePreviewNavigationInput(canvas);
             DrawCheckerboard(canvas, 18f);
             EditorGUI.DrawRect(new Rect(canvas.x, canvas.y, canvas.width, 1f), BorderColor);
@@ -807,36 +832,15 @@ namespace BallForge.Sprites.DOTS.Editor
             }
 
             GUI.BeginGroup(canvas);
-            var localCanvas = new Rect(0f, 0f, canvas.width, canvas.height);
             clip.EnsureFrameData();
             if (!OnionSelectionIsVisible(clip, state.Frame))
                 _selectedOnionFrame = -1;
             else
                 _selectedOnionDelta = _selectedOnionFrame - state.Frame;
 
-            float availableWidth = Mathf.Max(40f, localCanvas.width - 52f);
-            float availableHeight = Mathf.Max(40f, localCanvas.height - 52f);
-            float cellAspect = (_profile.Sheet.width / (float)Mathf.Max(1, _profile.Columns)) /
-                               (_profile.Sheet.height / (float)Mathf.Max(1, _profile.Rows));
-            float fitWidth = availableWidth;
-            float fitHeight = fitWidth / Mathf.Max(0.01f, cellAspect);
-            if (fitHeight > availableHeight)
-            {
-                fitHeight = availableHeight;
-                fitWidth = fitHeight * cellAspect;
-            }
-            float zoom = Mathf.Clamp(_previewZoom, 0.25f, 8f);
-            float cellWidth = fitWidth * zoom;
-            float cellHeight = fitHeight * zoom;
-            float contentW = Mathf.Max(localCanvas.width, cellWidth + 16f);
-            float contentH = Mathf.Max(localCanvas.height, cellHeight + 16f);
+            TryComputePreviewLayout(localCanvas, out Rect cell, out contentW, out contentH);
             _previewScroll = GUI.BeginScrollView(
                 localCanvas, _previewScroll, new Rect(0f, 0f, contentW, contentH), false, false);
-            var cell = new Rect(
-                (contentW - cellWidth) * 0.5f,
-                (contentH - cellHeight) * 0.5f,
-                cellWidth,
-                cellHeight);
 
             var onionGhosts = BuildOnionGhostLayouts(clip, state.Frame, cell);
             PruneColliderSelection(clip, state.Frame);
@@ -848,7 +852,6 @@ namespace BallForge.Sprites.DOTS.Editor
             var activeSpriteRect = new Rect(cell.position + activeScreenOffset, cell.size);
             DrawCell(_profile.Sheet, CellIndexOf(clip, state.Frame), activeSpriteRect, 1f);
 
-            DrawPivot(cell);
             if (_showHitboxes)
             {
                 foreach (var box in BoxesFor(clip, state.Frame))
@@ -877,14 +880,21 @@ namespace BallForge.Sprites.DOTS.Editor
                 DrawOnionGhostBadges(onionGhosts);
 
             DrawSockets(cell, clip, state.Frame);
+            DrawPivot(cell);
             if (_socketPlacementArmed && _colliderCreationMode == ColliderCreationMode.None)
                 DrawSocketPlacementBalloon(canvas);
 
             int previewControlId = GUIUtility.GetControlID(
                 "BallForgeSpriteAnimatorPreview".GetHashCode(), FocusType.Keyboard, canvas);
+            if (!_showPivot && _draggingPivot)
+            {
+                _draggingPivot = false;
+                _pivotSelected = false;
+            }
             // Input arbitration: an armed creation tool owns the canvas. Otherwise precise
             // collider hits win, then sockets, then an already-selected onion/badge, then marquee.
-            // A live collider tool must not lose clicks to socket placement.
+            // A live collider tool must not lose clicks to socket placement. Pivot drag is
+            // allowed only when those tools are not armed and the handle itself is clicked.
             if (_showHitboxes && _colliderCreationMode != ColliderCreationMode.None)
             {
                 EditorGUIUtility.AddCursorRect(cell, MouseCursor.ArrowPlus);
@@ -897,11 +907,16 @@ namespace BallForge.Sprites.DOTS.Editor
             }
             else
             {
-                if (_draggingSocket)
+                if (_draggingPivot)
+                    HandlePivotInput(previewControlId, cell);
+                else if (_draggingSocket)
                     HandleSocketManipulationInput(previewControlId, cell, clip, state.Frame);
                 else if (Event.current.type == EventType.MouseDown &&
                          FindSocketAt(clip, state.Frame, cell, Event.current.mousePosition) != null)
                     HandleSocketManipulationInput(previewControlId, cell, clip, state.Frame);
+                else if (_showPivot && Event.current.type == EventType.MouseDown &&
+                         PivotHandleContains(cell, Event.current.mousePosition))
+                    HandlePivotInput(previewControlId, cell);
                 else
                 {
                     bool colliderConsumed = _showHitboxes &&
@@ -910,9 +925,13 @@ namespace BallForge.Sprites.DOTS.Editor
                     {
                         bool socketConsumed = HandleSocketManipulationInput(
                             previewControlId, cell, clip, state.Frame);
-                        if (!socketConsumed && _profile.OnionSkinEnabled)
+                        bool pivotConsumed = !socketConsumed && _showPivot &&
+                            HandlePivotInput(previewControlId, cell);
+                        if (!socketConsumed && !pivotConsumed && _profile.OnionSkinEnabled)
                             HandleOnionInput(previewControlId, cell, clip, state.Frame, onionGhosts);
                     }
+                    else if (_showPivot && Event.current.type == EventType.MouseDown)
+                        _pivotSelected = false;
                 }
             }
             GUI.EndScrollView();
@@ -971,7 +990,7 @@ namespace BallForge.Sprites.DOTS.Editor
             var area = new Rect(rect.x + 9f, rect.y + 38f, rect.width - 18f, rect.height - 48f);
             int colliderRows = CurrentClip == null ? 0 : CurrentFrameColliders(CurrentClip, _selectedFrame).Count;
             var inspectorContent = new Rect(0f, 0f, area.width - 15f,
-                Mathf.Max(area.height, 1560f + colliderRows * 26f));
+                Mathf.Max(area.height, 1640f + colliderRows * 26f));
             _inspectorScroll = GUI.BeginScrollView(area, _inspectorScroll, inspectorContent);
             GUILayout.BeginArea(inspectorContent);
             EditorGUI.BeginChangeCheck();
@@ -991,6 +1010,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 if (newSheet != null)
                     TryLoadExistingAsset();
             }
+            DrawSheetTextureInfo();
             _profile.Columns = Mathf.Max(1, EditorGUILayout.IntField("Columns", _profile.Columns));
             _profile.Rows = Mathf.Max(1, EditorGUILayout.IntField("Rows", _profile.Rows));
             using (new EditorGUI.DisabledScope(
@@ -1031,6 +1051,20 @@ namespace BallForge.Sprites.DOTS.Editor
                         RecordProfileUndo("Reset Sprite Pivot");
                         _profile.Pivot = SpriteSheetProfile.DefaultPivot;
                         _status = "Reset pivot to center";
+                    }
+                }
+                bool nextShowPivot = GUILayout.Toggle(_showPivot,
+                    new GUIContent("Show Pivot",
+                        "Draw the sheet pivot in the preview. Drag the handle to move it."),
+                    GUILayout.Width(92f));
+                if (nextShowPivot != _showPivot)
+                {
+                    Undo.RecordObject(this, "Toggle Show Pivot");
+                    _showPivot = nextShowPivot;
+                    if (!_showPivot)
+                    {
+                        _draggingPivot = false;
+                        _pivotSelected = false;
                     }
                 }
             }
@@ -1087,7 +1121,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 GUILayout.Space(9f);
                 SectionLabel("CLIP");
                 string oldName = clip.Name;
-                clip.Name = EditorGUILayout.TextField("Name", clip.Name);
+                clip.Name = DrawStringTextField("Name", clip.Name, "ClipName");
                 if (oldName != clip.Name)
                     RenameHitboxClip(oldName, clip.Name);
                 clip.Row = Mathf.Clamp(EditorGUILayout.IntField("Sheet Row", clip.Row), 0,
@@ -1120,9 +1154,9 @@ namespace BallForge.Sprites.DOTS.Editor
                         }
                     }
                 }
-                clip.FacingGroup = EditorGUILayout.TextField(
+                clip.FacingGroup = DrawStringTextField(
                     new GUIContent("Facing Group", "Optional logical group name (e.g. Walk, Idle)."),
-                    clip.FacingGroup);
+                    clip.FacingGroup, "FacingGroup");
                 clip.Facing = (SpriteFacingDirection)EditorGUILayout.EnumPopup(
                     new GUIContent("Facing", "Direction variant inside the facing group."),
                     clip.Facing);
@@ -1537,6 +1571,7 @@ namespace BallForge.Sprites.DOTS.Editor
 
             if (evt.type == EventType.MouseDown && (evt.button == 0 || evt.button == 2))
             {
+                ReleaseShortcutKeyboardFocus();
                 if (evt.button == 0 && mouse.y >= 27f && mouse.y <= 54f)
                 {
                     _selectedEventFrame = -1;
@@ -1574,6 +1609,7 @@ namespace BallForge.Sprites.DOTS.Editor
                         _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
+                        _socketDeleteArmed = false;
                         evt.Use();
                         Repaint();
                         return;
@@ -1588,6 +1624,7 @@ namespace BallForge.Sprites.DOTS.Editor
                         _selectedFrame = i;
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
+                        _socketDeleteArmed = false;
                         _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
                         _reorderMoved = false;
                         evt.Use();
@@ -2792,7 +2829,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 definition = new SpriteEventDef { Id = eventId, Name = $"Event {eventId}" };
                 _profile.Events.Add(definition);
             }
-            definition.Name = EditorGUILayout.TextField("Event Name", definition.Name);
+            definition.Name = DrawStringTextField("Event Name", definition.Name, "EventName");
             definition.Color = EditorGUILayout.ColorField("Event Color", definition.Color);
         }
 
@@ -2850,7 +2887,10 @@ namespace BallForge.Sprites.DOTS.Editor
                         EditorGUI.DrawRect(new Rect(chip.x, chip.y + 4f, 12f, 12f), swatch);
                         string rowLabel = onFrame ? $"{i}:{name}" : $"{i}:{name}  (other frame)";
                         if (GUILayout.Button(rowLabel, selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton))
+                        {
                             _selectedSocketName = name;
+                            _socketDeleteArmed = true;
+                        }
                     }
 
                     if (!selected)
@@ -2859,7 +2899,7 @@ namespace BallForge.Sprites.DOTS.Editor
                     if (!onFrame)
                         GUILayout.Label("No key on this frame yet. Drag or edit to add one.", _mutedStyle);
 
-                    string nextName = EditorGUILayout.TextField("Name", name);
+                    string nextName = DrawStringTextField("Name", name, "SocketName");
                     if (!SpriteSocketKeys.NamesEqual(nextName, name))
                     {
                         SpriteSocketKeys.RenameIdentity(clip.Sockets, name, nextName);
@@ -2898,6 +2938,7 @@ namespace BallForge.Sprites.DOTS.Editor
                             SpriteSocketKeys.DeleteIdentity(clip.Sockets, name);
                             _status = $"Deleted socket {name}";
                             _selectedSocketName = null;
+                            _socketDeleteArmed = false;
                             _draggingSocket = false;
                             SaveDirty();
                             GUIUtility.ExitGUI();
@@ -2928,6 +2969,7 @@ namespace BallForge.Sprites.DOTS.Editor
         {
             _socketPlacementArmed = false;
             _selectedSocketName = null;
+            _socketDeleteArmed = false;
             _draggingSocket = false;
         }
 
@@ -2938,6 +2980,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (SpriteSocketKeys.IdentityIndex(clip.Sockets, _selectedSocketName) < 0)
             {
                 _selectedSocketName = null;
+                _socketDeleteArmed = false;
                 _draggingSocket = false;
             }
         }
@@ -3091,6 +3134,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (hit != null)
             {
                 _selectedSocketName = hit;
+                _socketDeleteArmed = true;
                 _socketPlacementArmed = false;
                 _status = $"Selected socket {hit}";
                 evt.Use();
@@ -3111,6 +3155,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (!placingExisting)
                 placed.LocalAngle = 0f;
             _selectedSocketName = name;
+            _socketDeleteArmed = true;
             _socketPlacementArmed = false;
             _status = $"Placed {name} on frame {frame + 1}";
             SaveDirty();
@@ -3155,6 +3200,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _selectedFrame = frame;
             _selectedOnionFrame = -1;
             _selectedSocketName = hit;
+            _socketDeleteArmed = true;
             SpriteSocketKeys.TryGetPose(clip.Sockets, hit, frame, out var pose, out _, out _);
             _draggingSocket = true;
             _socketDragStart = evt.mousePosition;
@@ -3321,8 +3367,14 @@ namespace BallForge.Sprites.DOTS.Editor
 
         void RemoveSelectedFrame(SpriteClipDef clip)
         {
+            if (clip == null)
+                return;
+            clip.EnsureFrameData();
+            if (clip.Frames.Length <= 1)
+                return;
+
             RecordProfileUndo("Remove Sprite Animation Frame");
-            int removed = _selectedFrame;
+            int removed = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
             var frames = new List<int>(clip.Frames);
             frames.RemoveAt(removed);
             var durations = new List<float>(clip.FrameDurationScales);
@@ -3369,8 +3421,11 @@ namespace BallForge.Sprites.DOTS.Editor
                 if (box.ClipName == clip.Name && box.FrameIndex > removed)
                     box.FrameIndex--;
             _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
+            _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, _selectedFrame));
             PruneColliderSelection(clip, _selectedFrame);
             SaveDirty();
+            _status = $"Removed frame {removed + 1}  •  {clip.Frames.Length} remaining";
+            Repaint();
         }
 
         int[] CreateDefaultFrames()
@@ -3951,10 +4006,194 @@ namespace BallForge.Sprites.DOTS.Editor
 
         void DrawPivot(Rect cell)
         {
-            float x = cell.x + Mathf.Clamp01(_profile.Pivot.x) * cell.width;
-            float y = cell.y + (1f - Mathf.Clamp01(_profile.Pivot.y)) * cell.height;
-            EditorGUI.DrawRect(new Rect(x - 7f, y, 15f, 1f), AccentColor);
-            EditorGUI.DrawRect(new Rect(x, y - 7f, 1f, 15f), AccentColor);
+            if (!_showPivot)
+                return;
+
+            Vector2 point = PivotScreen(cell);
+            bool active = _draggingPivot || _pivotSelected;
+            float arm = 22f;
+            Color outline = new Color(0.05f, 0.06f, 0.08f, 0.95f);
+            Color fill = active ? Color.white : AccentColor;
+
+            Handles.BeginGUI();
+            Handles.color = outline;
+            Handles.DrawAAPolyLine(5.5f, point + Vector2.left * arm, point + Vector2.right * arm);
+            Handles.DrawAAPolyLine(5.5f, point + Vector2.up * arm, point + Vector2.down * arm);
+            Handles.color = fill;
+            Handles.DrawAAPolyLine(2.4f, point + Vector2.left * arm, point + Vector2.right * arm);
+            Handles.DrawAAPolyLine(2.4f, point + Vector2.up * arm, point + Vector2.down * arm);
+            Handles.EndGUI();
+
+            DrawDiamond(point, active ? 8.5f : 7f, outline);
+            DrawDiamond(point, active ? 6f : 4.8f, fill);
+            Handles.BeginGUI();
+            Handles.color = Color.white;
+            Handles.DrawSolidDisc(point, Vector3.forward, 2.2f);
+            Handles.EndGUI();
+
+            EditorGUIUtility.AddCursorRect(
+                new Rect(point.x - PivotHandleHitRadius, point.y - PivotHandleHitRadius,
+                    PivotHandleHitRadius * 2f, PivotHandleHitRadius * 2f),
+                MouseCursor.MoveArrow);
+        }
+
+        void DrawSheetTextureInfo()
+        {
+            if (_profile.Sheet == null)
+            {
+                EditorGUILayout.LabelField("File name", "—");
+                EditorGUILayout.LabelField("Size", "—");
+                return;
+            }
+
+            EditorGUILayout.LabelField("File name", SheetTextureFileName(_profile.Sheet));
+            EditorGUILayout.LabelField("Size",
+                $"{_profile.Sheet.width} × {_profile.Sheet.height}");
+            int columns = Mathf.Max(1, _profile.Columns);
+            int rows = Mathf.Max(1, _profile.Rows);
+            EditorGUILayout.LabelField("Cell size",
+                $"{_profile.Sheet.width / columns} × {_profile.Sheet.height / rows}");
+        }
+
+        static string SheetTextureFileName(Texture2D sheet)
+        {
+            if (sheet == null)
+                return "—";
+            string path = AssetDatabase.GetAssetPath(sheet);
+            if (!string.IsNullOrEmpty(path))
+            {
+                string fileName = Path.GetFileName(path);
+                if (!string.IsNullOrEmpty(fileName))
+                    return fileName;
+            }
+            return string.IsNullOrEmpty(sheet.name) ? "—" : sheet.name;
+        }
+
+        bool TryComputePreviewLayout(Rect localCanvas, out Rect cell, out float contentW, out float contentH)
+        {
+            contentW = Mathf.Max(1f, localCanvas.width);
+            contentH = Mathf.Max(1f, localCanvas.height);
+            cell = new Rect(0f, 0f, contentW, contentH);
+            if (_profile?.Sheet == null)
+                return false;
+
+            float availableWidth = Mathf.Max(40f, localCanvas.width - 52f);
+            float availableHeight = Mathf.Max(40f, localCanvas.height - 52f);
+            float cellAspect = (_profile.Sheet.width / (float)Mathf.Max(1, _profile.Columns)) /
+                               (_profile.Sheet.height / (float)Mathf.Max(1, _profile.Rows));
+            float fitWidth = availableWidth;
+            float fitHeight = fitWidth / Mathf.Max(0.01f, cellAspect);
+            if (fitHeight > availableHeight)
+            {
+                fitHeight = availableHeight;
+                fitWidth = fitHeight * cellAspect;
+            }
+            float zoom = Mathf.Clamp(_previewZoom, 0.25f, 8f);
+            float cellWidth = fitWidth * zoom;
+            float cellHeight = fitHeight * zoom;
+            contentW = Mathf.Max(localCanvas.width, cellWidth + 16f);
+            contentH = Mathf.Max(localCanvas.height, cellHeight + 16f);
+            cell = new Rect(
+                (contentW - cellWidth) * 0.5f,
+                (contentH - cellHeight) * 0.5f,
+                cellWidth,
+                cellHeight);
+            return true;
+        }
+
+        static Vector2 CenteredPreviewScroll(float contentW, float contentH, Rect localCanvas)
+        {
+            return new Vector2(
+                Mathf.Max(0f, (contentW - localCanvas.width) * 0.5f),
+                Mathf.Max(0f, (contentH - localCanvas.height) * 0.5f));
+        }
+
+        void RecenterPreview(Rect localCanvas)
+        {
+            TryComputePreviewLayout(localCanvas, out _, out float contentW, out float contentH);
+            _previewScroll = CenteredPreviewScroll(contentW, contentH, localCanvas);
+            _previewPan = Vector2.zero;
+            _status = "Recentered preview";
+            Repaint();
+        }
+
+        bool PivotHandleContains(Rect cell, Vector2 mouse)
+            => (mouse - PivotScreen(cell)).sqrMagnitude <= PivotHandleHitRadius * PivotHandleHitRadius;
+
+        static Vector2 ScreenToPivot(Vector2 screen, Rect cell)
+        {
+            return new Vector2(
+                Mathf.Clamp01((screen.x - cell.x) / Mathf.Max(1f, cell.width)),
+                Mathf.Clamp01(1f - (screen.y - cell.y) / Mathf.Max(1f, cell.height)));
+        }
+
+        bool HandlePivotInput(int controlId, Rect cell)
+        {
+            if (!_showPivot)
+                return false;
+
+            var evt = Event.current;
+            bool overHandle = PivotHandleContains(cell, evt.mousePosition);
+            bool ownsDrag = _draggingPivot && GUIUtility.hotControl == controlId;
+
+            if (evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape && ownsDrag)
+            {
+                EndPivotDrag(controlId, save: true);
+                evt.Use();
+                Repaint();
+                return true;
+            }
+
+            if (evt.type == EventType.MouseDown && evt.button == 0 && overHandle)
+            {
+                RecordProfileUndo("Move Sprite Pivot");
+                _draggingPivot = true;
+                _pivotSelected = true;
+                _playing = false;
+                _selectedOnionFrame = -1;
+                ClearColliderSelection();
+                _selectedEventFrame = -1;
+                GUIUtility.hotControl = controlId;
+                GUIUtility.keyboardControl = controlId;
+                _status = $"Pivot {_profile.Pivot.x:F2}, {_profile.Pivot.y:F2}";
+                evt.Use();
+                Repaint();
+                return true;
+            }
+
+            if (evt.type == EventType.MouseDown && evt.button == 0)
+            {
+                _pivotSelected = false;
+                return false;
+            }
+
+            if (evt.type == EventType.MouseDrag && ownsDrag)
+            {
+                _profile.Pivot = ScreenToPivot(evt.mousePosition, cell);
+                _status = $"Pivot {_profile.Pivot.x:F2}, {_profile.Pivot.y:F2}";
+                evt.Use();
+                Repaint();
+                return true;
+            }
+
+            if (evt.type == EventType.MouseUp && evt.button == 0 && ownsDrag)
+            {
+                EndPivotDrag(controlId, save: true);
+                evt.Use();
+                Repaint();
+                return true;
+            }
+
+            return ownsDrag;
+        }
+
+        void EndPivotDrag(int controlId, bool save)
+        {
+            _draggingPivot = false;
+            if (GUIUtility.hotControl == controlId)
+                GUIUtility.hotControl = 0;
+            if (save)
+                SaveDirty();
         }
 
         static Rect CenteredSquareRect(Vector2 center, Vector2 edge, Rect bounds, float minimumRadius)
@@ -4187,24 +4426,77 @@ namespace BallForge.Sprites.DOTS.Editor
             return GUILayout.Button(new GUIContent("Reset", tooltip), GUILayout.Width(48f));
         }
 
+        static bool IsSpaceKey(Event evt)
+            => evt.keyCode == KeyCode.Space || evt.character == ' ';
+
+        static string DrawStringTextField(string label, string value, string id)
+        {
+            GUI.SetNextControlName(StringFieldControlPrefix + id);
+            return EditorGUILayout.TextField(label, value);
+        }
+
+        static string DrawStringTextField(GUIContent label, string value, string id)
+        {
+            GUI.SetNextControlName(StringFieldControlPrefix + id);
+            return EditorGUILayout.TextField(label, value);
+        }
+
+        bool IsEditingStringTextField()
+        {
+            if (_renamingClip >= 0)
+                return true;
+            if (!EditorGUIUtility.editingTextField)
+                return false;
+            string focused = GUI.GetNameOfFocusedControl();
+            return focused == ClipRenameControl ||
+                   (!string.IsNullOrEmpty(focused) && focused.StartsWith(StringFieldControlPrefix));
+        }
+
+        bool IsEditingAnyTextField()
+            => _renamingClip >= 0 || EditorGUIUtility.editingTextField;
+
+        void ReleaseShortcutKeyboardFocus()
+        {
+            GUIUtility.keyboardControl = 0;
+            GUI.FocusControl(null);
+            Focus();
+        }
+
+        bool TryTogglePlaybackFromSpace()
+        {
+            double now = EditorApplication.timeSinceStartup;
+            // KeyCode.Space and character == ' ' can arrive as one event or a pair.
+            if (now - _lastSpaceToggleTime < 0.08d)
+                return false;
+            _lastSpaceToggleTime = now;
+            if (CurrentClip == null)
+                return false;
+            _playing = !_playing;
+            _lastEditorTime = now;
+            _status = _playing ? "Playback started" : "Playback paused";
+            return true;
+        }
+
         void HandleGlobalShortcuts()
         {
             var evt = Event.current;
-            if (evt.type != EventType.KeyDown || EditorGUIUtility.editingTextField)
+            if (evt.type != EventType.KeyDown)
                 return;
 
-            if (evt.keyCode == KeyCode.Space && CurrentClip != null)
+            if (IsSpaceKey(evt))
             {
-                GUIUtility.keyboardControl = 0;
-                GUI.FocusControl(null);
-                Focus();
-                _playing = !_playing;
-                _lastEditorTime = EditorApplication.timeSinceStartup;
-                _status = _playing ? "Playback started" : "Playback paused";
+                if (IsEditingStringTextField())
+                    return;
+
+                ReleaseShortcutKeyboardFocus();
+                TryTogglePlaybackFromSpace();
                 evt.Use();
                 Repaint();
                 return;
             }
+
+            if (IsEditingAnyTextField())
+                return;
 
             if (_selectedOnionFrame < 0 && CurrentClip != null &&
                 evt.keyCode is KeyCode.LeftArrow or KeyCode.RightArrow)
@@ -4247,14 +4539,27 @@ namespace BallForge.Sprites.DOTS.Editor
                     evt.Use();
                     return;
                 }
-                if (!string.IsNullOrEmpty(_selectedSocketName) && CurrentClip != null)
+                if (_socketDeleteArmed && !string.IsNullOrEmpty(_selectedSocketName) && CurrentClip != null)
                 {
                     RecordProfileUndo("Delete Sprite Socket");
                     SpriteSocketKeys.DeleteIdentity(CurrentClip.Sockets, _selectedSocketName);
                     _status = $"Deleted socket {_selectedSocketName}";
                     _selectedSocketName = null;
+                    _socketDeleteArmed = false;
                     _draggingSocket = false;
                     SaveDirty();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                var clip = CurrentClip;
+                if (clip != null)
+                {
+                    if (clip.Frames.Length > 1)
+                        RemoveSelectedFrame(clip);
+                    else
+                        _status = "A clip must keep at least one frame";
                     evt.Use();
                     Repaint();
                     return;
@@ -4266,15 +4571,19 @@ namespace BallForge.Sprites.DOTS.Editor
                 bool hadSelection = _selectedColliders.Count > 0 || _selectedEventFrame >= 0 ||
                                     _selectedOnionFrame >= 0 || _colliderCreationMode != ColliderCreationMode.None ||
                                     _colliderMarqueePending || _socketPlacementArmed ||
-                                    !string.IsNullOrEmpty(_selectedSocketName);
+                                    !string.IsNullOrEmpty(_selectedSocketName) ||
+                                    _draggingPivot || _pivotSelected;
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
                 _selectedOnionFrame = -1;
                 CancelColliderCreation("Selection and active tools cleared");
                 CancelSocketPlacement(null);
                 _selectedSocketName = null;
+                _socketDeleteArmed = false;
                 _draggingSocket = false;
                 _draggingOnion = false;
+                _draggingPivot = false;
+                _pivotSelected = false;
                 if (_colliderMarqueePending)
                     GUIUtility.hotControl = 0;
                 _colliderMarqueePending = false;
@@ -4308,8 +4617,11 @@ namespace BallForge.Sprites.DOTS.Editor
             _draggingBox = false;
             _draggingOnion = false;
             _draggingSocket = false;
+            _draggingPivot = false;
+            _pivotSelected = false;
             CancelSocketPlacement(null);
             _selectedSocketName = null;
+            _socketDeleteArmed = false;
             ClearPolygonDraft();
             _status = "Undo/Redo applied";
             Repaint();
