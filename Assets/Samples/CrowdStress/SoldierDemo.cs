@@ -95,6 +95,7 @@ namespace InvertLab.Sprites.DOTS
             em.AddComponent<SoldierEntityTag>(_proto);
 
             // ---- hand the crowd to the instanced renderer (one draw call) ----
+            SpriteBatchSpawner.LayoutXy = false;
             SpriteInstanceRenderSystem.Install(em);
             SpriteInstanceRenderSystem.SetSheet(tex);
             SpriteAnimGrid grid;

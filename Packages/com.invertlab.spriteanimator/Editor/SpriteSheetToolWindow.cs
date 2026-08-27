@@ -78,7 +78,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float MinInspectorPanelWidth = 260f;
         const float Gap = 8f;
         const float PixelsPerSecond = 520f;
-        const float TimelineDragMoveThreshold = 3f;
+        const float TimelineDragMoveThreshold = 1f;
         const float DefaultPreviewSpeed = 1f;
         const float PivotHandleHitRadius = 14f;
         const float ColliderHandleSize = 8f;
@@ -728,10 +728,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GUI.Box(itemRect, GUIContent.none, _clipSelectedStyle);
                     GUI.SetNextControlName(ClipRenameControl);
                     _renameClipValue = GUI.TextField(nameRect, _renameClipValue, EditorStyles.boldLabel);
-                    if (_focusClipRename)
+                    if (_focusClipRename || GUI.GetNameOfFocusedControl() != ClipRenameControl)
                     {
                         EditorGUI.FocusTextInControl(ClipRenameControl);
-                        _focusClipRename = false;
+                        if (GUI.GetNameOfFocusedControl() == ClipRenameControl)
+                            _focusClipRename = false;
                     }
                 }
                 else
@@ -743,10 +744,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                         !deleteRect.Contains(input.mousePosition))
                     {
                         SelectClipCard(i);
+                        if (nameRect.Contains(input.mousePosition) && input.clickCount >= 2)
+                            BeginClipRename(i);
                         input.Use();
                     }
                     string clipName = string.IsNullOrWhiteSpace(clip.Name) ? $"Clip {i + 1}" : clip.Name;
-                    GUI.Label(nameRect, new GUIContent(clipName, "Select this clip. Press F2 to rename."),
+                    GUI.Label(nameRect, new GUIContent(clipName, "Click to select. F2 or double-click the name to rename."),
                         EditorStyles.boldLabel);
                 }
                 GUI.Label(new Rect(itemRect.x + 10f, itemRect.y + 22f, itemRect.width - 48f, 14f),
@@ -811,12 +814,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CommitClipRename();
 
             _selectedClip = clipIndex;
-            SelectOnlyFrame(0);
-            ClearColliderSelection();
-            _selectedEventFrame = -1;
-            _selectedOnionFrame = -1;
-            _previewTime = 0f;
-            _playing = false;
             _renamingClip = clipIndex;
             _renameClipOriginal = _profile.Clips[clipIndex].Name;
             _renameClipValue = string.IsNullOrWhiteSpace(_renameClipOriginal)
@@ -1185,6 +1182,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     }
                 }
             }
+            DrawPixelsPerUnitSize();
             using (new EditorGUILayout.HorizontalScope())
             {
                 _profile.Pivot = EditorGUILayout.Vector2Field("Pivot", _profile.Pivot);
@@ -1256,7 +1254,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
             EditorGUILayout.HelpBox(
-                "Circle is the default thumbnail hit target. Drag a thumbnail to reorder; drag empty track space to pan; drag the ruler or red playhead to scrub.",
+                "Drag a frame to reorder. Drag empty track to box-select. Drag the right edge to change hold. Drag the ruler or playhead to scrub. Alt-drag or middle-mouse pans. Shift/Ctrl click adds to the selection.",
                 MessageType.None);
 
             var clip = CurrentClip;
@@ -1577,6 +1575,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUIUtility.AddCursorRect(new Rect(0f, 0f, contentWidth, 27f), MouseCursor.SlideArrow);
             EditorGUIUtility.AddCursorRect(new Rect(0f, 27f, contentWidth, 27f), MouseCursor.SlideArrow);
             EditorGUIUtility.AddCursorRect(new Rect(0f, 54f, contentWidth, 118f), MouseCursor.Arrow);
+            for (int i = 0; i < frameCount; i++)
+            {
+                EditorGUIUtility.AddCursorRect(cards[i], MouseCursor.MoveArrow);
+                EditorGUIUtility.AddCursorRect(FrameResizeHandle(cards[i]), MouseCursor.ResizeHorizontal);
+            }
 
             for (int i = 0; i < frameCount; i++)
             {
@@ -1794,18 +1797,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                         {
                             if (delta.magnitude < TimelineDragMoveThreshold)
                                 break;
-                            if (Mathf.Abs(delta.x) >= Mathf.Abs(delta.y))
-                            {
-                                RecordDiscreteUndo("Change Frame Duration");
-                                _timelineResizeCommitted = true;
-                            }
-                            else
-                            {
-                                ConvertTimelineResizeToMarquee(contentMouse, cards,
-                                    evt.shift || evt.control || evt.command);
-                                AutoScrollTimelineAtScreenEdge(screenMouse, viewportScreen, maxScroll);
-                                break;
-                            }
+                            RecordDiscreteUndo("Change Frame Duration");
+                            _timelineResizeCommitted = true;
                         }
 
                         float deltaSeconds = delta.x / Mathf.Max(1f, _resizePixelsPerSecond);
@@ -1991,60 +1984,50 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
-                if (evt.button == 0)
+                if (evt.button == 0 && mouse.y > 54f)
                 {
-                    for (int i = thumbnails.Length - 1; i >= 0; i--)
+                    int card = FrameAt(cards, thumbnails, mouse);
+                    if (card >= 0)
                     {
-                        if (!evt.alt || !ThumbnailContains(thumbnails[i], mouse)) continue;
-                        BeginTimelineDrag(controlId, TimelineDragMode.Reorder, mouse);
-                        _dragFrameIndex = i;
-                        _dropFrameSlot = i;
-                        SelectOnlyFrame(i);
-                        ClearColliderSelection();
-                        _selectedEventFrame = -1;
-                        _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
-                        _reorderMoved = false;
-                        evt.Use();
-                        Repaint();
-                        return;
-                    }
-
-                    if (!evt.alt)
-                    {
-                        for (int i = cards.Length - 1; i >= 0; i--)
+                        bool onThumb = thumbnails[card].Contains(mouse);
+                        bool onEdge = FrameResizeHandle(cards[card]).Contains(mouse);
+                        if (onEdge && !onThumb)
                         {
-                            if (!FrameResizeHandle(cards[i]).Contains(mouse)) continue;
                             BeginTimelineDrag(controlId, TimelineDragMode.ResizeFrame, mouse);
-                            _resizeFrameIndex = i;
-                            _resizeStartDuration = durations[i];
+                            _resizeFrameIndex = card;
+                            _resizeStartDuration = durations[card];
                             _resizePixelsPerSecond = pixelsPerSecond;
                             _timelineResizeCommitted = false;
-                            SelectOnlyFrame(i);
-                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
+                            SelectOnlyFrame(card);
+                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
                             ClearColliderSelection();
                             _selectedEventFrame = -1;
                             evt.Use();
                             Repaint();
                             return;
                         }
-                    }
 
-                    if (mouse.y > 54f)
-                    {
                         bool additive = evt.shift || evt.control || evt.command;
-                        int card = FrameCardAt(cards, mouse);
-                        if (card >= 0)
-                        {
-                            ApplyFrameModifierClick(card, additive, toggle: evt.control || evt.command);
-                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
-                        }
-                        BeginTimelineMarquee(controlId, mouse, additive);
+                        ApplyFrameModifierClick(card, additive, toggle: evt.control || evt.command);
+                        _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
+                        BeginTimelineDrag(controlId, TimelineDragMode.Reorder, mouse);
+                        _dragFrameIndex = card;
+                        _dropFrameSlot = card;
+                        _reorderMoved = false;
                         evt.Use();
                         Repaint();
                         return;
                     }
+
+                    bool additiveEmpty = evt.shift || evt.control || evt.command;
+                    BeginTimelineMarquee(controlId, mouse, additiveEmpty);
+                    ClearColliderSelection();
+                    _selectedEventFrame = -1;
+                    evt.Use();
+                    Repaint();
+                    return;
                 }
 
                 if (evt.button == 0 && mouse.y <= 27f)
@@ -2196,9 +2179,20 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         static int FrameCardAt(Rect[] cards, Vector2 point)
         {
+            return FrameAt(cards, null, point);
+        }
+
+        static int FrameAt(Rect[] cards, Rect[] thumbnails, Vector2 point)
+        {
             for (int i = cards.Length - 1; i >= 0; i--)
-                if (cards[i].Contains(point))
+            {
+                var row = cards[i];
+                row.yMin = 54f;
+                if (row.Contains(point))
                     return i;
+                if (thumbnails != null && thumbnails[i].Contains(point))
+                    return i;
+            }
             return -1;
         }
 
@@ -2422,7 +2416,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         static Rect FrameResizeHandle(Rect card)
-            => new(card.xMax - 16f, card.y, 18f, card.height);
+            => new(card.xMax - 5f, card.y, 6f, card.height);
 
         Rect TimelineSpriteRect(Rect area)
         {
@@ -4991,7 +4985,24 @@ namespace InvertLab.Sprites.DOTS.Editor
             int columns = Mathf.Max(1, _profile.Columns);
             int rows = Mathf.Max(1, _profile.Rows);
             EditorGUILayout.LabelField("Cell size",
-                $"{_profile.Sheet.width / columns} × {_profile.Sheet.height / rows}");
+                $"{_profile.Sheet.width / columns} × {_profile.Sheet.height / rows} px");
+        }
+
+        void DrawPixelsPerUnitSize()
+        {
+            if (_profile.Sheet == null)
+            {
+                EditorGUILayout.LabelField("Cell in world", "—");
+                return;
+            }
+
+            int columns = Mathf.Max(1, _profile.Columns);
+            int rows = Mathf.Max(1, _profile.Rows);
+            float cellW = _profile.Sheet.width / (float)columns;
+            float cellH = _profile.Sheet.height / (float)rows;
+            float ppu = Mathf.Max(0.01f, _profile.PixelsPerUnit);
+            EditorGUILayout.LabelField("Cell in world",
+                $"{cellW:0.#} × {cellH:0.#} px  /  {ppu:0.#}  =  {cellW / ppu:0.###} × {cellH / ppu:0.###} units");
         }
 
         static string SheetTextureFileName(Texture2D sheet)
@@ -5892,7 +5903,16 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.keyCode == KeyCode.F2)
             {
-                if (IsEditingStringTextField() || CurrentClip == null)
+                if (CurrentClip == null)
+                    return;
+                if (_renamingClip >= 0)
+                    return;
+                string focused = GUI.GetNameOfFocusedControl();
+                bool editingOther = EditorGUIUtility.editingTextField &&
+                    !string.IsNullOrEmpty(focused) &&
+                    focused.StartsWith(StringFieldControlPrefix) &&
+                    focused != StringFieldControlPrefix + "ClipName";
+                if (editingOther)
                     return;
                 BeginClipRename(_selectedClip);
                 evt.Use();

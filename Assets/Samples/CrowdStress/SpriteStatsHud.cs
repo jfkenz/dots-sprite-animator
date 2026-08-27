@@ -126,7 +126,10 @@ namespace InvertLab.Sprites.DOTS
                     // square grid formation around origin — dense block fully
                     // visible at normal zoom (random scatter spread sprites
                     // over an 8km field where you'd only ever see a few).
-                    SpriteBatchSpawner.SpawnNow(em, new float3(0, 1.55f, 0),
+                    var center = SpriteBatchSpawner.LayoutXy
+                        ? float3.zero
+                        : new float3(0, 1.55f, 0);
+                    SpriteBatchSpawner.SpawnNow(em, center,
                         4000f, 2f, n, true, true);
 
                     // keep the session's mode consistent: if anything is

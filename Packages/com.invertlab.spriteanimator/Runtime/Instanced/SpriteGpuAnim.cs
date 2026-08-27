@@ -1,5 +1,7 @@
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -244,6 +246,112 @@ namespace InvertLab.Sprites.DOTS
             int n = ents.Length;
             ents.Dispose();
             return n;
+        }
+
+        /// <summary>Build GPU clock state for a clip. False if the clip needs CPU.</summary>
+        public static bool TryFromClip(ref SpriteAnimSetBlob set, int clipIndex, float now, float speed,
+                                       int cols, int rows,
+                                       Unity.Entities.BlobAssetReference<SpriteAnimSetBlob> savedSet,
+                                       out SpriteGpuAnim gpu)
+        {
+            gpu = default;
+            if (!SpriteGpuEligibility.IsGpuEligible(ref set, clipIndex, out _))
+                return false;
+
+            ref var def = ref set.Clips[clipIndex];
+            int slot0 = (int)set.Frames[def.FirstFrame].x;
+            cols = math.max(1, cols);
+            rows = math.max(1, rows);
+            float rate = math.max(0.0001f, def.FrameRate * math.max(0.01f, speed));
+            gpu = new SpriteGpuAnim
+            {
+                StartTime      = now,
+                Rate           = rate,
+                N              = def.FrameCount,
+                WrapLoop       = (byte)(def.WrapMode == SpriteAnimWrap.Loop ? 1 : 0),
+                SlotOriginX    = (slot0 % cols) / (float)cols,
+                SlotOriginY    = (rows - 1 - slot0 / cols) / (float)rows,
+                CellW          = 1f / cols,
+                CellH          = 1f / rows,
+                SavedTime      = 0f,
+                SavedClipIndex = clipIndex,
+                SavedSpeed     = speed <= 0f ? 1f : speed,
+                SavedPlaying   = 1,
+                SavedSet       = savedSet,
+            };
+            return true;
+        }
+
+        /// <summary>Burst-switch every crowd GPU sprite to clipIndex.</summary>
+        public static void SetAllCrowdClips(World world, int clipIndex, float now)
+        {
+            if (world == null || !world.IsCreated)
+                return;
+            int cols = 4, rows = 4;
+            var em = world.EntityManager;
+            var gq = em.CreateEntityQuery(typeof(SpriteAnimGrid));
+            if (!gq.IsEmpty)
+            {
+                var g = em.GetComponentData<SpriteAnimGrid>(gq.GetSingletonEntity());
+                cols = g.Cols;
+                rows = g.Rows;
+            }
+
+            var driver = world.GetExistingSystemManaged<SpriteCrowdGpuClipDriver>()
+                         ?? world.GetOrCreateSystemManaged<SpriteCrowdGpuClipDriver>();
+            driver.Apply(clipIndex, now, cols, rows);
+        }
+    }
+
+    /// <summary>Burst-writes SpriteGpuAnim clip fields on every crowd entity.</summary>
+    [BurstCompile]
+    public partial struct SpriteCrowdSetGpuClipJob : IJobEntity
+    {
+        public int ClipIndex;
+        public float Now;
+        public int Cols;
+        public int Rows;
+
+        void Execute(ref SpriteGpuAnim gpu, in SpriteAnimSetRef setRef, in SpriteCrowdEntityTag tag)
+        {
+            ref var set = ref setRef.Set.Value;
+            if (ClipIndex < 0 || ClipIndex >= set.Clips.Length)
+                return;
+            ref var def = ref set.Clips[ClipIndex];
+            int slot0 = (int)set.Frames[def.FirstFrame].x;
+            int cols = math.max(1, Cols);
+            int rows = math.max(1, Rows);
+            float speed = gpu.SavedSpeed <= 0f ? 1f : gpu.SavedSpeed;
+            gpu.StartTime = Now;
+            gpu.Rate = math.max(0.0001f, def.FrameRate * speed);
+            gpu.N = def.FrameCount;
+            gpu.WrapLoop = (byte)(def.WrapMode == SpriteAnimWrap.Loop ? 1 : 0);
+            gpu.SlotOriginX = (slot0 % cols) / (float)cols;
+            gpu.SlotOriginY = (rows - 1 - slot0 / cols) / (float)rows;
+            gpu.CellW = 1f / cols;
+            gpu.CellH = 1f / rows;
+            gpu.SavedClipIndex = ClipIndex;
+            gpu.SavedTime = 0f;
+        }
+    }
+
+    /// <summary>Runs <see cref="SpriteCrowdSetGpuClipJob"/> on demand from authoring.</summary>
+    public partial class SpriteCrowdGpuClipDriver : SystemBase
+    {
+        protected override void OnUpdate() { }
+
+        public void Apply(int clipIndex, float now, int cols, int rows)
+        {
+            var job = new SpriteCrowdSetGpuClipJob
+            {
+                ClipIndex = clipIndex,
+                Now = now,
+                Cols = cols,
+                Rows = rows,
+            };
+            Dependency = job.ScheduleParallel(Dependency);
+            CompleteDependency();
+            SpriteGpuAnimResources.MarkDirty();
         }
     }
 }

@@ -57,10 +57,14 @@ namespace InvertLab.Sprites.DOTS
             SpriteGpuAnimResources.EnsureCapacity(count);
             SpriteGpuAnimResources.EnsureObjects(sheet);
 
+            byte layoutXy = SpriteBatchSpawner.LayoutXy ? (byte)1 : (byte)0;
+            SpriteGpuAnimResources.Material.SetFloat("_LayoutXy", layoutXy);
+
             if (dirty)
             {
                 var job = new PackJob
                 {
+                    LayoutXy = layoutXy,
                     Data = SpriteGpuAnimResources.Staging,
                 };
                 state.Dependency = job.ScheduleParallel(q, state.Dependency);
@@ -75,7 +79,9 @@ namespace InvertLab.Sprites.DOTS
             mat.SetBuffer("_InstanceData", SpriteGpuAnimResources.Buffer);
             mat.SetFloat("_Now", Time.unscaledTime);
 
-            var bounds = new Bounds(Vector3.zero, new Vector3(4000f, 200f, 4000f));
+            var bounds = layoutXy != 0
+                ? new Bounds(Vector3.zero, new Vector3(4000f, 4000f, 200f))
+                : new Bounds(Vector3.zero, new Vector3(4000f, 200f, 4000f));
             Graphics.DrawMeshInstancedProcedural(
                 SpriteGpuAnimResources.Quad, 0, mat, bounds, count,
                 null, UnityEngine.Rendering.ShadowCastingMode.Off, false, 0);
@@ -85,6 +91,7 @@ namespace InvertLab.Sprites.DOTS
         [BurstCompile]
         partial struct PackJob : IJobEntity
         {
+            public byte LayoutXy;
             [WriteOnly] public NativeArray<SpriteGpuInstanceData> Data;
 
             void Execute([EntityIndexInQuery] int i,
@@ -95,8 +102,9 @@ namespace InvertLab.Sprites.DOTS
             {
                 Data[i] = new SpriteGpuInstanceData
                 {
-                    PosScale = new float4(lt.Position.x, lt.Position.z,
-                                          lt.Scale, lt.Position.y),
+                    PosScale = LayoutXy != 0
+                        ? new float4(lt.Position.x, lt.Position.y, lt.Scale, lt.Position.z)
+                        : new float4(lt.Position.x, lt.Position.z, lt.Scale, lt.Position.y),
                     Cell = new float4(a.CellW, a.CellH, a.SlotOriginX, a.SlotOriginY),
                     Anim = new float4(a.StartTime, a.Rate, a.N, a.WrapLoop),
                     Flip = new float4(math.select(0f, 1f, flip.X != 0), math.select(0f, 1f, flip.Y != 0), 0f, 0f),

@@ -1,8 +1,8 @@
 // Invert Lab instanced sprite shader — ONE draw call for ALL sprites.
 // Per-instance data comes from a StructuredBuffer packed by SpriteInstanceRenderSystem.
 // Quad is built from SV_VertexID (6-vert triangle soup, mesh attributes ignored).
-// Sprites lie flat (world XZ plane); head points toward -Z to match the demo's
-// top-down camera (Euler 90,0,180).
+// Default: sprites lie flat on world XZ (soldier top-down, Euler 90,0,180).
+// _LayoutXy > 0.5: sprites stand on world XY facing a 2D camera.
 Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
 {
     Properties
@@ -36,7 +36,8 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
 
             struct SpriteInstanceData
             {
-                float4 PosScale;   // xy = world xz, z = scale, w = world height (y)
+                float4 PosScale;   // XZ: xy=world xz, z=scale, w=height y
+                               // XY: xy=world xy, z=scale, w=depth z
                 float4 CropST;     // xy = cell scale, zw = cell origin (uv, bottom-left)
                 float4 FrameTRS;   // xy = frame scale, z = rotation radians
                 float4 Flip;       // x/y = uv flip flags
@@ -46,6 +47,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
             StructuredBuffer<SpriteInstanceData> _InstanceData;
             sampler2D _MainTex;
             float _Cutoff;
+            float _LayoutXy;
 
             struct v2f
             {
@@ -72,11 +74,21 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                     local.x * cs - local.y * sn,
                     local.x * sn + local.y * cs);
 
-                // flat-lay: local x -> world x, local y -> world -z (head to -Z)
                 float3 wpos;
-                wpos.x = d.PosScale.x + rotated.x * d.PosScale.z;
-                wpos.y = d.PosScale.w;
-                wpos.z = d.PosScale.y - rotated.y * d.PosScale.z;
+                if (_LayoutXy > 0.5)
+                {
+                    // 2D camera: local x -> world x, local y -> world y
+                    wpos.x = d.PosScale.x + rotated.x * d.PosScale.z;
+                    wpos.y = d.PosScale.y + rotated.y * d.PosScale.z;
+                    wpos.z = d.PosScale.w;
+                }
+                else
+                {
+                    // flat-lay: local x -> world x, local y -> world -z (head to -Z)
+                    wpos.x = d.PosScale.x + rotated.x * d.PosScale.z;
+                    wpos.y = d.PosScale.w;
+                    wpos.z = d.PosScale.y - rotated.y * d.PosScale.z;
+                }
 
                 float2 uv = quad + 0.5;
                 uv.x = lerp(uv.x, 1.0 - uv.x, saturate(d.Flip.x));

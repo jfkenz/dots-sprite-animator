@@ -1,5 +1,7 @@
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Rendering;
 using Unity.Transforms;
@@ -14,11 +16,14 @@ namespace InvertLab.Sprites.DOTS
     }
 
     /// <summary>
-    /// Bulk spawning: clones the prototype with ONE native Instantiate call per
-    /// batch, then places instances. No per-entity managed roundtrips.
+    /// Bulk spawning: one native Instantiate, then a Burst job writes
+    /// LocalTransform / clocks. No per-entity managed roundtrips.
     /// </summary>
     public static class SpriteBatchSpawner
     {
+        /// <summary>True = grid/scatter on XY (2D camera). False = XZ (soldier top-down).</summary>
+        public static bool LayoutXy;
+
         /// <summary>Point the spawner at a prototype entity (call once).</summary>
         public static void SetPrototype(EntityManager em, Entity proto)
         {
@@ -45,7 +50,7 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Immediate bulk spawn. grid=true square formation around center,
-        /// otherwise uniform random scatter within ±spread on x/z.
+        /// otherwise uniform random scatter within ±spread.
         /// </summary>
         public static int SpawnNow(EntityManager em, float3 center, float spread,
                                    float scale, int count, bool grid,
@@ -55,55 +60,135 @@ namespace InvertLab.Sprites.DOTS
             count = math.max(0, count);
             if (count == 0) return 0;
 
-            using var instances = em.Instantiate(proto, count, Allocator.Temp);
-            var rng = new Unity.Mathematics.Random(0x9E3779B9u ^
-                (uint)UnityEngine.Time.frameCount * 747796405u + 2891336453u);
+            using var instances = em.Instantiate(proto, count, Allocator.TempJob);
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null || !world.IsCreated)
+                return 0;
 
-            if (grid)
-            {
-                int side = (int)math.ceil(math.sqrt(count));
-                float step = scale * 1.15f;
-                for (int i = 0; i < instances.Length; i++)
-                {
-                    int gx = i % side, gz = i / side;
-                    var p = new float3(
-                        center.x - (side - 1) * step * 0.5f + gx * step,
-                        center.y,
-                        center.z - (side - 1) * step * 0.5f + gz * step);
-                    Place(em, instances[i], p, scale, ref rng, randomizeClocks);
-                }
-            }
-            else
+            var driver = world.GetExistingSystemManaged<SpriteBatchPlaceDriver>()
+                         ?? world.GetOrCreateSystemManaged<SpriteBatchPlaceDriver>();
+            driver.Place(instances, center, spread, scale, grid, randomizeClocks, LayoutXy,
+                Time.unscaledTime);
+
+            if (em.HasComponent<DisableRendering>(proto))
             {
                 for (int i = 0; i < instances.Length; i++)
                 {
-                    var p = new float3(
-                        center.x + rng.NextFloat(-spread, spread),
-                        center.y,
-                        center.z + rng.NextFloat(-spread, spread));
-                    Place(em, instances[i], p, scale, ref rng, randomizeClocks);
+                    if (em.HasComponent<DisableRendering>(instances[i]))
+                        em.RemoveComponent<DisableRendering>(instances[i]);
                 }
             }
+
+            SpriteGpuAnimResources.MarkDirty();
             return count;
         }
+    }
 
-        static void Place(EntityManager em, Entity e, float3 pos, float scale,
-                          ref Unity.Mathematics.Random rng, bool randomizeClocks)
+    /// <summary>Burst-places a just-instantiated batch. Invoked from SpawnNow.</summary>
+    public partial class SpriteBatchPlaceDriver : SystemBase
+    {
+        protected override void OnUpdate() { }
+
+        public void Place(NativeArray<Entity> instances, float3 center, float spread,
+                          float scale, bool grid, bool randomizeClocks, bool layoutXy,
+                          float now)
         {
-            var lt = em.GetComponentData<LocalTransform>(e);
-            lt.Position = pos;
-            lt.Scale = scale;
-            em.SetComponentData(e, lt);
+            int count = instances.Length;
+            if (count == 0)
+                return;
 
-            if (randomizeClocks && em.HasComponent<SpriteAnimPlayer>(e))
+            int side = (int)math.ceil(math.sqrt(count));
+            var job = new PlaceJob
             {
-                var pl = em.GetComponentData<SpriteAnimPlayer>(e);
-                pl.Time = rng.NextFloat(0f, 4f);
-                pl.Playing = 1;
-                em.SetComponentData(e, pl);
+                Entities = instances,
+                Transforms = GetComponentLookup<LocalTransform>(false),
+                Players = GetComponentLookup<SpriteAnimPlayer>(false),
+                GpuAnims = GetComponentLookup<SpriteGpuAnim>(false),
+                Center = center,
+                Spread = spread,
+                Scale = scale,
+                Side = math.max(1, side),
+                Step = scale * 1.15f,
+                Grid = (byte)(grid ? 1 : 0),
+                LayoutXy = (byte)(layoutXy ? 1 : 0),
+                RandomizeClocks = (byte)(randomizeClocks ? 1 : 0),
+                Seed = 0x9E3779B9u ^ (uint)UnityEngine.Time.frameCount * 747796405u + 2891336453u,
+                Now = now,
+            };
+            job.Schedule(count, 64).Complete();
+        }
+
+        [BurstCompile]
+        struct PlaceJob : IJobParallelFor
+        {
+            [ReadOnly] public NativeArray<Entity> Entities;
+            [NativeDisableParallelForRestriction] public ComponentLookup<LocalTransform> Transforms;
+            [NativeDisableParallelForRestriction] public ComponentLookup<SpriteAnimPlayer> Players;
+            [NativeDisableParallelForRestriction] public ComponentLookup<SpriteGpuAnim> GpuAnims;
+            public float3 Center;
+            public float Spread;
+            public float Scale;
+            public int Side;
+            public float Step;
+            public byte Grid;
+            public byte LayoutXy;
+            public byte RandomizeClocks;
+            public uint Seed;
+            public float Now;
+
+            public void Execute(int i)
+            {
+                var rng = Unity.Mathematics.Random.CreateFromIndex(Seed + (uint)i);
+                float3 p;
+                if (Grid != 0)
+                {
+                    int gx = i % Side;
+                    int gz = i / Side;
+                    float a = (Side - 1) * Step * 0.5f;
+                    p = LayoutXy != 0
+                        ? new float3(Center.x - a + gx * Step, Center.y - a + gz * Step, Center.z)
+                        : new float3(Center.x - a + gx * Step, Center.y, Center.z - a + gz * Step);
+                }
+                else
+                {
+                    p = LayoutXy != 0
+                        ? new float3(
+                            Center.x + rng.NextFloat(-Spread, Spread),
+                            Center.y + rng.NextFloat(-Spread, Spread),
+                            Center.z)
+                        : new float3(
+                            Center.x + rng.NextFloat(-Spread, Spread),
+                            Center.y,
+                            Center.z + rng.NextFloat(-Spread, Spread));
+                }
+
+                var e = Entities[i];
+                if (!Transforms.HasComponent(e))
+                    return;
+                var lt = Transforms[e];
+                lt.Position = p;
+                lt.Scale = Scale;
+                Transforms[e] = lt;
+
+                if (RandomizeClocks == 0)
+                    return;
+
+                if (Players.HasComponent(e))
+                {
+                    var pl = Players[e];
+                    pl.Time = rng.NextFloat(0f, 4f);
+                    pl.Playing = 1;
+                    Players[e] = pl;
+                }
+
+                if (GpuAnims.HasComponent(e))
+                {
+                    var g = GpuAnims[e];
+                    if (g.Rate > 0f)
+                        g.StartTime = Now - rng.NextFloat(0f, 4f);
+                    GpuAnims[e] = g;
+                }
             }
-            if (em.HasComponent<DisableRendering>(e))
-                em.RemoveComponent<DisableRendering>(e);
         }
     }
 }

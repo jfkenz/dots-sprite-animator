@@ -284,7 +284,8 @@ namespace InvertLab.Sprites.DOTS
             return fallbackIndex >= 0 && Play(em, e, fallbackIndex);
         }
 
-        static bool Play(EntityManager em, Entity e, int clipIndex)
+        /// <summary>Switch an entity to clip index (restarts at t=0).</summary>
+        public static bool Play(EntityManager em, Entity e, int clipIndex)
         {
             if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return false;

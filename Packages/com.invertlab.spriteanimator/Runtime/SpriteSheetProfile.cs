@@ -284,9 +284,4 @@ namespace InvertLab.Sprites.DOTS
             JsonUtility.FromJson<SpriteSheetProfile>(json);
     }
 
-    /// <summary>Project asset consumed by both the editor and runtime bakers.</summary>
-    public class ScriptableSpriteSheetProfile : ScriptableObject
-    {
-        public SpriteSheetProfile Data = new();
-    }
 }

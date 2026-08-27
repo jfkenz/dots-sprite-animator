@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace InvertLab.Sprites.DOTS
 {
@@ -68,6 +70,206 @@ namespace InvertLab.Sprites.DOTS
 
         [Tooltip("Optional tint")]
         public Color Tint = Color.white;
+
+        [Tooltip("Show the top clip first frame on this Quad in the Scene view. Uncheck to hide the preview mesh.")]
+        public bool ShowScenePreview = true;
+
+
+        public bool ApplyFromProfile()
+        {
+            var data = Profile?.Data;
+            if (data == null)
+                return false;
+
+            if (data.Sheet != null)
+                Sheet = data.Sheet;
+
+            Columns = Mathf.Max(1, data.Columns);
+            Rows = Mathf.Max(1, data.Rows);
+
+            if (data.Clips != null && data.Clips.Count > 0)
+                Clips = CopyClips(data.Clips);
+
+            int clipCount = Clips != null ? Clips.Length : 0;
+            InitialClipIndex = clipCount > 0
+                ? Mathf.Clamp(InitialClipIndex, 0, clipCount - 1)
+                : 0;
+#if UNITY_EDITOR
+            RefreshQuadPreview();
+#endif
+            return true;
+        }
+
+        void OnValidate()
+        {
+            if (Profile != null)
+                ApplyFromProfile();
+#if UNITY_EDITOR
+            RefreshQuadPreview();
+#endif
+        }
+
+#if UNITY_EDITOR
+        void RefreshQuadPreview()
+        {
+            var player = GetComponent<SpriteAnimPlayerAuthoring>();
+            if (player != null)
+                ApplyQuadPreview(player.ClipIndex, player.Frame);
+            else
+                ApplyQuadPreview();
+        }
+
+        public void ApplyQuadPreview() => ApplyQuadPreview(0, 0);
+
+        public void ApplyQuadPreview(int clipIndex, int frameIndex)
+        {
+            var filter = GetComponent<MeshFilter>();
+            var renderer = GetComponent<MeshRenderer>();
+            if (filter == null || renderer == null)
+                return;
+
+            var mesh = filter.sharedMesh;
+            if (mesh == null)
+                return;
+            if (mesh.name.IndexOf("Quad", System.StringComparison.OrdinalIgnoreCase) < 0 && mesh.vertexCount != 4)
+                return;
+
+            if (!ShowScenePreview)
+            {
+                renderer.SetPropertyBlock(null);
+                renderer.enabled = false;
+                return;
+            }
+
+            if (Sheet == null)
+                return;
+
+            var shader = Shader.Find(SpriteShaderLibrary.UnlitShader);
+            if (shader == null)
+                return;
+
+            var mat = renderer.sharedMaterial;
+            if (mat == null || mat.shader != shader)
+            {
+                mat = new Material(shader)
+                {
+                    name = "InvertLab Sprite Preview",
+                    hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild
+                };
+                renderer.sharedMaterial = mat;
+            }
+
+            mat.enableInstancing = false;
+            mat.DisableKeyword("DOTS_INSTANCING_ON");
+            var kw = new LocalKeyword(shader, "DOTS_INSTANCING_ON");
+            if (kw.isValid)
+                mat.SetKeyword(kw, false);
+
+            int cols = Mathf.Max(1, Columns);
+            int rows = Mathf.Max(1, Rows);
+            int col = 0;
+            int row = 0;
+            if (Clips != null && Clips.Length > 0)
+            {
+                if (clipIndex >= 0 && clipIndex < Clips.Length)
+                {
+                    var clip = Clips[clipIndex];
+                    row = clip.Row;
+                    if (clip.Frames != null && clip.Frames.Length > 0)
+                    {
+                        int fi = Mathf.Clamp(frameIndex, 0, clip.Frames.Length - 1);
+                        col = clip.Frames[fi];
+                    }
+                }
+                else
+                {
+                    var clip = Clips[0];
+                    if (clip.Frames != null && clip.Frames.Length > 0)
+                        col = clip.Frames[0];
+                    row = clip.Row;
+                }
+            }
+
+            float w = 1f / cols;
+            float h = 1f / rows;
+            var cropST = new Vector4(w, h, col * w, 1f - (row + 1) * h);
+
+            mat.SetTexture("_MainTex", Sheet);
+            mat.SetColor("_Color", Tint);
+            mat.SetVector("_CropST", cropST);
+
+            var block = new MaterialPropertyBlock();
+            block.SetTexture("_MainTex", Sheet);
+            block.SetColor("_Color", Tint);
+            block.SetVector("_CropST", cropST);
+            renderer.SetPropertyBlock(block);
+
+            renderer.enabled = true;
+        }
+#endif
+
+        static ClipAuthoring[] CopyClips(List<SpriteClipDef> clips)
+        {
+            var result = new ClipAuthoring[clips.Count];
+            for (int i = 0; i < clips.Count; i++)
+            {
+                var src = clips[i];
+                if (src == null)
+                    continue;
+
+                result[i] = new ClipAuthoring
+                {
+                    Name = src.Name,
+                    Row = src.Row,
+                    Frames = CopyArray(src.Frames),
+                    FrameRate = src.FrameRate,
+                    WrapMode = src.WrapMode,
+                    Loop = src.WrapMode == SpriteAnimWrap.Loop
+                        || src.WrapMode == SpriteAnimWrap.ReverseLoop,
+                    FrameDurationScales = CopyArray(src.FrameDurationScales),
+                    EventIds = CopyArray(src.EventIds),
+                    EventNormalizedTimes = CopyArray(src.EventNormalizedTimes),
+                    FrameOffsets = CopyArray(src.OnionOffsets),
+                    FrameScales = CopyArray(src.FrameScales),
+                    FrameRotations = CopyArray(src.FrameRotations),
+                    FrameTweenModes = CopyArray(src.FrameTweenModes),
+                    FacingGroup = src.FacingGroup,
+                    FacingDirection = src.Facing,
+                    Sockets = CopySockets(src.Sockets),
+                };
+            }
+            return result;
+        }
+
+        static T[] CopyArray<T>(T[] source)
+        {
+            if (source == null)
+                return null;
+            return (T[])source.Clone();
+        }
+
+        static FrameSocketDef[] CopySockets(List<FrameSocketDef> sockets)
+        {
+            if (sockets == null || sockets.Count == 0)
+                return null;
+
+            var result = new FrameSocketDef[sockets.Count];
+            for (int i = 0; i < sockets.Count; i++)
+            {
+                var src = sockets[i];
+                if (src == null)
+                    continue;
+
+                result[i] = new FrameSocketDef
+                {
+                    Name = src.Name,
+                    FrameIndex = src.FrameIndex,
+                    LocalPosition = src.LocalPosition,
+                    LocalAngle = src.LocalAngle,
+                };
+            }
+            return result;
+        }
 
         class Baker : Baker<SpriteAnimSetAuthoring>
         {
@@ -179,8 +381,20 @@ namespace InvertLab.Sprites.DOTS
                 }
                 var (setRef, player) = SpriteAnimSetBuilder.Build(Allocator.Persistent, inputs);
                 AddComponent(entity, setRef);
-                int initialClip = Mathf.Clamp(authoring.InitialClipIndex, 0, clipCount - 1);
-                player.ClipIndex = initialClip;
+                var playerAuthoring = GetComponent<SpriteAnimPlayerAuthoring>();
+                int initialClip;
+                if (playerAuthoring != null)
+                {
+                    initialClip = Mathf.Clamp(playerAuthoring.ClipIndex, 0, clipCount - 1);
+                    player.ClipIndex = initialClip;
+                    player.Speed = Mathf.Max(0.01f, playerAuthoring.Speed);
+                    player.Playing = playerAuthoring.Playing ? (byte)1 : (byte)0;
+                }
+                else
+                {
+                    initialClip = Mathf.Clamp(authoring.InitialClipIndex, 0, clipCount - 1);
+                    player.ClipIndex = initialClip;
+                }
                 AddComponent(entity, player);
                 ref var initialDef = ref setRef.Set.Value.Clips[initialClip];
                 int initialFrame = initialDef.WrapMode == SpriteAnimWrap.ReverseLoop

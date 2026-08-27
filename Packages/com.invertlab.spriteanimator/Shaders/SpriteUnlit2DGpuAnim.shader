@@ -36,7 +36,8 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
 
             struct SpriteGpuInstanceData
             {
-                float4 PosScale; // xy = world xz, z = scale, w = world height y
+                float4 PosScale; // XZ: xy=world xz, z=scale, w=height y
+                               // XY: xy=world xy, z=scale, w=depth z
                 float4 Cell;     // xy = cell size uv, zw = first-cell origin uv
                 float4 Anim;     // x = start time, y = rate fps, z = frames, w = wrap(1/0)
                 float4 Flip;     // x/y = uv flip flags
@@ -47,6 +48,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
             sampler2D _MainTex;
             float _Cutoff;
             float _Now;
+            float _LayoutXy;
 
             struct v2f
             {
@@ -88,9 +90,18 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                 float2 c = QUAD[vid];
 
                 float3 wpos;
-                wpos.x = d.PosScale.x + c.x * d.PosScale.z;
-                wpos.y = d.PosScale.w;
-                wpos.z = d.PosScale.y - c.y * d.PosScale.z;
+                if (_LayoutXy > 0.5)
+                {
+                    wpos.x = d.PosScale.x + c.x * d.PosScale.z;
+                    wpos.y = d.PosScale.y + c.y * d.PosScale.z;
+                    wpos.z = d.PosScale.w;
+                }
+                else
+                {
+                    wpos.x = d.PosScale.x + c.x * d.PosScale.z;
+                    wpos.y = d.PosScale.w;
+                    wpos.z = d.PosScale.y - c.y * d.PosScale.z;
+                }
 
                 float2 origin = FrameUvOrigin(d.Cell, d.Anim);
 

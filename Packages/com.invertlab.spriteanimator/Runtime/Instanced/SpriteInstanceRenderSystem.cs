@@ -25,7 +25,7 @@ namespace InvertLab.Sprites.DOTS
     /// <summary>Packed per-instance GPU data. Mirrors the shader struct exactly.</summary>
     public struct SpriteInstanceData
     {
-        public float4 PosScale;  // xy = world xz, z = scale, w = world height y
+        public float4 PosScale;  // XZ: xy=world xz, z=scale, w=height y; XY: xy=world xy, z=scale, w=depth z
         public float4 CropST;    // xy = cell size, zw = cell origin (uv bottom-left)
         public float4 FrameTRS;  // xy = frame scale, z = rotation radians, w = reserved
         public float4 Flip;      // x/y = uv flip flags
@@ -156,10 +156,13 @@ namespace InvertLab.Sprites.DOTS
 
             SpriteRenderResources.EnsureCapacity(count);
 
+            byte layoutXy = SpriteBatchSpawner.LayoutXy ? (byte)1 : (byte)0;
+            SpriteRenderResources.Material.SetFloat("_LayoutXy", layoutXy);
             var job = new PackJob
             {
                 Cols = grid.Cols,
                 Rows = grid.Rows,
+                LayoutXy = layoutXy,
                 Data = SpriteRenderResources.Staging,
             };
             state.Dependency = job.ScheduleParallel(q, state.Dependency);
@@ -169,7 +172,9 @@ namespace InvertLab.Sprites.DOTS
             res.SetData(SpriteRenderResources.Staging, 0, 0, count);
             SpriteRenderResources.Material.SetBuffer("_InstanceData", res);
 
-            var bounds = new Bounds(Vector3.zero, new Vector3(4000f, 200f, 4000f));
+            var bounds = layoutXy != 0
+                ? new Bounds(Vector3.zero, new Vector3(4000f, 4000f, 200f))
+                : new Bounds(Vector3.zero, new Vector3(4000f, 200f, 4000f));
             Graphics.DrawMeshInstancedProcedural(
                 SpriteRenderResources.Quad, 0, SpriteRenderResources.Material, bounds, count,
                 null, UnityEngine.Rendering.ShadowCastingMode.Off, false, 0);
@@ -182,6 +187,7 @@ namespace InvertLab.Sprites.DOTS
         {
             public int Cols;
             public int Rows;
+            public byte LayoutXy;
             [WriteOnly] public NativeArray<SpriteInstanceData> Data;
 
             void Execute([EntityIndexInQuery] int i,
@@ -196,9 +202,13 @@ namespace InvertLab.Sprites.DOTS
 
                 Data[i] = new SpriteInstanceData
                 {
-                    PosScale = new float4(lt.Position.x + frame.Offset.x,
-                                          lt.Position.z + frame.Offset.y,
-                                          lt.Scale, lt.Position.y),
+                    PosScale = LayoutXy != 0
+                        ? new float4(lt.Position.x + frame.Offset.x,
+                                     lt.Position.y + frame.Offset.y,
+                                     lt.Scale, lt.Position.z)
+                        : new float4(lt.Position.x + frame.Offset.x,
+                                     lt.Position.z + frame.Offset.y,
+                                     lt.Scale, lt.Position.y),
                     CropST = new float4(1f / Cols, 1f / Rows,
                                         col * (1f / Cols),
                                         (Rows - 1 - row) * (1f / Rows)),
