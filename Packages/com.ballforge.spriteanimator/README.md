@@ -2,9 +2,12 @@
 
 Portable Unity 6000.0 package for DOTS-first 2D flipbook animation authoring and runtime playback.
 
+Published by **Invert Lab**.
+
 ## Scope
 
-- Package id stays `com.ballforge.spriteanimator`.
+- Publisher: **Invert Lab**.
+- Package id stays `com.ballforge.spriteanimator` (internal; not shown on the store).
 - No gameplay-framework dependencies (no NZCore, Rukhanka, Trove, or project-only assemblies).
 - Supported dependencies: Entities, Entities Graphics, and URP.
 

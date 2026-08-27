@@ -2,6 +2,8 @@
 
 ## 0.7.0 - 2026-08-27
 
+- Set package publisher / author to **Invert Lab**.
+
 - Renamed package display branding to **DOTS Sprite Animator** (package id unchanged:
   `com.ballforge.spriteanimator`) and updated menu paths to:
   - `Window > DOTS Sprite Animator`

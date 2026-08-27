@@ -5,7 +5,7 @@
   "unity": "6000.0",
   "description": "Portable DOTS-first 2D flipbook sprite animation package with timeline authoring, events, colliders, sockets, and CPU/GPU playback paths.",
   "author": {
-    "name": "BallForge"
+    "name": "Invert Lab"
   },
   "dependencies": {
     "com.unity.entities": "1.4.2",

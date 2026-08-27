@@ -1,4 +1,4 @@
-// BallForge DOTS 2D sprite — unlit, transparent, per-instance everything.
+// Invert Lab DOTS 2D sprite — unlit, transparent, per-instance everything.
 // Per-instance properties ride Entities Graphics material property overrides
 // ([MaterialProperty]-tagged IComponentData), NOT MaterialPropertyBlock
 // (which does not exist for entities). All props are DOTS-instanced so

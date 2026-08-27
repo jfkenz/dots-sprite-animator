@@ -1,5 +1,7 @@
 # DOTS Sprite Animator Quick Start
 
+Publisher: **Invert Lab**.
+
 ## 1) Install
 
 Embed or reference the package:

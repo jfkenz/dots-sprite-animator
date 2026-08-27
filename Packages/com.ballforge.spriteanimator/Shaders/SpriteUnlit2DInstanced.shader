@@ -1,4 +1,4 @@
-// BallForge instanced sprite shader — ONE draw call for ALL sprites.
+// Invert Lab instanced sprite shader — ONE draw call for ALL sprites.
 // Per-instance data comes from a StructuredBuffer packed by SpriteInstanceRenderSystem.
 // Quad is built from SV_VertexID (6-vert triangle soup, mesh attributes ignored).
 // Sprites lie flat (world XZ plane); head points toward -Z to match the demo's

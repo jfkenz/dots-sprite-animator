@@ -1,4 +1,4 @@
-// BallForge GPU-animated sprite shader — the SHADER picks the displayed frame
+// Invert Lab GPU-animated sprite shader — the SHADER picks the displayed frame
 // from a global clock (_Now), so animating 1M sprites costs the CPU nothing.
 // Per-instance data (position, clip rate, start time, wrap, tint) is static:
 // uploaded only when a unit spawns/moves/changes clip, never per-frame.
