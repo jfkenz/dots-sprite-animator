@@ -17,6 +17,7 @@ namespace BallForge.Sprites.DOTS.Editor
             Reorder,
             ResizeFrame,
             Event,
+            Marquee,
         }
 
         enum ColliderCreationMode
@@ -99,6 +100,7 @@ namespace BallForge.Sprites.DOTS.Editor
         ScriptableSpriteSheetProfile _asset;
         int _selectedClip;
         int _selectedFrame;
+        readonly HashSet<int> _selectedFrames = new();
         int _selectedEventFrame = -1;
         int _newHitboxId = 1;
         ColliderCreationMode _colliderCreationMode = ColliderCreationMode.None;
@@ -148,6 +150,11 @@ namespace BallForge.Sprites.DOTS.Editor
         int _resizeFrameIndex = -1;
         float _resizeStartDuration;
         float _resizePixelsPerSecond;
+        Vector2 _timelineMarqueeStart;
+        Rect _timelineMarqueeRect;
+        bool _timelineMarqueeMoved;
+        bool _timelineMarqueeAdditive;
+        readonly HashSet<int> _timelineMarqueeBaseline = new();
         int _dragEventSourceFrame = -1;
         byte _dragEventId;
         float _dragEventAuthoredTime;
@@ -193,6 +200,13 @@ namespace BallForge.Sprites.DOTS.Editor
         readonly List<Texture2D> _styleTextures = new();
         readonly List<OnionGhostLayout> _onionGhostLayouts = new(16);
         readonly HashSet<FrameBoxDef> _selectedColliders = new();
+        Color32[] _sheetPixels;
+        int _sheetPixelsId = -1;
+        int _sheetPixelsWidth;
+        int _sheetPixelsHeight;
+        int _sheetPixelsColumns;
+        int _sheetPixelsRows;
+        bool[] _sheetCellEmpty;
 
         [MenuItem("Window/DOTS Sprite Animator")]
         public static void Open()
@@ -225,6 +239,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 if (texture != null)
                     DestroyImmediate(texture);
             _styleTextures.Clear();
+            InvalidateSheetPixelCache();
         }
 
         void TickPreview()
@@ -368,8 +383,68 @@ namespace BallForge.Sprites.DOTS.Editor
                 var clip = _profile.Clips[_selectedClip];
                 clip.EnsureFrameData();
                 _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
+                EnsureFrameSelection(clip.Frames.Length);
                 return clip;
             }
+        }
+
+        bool IsFrameSelected(int frame) => _selectedFrames.Contains(frame);
+
+        void EnsureFrameSelection(int frameCount)
+        {
+            if (frameCount <= 0)
+            {
+                _selectedFrames.Clear();
+                _selectedFrame = 0;
+                return;
+            }
+
+            _selectedFrame = Mathf.Clamp(_selectedFrame, 0, frameCount - 1);
+            _selectedFrames.RemoveWhere(index => index < 0 || index >= frameCount);
+            if (_selectedFrames.Count == 0)
+                _selectedFrames.Add(_selectedFrame);
+            else if (!_selectedFrames.Contains(_selectedFrame))
+                _selectedFrames.Add(_selectedFrame);
+        }
+
+        void SelectOnlyFrame(int frame)
+        {
+            _selectedFrame = Mathf.Max(0, frame);
+            _selectedFrames.Clear();
+            _selectedFrames.Add(_selectedFrame);
+        }
+
+        int LowestSelectedFrame()
+        {
+            int lowest = int.MaxValue;
+            foreach (int index in _selectedFrames)
+                if (index < lowest)
+                    lowest = index;
+            return lowest == int.MaxValue ? _selectedFrame : lowest;
+        }
+
+        void ApplyFrameModifierClick(int frame, bool additive, bool toggle)
+        {
+            frame = Mathf.Max(0, frame);
+            if (!additive)
+            {
+                SelectOnlyFrame(frame);
+                return;
+            }
+
+            if (toggle && _selectedFrames.Contains(frame))
+            {
+                if (_selectedFrames.Count > 1)
+                {
+                    _selectedFrames.Remove(frame);
+                    if (!_selectedFrames.Contains(_selectedFrame))
+                        _selectedFrame = LowestSelectedFrame();
+                }
+                return;
+            }
+
+            _selectedFrames.Add(frame);
+            _selectedFrame = frame;
         }
 
         void DrawToolbar(Rect rect)
@@ -479,7 +554,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _profile = new SpriteSheetProfile();
             EnsureProfile();
             _selectedClip = 0;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
             _previewTime = 0f;
@@ -520,7 +595,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (clip == null || clip.Frames.Length == 0)
                 return;
             int targetFrame = forward ? clip.Frames.Length - 1 : 0;
-            _selectedFrame = targetFrame;
+            SelectOnlyFrame(targetFrame);
             _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, targetFrame));
             _playing = false;
             ClearColliderSelection();
@@ -547,7 +622,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 next %= clip.Frames.Length;
             }
 
-            _selectedFrame = next;
+            SelectOnlyFrame(next);
             _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, next));
             _playing = false;
             ClearColliderSelection();
@@ -619,7 +694,7 @@ namespace BallForge.Sprites.DOTS.Editor
                         _selectedEventFrame = -1;
                     }
                     _selectedClip = i;
-                    _selectedFrame = 0;
+                    SelectOnlyFrame(0);
                     _previewTime = 0f;
                     BeginClipRename(i);
                     input.Use();
@@ -650,7 +725,7 @@ namespace BallForge.Sprites.DOTS.Editor
                             _selectedEventFrame = -1;
                         }
                         _selectedClip = i;
-                        _selectedFrame = 0;
+                        SelectOnlyFrame(0);
                         _previewTime = 0f;
                         GUI.FocusControl(null);
                         GUIUtility.keyboardControl = 0;
@@ -705,7 +780,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 CommitClipRename();
 
             _selectedClip = clipIndex;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -1213,7 +1288,10 @@ namespace BallForge.Sprites.DOTS.Editor
                 EditorGUILayout.HelpBox(gpuReason, MessageType.None);
 
                 GUILayout.Space(9f);
-                SectionLabel($"FRAME {_selectedFrame + 1}");
+                int selectedCount = Mathf.Max(1, _selectedFrames.Count);
+                SectionLabel(selectedCount > 1
+                    ? $"FRAME {_selectedFrame + 1}  •  {selectedCount} selected"
+                    : $"FRAME {_selectedFrame + 1}");
                 clip.Frames[_selectedFrame] = Mathf.Clamp(
                     EditorGUILayout.IntField("Sheet Column", clip.Frames[_selectedFrame]),
                     0, Mathf.Max(0, _profile.Columns - 1));
@@ -1252,8 +1330,8 @@ namespace BallForge.Sprites.DOTS.Editor
                     if (GUILayout.Button("+ Frame After"))
                         InsertFrameAfter(clip);
                     using (new EditorGUI.DisabledScope(clip.Frames.Length <= 1))
-                        if (GUILayout.Button("Remove Frame"))
-                            RemoveSelectedFrame(clip);
+                        if (GUILayout.Button(selectedCount > 1 ? "Remove Frames" : "Remove Frame"))
+                            RemoveSelectedFrames(clip);
                 }
 
                 DrawEventMarkerInspector(clip);
@@ -1414,9 +1492,23 @@ namespace BallForge.Sprites.DOTS.Editor
             string markerSelection = _selectedEventFrame >= 0
                 ? $"   •   marker {EventAuthoredTime(clip, _selectedEventFrame):F3}s selected"
                 : string.Empty;
-            GUI.Label(new Rect(rect.x + 105f, rect.y + 10f, rect.width - 118f, 16f),
-                $"{clip.Frames.Length} frames   •   {total:F3}s   •   drag image = reorder   •   frame edge = duration   •   right-click lane = event{markerSelection}",
+            const float deleteEmptyWidth = 148f;
+            var deleteEmptyRect = new Rect(rect.xMax - deleteEmptyWidth - 8f, rect.y + 7f, deleteEmptyWidth, 20f);
+            GUI.Label(new Rect(rect.x + 105f, rect.y + 10f,
+                    Mathf.Max(40f, deleteEmptyRect.x - rect.x - 113f), 16f),
+                $"{clip.Frames.Length} frames   •   {total:F3}s   •   drag image = reorder   •   frame edge = duration   •   drag empty = marquee   •   right-click lane = event{markerSelection}",
                 _mutedStyle);
+            int emptyFrameCount = CountEmptyFrames(clip);
+            using (new EditorGUI.DisabledScope(clip.Frames.Length <= 1 || emptyFrameCount == 0))
+            {
+                if (GUI.Button(deleteEmptyRect,
+                    new GUIContent("Delete empty frames",
+                        emptyFrameCount == 0
+                            ? "No sheet cells in this clip are empty of opaque pixels."
+                            : $"Remove {emptyFrameCount} frame{(emptyFrameCount == 1 ? string.Empty : "s")} whose sheet cell has no opaque pixels."),
+                    EditorStyles.miniButton))
+                    DeleteEmptyFrames(clip);
+            }
 
             var viewport = new Rect(rect.x + 8f, rect.y + 34f, rect.width - 16f, rect.height - 42f);
             float contentWidth = Mathf.Max(viewport.width - 16f, total * pixelsPerSecond + 52f);
@@ -1464,7 +1556,8 @@ namespace BallForge.Sprites.DOTS.Editor
             EditorGUI.DrawRect(new Rect(0f, 27f, contentWidth, 27f), new Color(0.08f, 0.095f, 0.12f));
             GUI.Label(new Rect(6f, 31f, 48f, 18f), "EVENT", _mutedStyle);
             EditorGUIUtility.AddCursorRect(new Rect(0f, 0f, contentWidth, 27f), MouseCursor.SlideArrow);
-            EditorGUIUtility.AddCursorRect(new Rect(0f, 27f, contentWidth, 145f), MouseCursor.Pan);
+            EditorGUIUtility.AddCursorRect(new Rect(0f, 27f, contentWidth, 27f), MouseCursor.SlideArrow);
+            EditorGUIUtility.AddCursorRect(new Rect(0f, 54f, contentWidth, 118f), MouseCursor.Arrow);
 
             for (int i = 0; i < frameCount; i++)
             {
@@ -1495,19 +1588,20 @@ namespace BallForge.Sprites.DOTS.Editor
                 bool draggedSource = _timelineDragMode == TimelineDragMode.Reorder &&
                                      _reorderMoved && i == _dragFrameIndex;
 
-                Color cardColor = i == _selectedFrame
+                bool selected = IsFrameSelected(i);
+                Color cardColor = selected
                     ? new Color(0.16f, 0.4f, 0.56f)
                     : PanelAltColor;
                 if (draggedSource) cardColor.a = 0.35f;
                 EditorGUI.DrawRect(card, cardColor);
-                DrawBorder(card, i == _selectedFrame ? AccentColor : BorderColor, i == _selectedFrame ? 2f : 1f);
+                DrawBorder(card, selected ? AccentColor : BorderColor, selected ? 2f : 1f);
                 GUI.Label(new Rect(card.x + 6f, card.y + 4f, card.width - 12f, 16f),
                     $"F{i + 1}  •  {duration:F3}s", _mutedStyle);
                 var thumbArea = new Rect(card.x + 7f, 83f, card.width - 14f, 62f);
                 DrawCheckerboard(thumbArea, 9f);
                 DrawCell(_profile.Sheet, CellIndexOf(clip, i), thumb, 1f);
                 bool hovered = ThumbnailContains(thumb, Event.current.mousePosition);
-                DrawThumbnailHitShape(thumb, i == _selectedFrame, hovered);
+                DrawThumbnailHitShape(thumb, selected, hovered);
                 EditorGUIUtility.AddCursorRect(thumb, MouseCursor.MoveArrow);
                 GUI.Label(new Rect(card.x + 6f, card.y + 85f, card.width - 12f, 14f),
                     clip.EventIds[i] == 0 ? $"column {clip.Frames[i]}" : EventName(clip.EventIds[i]),
@@ -1546,6 +1640,13 @@ namespace BallForge.Sprites.DOTS.Editor
                 DrawCell(_profile.Sheet, CellIndexOf(clip, _dragFrameIndex), ghostThumb, 0.9f);
                 GUI.Label(new Rect(ghost.x + 7f, ghost.y + 86f, ghost.width - 14f, 14f),
                     "release to place", _mutedStyle);
+            }
+
+            if (_timelineDragMode == TimelineDragMode.Marquee && _timelineMarqueeMoved)
+            {
+                EditorGUI.DrawRect(_timelineMarqueeRect,
+                    new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.12f));
+                DrawBorder(_timelineMarqueeRect, AccentColor, 1.5f);
             }
             GUI.EndScrollView();
         }
@@ -1602,6 +1703,8 @@ namespace BallForge.Sprites.DOTS.Editor
             {
                 if (_timelineDragMode == TimelineDragMode.ResizeFrame && _resizeFrameIndex >= 0)
                     clip.FrameDurationScales[_resizeFrameIndex] = _resizeStartDuration * clip.FrameRate;
+                else if (_timelineDragMode == TimelineDragMode.Marquee)
+                    RestoreFrameSelectionFromBaseline();
                 EndTimelineDrag(controlId);
                 evt.Use();
                 Repaint();
@@ -1644,7 +1747,7 @@ namespace BallForge.Sprites.DOTS.Editor
                         _resizeFrameIndex = i;
                         _resizeStartDuration = durations[i];
                         _resizePixelsPerSecond = pixelsPerSecond;
-                        _selectedFrame = i;
+                        SelectOnlyFrame(i);
                         _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
@@ -1657,10 +1760,24 @@ namespace BallForge.Sprites.DOTS.Editor
                     for (int i = thumbnails.Length - 1; i >= 0; i--)
                     {
                         if (!ThumbnailContains(thumbnails[i], mouse)) continue;
+                        bool additive = evt.shift || evt.control || evt.command;
+                        if (additive)
+                        {
+                            ApplyFrameModifierClick(i, additive: true, toggle: evt.control || evt.command);
+                            BeginTimelineMarquee(controlId, mouse, additive: true);
+                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
+                            ClearColliderSelection();
+                            _selectedEventFrame = -1;
+                            _socketDeleteArmed = false;
+                            evt.Use();
+                            Repaint();
+                            return;
+                        }
+
                         BeginTimelineDrag(controlId, TimelineDragMode.Reorder, mouse);
                         _dragFrameIndex = i;
                         _dropFrameSlot = i;
-                        _selectedFrame = i;
+                        SelectOnlyFrame(i);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
                         _socketDeleteArmed = false;
@@ -1670,9 +1787,27 @@ namespace BallForge.Sprites.DOTS.Editor
                         Repaint();
                         return;
                     }
+
+                    if (mouse.y > 54f)
+                    {
+                        bool additive = evt.shift || evt.control || evt.command;
+                        int card = FrameCardAt(cards, mouse);
+                        if (card >= 0)
+                        {
+                            ApplyFrameModifierClick(card, additive, toggle: evt.control || evt.command);
+                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
+                        }
+                        BeginTimelineMarquee(controlId, mouse, additive);
+                        ClearColliderSelection();
+                        _selectedEventFrame = -1;
+                        _socketDeleteArmed = false;
+                        evt.Use();
+                        Repaint();
+                        return;
+                    }
                 }
 
-                if (evt.button == 0 && (mouse.y <= 27f || evt.shift))
+                if (evt.button == 0 && mouse.y <= 27f)
                 {
                     BeginTimelineDrag(controlId, TimelineDragMode.Scrub, mouse);
                     ScrubTimeline(clip, mouse.x, total, pixelsPerSecond);
@@ -1757,6 +1892,22 @@ namespace BallForge.Sprites.DOTS.Editor
                                 _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
                         }
                         break;
+
+                    case TimelineDragMode.Marquee:
+                        if (!_timelineMarqueeMoved &&
+                            Vector2.Distance(screenMouse, _timelineDragStartScreen) >= 4f)
+                            _timelineMarqueeMoved = true;
+                        if (_timelineMarqueeMoved)
+                        {
+                            _timelineMarqueeRect = RectFromPoints(_timelineMarqueeStart, mouse);
+                            ApplyTimelineMarqueeSelection(cards);
+                            const float edge = 34f;
+                            if (screenMouse.x < viewportScreen.xMin + edge)
+                                _timelineScroll.x = Mathf.Max(0f, _timelineScroll.x - 13f);
+                            else if (screenMouse.x > viewportScreen.xMax - edge)
+                                _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
+                        }
+                        break;
                 }
                 evt.Use();
                 Repaint();
@@ -1799,7 +1950,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 0f,
                 Mathf.Max(0f, total - 0.0001f));
             int frame = AuthoredFrameAtTime(clip, authoredTime, out float normalizedTime);
-            _selectedFrame = frame;
+            SelectOnlyFrame(frame);
             _selectedEventFrame = clip.EventIds[frame] == 0 ? -1 : frame;
             ClearColliderSelection();
             _selectedOnionFrame = -1;
@@ -1891,6 +2042,68 @@ namespace BallForge.Sprites.DOTS.Editor
             _eventDragMoved = false;
             _panMoved = false;
             _panClickPlacesPlayhead = false;
+            _timelineMarqueeMoved = false;
+            _timelineMarqueeAdditive = false;
+            _timelineMarqueeRect = default;
+            _timelineMarqueeBaseline.Clear();
+        }
+
+        void BeginTimelineMarquee(int controlId, Vector2 contentMouse, bool additive)
+        {
+            BeginTimelineDrag(controlId, TimelineDragMode.Marquee, contentMouse);
+            _timelineMarqueeStart = contentMouse;
+            _timelineMarqueeRect = new Rect(contentMouse, Vector2.zero);
+            _timelineMarqueeMoved = false;
+            _timelineMarqueeAdditive = additive;
+            _timelineMarqueeBaseline.Clear();
+            foreach (int index in _selectedFrames)
+                _timelineMarqueeBaseline.Add(index);
+        }
+
+        static int FrameCardAt(Rect[] cards, Vector2 point)
+        {
+            for (int i = cards.Length - 1; i >= 0; i--)
+                if (cards[i].Contains(point))
+                    return i;
+            return -1;
+        }
+
+        void ApplyTimelineMarqueeSelection(Rect[] cards)
+        {
+            _selectedFrames.Clear();
+            if (_timelineMarqueeAdditive)
+            {
+                foreach (int index in _timelineMarqueeBaseline)
+                    _selectedFrames.Add(index);
+            }
+
+            for (int i = 0; i < cards.Length; i++)
+            {
+                if (cards[i].Overlaps(_timelineMarqueeRect))
+                    _selectedFrames.Add(i);
+            }
+
+            if (_selectedFrames.Count == 0)
+            {
+                int fallback = Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, cards.Length - 1));
+                _selectedFrames.Add(fallback);
+                _selectedFrame = fallback;
+                return;
+            }
+
+            if (!_selectedFrames.Contains(_selectedFrame))
+                _selectedFrame = LowestSelectedFrame();
+        }
+
+        void RestoreFrameSelectionFromBaseline()
+        {
+            _selectedFrames.Clear();
+            foreach (int index in _timelineMarqueeBaseline)
+                _selectedFrames.Add(index);
+            if (_selectedFrames.Count == 0)
+                _selectedFrames.Add(Mathf.Max(0, _selectedFrame));
+            else if (!_selectedFrames.Contains(_selectedFrame))
+                _selectedFrame = LowestSelectedFrame();
         }
 
         bool ThumbnailContains(Rect thumbnail, Vector2 point)
@@ -1960,7 +2173,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 0f,
                 Mathf.Max(0f, total - 0.0001f));
             _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
-            _selectedFrame = AuthoredFrameAtTime(clip, authoredTime, out _);
+            SelectOnlyFrame(AuthoredFrameAtTime(clip, authoredTime, out _));
             ClearColliderSelection();
             _selectedEventFrame = -1;
         }
@@ -2018,7 +2231,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _selectedEventFrame = RemapIndexAfterMove(_selectedEventFrame, fromIndex, toIndex);
 
             clip.MoveFrame(fromIndex, toIndex);
-            _selectedFrame = toIndex;
+            SelectOnlyFrame(toIndex);
             float authoredTime = 0f;
             for (int i = 0; i < toIndex; i++)
                 authoredTime += FrameDuration(clip, i);
@@ -3276,7 +3489,7 @@ namespace BallForge.Sprites.DOTS.Editor
             clip.EnsureFrameData();
             _profile.Clips.Add(clip);
             _selectedClip = _profile.Clips.Count - 1;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -3324,7 +3537,7 @@ namespace BallForge.Sprites.DOTS.Editor
             }
             _profile.Clips.Insert(_selectedClip + 1, clone);
             _selectedClip++;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -3356,7 +3569,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 _renamingClip--;
             if (deletedSelected)
             {
-                _selectedFrame = 0;
+                SelectOnlyFrame(0);
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
                 _selectedOnionFrame = -1;
@@ -3411,71 +3624,328 @@ namespace BallForge.Sprites.DOTS.Editor
             foreach (var box in _profile.Hitboxes)
                 if (box.ClipName == clip.Name && box.FrameIndex >= insert)
                     box.FrameIndex++;
-            _selectedFrame = insert;
+            SelectOnlyFrame(insert);
             SaveDirty();
         }
 
-        void RemoveSelectedFrame(SpriteClipDef clip)
+        void RemoveSelectedFrames(SpriteClipDef clip)
+        {
+            if (clip == null)
+                return;
+            EnsureFrameSelection(clip.Frames.Length);
+            RemoveFrames(clip, new List<int>(_selectedFrames));
+        }
+
+        void RemoveFrames(SpriteClipDef clip, List<int> indices)
+        {
+            if (clip == null || indices == null)
+                return;
+            clip.EnsureFrameData();
+            if (clip.Frames.Length <= 1)
+            {
+                _status = "A clip must keep at least one frame";
+                return;
+            }
+
+            var remove = new HashSet<int>();
+            for (int i = 0; i < indices.Count; i++)
+            {
+                int index = indices[i];
+                if (index >= 0 && index < clip.Frames.Length)
+                    remove.Add(index);
+            }
+            if (remove.Count == 0)
+                return;
+
+            if (remove.Count >= clip.Frames.Length)
+                remove.Remove(0);
+            if (remove.Count == 0)
+            {
+                _status = "A clip must keep at least one frame";
+                return;
+            }
+
+            int oldCount = clip.Frames.Length;
+            var remap = new int[oldCount];
+            int newCount = 0;
+            for (int i = 0; i < oldCount; i++)
+            {
+                if (remove.Contains(i))
+                    remap[i] = -1;
+                else
+                    remap[i] = newCount++;
+            }
+
+            RecordProfileUndo(remove.Count == 1
+                ? "Remove Sprite Animation Frame"
+                : "Remove Sprite Animation Frames");
+
+            clip.Frames = CompactArray(clip.Frames, remap, newCount);
+            clip.FrameDurationScales = CompactArray(clip.FrameDurationScales, remap, newCount);
+            clip.EventIds = CompactArray(clip.EventIds, remap, newCount);
+            clip.EventNormalizedTimes = CompactArray(clip.EventNormalizedTimes, remap, newCount);
+            clip.OnionOffsets = CompactArray(clip.OnionOffsets, remap, newCount);
+            clip.FrameScales = CompactArray(clip.FrameScales, remap, newCount);
+            clip.FrameRotations = CompactArray(clip.FrameRotations, remap, newCount);
+            clip.FrameTweenModes = CompactArray(clip.FrameTweenModes, remap, newCount);
+
+            if (clip.Sockets != null)
+            {
+                clip.Sockets.RemoveAll(socket =>
+                    socket.FrameIndex < 0 || socket.FrameIndex >= oldCount || remap[socket.FrameIndex] < 0);
+                for (int i = 0; i < clip.Sockets.Count; i++)
+                {
+                    int mapped = remap[clip.Sockets[i].FrameIndex];
+                    if (mapped >= 0)
+                        clip.Sockets[i].FrameIndex = mapped;
+                }
+            }
+
+            if (_selectedOnionFrame >= 0 && _selectedOnionFrame < oldCount)
+                _selectedOnionFrame = remap[_selectedOnionFrame];
+            else
+                _selectedOnionFrame = -1;
+
+            if (_selectedEventFrame >= 0 && _selectedEventFrame < oldCount)
+                _selectedEventFrame = remap[_selectedEventFrame];
+            else
+                _selectedEventFrame = -1;
+
+            _profile.Hitboxes ??= new List<FrameBoxDef>();
+            _profile.Hitboxes.RemoveAll(box =>
+                box.ClipName == clip.Name &&
+                (box.FrameIndex < 0 || box.FrameIndex >= oldCount || remap[box.FrameIndex] < 0));
+            foreach (var box in _profile.Hitboxes)
+            {
+                if (box.ClipName == clip.Name && box.FrameIndex >= 0 && box.FrameIndex < oldCount)
+                    box.FrameIndex = remap[box.FrameIndex];
+            }
+
+            int landing = -1;
+            int primary = Mathf.Clamp(_selectedFrame, 0, oldCount - 1);
+            if (remap[primary] >= 0)
+            {
+                landing = remap[primary];
+            }
+            else
+            {
+                for (int i = primary + 1; i < oldCount; i++)
+                {
+                    if (remap[i] >= 0)
+                    {
+                        landing = remap[i];
+                        break;
+                    }
+                }
+                if (landing < 0)
+                {
+                    for (int i = primary - 1; i >= 0; i--)
+                    {
+                        if (remap[i] >= 0)
+                        {
+                            landing = remap[i];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            SelectOnlyFrame(Mathf.Clamp(landing, 0, newCount - 1));
+            _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, _selectedFrame));
+            PruneColliderSelection(clip, _selectedFrame);
+            SaveDirty();
+            _status = remove.Count == 1
+                ? $"Removed frame {FirstRemovedIndex(remove) + 1}  •  {clip.Frames.Length} remaining"
+                : $"Removed {remove.Count} frames  •  {clip.Frames.Length} remaining";
+            Repaint();
+        }
+
+        static T[] CompactArray<T>(T[] source, int[] remap, int newCount)
+        {
+            var dest = new T[newCount];
+            if (source == null)
+                return dest;
+            int limit = Mathf.Min(source.Length, remap.Length);
+            for (int i = 0; i < limit; i++)
+            {
+                int mapped = remap[i];
+                if (mapped >= 0)
+                    dest[mapped] = source[i];
+            }
+            return dest;
+        }
+
+        static int FirstRemovedIndex(HashSet<int> remove)
+        {
+            int first = int.MaxValue;
+            foreach (int index in remove)
+                if (index < first)
+                    first = index;
+            return first == int.MaxValue ? 0 : first;
+        }
+
+        void DeleteEmptyFrames(SpriteClipDef clip)
         {
             if (clip == null)
                 return;
             clip.EnsureFrameData();
-            if (clip.Frames.Length <= 1)
+            var empty = CollectEmptyFrameIndices(clip);
+            if (empty.Count == 0)
+            {
+                _status = "No empty frames in this clip";
+                return;
+            }
+
+            int before = clip.Frames.Length;
+            RemoveFrames(clip, empty);
+            int removed = before - clip.Frames.Length;
+            _status = removed == 0
+                ? "A clip must keep at least one frame"
+                : $"Deleted {removed} empty frame{(removed == 1 ? string.Empty : "s")}  •  {clip.Frames.Length} remaining";
+        }
+
+        int CountEmptyFrames(SpriteClipDef clip)
+            => CollectEmptyFrameIndices(clip).Count;
+
+        List<int> CollectEmptyFrameIndices(SpriteClipDef clip)
+        {
+            var empty = new List<int>();
+            if (clip?.Frames == null || !TryEnsureSheetPixelCache())
+                return empty;
+            for (int i = 0; i < clip.Frames.Length; i++)
+            {
+                if (IsClipFrameCellEmpty(clip, i))
+                    empty.Add(i);
+            }
+            return empty;
+        }
+
+        bool IsClipFrameCellEmpty(SpriteClipDef clip, int frame)
+        {
+            if (clip?.Frames == null || frame < 0 || frame >= clip.Frames.Length)
+                return false;
+            int columns = Mathf.Max(1, _profile.Columns);
+            int rows = Mathf.Max(1, _profile.Rows);
+            int row = Mathf.Clamp(clip.Row, 0, rows - 1);
+            int column = Mathf.Clamp(clip.Frames[frame], 0, columns - 1);
+            return IsSheetCellEmpty(column, row);
+        }
+
+        bool IsSheetCellEmpty(int column, int row)
+        {
+            if (_sheetCellEmpty == null)
+                return false;
+            int columns = Mathf.Max(1, _sheetPixelsColumns);
+            int rows = Mathf.Max(1, _sheetPixelsRows);
+            column = Mathf.Clamp(column, 0, columns - 1);
+            row = Mathf.Clamp(row, 0, rows - 1);
+            int index = row * columns + column;
+            return index >= 0 && index < _sheetCellEmpty.Length && _sheetCellEmpty[index];
+        }
+
+        bool TryEnsureSheetPixelCache()
+        {
+            var sheet = _profile?.Sheet;
+            if (sheet == null)
+            {
+                InvalidateSheetPixelCache();
+                return false;
+            }
+
+            int id = sheet.GetInstanceID();
+            int columns = Mathf.Max(1, _profile.Columns);
+            int rows = Mathf.Max(1, _profile.Rows);
+            bool sameTexture = _sheetPixels != null &&
+                _sheetPixelsId == id &&
+                _sheetPixelsWidth == sheet.width &&
+                _sheetPixelsHeight == sheet.height;
+            if (sameTexture && _sheetCellEmpty != null &&
+                _sheetPixelsColumns == columns &&
+                _sheetPixelsRows == rows)
+                return true;
+
+            if (sameTexture)
+            {
+                _sheetPixelsColumns = columns;
+                _sheetPixelsRows = rows;
+                RebuildSheetCellEmptyFlags();
+                return _sheetCellEmpty != null;
+            }
+
+            Texture2D readable = null;
+            bool destroy = false;
+            try
+            {
+                readable = sheet.isReadable ? sheet : DuplicateReadable(sheet);
+                destroy = readable != sheet;
+                _sheetPixels = readable.GetPixels32();
+                _sheetPixelsId = id;
+                _sheetPixelsWidth = readable.width;
+                _sheetPixelsHeight = readable.height;
+                _sheetPixelsColumns = columns;
+                _sheetPixelsRows = rows;
+                RebuildSheetCellEmptyFlags();
+                return _sheetCellEmpty != null;
+            }
+            catch
+            {
+                InvalidateSheetPixelCache();
+                return false;
+            }
+            finally
+            {
+                if (destroy && readable != null)
+                    DestroyImmediate(readable);
+            }
+        }
+
+        void RebuildSheetCellEmptyFlags()
+        {
+            int columns = Mathf.Max(1, _sheetPixelsColumns);
+            int rows = Mathf.Max(1, _sheetPixelsRows);
+            _sheetCellEmpty = new bool[columns * rows];
+            if (_sheetPixels == null)
                 return;
 
-            RecordProfileUndo("Remove Sprite Animation Frame");
-            int removed = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
-            var frames = new List<int>(clip.Frames);
-            frames.RemoveAt(removed);
-            var durations = new List<float>(clip.FrameDurationScales);
-            durations.RemoveAt(removed);
-            var events = new List<byte>(clip.EventIds);
-            events.RemoveAt(removed);
-            var eventTimes = new List<float>(clip.EventNormalizedTimes);
-            eventTimes.RemoveAt(removed);
-            var onionOffsets = new List<Vector2>(clip.OnionOffsets);
-            onionOffsets.RemoveAt(removed);
-            var frameScales = new List<Vector2>(clip.FrameScales);
-            frameScales.RemoveAt(removed);
-            var frameRotations = new List<float>(clip.FrameRotations);
-            frameRotations.RemoveAt(removed);
-            var frameTweens = new List<byte>(clip.FrameTweenModes);
-            frameTweens.RemoveAt(removed);
-            clip.Frames = frames.ToArray();
-            clip.FrameDurationScales = durations.ToArray();
-            clip.EventIds = events.ToArray();
-            clip.EventNormalizedTimes = eventTimes.ToArray();
-            clip.OnionOffsets = onionOffsets.ToArray();
-            clip.FrameScales = frameScales.ToArray();
-            clip.FrameRotations = frameRotations.ToArray();
-            clip.FrameTweenModes = frameTweens.ToArray();
-            if (clip.Sockets != null)
+            int cellWidth = _sheetPixelsWidth / columns;
+            int cellHeight = _sheetPixelsHeight / rows;
+            if (cellWidth <= 0 || cellHeight <= 0)
+                return;
+
+            const byte alphaThreshold = 8;
+            for (int row = 0; row < rows; row++)
             {
-                clip.Sockets.RemoveAll(socket => socket.FrameIndex == removed);
-                for (int i = 0; i < clip.Sockets.Count; i++)
+                int pixelY0 = (rows - 1 - row) * cellHeight;
+                for (int column = 0; column < columns; column++)
                 {
-                    if (clip.Sockets[i].FrameIndex > removed)
-                        clip.Sockets[i].FrameIndex--;
+                    int pixelX0 = column * cellWidth;
+                    bool empty = true;
+                    for (int y = 0; y < cellHeight && empty; y++)
+                    {
+                        int rowStart = (pixelY0 + y) * _sheetPixelsWidth + pixelX0;
+                        for (int x = 0; x < cellWidth; x++)
+                        {
+                            if (_sheetPixels[rowStart + x].a > alphaThreshold)
+                            {
+                                empty = false;
+                                break;
+                            }
+                        }
+                    }
+                    _sheetCellEmpty[row * columns + column] = empty;
                 }
             }
-            if (_selectedOnionFrame == removed)
-                _selectedOnionFrame = -1;
-            else if (_selectedOnionFrame > removed)
-                _selectedOnionFrame--;
-            if (_selectedEventFrame == removed)
-                _selectedEventFrame = -1;
-            else if (_selectedEventFrame > removed)
-                _selectedEventFrame--;
-            _profile.Hitboxes.RemoveAll(box => box.ClipName == clip.Name && box.FrameIndex == removed);
-            foreach (var box in _profile.Hitboxes)
-                if (box.ClipName == clip.Name && box.FrameIndex > removed)
-                    box.FrameIndex--;
-            _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
-            _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, _selectedFrame));
-            PruneColliderSelection(clip, _selectedFrame);
-            SaveDirty();
-            _status = $"Removed frame {removed + 1}  •  {clip.Frames.Length} remaining";
-            Repaint();
+        }
+
+        void InvalidateSheetPixelCache()
+        {
+            _sheetPixels = null;
+            _sheetPixelsId = -1;
+            _sheetPixelsWidth = 0;
+            _sheetPixelsHeight = 0;
+            _sheetPixelsColumns = 0;
+            _sheetPixelsRows = 0;
+            _sheetCellEmpty = null;
         }
 
         int[] CreateDefaultFrames()
@@ -3646,7 +4116,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 asset.Data = _profile;
             EnsureProfile();
             _selectedClip = 0;
-            _selectedFrame = 0;
+            SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -5041,36 +5511,21 @@ namespace BallForge.Sprites.DOTS.Editor
                 return;
             }
 
-            if (IsEditingAnyTextField())
-                return;
-
-            if (_selectedOnionFrame < 0 && CurrentClip != null &&
-                evt.keyCode is KeyCode.LeftArrow or KeyCode.RightArrow)
-            {
-                StepFrame(CurrentClip, evt.keyCode == KeyCode.LeftArrow ? -1 : 1);
-                evt.Use();
-                return;
-            }
-
-            bool actionModifier = evt.control || evt.command;
-            if (actionModifier && evt.keyCode == KeyCode.A && CurrentClip != null && _showHitboxes)
-            {
-                SelectAllFrameColliders(CurrentClip, _selectedFrame);
-                evt.Use();
-                return;
-            }
-
-            if (evt.keyCode == KeyCode.Backspace &&
-                _colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
-            {
-                RemoveLastPolygonVertex();
-                evt.Use();
-                Repaint();
-                return;
-            }
-
             if (evt.keyCode is KeyCode.Delete or KeyCode.Backspace)
             {
+                if (IsEditingStringTextField())
+                    return;
+
+                if (evt.keyCode == KeyCode.Backspace &&
+                    _colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
+                {
+                    RemoveLastPolygonVertex();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                ReleaseShortcutKeyboardFocus();
                 PruneColliderSelection(CurrentClip, _selectedFrame);
                 if (_selectedColliders.Count > 0)
                 {
@@ -5103,13 +5558,32 @@ namespace BallForge.Sprites.DOTS.Editor
                 if (clip != null)
                 {
                     if (clip.Frames.Length > 1)
-                        RemoveSelectedFrame(clip);
+                        RemoveSelectedFrames(clip);
                     else
                         _status = "A clip must keep at least one frame";
-                    evt.Use();
-                    Repaint();
-                    return;
                 }
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (IsEditingAnyTextField())
+                return;
+
+            if (_selectedOnionFrame < 0 && CurrentClip != null &&
+                evt.keyCode is KeyCode.LeftArrow or KeyCode.RightArrow)
+            {
+                StepFrame(CurrentClip, evt.keyCode == KeyCode.LeftArrow ? -1 : 1);
+                evt.Use();
+                return;
+            }
+
+            bool actionModifier = evt.control || evt.command;
+            if (actionModifier && evt.keyCode == KeyCode.A && CurrentClip != null && _showHitboxes)
+            {
+                SelectAllFrameColliders(CurrentClip, _selectedFrame);
+                evt.Use();
+                return;
             }
 
             if (evt.keyCode == KeyCode.Escape)
@@ -5157,7 +5631,10 @@ namespace BallForge.Sprites.DOTS.Editor
             _selectedClip = Mathf.Clamp(_selectedClip, 0, Mathf.Max(0, _profile.Clips.Count - 1));
             var clip = CurrentClip;
             if (clip != null)
+            {
                 _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
+                EnsureFrameSelection(clip.Frames.Length);
+            }
             ClearColliderSelection();
             PruneEventSelection(clip);
             _colliderMarqueePending = false;
