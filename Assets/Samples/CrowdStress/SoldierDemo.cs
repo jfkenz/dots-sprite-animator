@@ -4,10 +4,19 @@ using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
 
-namespace BallForge.Sprites.DOTS
+namespace InvertLab.Sprites.DOTS
 {
-    /// <summary>Every soldier spawned by the demo.</summary>
-    public struct SoldierTag : IComponentData { }
+    /// <summary>
+    /// Scene component retained for Unity serialization. Runtime behavior is handled by
+    /// <see cref="SoldierDemoInputSystem"/> and <see cref="SoldierDemoRuntime"/>.
+    /// </summary>
+    public sealed class SoldierDemo : MonoBehaviour { }
+
+    /// <summary>Compatibility component for scenes serialized against the old script type.</summary>
+    public sealed class SoldierTag : MonoBehaviour { }
+
+    /// <summary>Every ECS soldier spawned by the demo.</summary>
+    public struct SoldierEntityTag : IComponentData { }
 
     /// <summary>
     /// Example-scene driver:
@@ -18,7 +27,7 @@ namespace BallForge.Sprites.DOTS
     /// Sprites lie flat (RotateX -90); camera looks top-down (Euler 90,0,180).
     /// All state lives here as statics; the input system below just forwards keys.
     /// </summary>
-    public static class SoldierDemo
+    public static class SoldierDemoRuntime
     {
         public const int BatchSize = 400;     // soldiers per key-5/6 press
         public const float SizeUnits = 2f;    // world size of one sprite quad
@@ -26,8 +35,6 @@ namespace BallForge.Sprites.DOTS
 
         static Entity _proto;
         static bool _ready;
-        static uint _rngState = 0x9E3779B9u;
-
         static readonly string[] StateNames = { "Idle", "Run", "Attack", "Block" };
 
         public static bool Ready => _ready;
@@ -85,7 +92,7 @@ namespace BallForge.Sprites.DOTS
             em.AddBuffer<SpriteAnimEventBuffer>(_proto);
             em.AddComponent<SpriteAnimEventsPending>(_proto);
             em.SetComponentEnabled<SpriteAnimEventsPending>(_proto, false);
-            em.AddComponent<SoldierTag>(_proto);
+            em.AddComponent<SoldierEntityTag>(_proto);
 
             // ---- hand the crowd to the instanced renderer (one draw call) ----
             SpriteInstanceRenderSystem.Install(em);
@@ -116,7 +123,7 @@ namespace BallForge.Sprites.DOTS
 
             var q = em.CreateEntityQuery(
                 new ComponentType[] {
-                    ComponentType.ReadOnly<SoldierTag>(),
+                    ComponentType.ReadOnly<SoldierEntityTag>(),
                     ComponentType.ReadWrite<SpriteAnimPlayer>(),
                     ComponentType.ReadOnly<SpriteAnimSetRef>(),
                 });
@@ -170,7 +177,7 @@ namespace BallForge.Sprites.DOTS
         {
             if (!_ready) return 0;
             var em = World.DefaultGameObjectInjectionWorld.EntityManager;
-            var cq = em.CreateEntityQuery(new ComponentType[] { ComponentType.ReadOnly<SoldierTag>() });
+            var cq = em.CreateEntityQuery(new ComponentType[] { ComponentType.ReadOnly<SoldierEntityTag>() });
             return cq.CalculateEntityCount();
         }
     }
@@ -191,30 +198,30 @@ namespace BallForge.Sprites.DOTS
         static void ResetStatics()
         {
             _bootstrapped = false;
-            SoldierDemo.ResetForPlayMode();
+            SoldierDemoRuntime.ResetForPlayMode();
         }
 
         protected override void OnUpdate()
         {
-            SoldierDemo.EnsureProto();
+            SoldierDemoRuntime.EnsureProto();
 
             if (!_bootstrapped)
             {
                 _bootstrapped = true;
                 // something on screen the moment you press Play
-                SoldierDemo.Spawn(SoldierDemo.BatchSize, grid: true);
+                SoldierDemoRuntime.Spawn(SoldierDemoRuntime.BatchSize, grid: true);
             }
 
             var kb = UnityEngine.InputSystem.Keyboard.current;
             if (kb == null)
                 return;
 
-            if (kb.digit1Key.wasPressedThisFrame) SoldierDemo.SetAllStates("Idle");
-            if (kb.digit2Key.wasPressedThisFrame) SoldierDemo.SetAllStates("Run");
-            if (kb.digit3Key.wasPressedThisFrame) SoldierDemo.SetAllStates("Attack");
-            if (kb.digit4Key.wasPressedThisFrame) SoldierDemo.SetAllStates("Block");
-            if (kb.digit5Key.wasPressedThisFrame) SoldierDemo.Spawn(SoldierDemo.BatchSize, grid: true);
-            if (kb.digit6Key.wasPressedThisFrame) SoldierDemo.Spawn(SoldierDemo.BatchSize, grid: false);
+            if (kb.digit1Key.wasPressedThisFrame) SoldierDemoRuntime.SetAllStates("Idle");
+            if (kb.digit2Key.wasPressedThisFrame) SoldierDemoRuntime.SetAllStates("Run");
+            if (kb.digit3Key.wasPressedThisFrame) SoldierDemoRuntime.SetAllStates("Attack");
+            if (kb.digit4Key.wasPressedThisFrame) SoldierDemoRuntime.SetAllStates("Block");
+            if (kb.digit5Key.wasPressedThisFrame) SoldierDemoRuntime.Spawn(SoldierDemoRuntime.BatchSize, grid: true);
+            if (kb.digit6Key.wasPressedThisFrame) SoldierDemoRuntime.Spawn(SoldierDemoRuntime.BatchSize, grid: false);
         }
     }
 }

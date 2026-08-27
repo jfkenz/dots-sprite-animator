@@ -3,7 +3,7 @@ using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace BallForge.Sprites.DOTS
+namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
     /// In-game sprite stats overlay — the authoritative way to find the spawn

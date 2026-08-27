@@ -1,0 +1,24 @@
+{
+    "name": "InvertLab.SpriteAnimator.Editor",
+    "rootNamespace": "InvertLab.Sprites.DOTS.Editor",
+    "references": [
+        "InvertLab.SpriteAnimator.Runtime",
+        "Unity.Entities",
+        "Unity.Entities.Graphics",
+        "Unity.Transforms",
+        "Unity.Mathematics",
+        "Unity.Burst",
+        "Unity.Collections"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,13 +1,13 @@
 {
   "name": "DotsSpriteAnimator.CrowdSample",
-  "rootNamespace": "BallForge.Sprites.DOTS",
+  "rootNamespace": "InvertLab.Sprites.DOTS",
   "references": [
     "Unity.Entities",
     "Unity.Mathematics",
     "Unity.Transforms",
     "Unity.Collections",
     "Unity.Burst",
-    "BallForge.SpriteAnimator.Runtime",
+    "InvertLab.SpriteAnimator.Runtime",
     "Unity.InputSystem"
   ],
   "includePlatforms": [],

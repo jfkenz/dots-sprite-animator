@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.ballforge.spriteanimator": "file:com.ballforge.spriteanimator",
+    "com.invertlab.spriteanimator": "file:com.invertlab.spriteanimator",
     "com.unity.2d.sprite": "1.0.0",
     "com.unity.entities": "1.4.2",
     "com.unity.entities.graphics": "1.4.16",

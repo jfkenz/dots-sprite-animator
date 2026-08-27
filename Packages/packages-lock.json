@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "com.ballforge.spriteanimator": {
-      "version": "file:com.ballforge.spriteanimator",
+    "com.invertlab.spriteanimator": {
+      "version": "file:com.invertlab.spriteanimator",
       "depth": 0,
       "source": "embedded",
       "dependencies": {
