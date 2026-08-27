@@ -63,6 +63,7 @@ namespace BallForge.Sprites.DOTS.Editor
         const float PixelsPerSecond = 520f;
         const float DefaultPreviewSpeed = 1f;
         const string ClipRenameControl = "BallForgeSpriteAnimator.ClipRename";
+        const string StringFieldControlPrefix = "BallForgeSpriteAnimator.Text.";
 
         static readonly Color WindowColor = new(0.075f, 0.086f, 0.105f);
         static readonly Color PanelColor = new(0.105f, 0.12f, 0.145f);
@@ -85,6 +86,7 @@ namespace BallForge.Sprites.DOTS.Editor
         bool _continuousColliderPlacement;
         bool _socketPlacementArmed;
         string _selectedSocketName;
+        bool _socketDeleteArmed;
         bool _draggingSocket;
         Vector2 _socketDragStart;
         Vector2 _socketOffsetStart;
@@ -100,6 +102,7 @@ namespace BallForge.Sprites.DOTS.Editor
         Vector2 _previewPanStartMouse;
         Vector2 _previewPanStartOffset;
         double _lastEditorTime;
+        double _lastSpaceToggleTime = -1d;
         float _previewTime;
 
         Vector2 _clipScroll;
@@ -1087,7 +1090,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 GUILayout.Space(9f);
                 SectionLabel("CLIP");
                 string oldName = clip.Name;
-                clip.Name = EditorGUILayout.TextField("Name", clip.Name);
+                clip.Name = DrawStringTextField("Name", clip.Name, "ClipName");
                 if (oldName != clip.Name)
                     RenameHitboxClip(oldName, clip.Name);
                 clip.Row = Mathf.Clamp(EditorGUILayout.IntField("Sheet Row", clip.Row), 0,
@@ -1120,9 +1123,9 @@ namespace BallForge.Sprites.DOTS.Editor
                         }
                     }
                 }
-                clip.FacingGroup = EditorGUILayout.TextField(
+                clip.FacingGroup = DrawStringTextField(
                     new GUIContent("Facing Group", "Optional logical group name (e.g. Walk, Idle)."),
-                    clip.FacingGroup);
+                    clip.FacingGroup, "FacingGroup");
                 clip.Facing = (SpriteFacingDirection)EditorGUILayout.EnumPopup(
                     new GUIContent("Facing", "Direction variant inside the facing group."),
                     clip.Facing);
@@ -1537,6 +1540,7 @@ namespace BallForge.Sprites.DOTS.Editor
 
             if (evt.type == EventType.MouseDown && (evt.button == 0 || evt.button == 2))
             {
+                ReleaseShortcutKeyboardFocus();
                 if (evt.button == 0 && mouse.y >= 27f && mouse.y <= 54f)
                 {
                     _selectedEventFrame = -1;
@@ -1574,6 +1578,7 @@ namespace BallForge.Sprites.DOTS.Editor
                         _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
+                        _socketDeleteArmed = false;
                         evt.Use();
                         Repaint();
                         return;
@@ -1588,6 +1593,7 @@ namespace BallForge.Sprites.DOTS.Editor
                         _selectedFrame = i;
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
+                        _socketDeleteArmed = false;
                         _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
                         _reorderMoved = false;
                         evt.Use();
@@ -2792,7 +2798,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 definition = new SpriteEventDef { Id = eventId, Name = $"Event {eventId}" };
                 _profile.Events.Add(definition);
             }
-            definition.Name = EditorGUILayout.TextField("Event Name", definition.Name);
+            definition.Name = DrawStringTextField("Event Name", definition.Name, "EventName");
             definition.Color = EditorGUILayout.ColorField("Event Color", definition.Color);
         }
 
@@ -2850,7 +2856,10 @@ namespace BallForge.Sprites.DOTS.Editor
                         EditorGUI.DrawRect(new Rect(chip.x, chip.y + 4f, 12f, 12f), swatch);
                         string rowLabel = onFrame ? $"{i}:{name}" : $"{i}:{name}  (other frame)";
                         if (GUILayout.Button(rowLabel, selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton))
+                        {
                             _selectedSocketName = name;
+                            _socketDeleteArmed = true;
+                        }
                     }
 
                     if (!selected)
@@ -2859,7 +2868,7 @@ namespace BallForge.Sprites.DOTS.Editor
                     if (!onFrame)
                         GUILayout.Label("No key on this frame yet. Drag or edit to add one.", _mutedStyle);
 
-                    string nextName = EditorGUILayout.TextField("Name", name);
+                    string nextName = DrawStringTextField("Name", name, "SocketName");
                     if (!SpriteSocketKeys.NamesEqual(nextName, name))
                     {
                         SpriteSocketKeys.RenameIdentity(clip.Sockets, name, nextName);
@@ -2898,6 +2907,7 @@ namespace BallForge.Sprites.DOTS.Editor
                             SpriteSocketKeys.DeleteIdentity(clip.Sockets, name);
                             _status = $"Deleted socket {name}";
                             _selectedSocketName = null;
+                            _socketDeleteArmed = false;
                             _draggingSocket = false;
                             SaveDirty();
                             GUIUtility.ExitGUI();
@@ -2928,6 +2938,7 @@ namespace BallForge.Sprites.DOTS.Editor
         {
             _socketPlacementArmed = false;
             _selectedSocketName = null;
+            _socketDeleteArmed = false;
             _draggingSocket = false;
         }
 
@@ -2938,6 +2949,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (SpriteSocketKeys.IdentityIndex(clip.Sockets, _selectedSocketName) < 0)
             {
                 _selectedSocketName = null;
+                _socketDeleteArmed = false;
                 _draggingSocket = false;
             }
         }
@@ -3091,6 +3103,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (hit != null)
             {
                 _selectedSocketName = hit;
+                _socketDeleteArmed = true;
                 _socketPlacementArmed = false;
                 _status = $"Selected socket {hit}";
                 evt.Use();
@@ -3111,6 +3124,7 @@ namespace BallForge.Sprites.DOTS.Editor
             if (!placingExisting)
                 placed.LocalAngle = 0f;
             _selectedSocketName = name;
+            _socketDeleteArmed = true;
             _socketPlacementArmed = false;
             _status = $"Placed {name} on frame {frame + 1}";
             SaveDirty();
@@ -3155,6 +3169,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _selectedFrame = frame;
             _selectedOnionFrame = -1;
             _selectedSocketName = hit;
+            _socketDeleteArmed = true;
             SpriteSocketKeys.TryGetPose(clip.Sockets, hit, frame, out var pose, out _, out _);
             _draggingSocket = true;
             _socketDragStart = evt.mousePosition;
@@ -3321,8 +3336,14 @@ namespace BallForge.Sprites.DOTS.Editor
 
         void RemoveSelectedFrame(SpriteClipDef clip)
         {
+            if (clip == null)
+                return;
+            clip.EnsureFrameData();
+            if (clip.Frames.Length <= 1)
+                return;
+
             RecordProfileUndo("Remove Sprite Animation Frame");
-            int removed = _selectedFrame;
+            int removed = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
             var frames = new List<int>(clip.Frames);
             frames.RemoveAt(removed);
             var durations = new List<float>(clip.FrameDurationScales);
@@ -3369,8 +3390,11 @@ namespace BallForge.Sprites.DOTS.Editor
                 if (box.ClipName == clip.Name && box.FrameIndex > removed)
                     box.FrameIndex--;
             _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
+            _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, _selectedFrame));
             PruneColliderSelection(clip, _selectedFrame);
             SaveDirty();
+            _status = $"Removed frame {removed + 1}  •  {clip.Frames.Length} remaining";
+            Repaint();
         }
 
         int[] CreateDefaultFrames()
@@ -4187,24 +4211,77 @@ namespace BallForge.Sprites.DOTS.Editor
             return GUILayout.Button(new GUIContent("Reset", tooltip), GUILayout.Width(48f));
         }
 
+        static bool IsSpaceKey(Event evt)
+            => evt.keyCode == KeyCode.Space || evt.character == ' ';
+
+        static string DrawStringTextField(string label, string value, string id)
+        {
+            GUI.SetNextControlName(StringFieldControlPrefix + id);
+            return EditorGUILayout.TextField(label, value);
+        }
+
+        static string DrawStringTextField(GUIContent label, string value, string id)
+        {
+            GUI.SetNextControlName(StringFieldControlPrefix + id);
+            return EditorGUILayout.TextField(label, value);
+        }
+
+        bool IsEditingStringTextField()
+        {
+            if (_renamingClip >= 0)
+                return true;
+            if (!EditorGUIUtility.editingTextField)
+                return false;
+            string focused = GUI.GetNameOfFocusedControl();
+            return focused == ClipRenameControl ||
+                   (!string.IsNullOrEmpty(focused) && focused.StartsWith(StringFieldControlPrefix));
+        }
+
+        bool IsEditingAnyTextField()
+            => _renamingClip >= 0 || EditorGUIUtility.editingTextField;
+
+        void ReleaseShortcutKeyboardFocus()
+        {
+            GUIUtility.keyboardControl = 0;
+            GUI.FocusControl(null);
+            Focus();
+        }
+
+        bool TryTogglePlaybackFromSpace()
+        {
+            double now = EditorApplication.timeSinceStartup;
+            // KeyCode.Space and character == ' ' can arrive as one event or a pair.
+            if (now - _lastSpaceToggleTime < 0.08d)
+                return false;
+            _lastSpaceToggleTime = now;
+            if (CurrentClip == null)
+                return false;
+            _playing = !_playing;
+            _lastEditorTime = now;
+            _status = _playing ? "Playback started" : "Playback paused";
+            return true;
+        }
+
         void HandleGlobalShortcuts()
         {
             var evt = Event.current;
-            if (evt.type != EventType.KeyDown || EditorGUIUtility.editingTextField)
+            if (evt.type != EventType.KeyDown)
                 return;
 
-            if (evt.keyCode == KeyCode.Space && CurrentClip != null)
+            if (IsSpaceKey(evt))
             {
-                GUIUtility.keyboardControl = 0;
-                GUI.FocusControl(null);
-                Focus();
-                _playing = !_playing;
-                _lastEditorTime = EditorApplication.timeSinceStartup;
-                _status = _playing ? "Playback started" : "Playback paused";
+                if (IsEditingStringTextField())
+                    return;
+
+                ReleaseShortcutKeyboardFocus();
+                TryTogglePlaybackFromSpace();
                 evt.Use();
                 Repaint();
                 return;
             }
+
+            if (IsEditingAnyTextField())
+                return;
 
             if (_selectedOnionFrame < 0 && CurrentClip != null &&
                 evt.keyCode is KeyCode.LeftArrow or KeyCode.RightArrow)
@@ -4247,14 +4324,27 @@ namespace BallForge.Sprites.DOTS.Editor
                     evt.Use();
                     return;
                 }
-                if (!string.IsNullOrEmpty(_selectedSocketName) && CurrentClip != null)
+                if (_socketDeleteArmed && !string.IsNullOrEmpty(_selectedSocketName) && CurrentClip != null)
                 {
                     RecordProfileUndo("Delete Sprite Socket");
                     SpriteSocketKeys.DeleteIdentity(CurrentClip.Sockets, _selectedSocketName);
                     _status = $"Deleted socket {_selectedSocketName}";
                     _selectedSocketName = null;
+                    _socketDeleteArmed = false;
                     _draggingSocket = false;
                     SaveDirty();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                var clip = CurrentClip;
+                if (clip != null)
+                {
+                    if (clip.Frames.Length > 1)
+                        RemoveSelectedFrame(clip);
+                    else
+                        _status = "A clip must keep at least one frame";
                     evt.Use();
                     Repaint();
                     return;
@@ -4273,6 +4363,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 CancelColliderCreation("Selection and active tools cleared");
                 CancelSocketPlacement(null);
                 _selectedSocketName = null;
+                _socketDeleteArmed = false;
                 _draggingSocket = false;
                 _draggingOnion = false;
                 if (_colliderMarqueePending)
@@ -4310,6 +4401,7 @@ namespace BallForge.Sprites.DOTS.Editor
             _draggingSocket = false;
             CancelSocketPlacement(null);
             _selectedSocketName = null;
+            _socketDeleteArmed = false;
             ClearPolygonDraft();
             _status = "Undo/Redo applied";
             Repaint();
