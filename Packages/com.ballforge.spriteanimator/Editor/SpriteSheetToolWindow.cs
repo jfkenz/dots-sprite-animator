@@ -1172,7 +1172,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 }
                 bool nextShowPivot = GUILayout.Toggle(_showPivot,
                     new GUIContent("Show Pivot",
-                        "Draw the sheet pivot in the preview. Drag the handle to move it."),
+                        "Draw the sheet pivot as a green dot in the preview. Drag it to move."),
                     GUILayout.Width(92f));
                 if (nextShowPivot != _showPivot)
                 {
@@ -1499,7 +1499,7 @@ namespace BallForge.Sprites.DOTS.Editor
             var deleteEmptyRect = new Rect(rect.xMax - deleteEmptyWidth - 8f, rect.y + 7f, deleteEmptyWidth, 20f);
             GUI.Label(new Rect(rect.x + 105f, rect.y + 10f,
                     Mathf.Max(40f, deleteEmptyRect.x - rect.x - 113f), 16f),
-                $"{clip.Frames.Length} frames   •   {total:F3}s   •   drag image = reorder   •   frame edge = duration   •   drag empty = marquee   •   right-click lane = event{markerSelection}",
+                $"{clip.Frames.Length} frames   •   {total:F3}s   •   drag = marquee   •   Alt+drag image = reorder   •   frame edge = duration   •   right-click lane = event{markerSelection}",
                 _mutedStyle);
             int emptyFrameCount = CountEmptyFrames(clip);
             using (new EditorGUI.DisabledScope(clip.Frames.Length <= 1 || emptyFrameCount == 0))
@@ -1605,7 +1605,8 @@ namespace BallForge.Sprites.DOTS.Editor
                 DrawCell(_profile.Sheet, CellIndexOf(clip, i), thumb, 1f);
                 bool hovered = ThumbnailContains(thumb, Event.current.mousePosition);
                 DrawThumbnailHitShape(thumb, selected, hovered);
-                EditorGUIUtility.AddCursorRect(thumb, MouseCursor.MoveArrow);
+                EditorGUIUtility.AddCursorRect(thumb,
+                    Event.current.alt ? MouseCursor.MoveArrow : MouseCursor.Arrow);
                 GUI.Label(new Rect(card.x + 6f, card.y + 85f, card.width - 12f, 14f),
                     clip.EventIds[i] == 0 ? $"column {clip.Frames[i]}" : EventName(clip.EventIds[i]),
                     _mutedStyle);
@@ -1762,21 +1763,7 @@ namespace BallForge.Sprites.DOTS.Editor
 
                     for (int i = thumbnails.Length - 1; i >= 0; i--)
                     {
-                        if (!ThumbnailContains(thumbnails[i], mouse)) continue;
-                        bool additive = evt.shift || evt.control || evt.command;
-                        if (additive)
-                        {
-                            ApplyFrameModifierClick(i, additive: true, toggle: evt.control || evt.command);
-                            BeginTimelineMarquee(controlId, mouse, additive: true);
-                            _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[i]);
-                            ClearColliderSelection();
-                            _selectedEventFrame = -1;
-                            _socketDeleteArmed = false;
-                            evt.Use();
-                            Repaint();
-                            return;
-                        }
-
+                        if (!evt.alt || !ThumbnailContains(thumbnails[i], mouse)) continue;
                         BeginTimelineDrag(controlId, TimelineDragMode.Reorder, mouse);
                         _dragFrameIndex = i;
                         _dropFrameSlot = i;
@@ -4826,24 +4813,17 @@ namespace BallForge.Sprites.DOTS.Editor
 
             Vector2 point = PivotScreen(cell);
             bool active = _draggingPivot || _pivotSelected;
-            float arm = 22f;
-            Color outline = new Color(0.05f, 0.06f, 0.08f, 0.95f);
-            Color fill = active ? Color.white : AccentColor;
+            float radius = active ? 6.5f : 5.5f;
+            Color fill = active
+                ? new Color(0.45f, 1f, 0.48f, 1f)
+                : new Color(0.22f, 0.82f, 0.3f, 1f);
+            Color outline = new Color(0.06f, 0.32f, 0.1f, 1f);
 
             Handles.BeginGUI();
             Handles.color = outline;
-            Handles.DrawAAPolyLine(5.5f, point + Vector2.left * arm, point + Vector2.right * arm);
-            Handles.DrawAAPolyLine(5.5f, point + Vector2.up * arm, point + Vector2.down * arm);
+            Handles.DrawSolidDisc(point, Vector3.forward, radius + 1.15f);
             Handles.color = fill;
-            Handles.DrawAAPolyLine(2.4f, point + Vector2.left * arm, point + Vector2.right * arm);
-            Handles.DrawAAPolyLine(2.4f, point + Vector2.up * arm, point + Vector2.down * arm);
-            Handles.EndGUI();
-
-            DrawDiamond(point, active ? 8.5f : 7f, outline);
-            DrawDiamond(point, active ? 6f : 4.8f, fill);
-            Handles.BeginGUI();
-            Handles.color = Color.white;
-            Handles.DrawSolidDisc(point, Vector3.forward, 2.2f);
+            Handles.DrawSolidDisc(point, Vector3.forward, radius);
             Handles.EndGUI();
 
             EditorGUIUtility.AddCursorRect(
