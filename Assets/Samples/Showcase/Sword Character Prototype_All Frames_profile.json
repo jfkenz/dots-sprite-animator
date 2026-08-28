@@ -1,6 +1,6 @@
 {
     "Sheet": {
-        "instanceID": 568105584918848480
+        "instanceID": 568105584918834992
     },
     "Columns": 11,
     "Rows": 28,
@@ -13,7 +13,7 @@
         {
             "Name": "Sword Character Prototype_All Frames",
             "Texture": {
-                "instanceID": 568105584918848868
+                "instanceID": 568105584918834988
             },
             "Columns": 8,
             "Rows": 8,
@@ -26,7 +26,7 @@
         {
             "Name": "Prototype Character_All Frames",
             "Texture": {
-                "instanceID": 568105584918848480
+                "instanceID": 568105584918834992
             },
             "Columns": 11,
             "Rows": 28,
@@ -1152,7 +1152,17 @@
             ],
             "FacingGroup": "",
             "Facing": 255,
-            "Sockets": []
+            "Sockets": [
+                {
+                    "Name": "Socket 1",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": 0.0,
+                        "y": 7.0
+                    },
+                    "LocalAngle": 0.0
+                }
+            ]
         },
         {
             "Name": "Clip 10",

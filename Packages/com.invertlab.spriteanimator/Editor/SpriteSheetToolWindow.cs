@@ -1527,7 +1527,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ? SourcePixelsToScreenOffset(clip.OnionOffsets[state.Frame], cell)
                 : Vector2.zero;
             var activeSpriteRect = new Rect(cell.position + activeScreenOffset, cell.size);
-            DrawCell(_profile.Sheet, CellIndexOf(clip, state.Frame), activeSpriteRect, 1f);
+            DrawClipFrame(clip, state.Frame, activeSpriteRect, 1f);
 
             if (_showHitboxes)
             {
@@ -2099,13 +2099,21 @@ namespace InvertLab.Sprites.DOTS.Editor
             string markerSelection = _selectedEventFrame >= 0
                 ? $"   •   marker {EventAuthoredTime(clip, _selectedEventFrame):F3}s selected"
                 : string.Empty;
+            const float addFrameWidth = 82f;
             const float deleteEmptyWidth = 148f;
+            const float headerBtnGap = 4f;
             var deleteEmptyRect = new Rect(rect.xMax - deleteEmptyWidth - 8f, rect.y + 7f, deleteEmptyWidth, 20f);
+            var addFrameRect = new Rect(deleteEmptyRect.x - addFrameWidth - headerBtnGap, rect.y + 7f, addFrameWidth, 20f);
             GUI.Label(new Rect(rect.x + 105f, rect.y + 10f,
-                    Mathf.Max(40f, deleteEmptyRect.x - rect.x - 113f), 16f),
+                    Mathf.Max(40f, addFrameRect.x - rect.x - 113f), 16f),
                 $"{clip.Frames.Length} frames   •   {total:F3}s   •   drag = marquee   •   Alt+drag image = reorder   •   frame edge = duration   •   right-click lane = event{markerSelection}",
                 _mutedStyle);
             int emptyFrameCount = CountEmptyFrames(clip);
+            if (GUI.Button(addFrameRect,
+                new GUIContent("Add Frame",
+                    "Insert a new frame after the selected one (next sheet column). Same as + Frame After in the inspector."),
+                EditorStyles.miniButton))
+                InsertFrameAfter(clip);
             using (new EditorGUI.DisabledScope(clip.Frames.Length <= 1 || emptyFrameCount == 0))
             {
                 if (GUI.Button(deleteEmptyRect,
@@ -2189,7 +2197,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     $"F{i + 1}  •  {duration:F3}s", _mutedStyle);
                 var thumbArea = new Rect(card.x + 7f, 83f, card.width - 14f, 62f);
                 DrawCheckerboard(thumbArea, 9f);
-                DrawCell(_profile.Sheet, CellIndexOf(clip, i), thumb, 1f);
+                DrawClipFrame(clip, i, thumb, 1f);
                 bool hovered = ThumbnailContains(thumb, Event.current.mousePosition);
                 DrawThumbnailHitShape(thumb, selected, hovered);
                 EditorGUIUtility.AddCursorRect(thumb,
@@ -2228,7 +2236,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 var ghostThumbArea = new Rect(ghost.x + 7f, ghost.y + 25f, ghost.width - 14f, 60f);
                 var ghostThumb = TimelineSpriteRect(ghostThumbArea);
                 DrawCheckerboard(ghostThumbArea, 9f);
-                DrawCell(_profile.Sheet, CellIndexOf(clip, _dragFrameIndex), ghostThumb, 0.9f);
+                DrawClipFrame(clip, _dragFrameIndex, ghostThumb, 0.9f);
                 GUI.Label(new Rect(ghost.x + 7f, ghost.y + 86f, ghost.width - 14f, 14f),
                     "release to place", _mutedStyle);
             }
@@ -4357,14 +4365,14 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             RecordDiscreteUndo("Add Sprite Animation Clip");
             _profile.EnsureSheets(_selectedSheet);
-            int rows = Mathf.Max(1, _profile.Rows);
+            int rows = Mathf.Max(1, _profile.SheetAt(_selectedSheet) != null ? _profile.SheetAt(_selectedSheet).Rows : _profile.Rows);
             int existingOnSheet = CountClipsOnSheet(_selectedSheet);
             var clip = new SpriteClipDef
             {
                 Name = $"Clip {_profile.Clips.Count + 1}",
                 SheetIndex = _selectedSheet,
                 Row = existingOnSheet % rows,
-                Frames = CreateDefaultFrames(),
+                Frames = CreateDefaultFrames(_selectedSheet, existingOnSheet % rows),
             };
             clip.EnsureFrameData();
             _profile.Clips.Add(clip);
@@ -4476,12 +4484,61 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
+        int NextUnusedOccupiedColumn(SpriteClipDef clip)
+        {
+            if (clip?.Frames == null || clip.Frames.Length == 0)
+                return 0;
+            var def = _profile.SheetForClip(clip);
+            int cols = def != null && def.Columns > 0 ? def.Columns : Mathf.Max(1, _profile.Columns);
+            int rows = def != null && def.Rows > 0 ? def.Rows : Mathf.Max(1, _profile.Rows);
+            int row = Mathf.Clamp(clip.Row, 0, Mathf.Max(0, rows - 1));
+            int start = 0;
+            if (_selectedFrame >= 0 && _selectedFrame < clip.Frames.Length)
+                start = clip.Frames[_selectedFrame] + 1;
+            var used = new HashSet<int>(clip.Frames);
+            bool canSample = TryEnsureSheetPixelCache(clip);
+            for (int n = 0; n < cols; n++)
+            {
+                int col = (start + n) % cols;
+                if (used.Contains(col))
+                    continue;
+                if (canSample && IsSheetCellEmpty(col, row))
+                    continue;
+                return col;
+            }
+            return -1;
+        }
+
         void InsertFrameAfter(SpriteClipDef clip)
         {
+            if (clip == null)
+                return;
+            clip.EnsureFrameData();
+            int nextCol = NextUnusedOccupiedColumn(clip);
+            if (nextCol < 0)
+            {
+                _status = "No more drawn cells on this row";
+                return;
+            }
+
+            bool replaceEmptyOnly = clip.Frames.Length == 1 &&
+                _selectedFrame == 0 &&
+                TryEnsureSheetPixelCache(clip) &&
+                IsClipFrameCellEmpty(clip, 0);
+            if (replaceEmptyOnly)
+            {
+                RecordProfileUndo("Insert Sprite Animation Frame");
+                clip.Frames[0] = nextCol;
+                SelectOnlyFrame(0);
+                SaveDirty();
+                _status = $"Filled empty frame with column {nextCol}";
+                return;
+            }
+
             RecordProfileUndo("Insert Sprite Animation Frame");
             int insert = _selectedFrame + 1;
             var frames = new List<int>(clip.Frames);
-            frames.Insert(insert, Mathf.Min(_profile.Columns - 1, clip.Frames[_selectedFrame] + 1));
+            frames.Insert(insert, nextCol);
             var durations = new List<float>(clip.FrameDurationScales);
             durations.Insert(insert, clip.FrameDurationScales[_selectedFrame]);
             var events = new List<byte>(clip.EventIds);
@@ -4705,7 +4762,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         List<int> CollectEmptyFrameIndices(SpriteClipDef clip)
         {
             var empty = new List<int>();
-            if (clip?.Frames == null || !TryEnsureSheetPixelCache())
+            if (clip?.Frames == null || !TryEnsureSheetPixelCache(clip))
                 return empty;
             for (int i = 0; i < clip.Frames.Length; i++)
             {
@@ -4719,8 +4776,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (clip?.Frames == null || frame < 0 || frame >= clip.Frames.Length)
                 return false;
-            int columns = Mathf.Max(1, _profile.Columns);
-            int rows = Mathf.Max(1, _profile.Rows);
+            var def = _profile.SheetForClip(clip);
+            int columns = def != null && def.Columns > 0 ? def.Columns : Mathf.Max(1, _profile.Columns);
+            int rows = def != null && def.Rows > 0 ? def.Rows : Mathf.Max(1, _profile.Rows);
             int row = Mathf.Clamp(clip.Row, 0, rows - 1);
             int column = Mathf.Clamp(clip.Frames[frame], 0, columns - 1);
             return IsSheetCellEmpty(column, row);
@@ -4739,8 +4797,14 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         bool TryEnsureSheetPixelCache()
+            => TryEnsureSheetPixelCache(_profile.SheetAt(_selectedSheet));
+
+        bool TryEnsureSheetPixelCache(SpriteClipDef clip)
+            => TryEnsureSheetPixelCache(_profile.SheetForClip(clip) ?? _profile.SheetAt(_selectedSheet));
+
+        bool TryEnsureSheetPixelCache(SpriteSheetDef def)
         {
-            var sheet = _profile?.Sheet;
+            var sheet = def?.Texture ?? _profile?.Sheet;
             if (sheet == null)
             {
                 InvalidateSheetPixelCache();
@@ -4748,8 +4812,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             EntityId id = sheet.GetEntityId();
-            int columns = Mathf.Max(1, _profile.Columns);
-            int rows = Mathf.Max(1, _profile.Rows);
+            int columns = def != null && def.Columns > 0 ? Mathf.Max(1, def.Columns) : Mathf.Max(1, _profile.Columns);
+            int rows = def != null && def.Rows > 0 ? Mathf.Max(1, def.Rows) : Mathf.Max(1, _profile.Rows);
             bool sameTexture = _sheetPixels != null &&
                 _sheetPixelsId == id &&
                 _sheetPixelsWidth == sheet.width &&
@@ -4843,11 +4907,26 @@ namespace InvertLab.Sprites.DOTS.Editor
             _sheetCellEmpty = null;
         }
 
-        int[] CreateDefaultFrames()
+        int[] CreateDefaultFrames(int sheetIndex, int row)
         {
-            int count = Mathf.Max(1, _profile.Columns);
-            var frames = new int[count];
-            for (int i = 0; i < count; i++) frames[i] = i;
+            var def = _profile.SheetAt(sheetIndex);
+            int cols = def != null && def.Columns > 0 ? def.Columns : Mathf.Max(1, _profile.Columns);
+            int rows = def != null && def.Rows > 0 ? def.Rows : Mathf.Max(1, _profile.Rows);
+            row = Mathf.Clamp(row, 0, Mathf.Max(0, rows - 1));
+            var occupied = new List<int>();
+            var probe = new SpriteClipDef { SheetIndex = sheetIndex, Row = row, Frames = new[] { 0 } };
+            if (TryEnsureSheetPixelCache(probe))
+            {
+                for (int c = 0; c < cols; c++)
+                {
+                    if (!IsSheetCellEmpty(c, row))
+                        occupied.Add(c);
+                }
+            }
+            if (occupied.Count > 0)
+                return occupied.ToArray();
+            var frames = new int[Mathf.Max(1, cols)];
+            for (int i = 0; i < frames.Length; i++) frames[i] = i;
             return frames;
         }
 
@@ -5509,12 +5588,34 @@ namespace InvertLab.Sprites.DOTS.Editor
             return definition == null ? EventColor : definition.Color;
         }
 
+        int ClipSheetColumns(SpriteClipDef clip)
+        {
+            var def = _profile.SheetForClip(clip);
+            return def != null && def.Columns > 0 ? def.Columns : Mathf.Max(1, _profile.Columns);
+        }
+
+        int ClipSheetRows(SpriteClipDef clip)
+        {
+            var def = _profile.SheetForClip(clip);
+            return def != null && def.Rows > 0 ? def.Rows : Mathf.Max(1, _profile.Rows);
+        }
+
         int CellIndexOf(SpriteClipDef clip, int frame)
         {
+            int columns = ClipSheetColumns(clip);
+            int rows = ClipSheetRows(clip);
             frame = Mathf.Clamp(frame, 0, clip.Frames.Length - 1);
-            int row = Mathf.Clamp(clip.Row, 0, Mathf.Max(0, _profile.Rows - 1));
-            int column = Mathf.Clamp(clip.Frames[frame], 0, Mathf.Max(0, _profile.Columns - 1));
-            return row * Mathf.Max(1, _profile.Columns) + column;
+            int row = Mathf.Clamp(clip.Row, 0, Mathf.Max(0, rows - 1));
+            int column = Mathf.Clamp(clip.Frames[frame], 0, Mathf.Max(0, columns - 1));
+            return row * columns + column;
+        }
+
+        void DrawClipFrame(SpriteClipDef clip, int frame, Rect rect, float alpha)
+        {
+            var def = _profile.SheetForClip(clip);
+            var tex = def?.Texture ?? _profile.Sheet;
+            DrawCellTinted(tex, CellIndexOf(clip, frame), rect, new Color(1f, 1f, 1f, alpha),
+                ClipSheetColumns(clip), ClipSheetRows(clip));
         }
 
         void DrawCell(Texture2D sheet, int cellIndex, Rect rect, float alpha)
