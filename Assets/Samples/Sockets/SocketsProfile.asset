@@ -1,0 +1,221 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e4c91a2d8f4e6ab3c1d9e0f5a8b246, type: 3}
+  m_Name: SocketsProfile
+  m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.ScriptableSpriteSheetProfile
+  Data:
+    Sheet: {fileID: 2800000, guid: 6f3892696a2cdc346a3b303d0cb685fd, type: 3}
+    Columns: 8
+    Rows: 8
+    PixelsPerUnit: 100
+    Pivot: {x: 0.5, y: 0.5}
+    Sheets:
+    - Name: Sword Character Prototype
+      Texture: {fileID: 2800000, guid: 6f3892696a2cdc346a3b303d0cb685fd, type: 3}
+      Columns: 8
+      Rows: 8
+      PixelsPerUnit: 100
+      Pivot: {x: 0.5, y: 0.5}
+    Clips:
+    - Name: Idle
+      SheetIndex: 0
+      Row: 0
+      Frames: 0000000001000000020000000300000004000000050000000600000007000000
+      FrameRate: 6
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets:
+      - Name: Weapon
+        FrameIndex: 0
+        LocalPosition: {x: -5, y: -4}
+        LocalAngle: -82
+      - Name: Weapon
+        FrameIndex: 1
+        LocalPosition: {x: -5, y: -4}
+        LocalAngle: -80
+      - Name: Weapon
+        FrameIndex: 2
+        LocalPosition: {x: -5, y: -5}
+        LocalAngle: -78
+      - Name: Weapon
+        FrameIndex: 3
+        LocalPosition: {x: -5, y: -5}
+        LocalAngle: -76
+      - Name: Weapon
+        FrameIndex: 4
+        LocalPosition: {x: -5, y: -5}
+        LocalAngle: -78
+      - Name: Weapon
+        FrameIndex: 5
+        LocalPosition: {x: -5, y: -5}
+        LocalAngle: -80
+      - Name: Weapon
+        FrameIndex: 6
+        LocalPosition: {x: -5, y: -4}
+        LocalAngle: -82
+      - Name: Weapon
+        FrameIndex: 7
+        LocalPosition: {x: -5, y: -4}
+        LocalAngle: -84
+    - Name: Attack
+      SheetIndex: 0
+      Row: 1
+      Frames: 0000000001000000020000000300000004000000050000000600000007000000
+      FrameRate: 10
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets:
+      - Name: Weapon
+        FrameIndex: 0
+        LocalPosition: {x: -9, y: 1}
+        LocalAngle: -100
+      - Name: Weapon
+        FrameIndex: 1
+        LocalPosition: {x: 14, y: -2}
+        LocalAngle: -45
+      - Name: Weapon
+        FrameIndex: 2
+        LocalPosition: {x: 12, y: -4}
+        LocalAngle: -5
+      - Name: Weapon
+        FrameIndex: 3
+        LocalPosition: {x: 8, y: -4}
+        LocalAngle: 30
+      - Name: Weapon
+        FrameIndex: 4
+        LocalPosition: {x: 7, y: -5}
+        LocalAngle: 62
+      - Name: Weapon
+        FrameIndex: 5
+        LocalPosition: {x: 6, y: -5}
+        LocalAngle: 92
+      - Name: Weapon
+        FrameIndex: 6
+        LocalPosition: {x: 6, y: -5}
+        LocalAngle: 118
+      - Name: Weapon
+        FrameIndex: 7
+        LocalPosition: {x: 7, y: -5}
+        LocalAngle: 145
+    Events: []
+    Hitboxes: []
+    OnionSettingsInitialized: 1
+    OnionSkinEnabled: 0
+    OnionPastFrames: 3
+    OnionFutureFrames: 3
+    ShowOnionLayerNumbers: 1
+    TimelineHitShape: 0
+    TimelineHitPolygon:
+    - {x: 0.5, y: 0.04}
+    - {x: 0.82, y: 0.16}
+    - {x: 0.96, y: 0.5}
+    - {x: 0.82, y: 0.84}
+    - {x: 0.5, y: 0.96}
+    - {x: 0.18, y: 0.84}
+    - {x: 0.04, y: 0.5}
+    - {x: 0.18, y: 0.16}
