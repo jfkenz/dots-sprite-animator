@@ -5,7 +5,7 @@ namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
     /// Name is the socket identity across frames. Each (name, frame) key stores its
-    /// own LocalPosition and LocalAngle. Missing keys fall back to the last known pose.
+    /// own LocalPosition, LocalAngle, and LocalScale. Missing keys fall back to the last known pose.
     /// </summary>
     public static class SpriteSocketKeys
     {
@@ -95,11 +95,25 @@ namespace InvertLab.Sprites.DOTS
             return null;
         }
 
+        public static Vector2 ResolvedScale(Vector2 scale)
+        {
+            if (Mathf.Approximately(scale.x, 0f) && Mathf.Approximately(scale.y, 0f))
+                return Vector2.one;
+            return scale;
+        }
+
         public static bool TryGetLastKnown(IList<FrameSocketDef> sockets, string name, int frame,
             out Vector2 position, out float angle)
         {
+            return TryGetLastKnown(sockets, name, frame, out position, out angle, out _);
+        }
+
+        public static bool TryGetLastKnown(IList<FrameSocketDef> sockets, string name, int frame,
+            out Vector2 position, out float angle, out Vector2 scale)
+        {
             position = Vector2.zero;
             angle = 0f;
+            scale = Vector2.one;
             if (sockets == null)
                 return false;
 
@@ -126,23 +140,31 @@ namespace InvertLab.Sprites.DOTS
                 return false;
             position = chosen.LocalPosition;
             angle = chosen.LocalAngle;
+            scale = ResolvedScale(chosen.LocalScale);
             return true;
         }
 
         public static bool TryGetPose(IList<FrameSocketDef> sockets, string name, int frame,
             out Vector2 position, out float angle, out bool onFrame)
         {
+            return TryGetPose(sockets, name, frame, out position, out angle, out _, out onFrame);
+        }
+
+        public static bool TryGetPose(IList<FrameSocketDef> sockets, string name, int frame,
+            out Vector2 position, out float angle, out Vector2 scale, out bool onFrame)
+        {
             var key = FindOnFrame(sockets, name, frame);
             if (key != null)
             {
                 position = key.LocalPosition;
                 angle = key.LocalAngle;
+                scale = ResolvedScale(key.LocalScale);
                 onFrame = true;
                 return true;
             }
 
             onFrame = false;
-            return TryGetLastKnown(sockets, name, frame, out position, out angle);
+            return TryGetLastKnown(sockets, name, frame, out position, out angle, out scale);
         }
 
         public static FrameSocketDef EnsureFrameKey(List<FrameSocketDef> sockets, string name, int frame)
@@ -152,13 +174,14 @@ namespace InvertLab.Sprites.DOTS
             if (existing != null)
                 return existing;
 
-            TryGetLastKnown(sockets, name, frame, out var position, out var angle);
+            TryGetLastKnown(sockets, name, frame, out var position, out var angle, out var scale);
             var created = new FrameSocketDef
             {
                 Name = CanonicalName(name),
                 FrameIndex = frame,
                 LocalPosition = position,
                 LocalAngle = angle,
+                LocalScale = scale,
             };
             sockets.Add(created);
             return created;
@@ -182,6 +205,27 @@ namespace InvertLab.Sprites.DOTS
             if (sockets == null)
                 return 0;
             return sockets.RemoveAll(socket => socket != null && NamesEqual(socket.Name, name));
+        }
+
+        public static bool RemoveFrameKey(List<FrameSocketDef> sockets, string name, int frame)
+        {
+            if (sockets == null)
+                return false;
+            return sockets.RemoveAll(socket =>
+                socket != null && NamesEqual(socket.Name, name) && socket.FrameIndex == frame) > 0;
+        }
+
+        public static bool NameExistsOnAnyClip(IList<SpriteClipDef> clips, string name)
+        {
+            if (clips == null)
+                return false;
+            for (int i = 0; i < clips.Count; i++)
+            {
+                var sockets = clips[i]?.Sockets;
+                if (sockets != null && IdentityIndex(sockets, name) >= 0)
+                    return true;
+            }
+            return false;
         }
 
         public static Color ColorForIndex(int index)

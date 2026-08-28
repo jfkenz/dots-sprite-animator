@@ -74,5 +74,16 @@ namespace InvertLab.Sprites.DOTS
         public FixedString64Bytes Name;
         public float2 LocalPosition;
         public float LocalAngle;
+        public float2 LocalScale;
+    }
+
+    /// <summary>Moves this child entity to a named socket on its animated source.</summary>
+    public struct SpriteSocketAttachment : IComponentData
+    {
+        public Entity Source;
+        public FixedString64Bytes SocketName;
+        public float2 PositionOffset;
+        public float AngleOffset;
+        public float BaseScale;
     }
 }

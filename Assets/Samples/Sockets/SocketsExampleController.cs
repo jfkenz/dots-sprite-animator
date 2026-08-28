@@ -1,25 +1,17 @@
 using Unity.Collections;
 using Unity.Entities;
-using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace InvertLab.Sprites.DOTS
 {
-    /// <summary>
-    /// Small GameObject bridge for the sockets sample. Animation remains ECS-driven;
-    /// this component reads the current SpriteSocketBuffer and moves one presentation object.
-    /// </summary>
+    /// <summary>Clip controls and CPU renderer setup for the sockets sample.</summary>
     public sealed class SocketsExampleController : MonoBehaviour
     {
-        [Header("Sample assets")]
         public ScriptableSpriteSheetProfile Profile;
-        public Transform SocketItem;
 
-        [Header("Runtime controls")]
         [Min(0)] public int ClipIndex;
-        public string SocketName = "Weapon";
 
         EntityQuery _playerQuery;
         EntityManager _entityManager;
@@ -27,9 +19,6 @@ namespace InvertLab.Sprites.DOTS
         World _world;
         bool _queryCreated;
         int _appliedClipIndex = -1;
-        bool _hasPose;
-        float2 _lastPosition;
-        float _lastAngle;
         GUIStyle _labelStyle;
 
         void Update()
@@ -57,43 +46,6 @@ namespace InvertLab.Sprites.DOTS
             ClipIndex = Mathf.Clamp(ClipIndex, 0, clipCount - 1);
             if (_appliedClipIndex != ClipIndex)
                 PlayClip(ClipIndex);
-        }
-
-        void LateUpdate()
-        {
-            if (!TryBindPlayer() || SocketItem == null)
-                return;
-
-            var sockets = _entityManager.GetBuffer<SpriteSocketBuffer>(_playerEntity, true);
-            var wanted = new FixedString64Bytes(SpriteSocketKeys.CanonicalName(SocketName));
-            for (int i = 0; i < sockets.Length; i++)
-            {
-                var socket = sockets[i];
-                if (!socket.Name.Equals(wanted))
-                    continue;
-
-                _lastPosition = socket.LocalPosition;
-                _lastAngle = socket.LocalAngle;
-                _hasPose = true;
-                break;
-            }
-
-            // Missing frame keys intentionally retain the previous pose.
-            if (!_hasPose || !_entityManager.HasComponent<LocalToWorld>(_playerEntity))
-                return;
-
-            var matrix = _entityManager.GetComponentData<LocalToWorld>(_playerEntity).Value;
-            float3 right = math.normalizesafe(matrix.c0.xyz, new float3(1f, 0f, 0f));
-            float3 up = math.normalizesafe(matrix.c1.xyz, new float3(0f, 1f, 0f));
-            float3 origin = matrix.c3.xyz;
-
-            // Socket positions were converted from source pixels with the clip sheet's
-            // PPU during baking. Remove entity scale from basis vectors to avoid scaling twice.
-            float3 worldPosition = origin + right * _lastPosition.x + up * _lastPosition.y;
-            float entityAngle = math.degrees(math.atan2(right.y, right.x));
-            SocketItem.SetPositionAndRotation(
-                new Vector3(worldPosition.x, worldPosition.y, SocketItem.position.z),
-                Quaternion.Euler(0f, 0f, entityAngle + _lastAngle));
         }
 
         bool TryBindPlayer()
@@ -148,7 +100,6 @@ namespace InvertLab.Sprites.DOTS
             if (sheet?.Texture == null)
                 return;
 
-            // CPU animation path. Sheet/grid follow each clip's SheetIndex.
             SpriteBatchSpawner.LayoutXy = true;
             SpriteInstanceRenderSystem.Install(_entityManager);
             SpriteInstanceRenderSystem.SetSheet(sheet.Texture);
@@ -184,7 +135,7 @@ namespace InvertLab.Sprites.DOTS
 
             GUI.Box(
                 new Rect(16f, 16f, 390f, 92f),
-                $"DOTS Sprite Animator - Sockets\nClip: {clipName}   Socket: {SocketName}\n[ / ] or 1 / 2: switch Idle / Attack",
+                $"DOTS Sprite Animator - Sockets\nClip: {clipName}   Socket: Weapon\n[ / ] or 1 / 2: switch Idle / Attack",
                 _labelStyle);
         }
 
@@ -192,11 +143,9 @@ namespace InvertLab.Sprites.DOTS
 
         void ReleaseQuery()
         {
-            if (_queryCreated)
-            {
+            if (_queryCreated && _world != null && _world.IsCreated)
                 _playerQuery.Dispose();
-                _queryCreated = false;
-            }
+            _queryCreated = false;
             _world = null;
             _playerEntity = Entity.Null;
         }

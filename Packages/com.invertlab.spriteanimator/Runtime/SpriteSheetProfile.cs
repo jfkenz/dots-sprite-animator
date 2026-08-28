@@ -208,7 +208,8 @@ namespace InvertLab.Sprites.DOTS
 
     /// <summary>
     /// Named attach point authored on one frame (source pixels, +x right, +y up).
-    /// Name is the identity across frames; LocalPosition and LocalAngle are per-frame keys.
+    /// Name is the identity across frames; LocalPosition, LocalAngle, and LocalScale
+    /// are per-frame keys.
     /// </summary>
     [Serializable]
     public class FrameSocketDef
@@ -217,6 +218,152 @@ namespace InvertLab.Sprites.DOTS
         public int FrameIndex;
         public Vector2 LocalPosition = Vector2.zero;
         public float LocalAngle;
+        public Vector2 LocalScale = Vector2.one;
+    }
+
+    /// <summary>How a socket catalog preview chooses its displayed cell.</summary>
+    public enum SpriteSocketPreviewPlayMode : byte
+    {
+        Cell = 0,
+        PlayClip = 1,
+        FollowHost = 2,
+    }
+
+    /// <summary>
+    /// Editor preview visual for one socket identity. Pose stays on
+    /// <see cref="FrameSocketDef"/>; this catalog is shared across clips.
+    /// </summary>
+    [Serializable]
+    public class SpriteSocketCatalogItem
+    {
+        public string SocketName = "Weapon";
+        public Texture2D Texture;
+        public ScriptableSpriteSheetProfile Profile;
+        public string ClipName = string.Empty;
+        public byte PlayMode;
+        public int Columns = 1;
+        public int Rows = 1;
+        public Vector2 Pivot = new(0.5f, 0.5f);
+        public int CellIndex;
+        public Vector2 GripPixels;
+        public float Scale = 1f;
+        public bool FlipX;
+        public int SortingOffset;
+        public bool PreviewEnabled = true;
+
+        public int CellCount => Mathf.Max(1, Columns) * Mathf.Max(1, Rows);
+        public bool HasPreview => Texture != null || Profile != null;
+
+        public SpriteSocketPreviewPlayMode PreviewPlayMode =>
+            (SpriteSocketPreviewPlayMode)PlayMode;
+
+        public void Normalize()
+        {
+            Columns = Mathf.Max(1, Columns);
+            Rows = Mathf.Max(1, Rows);
+            CellIndex = Mathf.Clamp(CellIndex, 0, CellCount - 1);
+            if (Scale <= 0f)
+                Scale = 1f;
+            Pivot = new Vector2(Mathf.Clamp01(Pivot.x), Mathf.Clamp01(Pivot.y));
+            if (PlayMode > (byte)SpriteSocketPreviewPlayMode.FollowHost)
+                PlayMode = (byte)SpriteSocketPreviewPlayMode.Cell;
+        }
+    }
+
+    /// <summary>Profile-level socket visuals, keyed by socket name.</summary>
+    [Serializable]
+    public class SpriteSocketCatalog
+    {
+        public List<SpriteSocketCatalogItem> Items = new();
+
+        public void EnsureItems()
+        {
+            Items ??= new List<SpriteSocketCatalogItem>();
+        }
+
+        public SpriteSocketCatalogItem Find(string socketName)
+        {
+            EnsureItems();
+            for (int i = 0; i < Items.Count; i++)
+            {
+                var item = Items[i];
+                if (item != null && SpriteSocketKeys.NamesEqual(item.SocketName, socketName))
+                    return item;
+            }
+            return null;
+        }
+
+        public SpriteSocketCatalogItem Ensure(string socketName)
+        {
+            var existing = Find(socketName);
+            if (existing != null)
+                return existing;
+            var created = new SpriteSocketCatalogItem
+            {
+                SocketName = SpriteSocketKeys.CanonicalName(socketName),
+            };
+            Items.Add(created);
+            return created;
+        }
+
+        public void Remove(string socketName)
+        {
+            EnsureItems();
+            Items.RemoveAll(item => item != null && SpriteSocketKeys.NamesEqual(item.SocketName, socketName));
+        }
+
+        public void SyncRename(string fromName, string toName, bool oldNameStillUsed)
+        {
+            EnsureItems();
+            string from = SpriteSocketKeys.CanonicalName(fromName);
+            string to = SpriteSocketKeys.CanonicalName(toName);
+            if (SpriteSocketKeys.NamesEqual(from, to))
+                return;
+
+            var source = Find(from);
+            if (source == null)
+                return;
+
+            if (oldNameStillUsed)
+            {
+                if (Find(to) == null)
+                    Items.Add(CloneItem(source, to));
+                return;
+            }
+
+            var dest = Find(to);
+            if (dest != null && !ReferenceEquals(dest, source))
+                Remove(from);
+            else
+                source.SocketName = to;
+        }
+
+        public void SyncDelete(string socketName, bool nameStillUsed)
+        {
+            if (!nameStillUsed)
+                Remove(socketName);
+        }
+
+        static SpriteSocketCatalogItem CloneItem(SpriteSocketCatalogItem source, string socketName)
+        {
+            return new SpriteSocketCatalogItem
+            {
+                SocketName = socketName,
+                Texture = source.Texture,
+                Profile = source.Profile,
+                ClipName = source.ClipName,
+                PlayMode = source.PlayMode,
+                Columns = source.Columns,
+                Rows = source.Rows,
+                Pivot = source.Pivot,
+                CellIndex = source.CellIndex,
+                GripPixels = source.GripPixels,
+                Scale = source.Scale,
+                FlipX = source.FlipX,
+                SortingOffset = source.SortingOffset,
+                PreviewEnabled = source.PreviewEnabled,
+            };
+        }
     }
 
     /// <summary>One texture + grid inside a profile that can hold several sheets.</summary>
@@ -257,6 +404,7 @@ namespace InvertLab.Sprites.DOTS
         public List<SpriteClipDef> Clips = new();
         public List<SpriteEventDef> Events = new();
         public List<FrameBoxDef> Hitboxes = new();
+        public SpriteSocketCatalog SocketCatalog = new();
         public bool OnionSettingsInitialized = true;
         public bool OnionSkinEnabled;
         public int OnionPastFrames = DefaultOnionFrameCount;
@@ -279,6 +427,12 @@ namespace InvertLab.Sprites.DOTS
         {
             if (TimelineHitPolygon == null || TimelineHitPolygon.Length < 3)
                 TimelineHitPolygon = CreateRegularHitPolygon(DefaultTimelineHitPolygonVertices);
+        }
+
+        public void EnsureSocketCatalog()
+        {
+            SocketCatalog ??= new SpriteSocketCatalog();
+            SocketCatalog.EnsureItems();
         }
 
         public static Vector2[] CreateRegularHitPolygon(int vertexCount)
@@ -366,6 +520,46 @@ namespace InvertLab.Sprites.DOTS
                 return null;
             int index = clip != null ? clip.SheetIndex : 0;
             return SheetAt(index);
+        }
+
+        public SpriteClipDef FindClip(string name)
+        {
+            if (Clips == null || Clips.Count == 0)
+                return null;
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                for (int i = 0; i < Clips.Count; i++)
+                {
+                    var clip = Clips[i];
+                    if (clip != null && string.Equals(clip.Name, name, StringComparison.Ordinal))
+                        return clip;
+                }
+            }
+            return Clips[0];
+        }
+
+        public bool TryGetClipDrawCell(SpriteClipDef clip, int frame,
+            out Texture2D texture, out int columns, out int rows, out int cellIndex)
+        {
+            texture = null;
+            columns = 1;
+            rows = 1;
+            cellIndex = 0;
+            EnsureSheets();
+            var sheet = SheetForClip(clip);
+            texture = sheet?.Texture ?? Sheet;
+            if (texture == null)
+                return false;
+            columns = sheet != null && sheet.Columns > 0 ? sheet.Columns : Mathf.Max(1, Columns);
+            rows = sheet != null && sheet.Rows > 0 ? sheet.Rows : Mathf.Max(1, Rows);
+            if (clip?.Frames == null || clip.Frames.Length == 0)
+                return true;
+            clip.EnsureFrameData();
+            frame = Mathf.Clamp(frame, 0, clip.Frames.Length - 1);
+            int row = Mathf.Clamp(clip.Row, 0, Mathf.Max(0, rows - 1));
+            int column = Mathf.Clamp(clip.Frames[frame], 0, Mathf.Max(0, columns - 1));
+            cellIndex = row * columns + column;
+            return true;
         }
 
         public void SyncLegacyFromSheet(int index)

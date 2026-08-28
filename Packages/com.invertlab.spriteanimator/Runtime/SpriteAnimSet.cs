@@ -38,6 +38,7 @@ namespace InvertLab.Sprites.DOTS
         public int FrameIndex;
         public float2 LocalPosition;
         public float LocalAngle;
+        public float2 LocalScale;
         public FixedString64Bytes Name;
     }
 
@@ -105,6 +106,7 @@ namespace InvertLab.Sprites.DOTS
                 public int FrameIndex;
                 public float2 LocalPosition;
                 public float LocalAngle;
+                public float2 LocalScale;
                 public string Name;
             }
 
@@ -199,6 +201,9 @@ namespace InvertLab.Sprites.DOTS
                         FrameIndex = math.clamp(socket.FrameIndex, 0, math.max(0, n - 1)),
                         LocalPosition = socket.LocalPosition,
                         LocalAngle = socket.LocalAngle,
+                        LocalScale = math.all(socket.LocalScale == float2.zero)
+                            ? new float2(1f, 1f)
+                            : socket.LocalScale,
                         Name = new FixedString64Bytes(string.IsNullOrWhiteSpace(socket.Name)
                             ? $"Socket {s + 1}"
                             : socket.Name.Trim()),
@@ -331,6 +336,7 @@ namespace InvertLab.Sprites.DOTS
                         Name = socket.Name,
                         LocalPosition = socket.LocalPosition,
                         LocalAngle = socket.LocalAngle,
+                        LocalScale = socket.LocalScale,
                     });
                 }
             }

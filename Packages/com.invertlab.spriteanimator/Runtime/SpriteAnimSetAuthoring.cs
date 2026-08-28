@@ -348,6 +348,7 @@ namespace InvertLab.Sprites.DOTS
                     FrameIndex = src.FrameIndex,
                     LocalPosition = src.LocalPosition,
                     LocalAngle = src.LocalAngle,
+                    LocalScale = src.LocalScale,
                 };
             }
             return result;
@@ -446,6 +447,9 @@ namespace InvertLab.Sprites.DOTS
                             FrameIndex = socket.FrameIndex,
                             LocalPosition = position,
                             LocalAngle = socket.LocalAngle,
+                            LocalScale = new float2(
+                                SpriteSocketKeys.ResolvedScale(socket.LocalScale).x,
+                                SpriteSocketKeys.ResolvedScale(socket.LocalScale).y),
                             Name = socket.Name,
                         };
                     }

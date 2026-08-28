@@ -223,6 +223,7 @@ namespace InvertLab.Sprites.DOTS
                     Name = socket.Name,
                     LocalPosition = socket.LocalPosition,
                     LocalAngle = socket.LocalAngle,
+                    LocalScale = socket.LocalScale,
                 });
             }
         }

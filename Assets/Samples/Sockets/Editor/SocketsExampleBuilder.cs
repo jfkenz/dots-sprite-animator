@@ -12,10 +12,10 @@ namespace InvertLab.Sprites.DOTS.Editor
     {
         const string Root = "Assets/Samples/Sockets";
         const string ProfilePath = Root + "/SocketsProfile.asset";
+        const string SwordMaterialPath = Root + "/SocketsSword.mat";
         const string ScenePath = Root + "/SocketsExample.unity";
         const string SubScenePath = Root + "/SocketsExample_SubScene.unity";
         const string CharacterPath = "Assets/Samples/Showcase/Sword Character Prototype_All Frames.png";
-        const string SwordPath = "Assets/Samples/Showcase/sword_angles.png";
 
         [MenuItem("Tools/DOTS Sprite Animator/Build Sockets Sample")]
         public static void Build()
@@ -25,12 +25,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 throw new System.InvalidOperationException("Missing Showcase character texture: " + CharacterPath);
 
             var profile = BuildProfile(character);
-            BuildSubScene(profile);
+            var swordMaterial = BuildSwordMaterial();
+            BuildSubScene(profile, swordMaterial);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(
+                SubScenePath,
+                ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
             BuildMainScene(profile);
 
             AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             Selection.activeObject = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
             Debug.Log("[Sockets Sample] Built " + ScenePath + ". Enter Play; use [ ], 1, or 2.");
         }
@@ -73,6 +77,28 @@ namespace InvertLab.Sprites.DOTS.Editor
             return profile;
         }
 
+        static Material BuildSwordMaterial()
+        {
+            var material = AssetDatabase.LoadAssetAtPath<Material>(SwordMaterialPath);
+            var shader = Shader.Find("DOTS Sprite Animator/Sprite Unlit 2D");
+            if (shader == null)
+                throw new System.InvalidOperationException("Missing DOTS Sprite Animator sprite shader.");
+
+            if (material == null)
+            {
+                material = new Material(shader);
+                AssetDatabase.CreateAsset(material, SwordMaterialPath);
+            }
+            else
+            {
+                material.shader = shader;
+            }
+
+            material.SetColor("_Color", new Color(0.72f, 0.86f, 1f, 1f));
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
         static SpriteClipDef MakeClip(
             string name,
             int row,
@@ -106,7 +132,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             return clip;
         }
 
-        static void BuildSubScene(ScriptableSpriteSheetProfile profile)
+        static void BuildSubScene(ScriptableSpriteSheetProfile profile, Material swordMaterial)
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -128,6 +154,21 @@ namespace InvertLab.Sprites.DOTS.Editor
             var sheet = profile.Data.SheetForClip(profile.Data.Clips[0]);
             float worldSize = SpriteSheetProfile.GetWorldHeight(sheet);
             quad.transform.localScale = new Vector3(worldSize, worldSize, worldSize);
+
+            var itemRoot = new GameObject("Weapon Socket Item");
+            itemRoot.transform.SetParent(quad.transform, false);
+            itemRoot.transform.localPosition = new Vector3(0f, 0f, -0.1f);
+            var attachment = itemRoot.AddComponent<SpriteSocketAttachmentAuthoring>();
+            attachment.Player = set;
+            attachment.SocketName = "Weapon";
+
+            var swordVisual = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            swordVisual.name = "Sword Visual";
+            Object.DestroyImmediate(swordVisual.GetComponent<Collider>());
+            swordVisual.transform.SetParent(itemRoot.transform, false);
+            swordVisual.transform.localPosition = new Vector3(0f, 0.32f, 0f);
+            swordVisual.transform.localScale = new Vector3(0.08f, 0.72f, 1f);
+            swordVisual.GetComponent<MeshRenderer>().sharedMaterial = swordMaterial;
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, SubScenePath);
@@ -151,28 +192,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             subScene.SceneAsset = AssetDatabase.LoadAssetAtPath<SceneAsset>(SubScenePath);
             subScene.AutoLoadScene = true;
 
-            var itemRoot = new GameObject("Weapon Socket Item");
-            itemRoot.transform.position = new Vector3(0f, 0f, -0.1f);
-
-            var swordVisual = new GameObject("Sword Visual");
-            swordVisual.transform.SetParent(itemRoot.transform, false);
-            swordVisual.transform.localPosition = new Vector3(0f, 0.35f, 0f);
-            swordVisual.transform.localScale = Vector3.one * 0.38f;
-            var swordRenderer = swordVisual.AddComponent<SpriteRenderer>();
-            swordRenderer.sprite = AssetDatabase.LoadAllAssetsAtPath(SwordPath)
-                .OfType<Sprite>()
-                .OrderBy(sprite => sprite.name)
-                .FirstOrDefault();
-            swordRenderer.sortingOrder = 10;
-
-            if (swordRenderer.sprite == null)
-                throw new System.InvalidOperationException("Missing sliced sword sprite: " + SwordPath);
-
             var controllerObject = new GameObject("Sockets Sample Controller");
             var controller = controllerObject.AddComponent<SocketsExampleController>();
             controller.Profile = profile;
-            controller.SocketItem = itemRoot.transform;
-            controller.SocketName = "Weapon";
             controller.ClipIndex = 0;
 
             EditorSceneManager.MarkSceneDirty(scene);

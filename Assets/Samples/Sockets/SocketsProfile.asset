@@ -86,34 +86,42 @@ MonoBehaviour:
         FrameIndex: 0
         LocalPosition: {x: -5, y: -4}
         LocalAngle: -82
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 1
         LocalPosition: {x: -5, y: -4}
         LocalAngle: -80
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 2
         LocalPosition: {x: -5, y: -5}
         LocalAngle: -78
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 3
         LocalPosition: {x: -5, y: -5}
         LocalAngle: -76
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 4
         LocalPosition: {x: -5, y: -5}
         LocalAngle: -78
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 5
         LocalPosition: {x: -5, y: -5}
         LocalAngle: -80
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 6
         LocalPosition: {x: -5, y: -4}
         LocalAngle: -82
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 7
         LocalPosition: {x: -5, y: -4}
         LocalAngle: -84
+        LocalScale: {x: 1, y: 1}
     - Name: Attack
       SheetIndex: 0
       Row: 1
@@ -174,36 +182,46 @@ MonoBehaviour:
         FrameIndex: 0
         LocalPosition: {x: -9, y: 1}
         LocalAngle: -100
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 1
         LocalPosition: {x: 14, y: -2}
         LocalAngle: -45
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 2
         LocalPosition: {x: 12, y: -4}
         LocalAngle: -5
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 3
         LocalPosition: {x: 8, y: -4}
         LocalAngle: 30
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 4
         LocalPosition: {x: 7, y: -5}
         LocalAngle: 62
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 5
         LocalPosition: {x: 6, y: -5}
         LocalAngle: 92
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 6
         LocalPosition: {x: 6, y: -5}
         LocalAngle: 118
+        LocalScale: {x: 1, y: 1}
       - Name: Weapon
         FrameIndex: 7
         LocalPosition: {x: 7, y: -5}
         LocalAngle: 145
+        LocalScale: {x: 1, y: 1}
     Events: []
     Hitboxes: []
+    SocketCatalog:
+      Items: []
     OnionSettingsInitialized: 1
     OnionSkinEnabled: 0
     OnionPastFrames: 3

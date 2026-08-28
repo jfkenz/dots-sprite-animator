@@ -1,10 +1,10 @@
 {
     "Sheet": {
-        "instanceID": 568105584918834992
+        "instanceID": 568105584918834980
     },
-    "Columns": 11,
-    "Rows": 28,
-    "PixelsPerUnit": 65.30612182617188,
+    "Columns": 8,
+    "Rows": 8,
+    "PixelsPerUnit": 100.0,
     "Pivot": {
         "x": 0.5,
         "y": 0.5
@@ -13,7 +13,7 @@
         {
             "Name": "Sword Character Prototype_All Frames",
             "Texture": {
-                "instanceID": 568105584918834988
+                "instanceID": 568105584918834980
             },
             "Columns": 8,
             "Rows": 8,
@@ -26,7 +26,7 @@
         {
             "Name": "Prototype Character_All Frames",
             "Texture": {
-                "instanceID": 568105584918834992
+                "instanceID": 568105584918835252
             },
             "Columns": 11,
             "Rows": 28,
@@ -174,7 +174,112 @@
             ],
             "FacingGroup": "",
             "Facing": 255,
-            "Sockets": []
+            "Sockets": [
+                {
+                    "Name": "bot",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": 20.0,
+                        "y": 8.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 0.08403659611940384,
+                        "y": 0.08403659611940384
+                    }
+                },
+                {
+                    "Name": "bot",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": -14.0,
+                        "y": 4.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                },
+                {
+                    "Name": "bot",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": 91.0,
+                        "y": -4.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                },
+                {
+                    "Name": "bot",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": 0.0,
+                        "y": -31.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                },
+                {
+                    "Name": "bot",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": 22.0,
+                        "y": -12.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                },
+                {
+                    "Name": "bot",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": 17.0,
+                        "y": 12.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                },
+                {
+                    "Name": "bot",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": -26.0,
+                        "y": 16.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                },
+                {
+                    "Name": "bot",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": -29.0,
+                        "y": -28.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                }
+            ]
         },
         {
             "Name": "attack1",
@@ -1119,20 +1224,52 @@
             "SheetIndex": 1,
             "Row": 0,
             "Frames": [
-                5
+                5,
+                0,
+                1,
+                2,
+                3
             ],
             "FrameRate": 8.0,
             "WrapMode": 0,
             "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
                 1.0
             ],
             "EventIds": [
+                0,
+                0,
+                0,
+                0,
                 0
             ],
             "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
                 0.0
             ],
             "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
                 {
                     "x": 0.0,
                     "y": 0.0
@@ -1142,12 +1279,36 @@
                 {
                     "x": 1.0,
                     "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
                 }
             ],
             "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
                 0.0
             ],
             "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
                 0
             ],
             "FacingGroup": "",
@@ -1160,7 +1321,11 @@
                         "x": 0.0,
                         "y": 7.0
                     },
-                    "LocalAngle": 0.0
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
                 }
             ]
         },
@@ -3808,6 +3973,36 @@
         }
     ],
     "Hitboxes": [],
+    "SocketCatalog": {
+        "Items": [
+            {
+                "SocketName": "bot",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true
+            }
+        ]
+    },
     "OnionSettingsInitialized": true,
     "OnionSkinEnabled": false,
     "OnionPastFrames": 0,
