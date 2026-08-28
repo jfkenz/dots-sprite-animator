@@ -1,17 +1,46 @@
 {
     "Sheet": {
-        "instanceID": 568105584918848868
+        "instanceID": 568105584918848480
     },
-    "Columns": 8,
-    "Rows": 8,
-    "PixelsPerUnit": 100.0,
+    "Columns": 11,
+    "Rows": 28,
+    "PixelsPerUnit": 65.30612182617188,
     "Pivot": {
         "x": 0.5,
         "y": 0.5
     },
+    "Sheets": [
+        {
+            "Name": "Sword Character Prototype_All Frames",
+            "Texture": {
+                "instanceID": 568105584918848868
+            },
+            "Columns": 8,
+            "Rows": 8,
+            "PixelsPerUnit": 100.0,
+            "Pivot": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "Name": "Prototype Character_All Frames",
+            "Texture": {
+                "instanceID": 568105584918848480
+            },
+            "Columns": 11,
+            "Rows": 28,
+            "PixelsPerUnit": 65.30612182617188,
+            "Pivot": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        }
+    ],
     "Clips": [
         {
             "Name": "idlle",
+            "SheetIndex": 0,
             "Row": 0,
             "Frames": [
                 0,
@@ -149,6 +178,7 @@
         },
         {
             "Name": "attack1",
+            "SheetIndex": 0,
             "Row": 1,
             "Frames": [
                 0,
@@ -286,6 +316,7 @@
         },
         {
             "Name": "attack2",
+            "SheetIndex": 0,
             "Row": 2,
             "Frames": [
                 0,
@@ -423,6 +454,7 @@
         },
         {
             "Name": "attack3",
+            "SheetIndex": 0,
             "Row": 3,
             "Frames": [
                 0,
@@ -560,6 +592,7 @@
         },
         {
             "Name": "attack4",
+            "SheetIndex": 0,
             "Row": 4,
             "Frames": [
                 0,
@@ -697,6 +730,7 @@
         },
         {
             "Name": "attack5",
+            "SheetIndex": 0,
             "Row": 5,
             "Frames": [
                 0,
@@ -806,6 +840,7 @@
         },
         {
             "Name": "attack6",
+            "SheetIndex": 0,
             "Row": 6,
             "Frames": [
                 0,
@@ -943,6 +978,7 @@
         },
         {
             "Name": "attack7",
+            "SheetIndex": 0,
             "Row": 7,
             "Frames": [
                 0,
@@ -1077,6 +1113,2666 @@
             "FacingGroup": "",
             "Facing": 255,
             "Sockets": []
+        },
+        {
+            "Name": "Clip 9",
+            "SheetIndex": 1,
+            "Row": 0,
+            "Frames": [
+                5
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0
+            ],
+            "EventIds": [
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0
+            ],
+            "FrameTweenModes": [
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 10",
+            "SheetIndex": 1,
+            "Row": 1,
+            "Frames": [
+                0,
+                1
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 11",
+            "SheetIndex": 1,
+            "Row": 2,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 12",
+            "SheetIndex": 1,
+            "Row": 3,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 13",
+            "SheetIndex": 1,
+            "Row": 4,
+            "Frames": [
+                0,
+                1,
+                2
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 14",
+            "SheetIndex": 1,
+            "Row": 5,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 15",
+            "SheetIndex": 1,
+            "Row": 6,
+            "Frames": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 16",
+            "SheetIndex": 1,
+            "Row": 7,
+            "Frames": [
+                0,
+                1,
+                2
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 17",
+            "SheetIndex": 1,
+            "Row": 8,
+            "Frames": [
+                0,
+                1,
+                2
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 18",
+            "SheetIndex": 1,
+            "Row": 9,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 19",
+            "SheetIndex": 1,
+            "Row": 10,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 20",
+            "SheetIndex": 1,
+            "Row": 11,
+            "Frames": [
+                0,
+                1,
+                2
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 21",
+            "SheetIndex": 1,
+            "Row": 12,
+            "Frames": [
+                0,
+                1,
+                2
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 22",
+            "SheetIndex": 1,
+            "Row": 13,
+            "Frames": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 23",
+            "SheetIndex": 1,
+            "Row": 14,
+            "Frames": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 24",
+            "SheetIndex": 1,
+            "Row": 15,
+            "Frames": [
+                0,
+                1,
+                2
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 25",
+            "SheetIndex": 1,
+            "Row": 16,
+            "Frames": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 26",
+            "SheetIndex": 1,
+            "Row": 17,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 27",
+            "SheetIndex": 1,
+            "Row": 18,
+            "Frames": [
+                0,
+                1,
+                2
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 28",
+            "SheetIndex": 1,
+            "Row": 19,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 29",
+            "SheetIndex": 1,
+            "Row": 20,
+            "Frames": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 30",
+            "SheetIndex": 1,
+            "Row": 21,
+            "Frames": [
+                0,
+                1,
+                2
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 31",
+            "SheetIndex": 1,
+            "Row": 22,
+            "Frames": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 32",
+            "SheetIndex": 1,
+            "Row": 23,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 33",
+            "SheetIndex": 1,
+            "Row": 24,
+            "Frames": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 34",
+            "SheetIndex": 1,
+            "Row": 25,
+            "Frames": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 35",
+            "SheetIndex": 1,
+            "Row": 26,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
+        },
+        {
+            "Name": "Clip 36",
+            "SheetIndex": 1,
+            "Row": 27,
+            "Frames": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10
+            ],
+            "FrameRate": 8.0,
+            "WrapMode": 0,
+            "FrameDurationScales": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "EventIds": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "EventNormalizedTimes": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "OnionOffsets": [
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            ],
+            "FrameScales": [
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                {
+                    "x": 1.0,
+                    "y": 1.0
+                }
+            ],
+            "FrameRotations": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "FrameTweenModes": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "FacingGroup": "",
+            "Facing": 255,
+            "Sockets": []
         }
     ],
     "Events": [
@@ -1104,8 +3800,8 @@
     "Hitboxes": [],
     "OnionSettingsInitialized": true,
     "OnionSkinEnabled": false,
-    "OnionPastFrames": 3,
-    "OnionFutureFrames": 3,
+    "OnionPastFrames": 0,
+    "OnionFutureFrames": 0,
     "ShowOnionLayerNumbers": true,
     "TimelineHitShape": 0,
     "TimelineHitPolygon": [

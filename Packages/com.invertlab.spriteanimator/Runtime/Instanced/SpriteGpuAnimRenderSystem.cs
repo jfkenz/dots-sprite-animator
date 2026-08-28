@@ -78,6 +78,9 @@ namespace InvertLab.Sprites.DOTS
             var mat = SpriteGpuAnimResources.Material;
             mat.SetBuffer("_InstanceData", SpriteGpuAnimResources.Buffer);
             mat.SetFloat("_Now", Time.unscaledTime);
+            mat.SetFloat("_UseSharedClip", SpriteGpuAnimResources.UseSharedClip ? 1f : 0f);
+            mat.SetVector("_SharedCell", (Vector4)SpriteGpuAnimResources.SharedCell);
+            mat.SetVector("_SharedAnim", (Vector4)SpriteGpuAnimResources.SharedAnim);
 
             var bounds = layoutXy != 0
                 ? new Bounds(Vector3.zero, new Vector3(4000f, 4000f, 200f))

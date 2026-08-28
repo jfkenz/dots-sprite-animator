@@ -36,6 +36,7 @@ namespace InvertLab.Sprites.DOTS
         public struct ClipAuthoring
         {
             public string Name;      // "Idle", "Run", ...
+            public int    SheetIndex; // 0-based into SpriteSheetProfile.Sheets
             public int    Row;       // which sheet row (0 = top row)
             public int[]  Frames;    // column indices, in play order (e.g. 0 1 2 3)
             public float  FrameRate; // frames per second
@@ -81,11 +82,27 @@ namespace InvertLab.Sprites.DOTS
             if (data == null)
                 return false;
 
-            if (data.Sheet != null)
-                Sheet = data.Sheet;
+            data.EnsureSheets();
+            SpriteSheetDef bakeSheet = null;
+            if (data.Clips != null && data.Clips.Count > 0)
+                bakeSheet = data.SheetForClip(data.Clips[0]);
+            if (bakeSheet == null && data.Sheets != null && data.Sheets.Count > 0)
+                bakeSheet = data.Sheets[0];
 
-            Columns = Mathf.Max(1, data.Columns);
-            Rows = Mathf.Max(1, data.Rows);
+            if (bakeSheet != null)
+            {
+                if (bakeSheet.Texture != null)
+                    Sheet = bakeSheet.Texture;
+                Columns = Mathf.Max(1, bakeSheet.Columns);
+                Rows = Mathf.Max(1, bakeSheet.Rows);
+            }
+            else
+            {
+                if (data.Sheet != null)
+                    Sheet = data.Sheet;
+                Columns = Mathf.Max(1, data.Columns);
+                Rows = Mathf.Max(1, data.Rows);
+            }
 
             if (data.Clips != null && data.Clips.Count > 0)
                 Clips = CopyClips(data.Clips);
@@ -98,6 +115,34 @@ namespace InvertLab.Sprites.DOTS
             RefreshQuadPreview();
 #endif
             return true;
+        }
+
+        public bool TryGetClipSheet(int clipIndex, out Texture2D texture, out int columns, out int rows, out float ppu)
+        {
+            texture = Sheet;
+            columns = Mathf.Max(1, Columns);
+            rows = Mathf.Max(1, Rows);
+            ppu = SpriteSheetProfile.DefaultPixelsPerUnit;
+            var data = Profile?.Data;
+            if (data != null)
+            {
+                data.EnsureSheets();
+                int sheetIndex = 0;
+                if (Clips != null && clipIndex >= 0 && clipIndex < Clips.Length)
+                    sheetIndex = Clips[clipIndex].SheetIndex;
+                else if (data.Clips != null && clipIndex >= 0 && clipIndex < data.Clips.Count)
+                    sheetIndex = data.Clips[clipIndex].SheetIndex;
+                var def = data.SheetAt(sheetIndex);
+                if (def != null)
+                {
+                    if (def.Texture != null)
+                        texture = def.Texture;
+                    columns = Mathf.Max(1, def.Columns);
+                    rows = Mathf.Max(1, def.Rows);
+                    ppu = SpriteSheetProfile.GetPixelsPerUnit(def);
+                }
+            }
+            return texture != null;
         }
 
         void OnValidate()
@@ -141,7 +186,27 @@ namespace InvertLab.Sprites.DOTS
                 return;
             }
 
-            if (Sheet == null)
+            Texture2D previewSheet = Sheet;
+            int previewColumns = Mathf.Max(1, Columns);
+            int previewRows = Mathf.Max(1, Rows);
+            SpriteSheetDef clipSheet = null;
+            if (Profile?.Data != null)
+            {
+                var data = Profile.Data;
+                data.EnsureSheets();
+                if (Clips != null && clipIndex >= 0 && clipIndex < Clips.Length)
+                    clipSheet = data.SheetAt(Clips[clipIndex].SheetIndex);
+                if (clipSheet?.Texture == null)
+                    clipSheet = data.SheetAt(0);
+                if (clipSheet?.Texture != null)
+                {
+                    previewSheet = clipSheet.Texture;
+                    previewColumns = Mathf.Max(1, clipSheet.Columns);
+                    previewRows = Mathf.Max(1, clipSheet.Rows);
+                }
+            }
+
+            if (previewSheet == null)
                 return;
 
             var shader = Shader.Find(SpriteShaderLibrary.UnlitShader);
@@ -165,8 +230,8 @@ namespace InvertLab.Sprites.DOTS
             if (kw.isValid)
                 mat.SetKeyword(kw, false);
 
-            int cols = Mathf.Max(1, Columns);
-            int rows = Mathf.Max(1, Rows);
+            int cols = previewColumns;
+            int rows = previewRows;
             int col = 0;
             int row = 0;
             if (Clips != null && Clips.Length > 0)
@@ -194,17 +259,33 @@ namespace InvertLab.Sprites.DOTS
             float h = 1f / rows;
             var cropST = new Vector4(w, h, col * w, 1f - (row + 1) * h);
 
-            mat.SetTexture("_MainTex", Sheet);
+            mat.SetTexture("_MainTex", previewSheet);
             mat.SetColor("_Color", Tint);
             mat.SetVector("_CropST", cropST);
 
             var block = new MaterialPropertyBlock();
-            block.SetTexture("_MainTex", Sheet);
+            block.SetTexture("_MainTex", previewSheet);
             block.SetColor("_Color", Tint);
             block.SetVector("_CropST", cropST);
             renderer.SetPropertyBlock(block);
 
             renderer.enabled = true;
+
+            // 1x1 Quad crop is UV-only; scale the transform so PPU is visible in Scene view.
+            if (clipSheet != null &&
+                SpriteSheetProfile.TryGetCellPixels(clipSheet, out float cellW, out float cellH))
+            {
+                float ppu = SpriteSheetProfile.GetPixelsPerUnit(clipSheet);
+                float sx = cellW / ppu;
+                float sy = cellH / ppu;
+                var scale = transform.localScale;
+                if (!Mathf.Approximately(scale.x, sx) || !Mathf.Approximately(scale.y, sy))
+                {
+                    scale.x = sx;
+                    scale.y = sy;
+                    transform.localScale = scale;
+                }
+            }
         }
 #endif
 
@@ -220,6 +301,7 @@ namespace InvertLab.Sprites.DOTS
                 result[i] = new ClipAuthoring
                 {
                     Name = src.Name,
+                    SheetIndex = src.SheetIndex,
                     Row = src.Row,
                     Frames = CopyArray(src.Frames),
                     FrameRate = src.FrameRate,
@@ -276,8 +358,16 @@ namespace InvertLab.Sprites.DOTS
             public override void Bake(SpriteAnimSetAuthoring authoring)
             {
                 var profile = authoring.Profile != null ? authoring.Profile.Data : null;
-                bool useProfile = profile?.Sheet != null && profile.Clips != null && profile.Clips.Count > 0;
-                var sheet = useProfile ? profile.Sheet : authoring.Sheet;
+                if (profile != null)
+                    profile.EnsureSheets();
+
+                SpriteSheetDef bakeSheetDef = null;
+                bool useProfile = profile?.Clips != null && profile.Clips.Count > 0;
+                if (useProfile)
+                    bakeSheetDef = profile.SheetForClip(profile.Clips[0]);
+                var sheet = useProfile
+                    ? (bakeSheetDef?.Texture ?? profile.Sheet)
+                    : authoring.Sheet;
                 int clipCount = useProfile ? profile.Clips.Count : authoring.Clips?.Length ?? 0;
                 if (sheet == null || clipCount == 0)
                     return;
@@ -292,13 +382,19 @@ namespace InvertLab.Sprites.DOTS
                 // (no GameObjects graphics components involved)
 
                 // ---- clip blob ----
-                int cols = Mathf.Max(1, useProfile ? profile.Columns : authoring.Columns);
-                int rows = Mathf.Max(1, useProfile ? profile.Rows : authoring.Rows);
                 var inputs = new SpriteAnimSetBuilder.ClipInput[clipCount];
                 for (int i = 0; i < clipCount; i++)
                 {
                     var profileClip = useProfile ? profile.Clips[i] : null;
                     var authorClip = useProfile ? default : authoring.Clips[i];
+                    var clipSheet = useProfile ? profile.SheetForClip(profileClip) : null;
+                    int cols = Mathf.Max(1, clipSheet != null ? clipSheet.Columns : authoring.Columns);
+                    int rows = Mathf.Max(1, clipSheet != null ? clipSheet.Rows : authoring.Rows);
+                    float bakePpu = clipSheet != null
+                        ? SpriteSheetProfile.GetPixelsPerUnit(clipSheet)
+                        : 1f;
+                    if (clipSheet?.Texture != null)
+                        DependsOn(clipSheet.Texture);
                     var frameCols = useProfile ? profileClip.Frames : authorClip.Frames;
                     frameCols = frameCols != null && frameCols.Length > 0
                         ? frameCols
@@ -316,7 +412,7 @@ namespace InvertLab.Sprites.DOTS
                     {
                         slots[f] = Mathf.Clamp(row, 0, rows - 1) * cols + Mathf.Clamp(frameCols[f], 0, cols - 1);
                         Vector2 offset = useProfile && profileClip.OnionOffsets != null && f < profileClip.OnionOffsets.Length
-                            ? profileClip.OnionOffsets[f] / Mathf.Max(0.01f, profile.PixelsPerUnit)
+                            ? profileClip.OnionOffsets[f] / bakePpu
                             : !useProfile && authorClip.FrameOffsets != null && f < authorClip.FrameOffsets.Length
                                 ? authorClip.FrameOffsets[f]
                                 : Vector2.zero;
@@ -342,8 +438,8 @@ namespace InvertLab.Sprites.DOTS
                         var socket = useProfile ? profileClip.Sockets[s] : authorClip.Sockets[s];
                         float2 position = useProfile
                             ? new float2(
-                                socket.LocalPosition.x / Mathf.Max(0.01f, profile.PixelsPerUnit),
-                                socket.LocalPosition.y / Mathf.Max(0.01f, profile.PixelsPerUnit))
+                                socket.LocalPosition.x / bakePpu,
+                                socket.LocalPosition.y / bakePpu)
                             : new float2(socket.LocalPosition.x, socket.LocalPosition.y);
                         socketInputs[s] = new SpriteAnimSetBuilder.ClipInput.FrameSocketInput
                         {

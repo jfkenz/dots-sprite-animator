@@ -6,6 +6,8 @@ namespace InvertLab.Sprites.DOTS.Editor
     [CustomEditor(typeof(SpriteAnimPlayerAuthoring))]
     public sealed class SpriteAnimPlayerAuthoringEditor : UnityEditor.Editor
     {
+        const int ButtonsPerRow = 8;
+
         public override bool RequiresConstantRepaint()
         {
             var player = (SpriteAnimPlayerAuthoring)target;
@@ -20,14 +22,16 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             var authoring = (SpriteAnimPlayerAuthoring)target;
             var set = authoring.GetComponent<SpriteAnimSetAuthoring>();
+            int clipCount = set != null && set.Clips != null ? set.Clips.Length : 0;
             string clipName = "(none)";
-            if (set != null && set.Clips != null &&
-                authoring.ClipIndex >= 0 && authoring.ClipIndex < set.Clips.Length)
+            if (clipCount > 0 && authoring.ClipIndex >= 0 && authoring.ClipIndex < clipCount)
             {
                 clipName = string.IsNullOrEmpty(set.Clips[authoring.ClipIndex].Name)
                     ? ("clip" + authoring.ClipIndex)
                     : set.Clips[authoring.ClipIndex].Name;
             }
+
+            HandleInspectorClipKeys(authoring, clipCount);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Current", $"{clipName}  frame {authoring.Frame}");
@@ -55,40 +59,98 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
 
-            if (set != null && set.Clips != null && set.Clips.Length > 0)
+            if (clipCount > 0)
             {
-                var names = new string[set.Clips.Length];
-                for (int i = 0; i < names.Length; i++)
+                var names = new string[clipCount];
+                for (int i = 0; i < clipCount; i++)
                 {
                     names[i] = (i + 1) + "  " + (string.IsNullOrEmpty(set.Clips[i].Name)
                         ? ("clip" + i)
                         : set.Clips[i].Name);
                 }
 
-                int current = Mathf.Clamp(authoring.ClipIndex, 0, names.Length - 1);
+                int current = Mathf.Clamp(authoring.ClipIndex, 0, clipCount - 1);
                 int next = EditorGUILayout.Popup("Clip", current, names);
                 if (next != current)
                     PlayClip(authoring, next);
 
-                int shown = Mathf.Min(8, set.Clips.Length);
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    for (int i = 0; i < shown; i++)
+                    if (GUILayout.Button("[", GUILayout.Width(28), GUILayout.Height(22)))
+                        StepClip(authoring, clipCount, -1);
+
+                    EditorGUI.BeginChangeCheck();
+                    int typed = EditorGUILayout.IntField(current + 1, GUILayout.Width(48), GUILayout.Height(22));
+                    if (EditorGUI.EndChangeCheck())
                     {
-                        GUI.backgroundColor = i == authoring.ClipIndex
-                            ? new Color(0.45f, 0.85f, 0.45f)
-                            : Color.white;
-                        if (GUILayout.Button((i + 1).ToString(), GUILayout.Height(22)))
-                            PlayClip(authoring, i);
+                        int index = Mathf.Clamp(typed - 1, 0, clipCount - 1);
+                        if (index != authoring.ClipIndex)
+                            PlayClip(authoring, index);
                     }
-                    GUI.backgroundColor = Color.white;
+
+                    if (GUILayout.Button("]", GUILayout.Width(28), GUILayout.Height(22)))
+                        StepClip(authoring, clipCount, 1);
+
+                    GUILayout.Label($"{current + 1} / {clipCount}", GUILayout.Width(56));
+                }
+
+                int rows = (clipCount + ButtonsPerRow - 1) / ButtonsPerRow;
+                for (int row = 0; row < rows; row++)
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        int start = row * ButtonsPerRow;
+                        int end = Mathf.Min(start + ButtonsPerRow, clipCount);
+                        for (int i = start; i < end; i++)
+                        {
+                            GUI.backgroundColor = i == authoring.ClipIndex
+                                ? new Color(0.45f, 0.85f, 0.45f)
+                                : Color.white;
+                            if (GUILayout.Button((i + 1).ToString(), GUILayout.Height(22)))
+                                PlayClip(authoring, i);
+                        }
+                        GUI.backgroundColor = Color.white;
+                    }
                 }
             }
 
             EditorGUILayout.HelpBox(
-                "Play / keys 1-8 switch this Quad and every spawned crowd sprite. " +
-                "Same clips as SpriteAnimSetAuthoring.",
+                "Buttons match the clip count. [ and ] step clips. Type a 1-based number. " +
+                "Play switches this Quad and every spawned crowd sprite.",
                 MessageType.Info);
+        }
+
+        static void HandleInspectorClipKeys(SpriteAnimPlayerAuthoring authoring, int clipCount)
+        {
+            if (clipCount <= 0)
+                return;
+            var e = Event.current;
+            if (e == null || e.type != EventType.KeyDown)
+                return;
+            if (EditorGUIUtility.editingTextField)
+                return;
+
+            if (e.keyCode == KeyCode.LeftBracket)
+            {
+                StepClip(authoring, clipCount, -1);
+                e.Use();
+            }
+            else if (e.keyCode == KeyCode.RightBracket)
+            {
+                StepClip(authoring, clipCount, 1);
+                e.Use();
+            }
+        }
+
+        static void StepClip(SpriteAnimPlayerAuthoring authoring, int clipCount, int delta)
+        {
+            if (clipCount <= 0)
+                return;
+            int index = authoring.ClipIndex + delta;
+            index %= clipCount;
+            if (index < 0)
+                index += clipCount;
+            PlayClip(authoring, index);
         }
 
         static void PlayClip(SpriteAnimPlayerAuthoring authoring, int clipIndex)

@@ -49,6 +49,9 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
             float _Cutoff;
             float _Now;
             float _LayoutXy;
+            float _UseSharedClip;
+            float4 _SharedCell;
+            float4 _SharedAnim;
 
             struct v2f
             {
@@ -87,6 +90,8 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                 };
 
                 SpriteGpuInstanceData d = _InstanceData[iid];
+                float4 cell = _UseSharedClip > 0.5 ? _SharedCell : d.Cell;
+                float4 anim = _UseSharedClip > 0.5 ? _SharedAnim : d.Anim;
                 float2 c = QUAD[vid];
 
                 float3 wpos;
@@ -103,7 +108,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                     wpos.z = d.PosScale.y - c.y * d.PosScale.z;
                 }
 
-                float2 origin = FrameUvOrigin(d.Cell, d.Anim);
+                float2 origin = FrameUvOrigin(cell, anim);
 
                 float2 uv = c + 0.5;
                 uv.x = lerp(uv.x, 1.0 - uv.x, saturate(d.Flip.x));
@@ -111,7 +116,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
 
                 v2f o;
                 o.pos = TransformObjectToHClip(wpos);
-                o.uv = origin + uv * d.Cell.xy;
+                o.uv = origin + uv * cell.xy;
                 o.col = d.Color;
                 return o;
             }

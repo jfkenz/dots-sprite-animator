@@ -50,7 +50,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             EditorGUILayout.HelpBox(
                 "GPU + Burst is on by default: one shader draw, Burst spawn/place, no CPU tick. " +
-                "Assign Source, press Play, spawn. Keys 1-8 switch clips.",
+                "Assign Source, press Play, spawn. Keys 1-9 / 0, [ and ] switch clips.",
                 MessageType.Info);
         }
     }

@@ -68,12 +68,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
-        const string PackageVersion = "0.7.1";
+        const string PackageVersion = "0.8.0";
         const float ToolbarHeight = 48f;
         const float TimelineHeight = 226f;
-        const float DefaultClipPanelWidth = 210f;
+        const float DefaultClipPanelWidth = 220f;
         const float DefaultInspectorPanelWidth = 340f;
-        const float MinClipPanelWidth = 180f;
+        const float MinClipPanelWidth = 196f;
         const float MinPreviewPanelWidth = 220f;
         const float MinInspectorPanelWidth = 260f;
         const float Gap = 8f;
@@ -85,7 +85,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float ColliderRotateHandleDistance = 26f;
         const float ColliderMinScreenHalf = 6f;
         const string ClipRenameControl = "BallForgeSpriteAnimator.ClipRename";
+        const string SheetRenameControl = "InvertLabSpriteAnimator.SheetRename";
         const string StringFieldControlPrefix = "BallForgeSpriteAnimator.Text.";
+        const float SheetRowHeight = 38f;
+        const float NestedClipRowHeight = 36f;
+        const float ClipNestIndent = 14f;
 
         static readonly Color WindowColor = new(0.075f, 0.086f, 0.105f);
         static readonly Color PanelColor = new(0.105f, 0.12f, 0.145f);
@@ -107,6 +111,14 @@ namespace InvertLab.Sprites.DOTS.Editor
         readonly List<string> _undoNames = new();
         readonly List<string> _redoNames = new();
         int _selectedClip;
+        int _selectedSheet;
+        bool _showTimelineInputHelp;
+        bool _sheetFoldInitialized;
+        readonly HashSet<int> _collapsedSheets = new();
+        int _renamingSheet = -1;
+        string _renameSheetValue = string.Empty;
+        string _renameSheetOriginal = string.Empty;
+        bool _focusSheetRename;
         int _selectedFrame;
         readonly HashSet<int> _selectedFrames = new();
         int _selectedEventFrame = -1;
@@ -403,8 +415,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 if (_profile?.Clips == null || _profile.Clips.Count == 0)
                     return null;
-                _selectedClip = Mathf.Clamp(_selectedClip, 0, _profile.Clips.Count - 1);
+                if (_selectedClip < 0 || _selectedClip >= _profile.Clips.Count)
+                    return null;
                 var clip = _profile.Clips[_selectedClip];
+                if (clip == null)
+                    return null;
                 clip.EnsureFrameData();
                 _selectedFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
                 EnsureFrameSelection(clip.Frames.Length);
@@ -574,7 +589,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 SpriteAnimatorToolsMenu.OpenHelp();
 
             var saveRect = new Rect(rect.xMax - 154f, 10f, 140f, 28f);
-            using (new EditorGUI.DisabledScope(_profile.Sheet == null))
+            using (new EditorGUI.DisabledScope(!CanSaveProfile()))
             {
                 if (GUI.Button(saveRect,
                     new GUIContent("Save Profile", "Save to <SheetName>_profile.asset and matching json."),
@@ -591,8 +606,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             _asset = null;
             _profile = new SpriteSheetProfile();
+            _selectedSheet = 0;
+            _sheetFoldInitialized = false;
+            _collapsedSheets.Clear();
             EnsureProfile();
-            _selectedClip = 0;
+            _selectedClip = -1;
             SelectOnlyFrame(0);
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -672,18 +690,271 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawClipBrowser(Rect rect)
         {
+            _profile.EnsureSheets(_selectedSheet);
+            if (_profile.Sheets.Count > 0)
+                _selectedSheet = Mathf.Clamp(_selectedSheet, 0, _profile.Sheets.Count - 1);
+            EnsureSheetFoldState();
+
+            int sheetCount = _profile.Sheets.Count;
+            int clipCount = _profile.Clips != null ? _profile.Clips.Count : 0;
             GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, 20f), "CLIPS", _sectionStyle);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 31f, rect.width - 24f, 16f),
-                $"{_profile.Clips.Count} animation clips", _mutedStyle);
+                $"{sheetCount} sheet{(sheetCount == 1 ? "" : "s")} · {clipCount} clip{(clipCount == 1 ? "" : "s")}",
+                _mutedStyle);
 
-            var listRect = new Rect(rect.x + 8f, rect.y + 54f, rect.width - 16f, rect.height - 100f);
-            float contentHeight = Mathf.Max(listRect.height, _profile.Clips.Count * 46f + 6f);
+            const float cardPad = 8f;
+            const float headerH = 24f;
+            const float insetMargin = 8f;
+            const float clipRowH = NestedClipRowHeight;
+            const float actionH = 28f;
+            const float addSheetH = 28f;
+            const float addSheetW = 72f;
+            const float cardGap = 6f;
+            bool stackAddSheet = sheetCount > 1;
+            const float columnFooterH = 38f;
+
+            var listRect = new Rect(rect.x + 8f, rect.y + 52f, rect.width - 16f,
+                Mathf.Max(24f, rect.height - 52f - (stackAddSheet ? columnFooterH : 4f)));
+
+            float contentHeight = 4f;
+            for (int s = 0; s < sheetCount; s++)
+            {
+                bool expanded = s == _selectedSheet;
+                int n = expanded ? CountClipsOnSheet(s) : 0;
+                float cardH = cardPad + headerH + cardPad;
+                if (expanded)
+                {
+                    float insetH = insetMargin + n * clipRowH + 4f + actionH + insetMargin;
+                    cardH = cardPad + headerH + 6f + insetH + cardPad;
+                    if (!stackAddSheet)
+                        cardH += 4f + addSheetH;
+                }
+                contentHeight += cardH + cardGap;
+            }
+            contentHeight = Mathf.Max(listRect.height, contentHeight);
+
             _clipScroll = GUI.BeginScrollView(listRect, _clipScroll,
                 new Rect(0f, 0f, listRect.width - 15f, contentHeight));
 
             var input = Event.current;
-            if (_renamingClip >= 0 && input.type == EventType.KeyDown &&
-                GUI.GetNameOfFocusedControl() == ClipRenameControl)
+            HandleBrowserRenameKeys(input);
+
+            float y = 4f;
+            float rowW = listRect.width - 21f;
+            var sheetCardColor = new Color(0.155f, 0.172f, 0.205f, 1f);
+            var clipInsetColor = new Color(0.068f, 0.078f, 0.098f, 1f);
+            var quietBorder = new Color(0.2f, 0.225f, 0.265f, 1f);
+            var insetBorder = new Color(0.155f, 0.175f, 0.21f, 1f);
+
+            for (int s = 0; s < sheetCount; s++)
+            {
+                var def = _profile.Sheets[s];
+                bool expanded = s == _selectedSheet;
+                int clipsOnSheet = CountClipsOnSheet(s);
+
+                float insetH = 0f;
+                if (expanded)
+                    insetH = insetMargin + clipsOnSheet * clipRowH + 4f + actionH + insetMargin;
+                float cardH = cardPad + headerH + cardPad;
+                if (expanded)
+                {
+                    cardH = cardPad + headerH + 6f + insetH + cardPad;
+                    if (!stackAddSheet)
+                        cardH += 4f + addSheetH;
+                }
+
+                var cardRect = new Rect(2f, y, rowW, cardH);
+                EditorGUI.DrawRect(cardRect, sheetCardColor);
+                DrawBorder(cardRect, quietBorder, 1f);
+
+                var headerRect = new Rect(cardRect.x + cardPad, cardRect.y + cardPad,
+                    cardRect.width - cardPad * 2f, headerH);
+                float countW = expanded ? 0f : 58f;
+                var nameRect = new Rect(headerRect.x, headerRect.y,
+                    Mathf.Max(20f, headerRect.width - countW), headerH);
+
+                bool renaming = s == _renamingSheet;
+                if (renaming)
+                {
+                    GUI.SetNextControlName(SheetRenameControl);
+                    _renameSheetValue = GUI.TextField(nameRect, _renameSheetValue, EditorStyles.boldLabel);
+                    if (_focusSheetRename || GUI.GetNameOfFocusedControl() != SheetRenameControl)
+                    {
+                        EditorGUI.FocusTextInControl(SheetRenameControl);
+                        if (GUI.GetNameOfFocusedControl() == SheetRenameControl)
+                            _focusSheetRename = false;
+                    }
+                }
+                else
+                {
+                    string sheetName = string.IsNullOrWhiteSpace(def?.Name)
+                        ? (def?.Texture != null && !string.IsNullOrEmpty(def.Texture.name)
+                            ? def.Texture.name
+                            : $"Sheet {s + 1}")
+                        : def.Name;
+                    GUI.Label(nameRect, new GUIContent(sheetName,
+                        "Click to select this sheet. F2 or double-click the name to rename."),
+                        EditorStyles.boldLabel);
+                }
+
+                if (!expanded)
+                {
+                    GUI.Label(new Rect(headerRect.xMax - countW, headerRect.y + 4f, countW, 16f),
+                        $"{clipsOnSheet} clip{(clipsOnSheet == 1 ? "" : "s")}", _mutedStyle);
+                }
+
+                if (!renaming && input.type == EventType.MouseDown && input.button == 0 &&
+                    headerRect.Contains(input.mousePosition))
+                {
+                    SelectSheetRow(s);
+                    if (nameRect.Contains(input.mousePosition) && input.clickCount >= 2)
+                        BeginSheetRename(s);
+                    input.Use();
+                }
+
+                if (expanded)
+                {
+                    var inset = new Rect(cardRect.x + insetMargin, headerRect.yMax + 6f,
+                        cardRect.width - insetMargin * 2f, insetH);
+                    EditorGUI.DrawRect(inset, clipInsetColor);
+                    DrawBorder(inset, insetBorder, 1f);
+
+                    float clipY = inset.y + insetMargin;
+                    if (_profile.Clips != null)
+                    {
+                        for (int i = 0; i < clipCount; i++)
+                        {
+                            var clip = _profile.Clips[i];
+                            if (clip == null || clip.SheetIndex != s)
+                                continue;
+                            clip.EnsureFrameData();
+                            var itemRect = new Rect(inset.x + 4f, clipY, inset.width - 8f, clipRowH - 2f);
+                            var clipNameRect = new Rect(itemRect.x + 8f, itemRect.y + 2f,
+                                itemRect.width - 12f, 16f);
+
+                            bool isRenamingClip = i == _renamingClip;
+                            if (isRenamingClip)
+                            {
+                                GUI.Box(itemRect, GUIContent.none, _clipSelectedStyle);
+                                GUI.SetNextControlName(ClipRenameControl);
+                                _renameClipValue = GUI.TextField(clipNameRect, _renameClipValue, EditorStyles.boldLabel);
+                                if (_focusClipRename || GUI.GetNameOfFocusedControl() != ClipRenameControl)
+                                {
+                                    EditorGUI.FocusTextInControl(ClipRenameControl);
+                                    if (GUI.GetNameOfFocusedControl() == ClipRenameControl)
+                                        _focusClipRename = false;
+                                }
+                            }
+                            else
+                            {
+                                GUI.Box(itemRect, GUIContent.none,
+                                    i == _selectedClip ? _clipSelectedStyle : _clipStyle);
+                                if (input.type == EventType.MouseDown && input.button == 0 &&
+                                    itemRect.Contains(input.mousePosition))
+                                {
+                                    SelectClipCard(i);
+                                    if (clipNameRect.Contains(input.mousePosition) && input.clickCount >= 2)
+                                        BeginClipRename(i);
+                                    input.Use();
+                                }
+                                string clipName = string.IsNullOrWhiteSpace(clip.Name) ? $"Clip {i + 1}" : clip.Name;
+                                GUI.Label(clipNameRect,
+                                    new GUIContent(clipName, "Click to select. F2 or double-click the name to rename."),
+                                    EditorStyles.boldLabel);
+                            }
+                            GUI.Label(new Rect(itemRect.x + 8f, itemRect.y + 18f, itemRect.width - 12f, 13f),
+                                $"{clip.Frames.Length} frames   {clip.FrameRate:F1} fps", _mutedStyle);
+                            clipY += clipRowH;
+                        }
+                    }
+
+                    var actionBar = new Rect(inset.x + 4f, inset.yMax - insetMargin - actionH,
+                        inset.width - 8f, actionH);
+                    bool canMutate = CurrentClip != null && CurrentClip.SheetIndex == s;
+                    DrawClipInsetActions(actionBar, canMutate);
+
+                    if (!stackAddSheet)
+                    {
+                        var addRect = new Rect(cardRect.xMax - cardPad - addSheetW,
+                            inset.yMax + 4f, addSheetW, addSheetH);
+                        if (GUI.Button(addRect, "+ Sheet", _transportStyle))
+                        {
+                            CommitAllRenames();
+                            AddSheet();
+                        }
+                    }
+                }
+
+                y += cardH + cardGap;
+            }
+            GUI.EndScrollView();
+
+            if (stackAddSheet)
+            {
+                float btnW = Mathf.Min(addSheetW, Mathf.Max(48f, rect.width - 16f));
+                var addRect = new Rect(rect.xMax - 8f - btnW, rect.yMax - 34f, btnW, addSheetH);
+                if (GUI.Button(addRect, "+ Sheet", _transportStyle))
+                {
+                    CommitAllRenames();
+                    AddSheet();
+                }
+            }
+        }
+
+        void DrawClipInsetActions(Rect bar, bool canMutateClip)
+        {
+            float gap = 3f;
+            float w1 = 52f, w2 = 70f, w3 = 52f;
+            float need = w1 + w2 + w3 + gap * 2f;
+            if (need > bar.width && bar.width > 40f)
+            {
+                float scale = bar.width / need;
+                w1 *= scale;
+                w2 *= scale;
+                w3 *= scale;
+            }
+            float x = bar.x;
+            if (GUI.Button(new Rect(x, bar.y, w1, bar.height), "+ Clip", _transportStyle))
+            {
+                CommitAllRenames();
+                AddClip();
+            }
+            x += w1 + gap;
+            using (new EditorGUI.DisabledScope(!canMutateClip))
+            {
+                if (GUI.Button(new Rect(x, bar.y, w2, bar.height), "Duplicate", _transportStyle))
+                {
+                    CommitAllRenames();
+                    DuplicateClip();
+                }
+                x += w2 + gap;
+                if (GUI.Button(new Rect(x, bar.y, w3, bar.height), "Delete", _transportStyle))
+                {
+                    CancelAllRenames();
+                    DeleteClip();
+                }
+            }
+        }
+
+        void HandleBrowserRenameKeys(Event input)
+        {
+            string focused = GUI.GetNameOfFocusedControl();
+            if (_renamingSheet >= 0 && input.type == EventType.KeyDown &&
+                focused == SheetRenameControl)
+            {
+                if (input.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
+                {
+                    CommitSheetRename();
+                    input.Use();
+                }
+                else if (input.keyCode == KeyCode.Escape)
+                {
+                    CancelSheetRename();
+                    input.Use();
+                }
+            }
+            else if (_renamingClip >= 0 && input.type == EventType.KeyDown &&
+                     focused == ClipRenameControl)
             {
                 if (input.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
                 {
@@ -696,96 +967,359 @@ namespace InvertLab.Sprites.DOTS.Editor
                     input.Use();
                 }
             }
-            else if (_renamingClip < 0 && input.type == EventType.KeyDown && input.keyCode == KeyCode.F2 &&
-                     CurrentClip != null && !IsEditingStringTextField())
+            else if (_renamingClip < 0 && _renamingSheet < 0 &&
+                     input.type == EventType.KeyDown && input.keyCode == KeyCode.F2 &&
+                     !IsEditingStringTextField())
             {
-                BeginClipRename(_selectedClip);
+                if (CurrentClip != null)
+                    BeginClipRename(_selectedClip);
+                else if (_profile.Sheets != null && _profile.Sheets.Count > 0)
+                    BeginSheetRename(_selectedSheet);
                 input.Use();
             }
 
-            if (_renamingClip >= 0 && input.type == EventType.MouseDown)
-            {
-                var activeItemRect = new Rect(2f, 2f + _renamingClip * 46f, listRect.width - 21f, 40f);
-                var activeNameRect = new Rect(activeItemRect.x + 10f, activeItemRect.y + 4f,
-                    activeItemRect.width - 20f, 19f);
-                if (!activeNameRect.Contains(input.mousePosition))
-                    CommitClipRename();
-            }
+        }
 
-            int deleteClipIndex = -1;
-            for (int i = 0; i < _profile.Clips.Count; i++)
+        void EnsureSheetFoldState()
+        {
+            if (_sheetFoldInitialized || _profile?.Sheets == null)
+                return;
+            _sheetFoldInitialized = true;
+            _collapsedSheets.Clear();
+            if (_profile.Sheets.Count > 1)
             {
-                var clip = _profile.Clips[i];
-                clip.EnsureFrameData();
-                var itemRect = new Rect(2f, 2f + i * 46f, listRect.width - 21f, 40f);
-                var deleteRect = new Rect(itemRect.xMax - 27f, itemRect.y + 8f, 21f, 22f);
-                var selectRect = new Rect(itemRect.x, itemRect.y, itemRect.width - 31f, itemRect.height);
-                var nameRect = new Rect(itemRect.x + 10f, itemRect.y + 4f, itemRect.width - 48f, 19f);
-
-                bool isRenaming = i == _renamingClip;
-                if (isRenaming)
+                for (int i = 0; i < _profile.Sheets.Count; i++)
                 {
-                    GUI.Box(itemRect, GUIContent.none, _clipSelectedStyle);
-                    GUI.SetNextControlName(ClipRenameControl);
-                    _renameClipValue = GUI.TextField(nameRect, _renameClipValue, EditorStyles.boldLabel);
-                    if (_focusClipRename || GUI.GetNameOfFocusedControl() != ClipRenameControl)
-                    {
-                        EditorGUI.FocusTextInControl(ClipRenameControl);
-                        if (GUI.GetNameOfFocusedControl() == ClipRenameControl)
-                            _focusClipRename = false;
-                    }
-                }
-                else
-                {
-                    GUI.Box(itemRect, GUIContent.none,
-                        i == _selectedClip ? _clipSelectedStyle : _clipStyle);
-                    if (input.type == EventType.MouseDown && input.button == 0 &&
-                        selectRect.Contains(input.mousePosition) &&
-                        !deleteRect.Contains(input.mousePosition))
-                    {
-                        SelectClipCard(i);
-                        if (nameRect.Contains(input.mousePosition) && input.clickCount >= 2)
-                            BeginClipRename(i);
-                        input.Use();
-                    }
-                    string clipName = string.IsNullOrWhiteSpace(clip.Name) ? $"Clip {i + 1}" : clip.Name;
-                    GUI.Label(nameRect, new GUIContent(clipName, "Click to select. F2 or double-click the name to rename."),
-                        EditorStyles.boldLabel);
-                }
-                GUI.Label(new Rect(itemRect.x + 10f, itemRect.y + 22f, itemRect.width - 48f, 14f),
-                    $"{clip.Frames.Length} frames   {clip.FrameRate:F1} fps", _mutedStyle);
-                if (GUI.Button(deleteRect, new GUIContent("×", $"Delete {clip.Name}. Undo is supported."),
-                    EditorStyles.miniButton))
-                {
-                    deleteClipIndex = i;
-                    break;
-                }
-            }
-            GUI.EndScrollView();
-
-            if (deleteClipIndex >= 0)
-                DeleteClipAt(deleteClipIndex);
-
-            float y = rect.yMax - 38f;
-            if (GUI.Button(new Rect(rect.x + 10f, y, 62f, 26f), "+ Clip", _transportStyle))
-            {
-                CommitClipRename();
-                AddClip();
-            }
-            using (new EditorGUI.DisabledScope(CurrentClip == null))
-            {
-                if (GUI.Button(new Rect(rect.x + 77f, y, 68f, 26f), "Duplicate", _transportStyle))
-                {
-                    CommitClipRename();
-                    DuplicateClip();
-                }
-                if (GUI.Button(new Rect(rect.x + 150f, y, 50f, 26f), "Delete", _transportStyle))
-                {
-                    CancelClipRename();
-                    DeleteClip();
+                    if (i != _selectedSheet)
+                        _collapsedSheets.Add(i);
                 }
             }
         }
+
+        bool IsSheetExpanded(int sheetIndex) => !_collapsedSheets.Contains(sheetIndex);
+
+        void ToggleSheetFold(int sheetIndex)
+        {
+            if (_collapsedSheets.Contains(sheetIndex))
+                _collapsedSheets.Remove(sheetIndex);
+            else
+                _collapsedSheets.Add(sheetIndex);
+        }
+
+        int CountClipsOnSheet(int sheetIndex)
+        {
+            int n = 0;
+            if (_profile?.Clips == null)
+                return 0;
+            for (int i = 0; i < _profile.Clips.Count; i++)
+            {
+                if (_profile.Clips[i] != null && _profile.Clips[i].SheetIndex == sheetIndex)
+                    n++;
+            }
+            return n;
+        }
+
+        int FirstClipIndexOfSheet(int sheetIndex)
+        {
+            if (_profile?.Clips == null)
+                return -1;
+            for (int i = 0; i < _profile.Clips.Count; i++)
+            {
+                if (_profile.Clips[i] != null && _profile.Clips[i].SheetIndex == sheetIndex)
+                    return i;
+            }
+            return -1;
+        }
+
+        void SelectSheetRow(int index)
+        {
+            if (_profile?.Sheets == null || index < 0 || index >= _profile.Sheets.Count)
+                return;
+            CommitAllRenames();
+            _selectedSheet = index;
+            _collapsedSheets.Clear();
+            if (_profile.Sheets.Count > 1)
+            {
+                for (int i = 0; i < _profile.Sheets.Count; i++)
+                {
+                    if (i != index)
+                        _collapsedSheets.Add(i);
+                }
+            }
+            _profile.SyncLegacyFromSheet(_selectedSheet);
+            InvalidateSheetPixelCache();
+            var current = CurrentClip;
+            if (current == null || current.SheetIndex != _selectedSheet)
+            {
+                int first = FirstClipIndexOfSheet(_selectedSheet);
+                if (first >= 0)
+                    SelectClipCard(first);
+                else
+                    ClearClipSelection();
+            }
+            ReleaseShortcutKeyboardFocus();
+            Repaint();
+        }
+
+        void ClearClipSelection()
+        {
+            _selectedClip = -1;
+            _selectedFrames.Clear();
+            _selectedFrame = 0;
+            ClearColliderSelection();
+            _selectedEventFrame = -1;
+            _selectedOnionFrame = -1;
+            _previewTime = 0f;
+        }
+
+        void DrawSheetRowThumb(SpriteSheetDef def, Rect rect)
+        {
+            if (def?.Texture == null)
+            {
+                EditorGUI.DrawRect(rect, PanelAltColor);
+                DrawBorder(rect, BorderColor, 1f);
+                return;
+            }
+            int columns = Mathf.Max(1, def.Columns);
+            int rows = Mathf.Max(1, def.Rows);
+            DrawCellTinted(def.Texture, 0, rect, Color.white, columns, rows);
+            DrawBorder(rect, BorderColor, 1f);
+        }
+
+        void AddSheet()
+        {
+            RecordProfileUndo("Add Sprite Sheet");
+            _profile.EnsureSheets(_selectedSheet);
+            int n = _profile.Sheets.Count + 1;
+            _profile.Sheets.Add(new SpriteSheetDef
+            {
+                Name = UniqueSheetName($"Sheet {n}"),
+                Texture = null,
+                Columns = SpriteSheetProfile.DefaultColumns,
+                Rows = SpriteSheetProfile.DefaultRows,
+                PixelsPerUnit = SpriteSheetProfile.DefaultPixelsPerUnit,
+                Pivot = SpriteSheetProfile.DefaultPivot,
+            });
+            int index = _profile.Sheets.Count - 1;
+            _collapsedSheets.Remove(index);
+            _selectedSheet = index;
+            _profile.SyncLegacyFromSheet(_selectedSheet);
+            InvalidateSheetPixelCache();
+            ClearClipSelection();
+            _status = $"Added {_profile.Sheets[index].Name}";
+            SaveDirty();
+            Repaint();
+        }
+
+        void DeleteSheetAt(int index)
+        {
+            if (_profile?.Sheets == null || index < 0 || index >= _profile.Sheets.Count)
+                return;
+            if (_profile.Sheets.Count <= 1)
+                return;
+
+            RecordProfileUndo("Delete Sprite Sheet");
+            string sheetName = _profile.Sheets[index]?.Name ?? $"Sheet {index + 1}";
+            if (_profile.Clips != null)
+            {
+                for (int i = _profile.Clips.Count - 1; i >= 0; i--)
+                {
+                    var clip = _profile.Clips[i];
+                    if (clip == null || clip.SheetIndex != index)
+                        continue;
+                    if (_profile.Hitboxes != null)
+                        _profile.Hitboxes.RemoveAll(box => box.ClipName == clip.Name);
+                    _profile.Clips.RemoveAt(i);
+                    if (i < _selectedClip)
+                        _selectedClip--;
+                    else if (i == _selectedClip)
+                        _selectedClip = -1;
+                    if (_renamingClip == i)
+                        ClearClipRename();
+                    else if (_renamingClip > i)
+                        _renamingClip--;
+                }
+                for (int i = 0; i < _profile.Clips.Count; i++)
+                {
+                    if (_profile.Clips[i] != null && _profile.Clips[i].SheetIndex > index)
+                        _profile.Clips[i].SheetIndex--;
+                }
+            }
+            _profile.Sheets.RemoveAt(index);
+            var nextCollapsed = new HashSet<int>();
+            foreach (int collapsed in _collapsedSheets)
+            {
+                if (collapsed == index)
+                    continue;
+                nextCollapsed.Add(collapsed > index ? collapsed - 1 : collapsed);
+            }
+            _collapsedSheets.Clear();
+            foreach (int collapsed in nextCollapsed)
+                _collapsedSheets.Add(collapsed);
+
+            if (_selectedSheet == index)
+                _selectedSheet = Mathf.Clamp(index, 0, _profile.Sheets.Count - 1);
+            else if (_selectedSheet > index)
+                _selectedSheet--;
+            _selectedSheet = Mathf.Clamp(_selectedSheet, 0, Mathf.Max(0, _profile.Sheets.Count - 1));
+            if (_renamingSheet == index)
+                ClearSheetRename();
+            else if (_renamingSheet > index)
+                _renamingSheet--;
+
+            _profile.SyncLegacyFromSheet(_selectedSheet);
+            InvalidateSheetPixelCache();
+            var current = CurrentClip;
+            if (current == null || current.SheetIndex != _selectedSheet)
+            {
+                int first = FirstClipIndexOfSheet(_selectedSheet);
+                if (first >= 0)
+                {
+                    _selectedClip = first;
+                    SelectOnlyFrame(0);
+                }
+                else
+                    ClearClipSelection();
+            }
+            _status = $"Deleted sheet {sheetName}";
+            SaveDirty();
+            Repaint();
+        }
+
+        void BeginSheetRename(int sheetIndex)
+        {
+            if (_profile?.Sheets == null || sheetIndex < 0 || sheetIndex >= _profile.Sheets.Count)
+                return;
+            CommitAllRenames();
+            _selectedSheet = sheetIndex;
+            _renamingSheet = sheetIndex;
+            _renameSheetOriginal = _profile.Sheets[sheetIndex]?.Name ?? string.Empty;
+            _renameSheetValue = string.IsNullOrWhiteSpace(_renameSheetOriginal)
+                ? $"Sheet {sheetIndex + 1}"
+                : _renameSheetOriginal;
+            _focusSheetRename = true;
+            Repaint();
+        }
+
+        void CommitSheetRename()
+        {
+            if (_renamingSheet < 0 || _profile?.Sheets == null ||
+                _renamingSheet >= _profile.Sheets.Count)
+            {
+                ClearSheetRename();
+                return;
+            }
+            var def = _profile.Sheets[_renamingSheet];
+            string newName = UniqueSheetName(_renameSheetValue, _renamingSheet);
+            if (def != null && !string.Equals(def.Name, newName, StringComparison.Ordinal))
+            {
+                RecordProfileUndo("Rename Sprite Sheet");
+                def.Name = newName;
+                _status = $"Renamed sheet to {newName}";
+                SaveDirty();
+            }
+            ClearSheetRename();
+        }
+
+        void CancelSheetRename()
+        {
+            if (_renamingSheet >= 0)
+                _status = $"Kept sheet name {_renameSheetOriginal}";
+            ClearSheetRename();
+        }
+
+        void ClearSheetRename()
+        {
+            _renamingSheet = -1;
+            _renameSheetValue = string.Empty;
+            _renameSheetOriginal = string.Empty;
+            _focusSheetRename = false;
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        string UniqueSheetName(string requestedName, int ignoredSheetIndex = -1)
+        {
+            string baseName = string.IsNullOrWhiteSpace(requestedName)
+                ? $"Sheet {Mathf.Max(1, ignoredSheetIndex + 1)}"
+                : requestedName.Trim();
+            string candidate = baseName;
+            int suffix = 2;
+            while (SheetNameExists(candidate, ignoredSheetIndex))
+                candidate = $"{baseName} {suffix++}";
+            return candidate;
+        }
+
+        bool SheetNameExists(string candidate, int ignoredSheetIndex)
+        {
+            if (_profile?.Sheets == null)
+                return false;
+            for (int i = 0; i < _profile.Sheets.Count; i++)
+            {
+                if (i == ignoredSheetIndex || _profile.Sheets[i] == null)
+                    continue;
+                if (string.Equals(_profile.Sheets[i].Name, candidate, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        void CommitAllRenames()
+        {
+            if (_renamingClip >= 0)
+                CommitClipRename();
+            if (_renamingSheet >= 0)
+                CommitSheetRename();
+        }
+
+        void CancelAllRenames()
+        {
+            if (_renamingClip >= 0)
+                CancelClipRename();
+            if (_renamingSheet >= 0)
+                CancelSheetRename();
+        }
+
+        void WriteActiveSheetFromLegacy()
+        {
+            if (_profile?.Sheets == null || _profile.Sheets.Count == 0)
+                return;
+            int index = Mathf.Clamp(_selectedSheet, 0, _profile.Sheets.Count - 1);
+            var before = _profile.Sheets[index];
+            Texture2D oldTex = before != null ? before.Texture : null;
+            int oldCols = before != null ? before.Columns : 0;
+            int oldRows = before != null ? before.Rows : 0;
+            _profile.WriteLegacyIntoSheet(index);
+            var after = _profile.Sheets[index];
+            if (after == null || after.Texture != oldTex || after.Columns != oldCols || after.Rows != oldRows)
+                InvalidateSheetPixelCache();
+        }
+
+        int WorldSizeSourceForTextureAssign(int assignedIndex)
+        {
+            if (_profile?.Sheets == null)
+                return assignedIndex;
+            for (int i = 0; i < _profile.Sheets.Count; i++)
+            {
+                if (i == assignedIndex)
+                    continue;
+                if (_profile.Sheets[i]?.Texture != null)
+                    return i;
+            }
+            return assignedIndex;
+        }
+
+        void RematchSheetsWorldSize(int sourceSheetIndex)
+        {
+            if (_profile?.Sheets == null || _profile.Sheets.Count == 0)
+                return;
+            var source = _profile.SheetAt(sourceSheetIndex);
+            if (source?.Texture == null)
+                return;
+            _profile.MatchSheetsWorldSize(sourceSheetIndex);
+            _profile.SyncLegacyFromSheet(Mathf.Clamp(_selectedSheet, 0, _profile.Sheets.Count - 1));
+        }
+
 
         void SelectClipCard(int index)
         {
@@ -793,6 +1327,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             if (_renamingClip >= 0 && _renamingClip != index)
                 CancelClipRename();
+            if (_renamingSheet >= 0)
+                CommitSheetRename();
             if (_selectedClip != index)
             {
                 _selectedOnionFrame = -1;
@@ -800,6 +1336,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _selectedEventFrame = -1;
             }
             _selectedClip = index;
+            var clip = _profile.Clips[index];
+            if (clip != null && _profile.Sheets != null && _profile.Sheets.Count > 0)
+            {
+                _selectedSheet = Mathf.Clamp(clip.SheetIndex, 0, _profile.Sheets.Count - 1);
+                _collapsedSheets.Remove(_selectedSheet);
+                _profile.SyncLegacyFromSheet(_selectedSheet);
+                InvalidateSheetPixelCache();
+            }
             SelectOnlyFrame(0);
             _previewTime = 0f;
             ReleaseShortcutKeyboardFocus();
@@ -812,6 +1356,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_renamingClip >= 0 && _renamingClip != clipIndex)
                 CommitClipRename();
+            if (_renamingSheet >= 0)
+                CommitSheetRename();
 
             _selectedClip = clipIndex;
             _renamingClip = clipIndex;
@@ -1144,32 +1690,33 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             GUILayout.Space(9f);
             SectionLabel("SHEET");
+            var activeSheet = _profile.SheetAt(_selectedSheet);
+            if (activeSheet != null)
+            {
+                string sheetName = EditorGUILayout.TextField("Name", activeSheet.Name ?? string.Empty);
+                if (sheetName != activeSheet.Name)
+                    activeSheet.Name = sheetName;
+            }
             var newSheet = (Texture2D)EditorGUILayout.ObjectField("Texture", _profile.Sheet, typeof(Texture2D), false);
             if (newSheet != _profile.Sheet)
             {
                 _profile.Sheet = newSheet;
+                WriteActiveSheetFromLegacy();
                 if (newSheet != null)
+                    RematchSheetsWorldSize(WorldSizeSourceForTextureAssign(_selectedSheet));
+                if (newSheet != null && activeSheet != null &&
+                    (string.IsNullOrWhiteSpace(activeSheet.Name) ||
+                     activeSheet.Name == "Sheet" || activeSheet.Name.StartsWith("Sheet ")))
+                    activeSheet.Name = UniqueSheetName(newSheet.name, _selectedSheet);
+                if (newSheet != null && _selectedSheet == 0)
                     TryLoadExistingAsset();
             }
             DrawSheetTextureInfo();
             _profile.Columns = Mathf.Max(1, EditorGUILayout.IntField("Columns", _profile.Columns));
             _profile.Rows = Mathf.Max(1, EditorGUILayout.IntField("Rows", _profile.Rows));
-            using (new EditorGUI.DisabledScope(
-                _profile.Columns == SpriteSheetProfile.DefaultColumns &&
-                _profile.Rows == SpriteSheetProfile.DefaultRows))
-            {
-                if (GUILayout.Button(new GUIContent("Reset Grid to 4 × 4",
-                    "Reset the sheet grid to 4 columns by 4 rows.")))
-                {
-                    RecordProfileUndo("Reset Sprite Sheet Grid");
-                    _profile.Columns = SpriteSheetProfile.DefaultColumns;
-                    _profile.Rows = SpriteSheetProfile.DefaultRows;
-                    _status = "Reset sheet grid to 4 x 4";
-                }
-            }
             using (new EditorGUILayout.HorizontalScope())
             {
-                _profile.PixelsPerUnit = Mathf.Max(0.01f,
+                _profile.PixelsPerUnit = Mathf.Max(SpriteSheetProfile.MinPixelsPerUnit,
                     EditorGUILayout.FloatField("Pixels / Unit", _profile.PixelsPerUnit));
                 using (new EditorGUI.DisabledScope(
                     Mathf.Approximately(_profile.PixelsPerUnit, SpriteSheetProfile.DefaultPixelsPerUnit)))
@@ -1211,10 +1758,24 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
             if (GUILayout.Button("Auto-detect transparent grid"))
+            {
                 AutoDetect();
+                WriteActiveSheetFromLegacy();
+                RematchSheetsWorldSize(_selectedSheet);
+            }
 
             GUILayout.Space(9f);
-            SectionLabel("TIMELINE INPUT");
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label("TIMELINE INPUT", _sectionStyle);
+                GUILayout.FlexibleSpace();
+                _showTimelineInputHelp = GUILayout.Toggle(_showTimelineInputHelp,
+                    new GUIContent("?", "Show timeline input shortcuts."),
+                    EditorStyles.miniButton, GUILayout.Width(22f));
+            }
+            var timelineRule = GUILayoutUtility.GetRect(1f, 1f, GUILayout.ExpandWidth(true));
+            EditorGUI.DrawRect(timelineRule, BorderColor);
+            GUILayout.Space(3f);
             using (new EditorGUILayout.HorizontalScope())
             {
                 _profile.TimelineHitShape = (SpriteTimelineHitShape)EditorGUILayout.EnumPopup(
@@ -1253,9 +1814,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _profile.TimelineHitPolygon = SpriteSheetProfile.CreateRegularHitPolygon(newCount);
                 }
             }
-            EditorGUILayout.HelpBox(
-                "Drag a frame to reorder. Drag empty track to box-select. Drag the right edge to change hold. Drag the ruler or playhead to scrub. Alt-drag or middle-mouse pans. Shift/Ctrl click adds to the selection.",
-                MessageType.None);
+            if (_showTimelineInputHelp)
+            {
+                EditorGUILayout.HelpBox(
+                    "Drag a frame to reorder. Drag empty track to box-select. Drag the right edge to change hold. Drag the ruler or playhead to scrub. Alt-drag or middle-mouse pans. Shift/Ctrl click adds to the selection.",
+                    MessageType.None);
+            }
 
             var clip = CurrentClip;
             if (clip != null)
@@ -1505,7 +2069,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             if (EditorGUI.EndChangeCheck())
+            {
+                WriteActiveSheetFromLegacy();
+                RematchSheetsWorldSize(_selectedSheet);
                 SaveDirty();
+            }
             GUILayout.EndArea();
             GUI.EndScrollView();
         }
@@ -3788,15 +4356,20 @@ namespace InvertLab.Sprites.DOTS.Editor
         void AddClip()
         {
             RecordDiscreteUndo("Add Sprite Animation Clip");
+            _profile.EnsureSheets(_selectedSheet);
+            int rows = Mathf.Max(1, _profile.Rows);
+            int existingOnSheet = CountClipsOnSheet(_selectedSheet);
             var clip = new SpriteClipDef
             {
                 Name = $"Clip {_profile.Clips.Count + 1}",
-                Row = _profile.Clips.Count % Mathf.Max(1, _profile.Rows),
+                SheetIndex = _selectedSheet,
+                Row = existingOnSheet % rows,
                 Frames = CreateDefaultFrames(),
             };
             clip.EnsureFrameData();
             _profile.Clips.Add(clip);
             _selectedClip = _profile.Clips.Count - 1;
+            _collapsedSheets.Remove(_selectedSheet);
             SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
@@ -3815,6 +4388,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             var clone = new SpriteClipDef
             {
                 Name = source.Name + " Copy",
+                SheetIndex = source.SheetIndex,
                 Row = source.Row,
                 Frames = (int[])source.Frames.Clone(),
                 FrameRate = source.FrameRate,
@@ -3846,6 +4420,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             _profile.Clips.Insert(_selectedClip + 1, clone);
             _selectedClip++;
+            _collapsedSheets.Remove(clone.SheetIndex);
             SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
@@ -3869,9 +4444,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             RecordProfileUndo("Delete Sprite Animation Clip");
             _profile.Hitboxes.RemoveAll(box => box.ClipName == clip.Name);
             _profile.Clips.RemoveAt(clipIndex);
-            if (clipIndex < _selectedClip)
-                _selectedClip--;
-            _selectedClip = Mathf.Clamp(_selectedClip, 0, Mathf.Max(0, _profile.Clips.Count - 1));
+            if (_profile.Clips.Count == 0)
+                _selectedClip = -1;
+            else
+            {
+                if (clipIndex < _selectedClip)
+                    _selectedClip--;
+                if (_selectedClip >= _profile.Clips.Count)
+                    _selectedClip = _profile.Clips.Count - 1;
+                var remaining = _selectedClip >= 0 && _selectedClip < _profile.Clips.Count
+                    ? _profile.Clips[_selectedClip]
+                    : null;
+                if (remaining == null || remaining.SheetIndex != _selectedSheet)
+                    _selectedClip = FirstClipIndexOfSheet(_selectedSheet);
+            }
             if (_renamingClip == clipIndex)
                 ClearClipRename();
             else if (_renamingClip > clipIndex)
@@ -4267,6 +4853,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         PreviewState EvaluatePreview(SpriteClipDef clip, float time)
         {
+            if (clip == null)
+                return default;
             var sample = SpriteAnimPlayback.EvaluatePreview(clip, time, _previewLoop);
             return new PreviewState
             {
@@ -4376,18 +4964,40 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorUtility.SetDirty(_asset);
         }
 
+        bool CanSaveProfile()
+        {
+            return ResolveSaveTexture() != null;
+        }
+
+        Texture2D ResolveSaveTexture()
+        {
+            if (_profile == null)
+                return null;
+            _profile.EnsureSheets(_selectedSheet);
+            if (_profile.Sheets != null && _profile.Sheets.Count > 0 &&
+                _profile.Sheets[0] != null && _profile.Sheets[0].Texture != null)
+                return _profile.Sheets[0].Texture;
+            var active = _profile.SheetAt(_selectedSheet);
+            if (active?.Texture != null)
+                return active.Texture;
+            return _profile.Sheet;
+        }
+
         void SaveProfile()
         {
-            if (_profile.Sheet == null)
+            Texture2D saveTex = ResolveSaveTexture();
+            if (saveTex == null)
             {
                 _status = "Assign a sprite sheet before saving";
                 ShowNotification(new GUIContent(_status));
                 return;
             }
 
-            string texturePath = AssetDatabase.GetAssetPath(_profile.Sheet);
+            _profile.EnsureSheets(_selectedSheet);
+            WriteActiveSheetFromLegacy();
+            string texturePath = AssetDatabase.GetAssetPath(saveTex);
             string directory = Path.GetDirectoryName(texturePath)?.Replace('\\', '/');
-            string assetPath = $"{directory}/{_profile.Sheet.name}_profile.asset";
+            string assetPath = $"{directory}/{saveTex.name}_profile.asset";
             if (_asset == null)
                 TryLoadExistingAsset();
             if (_asset == null)
@@ -4423,8 +5033,29 @@ namespace InvertLab.Sprites.DOTS.Editor
             _profile = asset.Data ?? new SpriteSheetProfile();
             if (asset.Data == null)
                 asset.Data = _profile;
+            _sheetFoldInitialized = false;
             EnsureProfile();
-            _selectedClip = 0;
+            if (_profile.Clips != null && _profile.Clips.Count > 0 && _profile.Clips[0] != null)
+            {
+                _selectedClip = 0;
+                _selectedSheet = _profile.Clips[0].SheetIndex;
+            }
+            else
+            {
+                _selectedClip = -1;
+                _selectedSheet = 0;
+            }
+            _profile.EnsureSheets(_selectedSheet);
+            if (_profile.SheetsWorldHeightsDiffer())
+            {
+                int source = _selectedSheet;
+                var selected = _profile.SheetAt(_selectedSheet);
+                if (selected?.Texture == null)
+                    source = 0;
+                RematchSheetsWorldSize(source);
+                SaveDirty();
+            }
+            InvalidateSheetPixelCache();
             SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
@@ -4439,6 +5070,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             _profile.Clips ??= new List<SpriteClipDef>();
             _profile.Events ??= new List<SpriteEventDef>();
             _profile.Hitboxes ??= new List<FrameBoxDef>();
+            _profile.EnsureSheets(_selectedSheet);
+            if (_profile.Sheets != null && _profile.Sheets.Count > 0)
+                _selectedSheet = Mathf.Clamp(_selectedSheet, 0, _profile.Sheets.Count - 1);
             _profile.EnsureTimelineHitPolygon();
             if (!_profile.OnionSettingsInitialized)
             {
@@ -4887,10 +5521,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             => DrawCellTinted(sheet, cellIndex, rect, new Color(1f, 1f, 1f, alpha));
 
         void DrawCellTinted(Texture2D sheet, int cellIndex, Rect rect, Color tint)
+            => DrawCellTinted(sheet, cellIndex, rect, tint, _profile.Columns, _profile.Rows);
+
+        void DrawCellTinted(Texture2D sheet, int cellIndex, Rect rect, Color tint, int columns, int rows)
         {
             if (sheet == null) return;
-            int columns = Mathf.Max(1, _profile.Columns);
-            int rows = Mathf.Max(1, _profile.Rows);
+            columns = Mathf.Max(1, columns);
+            rows = Mathf.Max(1, rows);
             int column = cellIndex % columns;
             int row = cellIndex / columns;
             var uv = new Rect(
@@ -5000,9 +5637,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             int rows = Mathf.Max(1, _profile.Rows);
             float cellW = _profile.Sheet.width / (float)columns;
             float cellH = _profile.Sheet.height / (float)rows;
-            float ppu = Mathf.Max(0.01f, _profile.PixelsPerUnit);
+            float ppu = Mathf.Max(SpriteSheetProfile.MinPixelsPerUnit, _profile.PixelsPerUnit);
+            float worldW = cellW / ppu;
+            float worldH = cellH / ppu;
             EditorGUILayout.LabelField("Cell in world",
-                $"{cellW:0.#} × {cellH:0.#} px  /  {ppu:0.#}  =  {cellW / ppu:0.###} × {cellH / ppu:0.###} units");
+                $"{worldW:0.###} × {worldH:0.###} units");
+            GUILayout.Label($"{cellW:0.#} px / {ppu:0.#} PPU", _mutedStyle);
+            if (_profile.Sheets != null && _profile.Sheets.Count > 1)
+                GUILayout.Label("PPU is per sheet so every sheet is the same world size.", _mutedStyle);
         }
 
         static string SheetTextureFileName(Texture2D sheet)
@@ -5859,7 +6501,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         bool IsEditingAnyTextField()
-            => _renamingClip >= 0 || EditorGUIUtility.editingTextField;
+            => _renamingClip >= 0 || _renamingSheet >= 0 || EditorGUIUtility.editingTextField;
 
         void ReleaseShortcutKeyboardFocus()
         {
@@ -5903,10 +6545,18 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.keyCode == KeyCode.F2)
             {
+                if (_renamingClip >= 0 || _renamingSheet >= 0)
+                    return;
                 if (CurrentClip == null)
+                {
+                    if (_profile?.Sheets != null && _profile.Sheets.Count > 0)
+                    {
+                        BeginSheetRename(_selectedSheet);
+                        evt.Use();
+                        Repaint();
+                    }
                     return;
-                if (_renamingClip >= 0)
-                    return;
+                }
                 string focused = GUI.GetNameOfFocusedControl();
                 bool editingOther = EditorGUIUtility.editingTextField &&
                     !string.IsNullOrEmpty(focused) &&
@@ -6035,7 +6685,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                     undoSource.Data = _profile;
             }
             EnsureProfile();
-            _selectedClip = Mathf.Clamp(_selectedClip, 0, Mathf.Max(0, _profile.Clips.Count - 1));
+            if (_profile.Clips == null || _profile.Clips.Count == 0)
+                _selectedClip = -1;
+            else if (_selectedClip >= 0)
+                _selectedClip = Mathf.Clamp(_selectedClip, 0, _profile.Clips.Count - 1);
+            if (_profile.Sheets != null && _profile.Sheets.Count > 0)
+                _selectedSheet = Mathf.Clamp(_selectedSheet, 0, _profile.Sheets.Count - 1);
+            if (CurrentClip != null)
+            {
+                _selectedSheet = CurrentClip.SheetIndex;
+                _profile.SyncLegacyFromSheet(_selectedSheet);
+            }
+            InvalidateSheetPixelCache();
             var clip = CurrentClip;
             if (clip != null)
             {

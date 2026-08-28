@@ -13,13 +13,27 @@ MonoBehaviour:
   m_Name: Sword Character Prototype_All Frames_profile
   m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime:InvertLab.Sprites.DOTS:ScriptableSpriteSheetProfile
   Data:
-    Sheet: {fileID: 2800000, guid: 6f3892696a2cdc346a3b303d0cb685fd, type: 3}
-    Columns: 8
-    Rows: 8
-    PixelsPerUnit: 100
+    Sheet: {fileID: 2800000, guid: 5325911978796104990c81c8228d137a, type: 3}
+    Columns: 11
+    Rows: 28
+    PixelsPerUnit: 65.30612
     Pivot: {x: 0.5, y: 0.5}
+    Sheets:
+    - Name: Sword Character Prototype_All Frames
+      Texture: {fileID: 2800000, guid: 6f3892696a2cdc346a3b303d0cb685fd, type: 3}
+      Columns: 8
+      Rows: 8
+      PixelsPerUnit: 100
+      Pivot: {x: 0.5, y: 0.5}
+    - Name: Prototype Character_All Frames
+      Texture: {fileID: 2800000, guid: 5325911978796104990c81c8228d137a, type: 3}
+      Columns: 11
+      Rows: 28
+      PixelsPerUnit: 65.30612
+      Pivot: {x: 0.5, y: 0.5}
     Clips:
     - Name: idlle
+      SheetIndex: 0
       Row: 0
       Frames: 0000000001000000020000000300000004000000050000000600000007000000
       FrameRate: 8
@@ -75,6 +89,7 @@ MonoBehaviour:
       Facing: 255
       Sockets: []
     - Name: attack1
+      SheetIndex: 0
       Row: 1
       Frames: 0000000001000000020000000300000004000000050000000600000007000000
       FrameRate: 8
@@ -130,6 +145,7 @@ MonoBehaviour:
       Facing: 255
       Sockets: []
     - Name: attack2
+      SheetIndex: 0
       Row: 2
       Frames: 0000000001000000020000000300000004000000050000000600000007000000
       FrameRate: 8
@@ -185,6 +201,7 @@ MonoBehaviour:
       Facing: 255
       Sockets: []
     - Name: attack3
+      SheetIndex: 0
       Row: 3
       Frames: 0000000001000000020000000300000004000000050000000600000007000000
       FrameRate: 8
@@ -240,6 +257,7 @@ MonoBehaviour:
       Facing: 255
       Sockets: []
     - Name: attack4
+      SheetIndex: 0
       Row: 4
       Frames: 0000000001000000020000000300000004000000050000000600000007000000
       FrameRate: 8
@@ -295,6 +313,7 @@ MonoBehaviour:
       Facing: 255
       Sockets: []
     - Name: attack5
+      SheetIndex: 0
       Row: 5
       Frames: 000000000100000002000000030000000400000005000000
       FrameRate: 8
@@ -340,6 +359,7 @@ MonoBehaviour:
       Facing: 255
       Sockets: []
     - Name: attack6
+      SheetIndex: 0
       Row: 6
       Frames: 0000000001000000020000000300000004000000050000000600000007000000
       FrameRate: 8
@@ -395,6 +415,7 @@ MonoBehaviour:
       Facing: 255
       Sockets: []
     - Name: attack7
+      SheetIndex: 0
       Row: 7
       Frames: 0000000001000000020000000300000004000000050000000600000007000000
       FrameRate: 8
@@ -449,6 +470,1144 @@ MonoBehaviour:
       FacingGroup: 
       Facing: 255
       Sockets: []
+    - Name: Clip 9
+      SheetIndex: 1
+      Row: 0
+      Frames: 05000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      EventIds: 00
+      EventNormalizedTimes:
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      FrameTweenModes: 00
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 10
+      SheetIndex: 1
+      Row: 1
+      Frames: 0000000001000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      EventIds: 0000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      FrameTweenModes: 0000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 11
+      SheetIndex: 1
+      Row: 2
+      Frames: 00000000010000000200000003000000040000000500000006000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 12
+      SheetIndex: 1
+      Row: 3
+      Frames: 0000000001000000020000000300000004000000050000000600000007000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 13
+      SheetIndex: 1
+      Row: 4
+      Frames: 000000000100000002000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 14
+      SheetIndex: 1
+      Row: 5
+      Frames: 0000000001000000020000000300000004000000050000000600000007000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 15
+      SheetIndex: 1
+      Row: 6
+      Frames: 00000000010000000200000003000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 16
+      SheetIndex: 1
+      Row: 7
+      Frames: 000000000100000002000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 17
+      SheetIndex: 1
+      Row: 8
+      Frames: 000000000100000002000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 18
+      SheetIndex: 1
+      Row: 9
+      Frames: 0000000001000000020000000300000004000000050000000600000007000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 19
+      SheetIndex: 1
+      Row: 10
+      Frames: 0000000001000000020000000300000004000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 20
+      SheetIndex: 1
+      Row: 11
+      Frames: 000000000100000002000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 21
+      SheetIndex: 1
+      Row: 12
+      Frames: 000000000100000002000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 22
+      SheetIndex: 1
+      Row: 13
+      Frames: 00000000010000000200000003000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 23
+      SheetIndex: 1
+      Row: 14
+      Frames: 00000000010000000200000003000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 24
+      SheetIndex: 1
+      Row: 15
+      Frames: 000000000100000002000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 25
+      SheetIndex: 1
+      Row: 16
+      Frames: 00000000010000000200000003000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 26
+      SheetIndex: 1
+      Row: 17
+      Frames: 000000000100000002000000030000000400000005000000060000000700000008000000090000000a000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 27
+      SheetIndex: 1
+      Row: 18
+      Frames: 000000000100000002000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 28
+      SheetIndex: 1
+      Row: 19
+      Frames: 0000000001000000020000000300000004000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 29
+      SheetIndex: 1
+      Row: 20
+      Frames: 00000000010000000200000003000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 30
+      SheetIndex: 1
+      Row: 21
+      Frames: 000000000100000002000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 31
+      SheetIndex: 1
+      Row: 22
+      Frames: 00000000010000000200000003000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 32
+      SheetIndex: 1
+      Row: 23
+      Frames: 000000000100000002000000030000000400000005000000060000000700000008000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 33
+      SheetIndex: 1
+      Row: 24
+      Frames: 00000000010000000200000003000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 34
+      SheetIndex: 1
+      Row: 25
+      Frames: 00000000010000000200000003000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 35
+      SheetIndex: 1
+      Row: 26
+      Frames: 00000000010000000200000003000000040000000500000006000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    - Name: Clip 36
+      SheetIndex: 1
+      Row: 27
+      Frames: 000000000100000002000000030000000400000005000000060000000700000008000000090000000a000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 0000000000000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 0000000000000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
     Events:
     - Id: 1
       Name: Footstep
@@ -459,8 +1618,8 @@ MonoBehaviour:
     Hitboxes: []
     OnionSettingsInitialized: 1
     OnionSkinEnabled: 0
-    OnionPastFrames: 3
-    OnionFutureFrames: 3
+    OnionPastFrames: 0
+    OnionFutureFrames: 0
     ShowOnionLayerNumbers: 1
     TimelineHitShape: 0
     TimelineHitPolygon:

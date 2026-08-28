@@ -62,8 +62,20 @@ namespace InvertLab.Sprites.DOTS
 
         static bool dataDirty;
 
+        // Crowd plays one clip: shader uniforms, no 1M entity rewrite on switch.
+        public static bool UseSharedClip;
+        public static float4 SharedCell;
+        public static float4 SharedAnim;
+
         /// <summary>Force re-upload of instance data next frame (spawn/move/convert).</summary>
         public static void MarkDirty() => dataDirty = true;
+
+        public static void SetSharedClip(in SpriteGpuAnim anim)
+        {
+            UseSharedClip = true;
+            SharedCell = new float4(anim.CellW, anim.CellH, anim.SlotOriginX, anim.SlotOriginY);
+            SharedAnim = new float4(anim.StartTime, anim.Rate, anim.N, anim.WrapLoop);
+        }
 
         /// <summary>Consume the dirty flag (renderer-side).</summary>
         public static bool TakeDirty()
@@ -85,6 +97,9 @@ namespace InvertLab.Sprites.DOTS
             Quad = null;
             Capacity = 0;
             dataDirty = false;
+            UseSharedClip = false;
+            SharedCell = 0f;
+            SharedAnim = 0f;
         }
 
         public static void EnsureCapacity(int need)
