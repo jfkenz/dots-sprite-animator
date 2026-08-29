@@ -40,6 +40,35 @@ namespace InvertLab.Sprites.DOTS
         public float LocalAngle;
         public float2 LocalScale;
         public FixedString64Bytes Name;
+        public FixedString64Bytes SocketId;
+        public ulong SocketIdHash;
+    }
+
+    public struct SpriteSocketMotionPoint
+    {
+        public float NormalizedTime;
+        public float2 LocalPosition;
+        public float LocalAngle;
+        public float2 LocalScale;
+    }
+
+    public struct SpriteSocketTriggerPoint
+    {
+        public float NormalizedTime;
+        public byte EventId;
+    }
+
+    /// <summary>Profile-level motion sampled independently from character clips.</summary>
+    public struct SpriteSocketMotionBlob
+    {
+        public FixedString64Bytes Name;
+        public FixedString64Bytes SocketId;
+        public ulong SocketIdHash;
+        public float Duration;
+        public float Speed;
+        public byte Loop;
+        public BlobArray<SpriteSocketMotionPoint> Keys;
+        public BlobArray<SpriteSocketTriggerPoint> Triggers;
     }
 
     /// <summary>
@@ -52,6 +81,7 @@ namespace InvertLab.Sprites.DOTS
         // Play-ordered slots: Frames[clip.FirstFrame + t].x = frame slot index
         // (sheet cell / render slot shown at time t of that clip).
         public BlobArray<float4> Frames;
+        public BlobArray<SpriteSocketMotionBlob> SocketMotions;
     }
 
     /// <summary>The character's animation library (e.g. the soldier's 4 states).</summary>
@@ -108,6 +138,7 @@ namespace InvertLab.Sprites.DOTS
                 public float LocalAngle;
                 public float2 LocalScale;
                 public string Name;
+                public string SocketId;
             }
 
             /// <summary>
@@ -122,9 +153,34 @@ namespace InvertLab.Sprites.DOTS
                     : SpriteAnimWrap.Once);
         }
 
+        public struct SocketMotionInput
+        {
+            public string Name;
+            public string SocketId;
+            public float Duration;
+            public float Speed;
+            public bool Loop;
+            public SocketMotionPointInput[] Keys;
+            public SocketTriggerInput[] Triggers;
+
+            public struct SocketMotionPointInput
+            {
+                public float NormalizedTime;
+                public float2 LocalPosition;
+                public float LocalAngle;
+                public float2 LocalScale;
+            }
+
+            public struct SocketTriggerInput
+            {
+                public float NormalizedTime;
+                public byte EventId;
+            }
+        }
+
         /// <summary>Build the blob + initial player state.</summary>
         public static (SpriteAnimSetRef, SpriteAnimPlayer) Build(
-            Allocator allocator, ClipInput[] clips)
+            Allocator allocator, ClipInput[] clips, SocketMotionInput[] socketMotions = null)
         {
             var builder = new BlobBuilder(Allocator.Temp);
             ref var root = ref builder.ConstructRoot<SpriteAnimSetBlob>();
@@ -207,9 +263,55 @@ namespace InvertLab.Sprites.DOTS
                         Name = new FixedString64Bytes(string.IsNullOrWhiteSpace(socket.Name)
                             ? $"Socket {s + 1}"
                             : socket.Name.Trim()),
+                        SocketId = new FixedString64Bytes(
+                            SpriteSocketIdUtility.Canonical(socket.SocketId, socket.Name)),
+                        SocketIdHash = SpriteSockets.Hash(
+                            SpriteSocketIdUtility.Canonical(socket.SocketId, socket.Name)),
                     };
                 }
                 cursor += n;
+            }
+
+            int motionCount = socketMotions?.Length ?? 0;
+            var motions = builder.Allocate(ref root.SocketMotions, motionCount);
+            for (int i = 0; i < motionCount; i++)
+            {
+                var input = socketMotions[i];
+                ref var motion = ref motions[i];
+                motion.Name = new FixedString64Bytes(string.IsNullOrWhiteSpace(input.Name)
+                    ? $"Socket {i + 1}"
+                    : input.Name.Trim());
+                string socketId = SpriteSocketIdUtility.Canonical(input.SocketId, input.Name);
+                motion.SocketId = new FixedString64Bytes(socketId);
+                motion.SocketIdHash = SpriteSockets.Hash(socketId);
+                motion.Duration = math.max(0.01f, input.Duration);
+                motion.Speed = math.max(0.01f, input.Speed);
+                motion.Loop = input.Loop ? (byte)1 : (byte)0;
+                int keyCount = input.Keys?.Length ?? 0;
+                var keys = builder.Allocate(ref motion.Keys, keyCount);
+                for (int k = 0; k < keyCount; k++)
+                {
+                    var key = input.Keys[k];
+                    keys[k] = new SpriteSocketMotionPoint
+                    {
+                        NormalizedTime = math.saturate(key.NormalizedTime),
+                        LocalPosition = key.LocalPosition,
+                        LocalAngle = key.LocalAngle,
+                        LocalScale = math.all(key.LocalScale == float2.zero)
+                            ? new float2(1f, 1f)
+                            : key.LocalScale,
+                    };
+                }
+                int triggerCount = input.Triggers?.Length ?? 0;
+                var triggers = builder.Allocate(ref motion.Triggers, triggerCount);
+                for (int t = 0; t < triggerCount; t++)
+                {
+                    triggers[t] = new SpriteSocketTriggerPoint
+                    {
+                        NormalizedTime = math.saturate(input.Triggers[t].NormalizedTime),
+                        EventId = input.Triggers[t].EventId,
+                    };
+                }
             }
 
             var result = builder.CreateBlobAssetReference<SpriteAnimSetBlob>(allocator);
@@ -334,6 +436,8 @@ namespace InvertLab.Sprites.DOTS
                     sockets.Add(new SpriteSocketBuffer
                     {
                         Name = socket.Name,
+                        SocketId = socket.SocketId,
+                        SocketIdHash = socket.SocketIdHash,
                         LocalPosition = socket.LocalPosition,
                         LocalAngle = socket.LocalAngle,
                         LocalScale = socket.LocalScale,

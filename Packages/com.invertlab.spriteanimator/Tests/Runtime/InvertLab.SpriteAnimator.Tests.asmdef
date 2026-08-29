@@ -1,0 +1,16 @@
+{
+  "name": "InvertLab.SpriteAnimator.Tests",
+  "rootNamespace": "InvertLab.Sprites.DOTS.Tests",
+  "references": [
+    "InvertLab.SpriteAnimator.Runtime",
+    "Unity.Entities",
+    "Unity.Mathematics"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "autoReferenced": false
+}

@@ -349,6 +349,7 @@ namespace InvertLab.Sprites.DOTS
                     LocalPosition = src.LocalPosition,
                     LocalAngle = src.LocalAngle,
                     LocalScale = src.LocalScale,
+                    DrawLayer = src.DrawLayer,
                 };
             }
             return result;
@@ -360,7 +361,11 @@ namespace InvertLab.Sprites.DOTS
             {
                 var profile = authoring.Profile != null ? authoring.Profile.Data : null;
                 if (profile != null)
+                {
                     profile.EnsureSheets();
+                    profile.EnsureSocketCatalog();
+                    profile.EnsureSocketMotions();
+                }
 
                 SpriteSheetDef bakeSheetDef = null;
                 bool useProfile = profile?.Clips != null && profile.Clips.Count > 0;
@@ -442,6 +447,9 @@ namespace InvertLab.Sprites.DOTS
                                 socket.LocalPosition.x / bakePpu,
                                 socket.LocalPosition.y / bakePpu)
                             : new float2(socket.LocalPosition.x, socket.LocalPosition.y);
+                        string socketId = useProfile
+                            ? profile.SocketCatalog.Find(socket.Name)?.SocketId
+                            : socket.Name;
                         socketInputs[s] = new SpriteAnimSetBuilder.ClipInput.FrameSocketInput
                         {
                             FrameIndex = socket.FrameIndex,
@@ -451,6 +459,7 @@ namespace InvertLab.Sprites.DOTS
                                 SpriteSocketKeys.ResolvedScale(socket.LocalScale).x,
                                 SpriteSocketKeys.ResolvedScale(socket.LocalScale).y),
                             Name = socket.Name,
+                            SocketId = socketId,
                         };
                     }
 
@@ -479,7 +488,72 @@ namespace InvertLab.Sprites.DOTS
                         FrameSockets = socketInputs,
                     };
                 }
-                var (setRef, player) = SpriteAnimSetBuilder.Build(Allocator.Persistent, inputs);
+                var activeMotions = new List<SpriteSocketMotionTrack>();
+                if (useProfile && profile.SocketMotions != null)
+                {
+                    for (int i = 0; i < profile.SocketMotions.Count; i++)
+                    {
+                        var candidate = profile.SocketMotions[i];
+                        var candidateItem = candidate != null
+                            ? profile.SocketCatalog.Find(candidate.SocketName)
+                            : null;
+                        if (candidate != null && candidate.Keys != null &&
+                            candidate.Keys.Count > 0 && candidateItem != null &&
+                            candidateItem.UsesOwnClock)
+                            activeMotions.Add(candidate);
+                    }
+                }
+                int motionCount = activeMotions.Count;
+                var motionInputs = new SpriteAnimSetBuilder.SocketMotionInput[motionCount];
+                for (int i = 0; i < motionCount; i++)
+                {
+                    var motion = activeMotions[i];
+                    var motionSheet = profile.SheetAt(motion.ReferenceSheetIndex);
+                    float motionPpu = SpriteSheetProfile.GetPixelsPerUnit(motionSheet);
+                    var catalogItem = profile.SocketCatalog.Find(motion.SocketName);
+                    int keyCount = motion.Keys?.Count ?? 0;
+                    var keys =
+                        new SpriteAnimSetBuilder.SocketMotionInput.SocketMotionPointInput[keyCount];
+                    for (int k = 0; k < keyCount; k++)
+                    {
+                        var key = motion.Keys[k];
+                        Vector2 resolvedScale = SpriteSocketKeys.ResolvedScale(key.LocalScale);
+                        keys[k] =
+                            new SpriteAnimSetBuilder.SocketMotionInput.SocketMotionPointInput
+                            {
+                                NormalizedTime = key.NormalizedTime,
+                                LocalPosition = new float2(
+                                    key.LocalPosition.x / motionPpu,
+                                    key.LocalPosition.y / motionPpu),
+                                LocalAngle = key.LocalAngle,
+                                LocalScale = new float2(resolvedScale.x, resolvedScale.y),
+                            };
+                    }
+                    int triggerCount = motion.Triggers?.Count ?? 0;
+                    var triggers =
+                        new SpriteAnimSetBuilder.SocketMotionInput.SocketTriggerInput[triggerCount];
+                    for (int t = 0; t < triggerCount; t++)
+                    {
+                        triggers[t] = new SpriteAnimSetBuilder.SocketMotionInput.SocketTriggerInput
+                        {
+                            NormalizedTime = motion.Triggers[t].NormalizedTime,
+                            EventId = motion.Triggers[t].EventId,
+                        };
+                    }
+                    motionInputs[i] = new SpriteAnimSetBuilder.SocketMotionInput
+                    {
+                        Name = motion.SocketName,
+                        SocketId = catalogItem?.SocketId,
+                        Duration = motion.Duration,
+                        Speed = catalogItem?.ResolvedSpeed ?? 1f,
+                        Loop = motion.Loop,
+                        Keys = keys,
+                        Triggers = triggers,
+                    };
+                }
+
+                var (setRef, player) = SpriteAnimSetBuilder.Build(
+                    Allocator.Persistent, inputs, motionInputs);
                 AddComponent(entity, setRef);
                 var playerAuthoring = GetComponent<SpriteAnimPlayerAuthoring>();
                 int initialClip;
@@ -519,6 +593,16 @@ namespace InvertLab.Sprites.DOTS
                 AddBuffer<SpriteAnimEventBuffer>(entity);
                 AddComponent(entity, new SpriteAnimEventsPending());
                 AddBuffer<SpriteSocketBuffer>(entity);
+                if (motionCount > 0)
+                {
+                    AddComponent(entity, new SpriteSocketMotionPlayer
+                    {
+                        Time = 0f,
+                        Playing = 1,
+                    });
+                    AddBuffer<SpriteSocketEventBuffer>(entity);
+                    AddComponent(entity, new SpriteSocketEventsPending());
+                }
             }
         }
     }

@@ -185,6 +185,7 @@ GameObject:
   - component: {fileID: 1524384339}
   - component: {fileID: 1524384338}
   - component: {fileID: 1524384337}
+  - component: {fileID: 1524384342}
   m_Layer: 0
   m_Name: Authoring Sprite
   m_TagString: Untagged
@@ -208,8 +209,8 @@ MonoBehaviour:
   Speed: 1
   Playing: 1
   ClipIndex: 0
-  _time: 1.4098397
-  _frame: 3
+  _time: 9.648093
+  _frame: 5
 --- !u!114 &1524384338
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -284,46 +285,294 @@ MonoBehaviour:
     FacingGroup: 
     FacingDirection: 255
     Sockets:
-    - Name: bot
+    - Name: "Orbit 0\xB0"
       FrameIndex: 0
-      LocalPosition: {x: 20, y: 8}
+      LocalPosition: {x: 62, y: 36}
       LocalAngle: 0
-      LocalScale: {x: 0.084036596, y: 0.084036596}
-    - Name: bot
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 0\xB0"
       FrameIndex: 1
-      LocalPosition: {x: -14, y: 4}
+      LocalPosition: {x: 44, y: 61}
       LocalAngle: 0
       LocalScale: {x: 1, y: 1}
-    - Name: bot
+      DrawLayer: 1
+    - Name: "Orbit 0\xB0"
       FrameIndex: 2
-      LocalPosition: {x: 91, y: -4}
+      LocalPosition: {x: -0, y: 72}
       LocalAngle: 0
       LocalScale: {x: 1, y: 1}
-    - Name: bot
+      DrawLayer: 1
+    - Name: "Orbit 0\xB0"
       FrameIndex: 3
-      LocalPosition: {x: 0, y: -31}
+      LocalPosition: {x: -44, y: 61}
       LocalAngle: 0
       LocalScale: {x: 1, y: 1}
-    - Name: bot
+      DrawLayer: 1
+    - Name: "Orbit 0\xB0"
       FrameIndex: 4
-      LocalPosition: {x: 22, y: -12}
+      LocalPosition: {x: -62, y: 36}
       LocalAngle: 0
       LocalScale: {x: 1, y: 1}
-    - Name: bot
+      DrawLayer: 2
+    - Name: "Orbit 0\xB0"
       FrameIndex: 5
-      LocalPosition: {x: 17, y: 12}
+      LocalPosition: {x: -44, y: 11}
       LocalAngle: 0
       LocalScale: {x: 1, y: 1}
-    - Name: bot
+      DrawLayer: 2
+    - Name: "Orbit 0\xB0"
       FrameIndex: 6
-      LocalPosition: {x: -26, y: 16}
+      LocalPosition: {x: 0, y: 0}
       LocalAngle: 0
       LocalScale: {x: 1, y: 1}
-    - Name: bot
+      DrawLayer: 2
+    - Name: "Orbit 0\xB0"
       FrameIndex: 7
-      LocalPosition: {x: -29, y: -28}
+      LocalPosition: {x: 44, y: 11}
       LocalAngle: 0
       LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 60\xB0"
+      FrameIndex: 0
+      LocalPosition: {x: 31, y: 89}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 60\xB0"
+      FrameIndex: 1
+      LocalPosition: {x: -0, y: 86}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 60\xB0"
+      FrameIndex: 2
+      LocalPosition: {x: -31, y: 54}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 60\xB0"
+      FrameIndex: 3
+      LocalPosition: {x: -44, y: 11}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 60\xB0"
+      FrameIndex: 4
+      LocalPosition: {x: -31, y: -17}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 60\xB0"
+      FrameIndex: 5
+      LocalPosition: {x: 0, y: -14}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 60\xB0"
+      FrameIndex: 6
+      LocalPosition: {x: 31, y: 18}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 60\xB0"
+      FrameIndex: 7
+      LocalPosition: {x: 44, y: 61}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 120\xB0"
+      FrameIndex: 0
+      LocalPosition: {x: -31, y: 89}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 120\xB0"
+      FrameIndex: 1
+      LocalPosition: {x: -44, y: 61}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 120\xB0"
+      FrameIndex: 2
+      LocalPosition: {x: -31, y: 18}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0"
+      FrameIndex: 3
+      LocalPosition: {x: -0, y: -14}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0"
+      FrameIndex: 4
+      LocalPosition: {x: 31, y: -17}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0"
+      FrameIndex: 5
+      LocalPosition: {x: 44, y: 11}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0"
+      FrameIndex: 6
+      LocalPosition: {x: 31, y: 54}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 120\xB0"
+      FrameIndex: 7
+      LocalPosition: {x: 0, y: 86}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 0\xB0 2"
+      FrameIndex: 0
+      LocalPosition: {x: 62, y: 36}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 0\xB0 2"
+      FrameIndex: 1
+      LocalPosition: {x: 44, y: 61}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 0\xB0 2"
+      FrameIndex: 2
+      LocalPosition: {x: -0, y: 72}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 0\xB0 2"
+      FrameIndex: 3
+      LocalPosition: {x: -44, y: 61}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 0\xB0 2"
+      FrameIndex: 4
+      LocalPosition: {x: -62, y: 36}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 0\xB0 2"
+      FrameIndex: 5
+      LocalPosition: {x: -44, y: 11}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 0\xB0 2"
+      FrameIndex: 6
+      LocalPosition: {x: 0, y: 0}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 0\xB0 2"
+      FrameIndex: 7
+      LocalPosition: {x: 44, y: 11}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0 2"
+      FrameIndex: 0
+      LocalPosition: {x: -31, y: 89}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 120\xB0 2"
+      FrameIndex: 1
+      LocalPosition: {x: -44, y: 61}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 120\xB0 2"
+      FrameIndex: 2
+      LocalPosition: {x: -31, y: 18}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0 2"
+      FrameIndex: 3
+      LocalPosition: {x: -0, y: -14}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0 2"
+      FrameIndex: 4
+      LocalPosition: {x: 31, y: -17}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0 2"
+      FrameIndex: 5
+      LocalPosition: {x: 44, y: 11}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 120\xB0 2"
+      FrameIndex: 6
+      LocalPosition: {x: 31, y: 54}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 120\xB0 2"
+      FrameIndex: 7
+      LocalPosition: {x: 0, y: 86}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 240\xB0"
+      FrameIndex: 0
+      LocalPosition: {x: -31, y: -17}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 240\xB0"
+      FrameIndex: 1
+      LocalPosition: {x: 0, y: -14}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 240\xB0"
+      FrameIndex: 2
+      LocalPosition: {x: 31, y: 18}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
+    - Name: "Orbit 240\xB0"
+      FrameIndex: 3
+      LocalPosition: {x: 44, y: 61}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 240\xB0"
+      FrameIndex: 4
+      LocalPosition: {x: 31, y: 89}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 240\xB0"
+      FrameIndex: 5
+      LocalPosition: {x: -0, y: 86}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 240\xB0"
+      FrameIndex: 6
+      LocalPosition: {x: -31, y: 54}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 1
+    - Name: "Orbit 240\xB0"
+      FrameIndex: 7
+      LocalPosition: {x: -44, y: 11}
+      LocalAngle: 0
+      LocalScale: {x: 1, y: 1}
+      DrawLayer: 2
   - Name: attack1
     SheetIndex: 0
     Row: 1
@@ -760,6 +1009,7 @@ MonoBehaviour:
       LocalPosition: {x: -0, y: 7}
       LocalAngle: 0
       LocalScale: {x: 1, y: 1}
+      DrawLayer: 0
   - Name: Clip 10
     SheetIndex: 1
     Row: 1
@@ -1980,6 +2230,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1524384342
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1524384336}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9d79d2be1a6f21439b37c3ccdd52dcc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.SpriteSocketAttachmentAuthoring
+  Player: {fileID: 1524384338}
+  SocketName: Weapon
+  PositionOffset: {x: 0, y: 0}
+  AngleOffset: 0
 --- !u!1 &1540337947
 GameObject:
   m_ObjectHideFlags: 0

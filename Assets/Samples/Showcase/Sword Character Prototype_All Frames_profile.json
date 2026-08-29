@@ -1,6 +1,6 @@
 {
     "Sheet": {
-        "instanceID": 568105584918834980
+        "instanceID": 568105584918834996
     },
     "Columns": 8,
     "Rows": 8,
@@ -13,7 +13,7 @@
         {
             "Name": "Sword Character Prototype_All Frames",
             "Texture": {
-                "instanceID": 568105584918834980
+                "instanceID": 568105584918834996
             },
             "Columns": 8,
             "Rows": 8,
@@ -26,7 +26,7 @@
         {
             "Name": "Prototype Character_All Frames",
             "Texture": {
-                "instanceID": 568105584918835252
+                "instanceID": 568105584918835000
             },
             "Columns": 11,
             "Rows": 28,
@@ -176,108 +176,1124 @@
             "Facing": 255,
             "Sockets": [
                 {
-                    "Name": "bot",
+                    "Name": "Orb 1",
                     "FrameIndex": 0,
                     "LocalPosition": {
-                        "x": 20.0,
-                        "y": 8.0
+                        "x": 27.0,
+                        "y": 36.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 0.08403659611940384,
-                        "y": 0.08403659611940384
-                    }
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
                 },
                 {
-                    "Name": "bot",
+                    "Name": "Orb 1",
                     "FrameIndex": 1,
                     "LocalPosition": {
-                        "x": -14.0,
-                        "y": 4.0
+                        "x": 23.0,
+                        "y": 46.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
                         "x": 1.0,
                         "y": 1.0
-                    }
+                    },
+                    "DrawLayer": 1
                 },
                 {
-                    "Name": "bot",
+                    "Name": "Orb 1",
                     "FrameIndex": 2,
                     "LocalPosition": {
-                        "x": 91.0,
-                        "y": -4.0
+                        "x": 14.0,
+                        "y": 50.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
                         "x": 1.0,
                         "y": 1.0
-                    }
+                    },
+                    "DrawLayer": 1
                 },
                 {
-                    "Name": "bot",
+                    "Name": "Orb 1",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": 4.0,
+                        "y": 46.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 1",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": 0.0,
+                        "y": 36.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 1",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": 4.0,
+                        "y": 26.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 1",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": 14.0,
+                        "y": 22.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 1",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": 23.0,
+                        "y": 26.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 2",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": -7.0,
+                        "y": 60.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 2",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": -15.0,
+                        "y": 66.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 2",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": -26.0,
+                        "y": 63.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 2",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": -31.0,
+                        "y": 54.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 2",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": -29.0,
+                        "y": 44.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 2",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": -20.0,
+                        "y": 39.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 2",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": -10.0,
+                        "y": 41.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 2",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": -4.0,
+                        "y": 50.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 3",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": 7.0,
+                        "y": 18.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 3",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": -3.0,
+                        "y": 17.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 3",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": -10.0,
+                        "y": 10.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 3",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": -9.0,
+                        "y": -1.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 3",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": -1.0,
+                        "y": -8.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 3",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": 9.0,
+                        "y": -7.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 3",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": 16.0,
+                        "y": 1.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 3",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": 15.0,
+                        "y": 11.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 4",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": 18.0,
+                        "y": 78.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 4",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": 10.0,
+                        "y": 71.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 4",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": 9.0,
+                        "y": 61.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 4",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": 16.0,
+                        "y": 53.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 4",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": 26.0,
+                        "y": 52.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 4",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": 34.0,
+                        "y": 59.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 4",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": 35.0,
+                        "y": 69.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 4",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": 28.0,
+                        "y": 77.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 5",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": -52.0,
+                        "y": 37.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 5",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": -54.0,
+                        "y": 27.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 5",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": -49.0,
+                        "y": 18.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 5",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": -39.0,
+                        "y": 15.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 5",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": -30.0,
+                        "y": 21.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 5",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": -27.0,
+                        "y": 31.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 5",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": -33.0,
+                        "y": 40.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 5",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": -43.0,
+                        "y": 42.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 6",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": 25.0,
+                        "y": 11.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 6",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": 29.0,
+                        "y": 2.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 6",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": 39.0,
+                        "y": -2.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 6",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": 48.0,
+                        "y": 2.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 6",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": 52.0,
+                        "y": 11.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 6",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": 48.0,
+                        "y": 21.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 6",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": 39.0,
+                        "y": 25.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 6",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": 29.0,
+                        "y": 21.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 7",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": -24.0,
+                        "y": 76.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 7",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": -15.0,
+                        "y": 71.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 7",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": -5.0,
+                        "y": 73.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 7",
                     "FrameIndex": 3,
                     "LocalPosition": {
                         "x": 0.0,
-                        "y": -31.0
+                        "y": 82.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
                         "x": 1.0,
                         "y": 1.0
-                    }
+                    },
+                    "DrawLayer": 2
                 },
                 {
-                    "Name": "bot",
+                    "Name": "Orb 7",
                     "FrameIndex": 4,
                     "LocalPosition": {
-                        "x": 22.0,
-                        "y": -12.0
+                        "x": -2.0,
+                        "y": 92.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
                         "x": 1.0,
                         "y": 1.0
-                    }
+                    },
+                    "DrawLayer": 1
                 },
                 {
-                    "Name": "bot",
+                    "Name": "Orb 7",
                     "FrameIndex": 5,
                     "LocalPosition": {
-                        "x": 17.0,
-                        "y": 12.0
+                        "x": -11.0,
+                        "y": 97.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
                         "x": 1.0,
                         "y": 1.0
-                    }
+                    },
+                    "DrawLayer": 1
                 },
                 {
-                    "Name": "bot",
+                    "Name": "Orb 7",
                     "FrameIndex": 6,
                     "LocalPosition": {
-                        "x": -26.0,
-                        "y": 16.0
+                        "x": -21.0,
+                        "y": 95.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
                         "x": 1.0,
                         "y": 1.0
-                    }
+                    },
+                    "DrawLayer": 1
                 },
                 {
-                    "Name": "bot",
+                    "Name": "Orb 7",
                     "FrameIndex": 7,
                     "LocalPosition": {
-                        "x": -29.0,
-                        "y": -28.0
+                        "x": -26.0,
+                        "y": 86.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
                         "x": 1.0,
                         "y": 1.0
-                    }
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 8",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": -29.0,
+                        "y": -24.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 8",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": -18.0,
+                        "y": -23.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 8",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": -12.0,
+                        "y": -16.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 8",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": -13.0,
+                        "y": -5.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 8",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": -20.0,
+                        "y": 2.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 8",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": -31.0,
+                        "y": 1.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 8",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": -37.0,
+                        "y": -7.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 8",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": -37.0,
+                        "y": -17.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 9",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": 58.0,
+                        "y": 43.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 9",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": 65.0,
+                        "y": 49.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 9",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": 66.0,
+                        "y": 60.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 9",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": 59.0,
+                        "y": 68.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 9",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": 49.0,
+                        "y": 68.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 9",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": 41.0,
+                        "y": 62.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 9",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": 40.0,
+                        "y": 51.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 9",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": 47.0,
+                        "y": 43.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 10",
+                    "FrameIndex": 0,
+                    "LocalPosition": {
+                        "x": -45.0,
+                        "y": 51.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 10",
+                    "FrameIndex": 1,
+                    "LocalPosition": {
+                        "x": -42.0,
+                        "y": 61.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 10",
+                    "FrameIndex": 2,
+                    "LocalPosition": {
+                        "x": -48.0,
+                        "y": 70.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 10",
+                    "FrameIndex": 3,
+                    "LocalPosition": {
+                        "x": -58.0,
+                        "y": 72.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 10",
+                    "FrameIndex": 4,
+                    "LocalPosition": {
+                        "x": -66.0,
+                        "y": 67.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 1
+                },
+                {
+                    "Name": "Orb 10",
+                    "FrameIndex": 5,
+                    "LocalPosition": {
+                        "x": -69.0,
+                        "y": 57.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 10",
+                    "FrameIndex": 6,
+                    "LocalPosition": {
+                        "x": -63.0,
+                        "y": 48.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
+                },
+                {
+                    "Name": "Orb 10",
+                    "FrameIndex": 7,
+                    "LocalPosition": {
+                        "x": -53.0,
+                        "y": 46.0
+                    },
+                    "LocalAngle": 0.0,
+                    "LocalScale": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "DrawLayer": 2
                 }
             ]
         },
@@ -1325,7 +2341,8 @@
                     "LocalScale": {
                         "x": 1.0,
                         "y": 1.0
-                    }
+                    },
+                    "DrawLayer": 0
                 }
             ]
         },
@@ -3976,7 +4993,36 @@
     "SocketCatalog": {
         "Items": [
             {
-                "SocketName": "bot",
+                "SocketName": "Socket 1",
+                "Texture": {
+                    "instanceID": 568105584918835002
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 1",
                 "Texture": {
                     "instanceID": 0
                 },
@@ -3999,7 +5045,271 @@
                 "Scale": 1.0,
                 "FlipX": false,
                 "SortingOffset": 0,
-                "PreviewEnabled": true
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 2",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 3",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 5",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 6",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 7",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 8",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 9",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 10",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
+            },
+            {
+                "SocketName": "Orb 4",
+                "Texture": {
+                    "instanceID": 0
+                },
+                "Profile": {
+                    "instanceID": 568105584918834384
+                },
+                "ClipName": "Clip 1",
+                "PlayMode": 1,
+                "Columns": 1,
+                "Rows": 1,
+                "Pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                },
+                "CellIndex": 0,
+                "GripPixels": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "Scale": 1.0,
+                "FlipX": false,
+                "SortingOffset": 0,
+                "PreviewEnabled": true,
+                "PathWrap": 0,
+                "MotionMode": 1,
+                "Speed": 1.0
             }
         ]
     },

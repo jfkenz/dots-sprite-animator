@@ -20,6 +20,9 @@ namespace InvertLab.Sprites.DOTS
         [Tooltip("Socket identity shared by the profile's frame keys.")]
         public string SocketName = "Weapon";
 
+        [Tooltip("Stable gameplay ID, for example equipment.head. Empty uses the legacy Socket Name.")]
+        public string SocketId = string.Empty;
+
         [Tooltip("Extra local offset, in world units, rotated with the socket.")]
         public Vector2 PositionOffset;
 
@@ -51,14 +54,15 @@ namespace InvertLab.Sprites.DOTS
                 }
 
                 string socketName = SpriteSocketKeys.CanonicalName(authoring.SocketName);
+                string socketId = SpriteSocketIdUtility.Canonical(authoring.SocketId, socketName);
                 if (player.Profile != null)
                     DependsOn(player.Profile);
 
-                if (!HasSocket(player, socketName))
+                if (!HasSocket(player, socketId, socketName))
                 {
                     Debug.LogWarning(
-                        $"[{nameof(SpriteSocketAttachmentAuthoring)}] Socket '{socketName}' was not found " +
-                        $"on any clip in '{player.name}'. The attachment keeps its authored pose until a key exists.",
+                        $"[{nameof(SpriteSocketAttachmentAuthoring)}] Socket ID '{socketId}' was not found " +
+                        $"on any frame or independent track in '{player.name}'. The attachment keeps its authored pose until a key exists.",
                         authoring);
                 }
 
@@ -68,6 +72,8 @@ namespace InvertLab.Sprites.DOTS
                 {
                     Source = sourceEntity,
                     SocketName = new FixedString64Bytes(socketName),
+                    SocketId = new FixedString64Bytes(socketId),
+                    SocketIdHash = SpriteSockets.Hash(socketId),
                     PositionOffset = new float2(authoring.PositionOffset.x, authoring.PositionOffset.y),
                     AngleOffset = authoring.AngleOffset,
                     BaseScale = authoring.transform.localScale.x,
@@ -93,9 +99,35 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
 
-            static bool HasSocket(SpriteAnimSetAuthoring player, string socketName)
+            static bool HasSocket(SpriteAnimSetAuthoring player, string socketId, string socketName)
             {
-                var profileClips = player.Profile?.Data?.Clips;
+                var profile = player.Profile?.Data;
+                profile?.EnsureSocketCatalog();
+                var catalog = profile?.SocketCatalog?.Items;
+                if (catalog != null)
+                {
+                    for (int i = 0; i < catalog.Count; i++)
+                    {
+                        var item = catalog[i];
+                        if (item != null &&
+                            string.Equals(item.SocketId, socketId,
+                                System.StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                }
+                var motions = profile?.SocketMotions;
+                if (motions != null)
+                {
+                    for (int i = 0; i < motions.Count; i++)
+                    {
+                        var motion = motions[i];
+                        if (motion != null && motion.Keys != null && motion.Keys.Count > 0 &&
+                            SpriteSocketKeys.NamesEqual(motion.SocketName, socketName))
+                            return true;
+                    }
+                }
+
+                var profileClips = profile?.Clips;
                 if (profileClips != null && profileClips.Count > 0)
                 {
                     for (int clipIndex = 0; clipIndex < profileClips.Count; clipIndex++)

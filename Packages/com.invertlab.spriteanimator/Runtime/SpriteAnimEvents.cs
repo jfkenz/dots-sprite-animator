@@ -31,6 +31,28 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 
+    public static class SpriteSocketEvents
+    {
+        public static event Action<Entity, SpriteSocketEventBuffer> Raised;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Reset() => Raised = null;
+
+        internal static void Raise(Entity entity, SpriteSocketEventBuffer socketEvent)
+            => Raised?.Invoke(entity, socketEvent);
+
+        public static void Ensure(EntityManager entityManager, Entity entity)
+        {
+            if (!entityManager.HasBuffer<SpriteSocketEventBuffer>(entity))
+                entityManager.AddBuffer<SpriteSocketEventBuffer>(entity);
+            if (!entityManager.HasComponent<SpriteSocketEventsPending>(entity))
+            {
+                entityManager.AddComponent<SpriteSocketEventsPending>(entity);
+                entityManager.SetComponentEnabled<SpriteSocketEventsPending>(entity, false);
+            }
+        }
+    }
+
     /// <summary>Adds event storage to legacy/programmatically-created animators once.</summary>
     [UpdateInGroup(typeof(SimulationSystemGroup), OrderFirst = true)]
     public partial struct SpriteAnimEventBootstrapSystem : ISystem
@@ -97,6 +119,42 @@ namespace InvertLab.Sprites.DOTS
             {
                 for (int i = 0; i < events.Length; i++)
                     SpriteAnimEvents.Raise(entity, events[i]);
+            }
+        }
+    }
+
+    [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [UpdateAfter(typeof(SpriteAnimEventClearSystem))]
+    [UpdateBefore(typeof(SpriteSocketMotionSystem))]
+    public partial struct SpriteSocketEventClearSystem : ISystem
+    {
+        public void OnUpdate(ref SystemState state)
+        {
+            var pending = SystemAPI.GetComponentLookup<SpriteSocketEventsPending>();
+            foreach (var (events, entity) in
+                     SystemAPI.Query<DynamicBuffer<SpriteSocketEventBuffer>>()
+                         .WithAll<SpriteSocketEventsPending>()
+                         .WithEntityAccess())
+            {
+                events.Clear();
+                pending.SetComponentEnabled(entity, false);
+            }
+        }
+    }
+
+    [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [UpdateAfter(typeof(SpriteSocketMotionSystem))]
+    public partial class SpriteSocketEventDispatchSystem : SystemBase
+    {
+        protected override void OnUpdate()
+        {
+            foreach (var (events, entity) in
+                     SystemAPI.Query<DynamicBuffer<SpriteSocketEventBuffer>>()
+                         .WithAll<SpriteSocketEventsPending>()
+                         .WithEntityAccess())
+            {
+                for (int i = 0; i < events.Length; i++)
+                    SpriteSocketEvents.Raise(entity, events[i]);
             }
         }
     }

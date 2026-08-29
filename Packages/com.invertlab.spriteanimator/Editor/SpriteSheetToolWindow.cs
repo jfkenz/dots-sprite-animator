@@ -18,7 +18,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             Reorder,
             ResizeFrame,
             Event,
+            SocketDraw,
             Marquee,
+        }
+
+        enum TimelineView
+        {
+            Frames,
+            Sockets,
         }
 
         enum ColliderCreationMode
@@ -33,6 +40,17 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             Authored,
             Centered,
+        }
+
+        enum SelectionOp
+        {
+            Replace,
+            Add,
+            Subtract,
+            Toggle,
+            Intersect,
+            Range,
+            RangeAdd,
         }
 
         enum ColliderHandleKind
@@ -91,7 +109,12 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         const string PackageVersion = "0.8.0";
         const float ToolbarHeight = 48f;
-        const float TimelineHeight = 226f;
+        const float TimelineHeight = 244f;
+        const float TimelineEventLaneY = 27f;
+        const float TimelineEventLaneH = 23f;
+        const float TimelineDrawLaneY = 50f;
+        const float TimelineDrawLaneH = 22f;
+        const float TimelineCardsY = 76f;
         const float DefaultClipPanelWidth = 220f;
         const float DefaultInspectorPanelWidth = 340f;
         const float MinClipPanelWidth = 196f;
@@ -108,6 +131,10 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float SocketMinAbsScale = 0.05f;
         const float SocketMaxAbsScale = 32f;
         const float SocketHandleHit = 14f;
+        const float SocketGroupPivotHit = 16f;
+        const float SocketGroupGizmoPad = 28f;
+        const float SocketGroupGizmoMinHalf = 36f;
+        const int SocketProfilePickerId = 0x5A0C3701;
         const string ClipRenameControl = "BallForgeSpriteAnimator.ClipRename";
         const string SheetRenameControl = "InvertLabSpriteAnimator.SheetRename";
         const string StringFieldControlPrefix = "BallForgeSpriteAnimator.Text.";
@@ -120,6 +147,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         static readonly Color PanelAltColor = new(0.13f, 0.15f, 0.18f);
         static readonly Color BorderColor = new(0.22f, 0.25f, 0.3f);
         static readonly Color AccentColor = new(0.18f, 0.66f, 0.92f);
+        static readonly Color SocketDrawBehindColor = new(0.62f, 0.42f, 0.98f);
+        static readonly Color SocketDrawFrontColor = new(1f, 0.76f, 0.22f);
         static readonly Color EventColor = new(1f, 0.61f, 0.2f);
         static readonly Color TextMuted = new(0.58f, 0.64f, 0.72f);
 
@@ -145,15 +174,47 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _focusSheetRename;
         int _selectedFrame;
         readonly HashSet<int> _selectedFrames = new();
+        int _frameListAnchor = -1;
         int _selectedEventFrame = -1;
+        int _selectedSocketDrawFrame = -1;
+        string _selectedSocketDrawName;
+        int _dragDrawSourceFrame = -1;
+        string _dragDrawSocketName;
+        byte _dragDrawLayer;
+        bool _drawDragMoved;
         int _newHitboxId = 1;
         ColliderCreationMode _colliderCreationMode = ColliderCreationMode.None;
         bool _continuousColliderPlacement;
         bool _socketPlacementArmed;
+        bool _socketPlacementIndependent;
         string _selectedSocketName;
         readonly HashSet<string> _selectedSockets = new();
+        int _socketListAnchor = -1;
+        bool _socketListAnchorIndependent;
+        bool _socketListMarqueePending;
+        bool _socketListMarqueeActive;
+        bool _socketListMarqueeIndependent;
+        Vector2 _socketListMarqueeStart;
+        SelectionOp _socketListMarqueeOp = SelectionOp.Replace;
+        readonly HashSet<string> _socketListMarqueeBaseline = new();
+        readonly List<string> _selectionScratchNames = new();
+        readonly List<int> _selectionScratchFrames = new();
+        readonly List<FrameBoxDef> _selectionScratchColliders = new();
+        readonly List<Rect> _socketListRowRects = new();
+        readonly List<string> _cachedSocketNames = new();
+        readonly List<string> _visibleSocketNames = new();
+        int _cachedSocketNamesGui = -1;
+        int _cachedSocketNamesCount = -1;
+        List<FrameSocketDef> _cachedSocketNamesSource;
+        int _guiPass;
+        readonly List<string> _previewMarqueeSocketNames = new();
+        readonly List<Vector2> _previewMarqueeSocketPins = new();
         readonly List<string> _socketMoveNames = new();
+        readonly List<FrameSocketDef> _socketMoveKeys = new();
         readonly List<Vector2> _socketMoveStarts = new();
+        readonly List<Vector2> _socketMoveStartScales = new();
+        readonly List<float> _socketMoveStartAngles = new();
+        readonly List<string> _socketProfileAssignNames = new();
         bool _socketMoveUndoRecorded;
         bool _draggingSocket;
         Vector2 _socketDragStart;
@@ -164,6 +225,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         Vector2 _socketPivotStart;
         float _socketStartAtan;
         Vector2 _socketHandleLocalStart;
+        Vector2 _socketGroupCentroidStart;
+        bool _socketGroupTransform;
         int _socketHotControl;
         int _socketInheritRangeAnchor = -1;
         bool _showSocketInheritPanel;
@@ -178,6 +241,24 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _socketInheritScale = true;
         bool _socketInheritDragging;
         Vector2 _socketInheritDragOffset;
+        bool _showSocketTransformPanel;
+        Rect _socketTransformPanelRect = new(80f, 72f, 300f, 348f);
+        bool _socketTransformDragging;
+        Vector2 _socketTransformDragOffset;
+        bool _socketTransformAllFrames;
+        readonly List<string> _socketTransformNames = new();
+        float _socketSampleFraction;
+        readonly List<FrameSocketDef> _socketPathKeys = new();
+        readonly List<Vector3> _socketPathPoints = new();
+        [SerializeField] int _socketOrbitShape = 1;
+        [SerializeField] int _socketOrbitTilt;
+        [SerializeField] int _socketOrbitPattern;
+        [SerializeField] int _socketOrbitCount = 3;
+        [SerializeField] int _socketCoplanarCount = 3;
+        [SerializeField] float _socketOrbitRadius;
+        [SerializeField] Vector2 _socketOrbitCenter;
+        [SerializeField] bool _socketOrbitCenterSet;
+        [SerializeField] TimelineView _timelineView;
 
         bool _playing = false;
         bool _previewLoop = true;
@@ -200,6 +281,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         Vector2 _clipScroll;
         Vector2 _inspectorScroll;
         Vector2 _timelineScroll;
+        Vector2 _socketTimelineScroll;
+        int _selectedSocketTriggerTrack = -1;
+        int _selectedSocketTriggerIndex = -1;
+        bool _draggingSocketTrigger;
+        bool _socketTriggerUndoRecorded;
+        float _socketTriggerStartTime;
+        int _socketTriggerHotControl;
         int _renamingClip = -1;
         string _renameClipValue = string.Empty;
         string _renameClipOriginal = string.Empty;
@@ -225,7 +313,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         Vector2 _timelineMarqueeStart;
         Rect _timelineMarqueeRect;
         bool _timelineMarqueeMoved;
-        bool _timelineMarqueeAdditive;
+        SelectionOp _timelineMarqueeOp = SelectionOp.Replace;
         readonly HashSet<int> _timelineMarqueeBaseline = new();
         int _dragEventSourceFrame = -1;
         byte _dragEventId;
@@ -239,7 +327,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _polygonHasHover;
         bool _colliderMarqueePending;
         bool _draggingColliderMarquee;
-        bool _colliderMarqueeAdditive;
+        SelectionOp _previewMarqueeOp = SelectionOp.Replace;
+        int _previewMarqueeHotControl;
+        int _colliderListAnchor = -1;
         Vector2 _colliderMarqueeStart;
         Rect _colliderMarqueeRect;
         readonly HashSet<FrameBoxDef> _previewMarqueeColliderBaseline = new();
@@ -266,6 +356,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         GUIStyle _titleStyle;
         GUIStyle _sectionStyle;
         GUIStyle _mutedStyle;
+        GUIStyle _mutedWrapStyle;
         GUIStyle _clipStyle;
         GUIStyle _clipSelectedStyle;
         GUIStyle _transportStyle;
@@ -339,9 +430,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void OnGUI()
         {
+            _guiPass++;
             EnsureProfile();
             EnsureStyles();
             HandleGlobalShortcuts();
+            PollSocketProfilePicker();
             if (Event.current.type == EventType.MouseDown && Event.current.button == 0)
                 Focus();
 
@@ -386,8 +479,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             HandleWindowSocketContextClick(previewRect);
 
             DrawClipBrowser(clipsRect);
-            DrawPreview(previewRect);
             DrawInspector(inspectorRect);
+            DrawPreview(previewRect);
             DrawPanelSplitter(leftSplitter, true, workRect.width);
             DrawPanelSplitter(rightSplitter, false, workRect.width);
             DrawTimeline(timelineRect, timelineControlId);
@@ -396,6 +489,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (inheritBlocksEditor)
                 Event.current.type = editorEvent;
             DrawSocketInheritOverlay();
+            DrawSocketTransformOverlay();
         }
 
         void ClampPanelWidths(float workWidth)
@@ -513,6 +607,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedFrame = Mathf.Max(0, frame);
             _selectedFrames.Clear();
             _selectedFrames.Add(_selectedFrame);
+            _frameListAnchor = _selectedFrame;
         }
 
         int LowestSelectedFrame()
@@ -524,28 +619,72 @@ namespace InvertLab.Sprites.DOTS.Editor
             return lowest == int.MaxValue ? _selectedFrame : lowest;
         }
 
-        void ApplyFrameModifierClick(int frame, bool additive, bool toggle)
+        void ApplyFrameModifierClick(int frame, SelectionOp op)
         {
             frame = Mathf.Max(0, frame);
-            if (!additive)
-            {
-                SelectOnlyFrame(frame);
-                return;
-            }
+            int count = CurrentClip?.Frames?.Length ?? (frame + 1);
+            frame = Mathf.Min(frame, Mathf.Max(0, count - 1));
+            int anchor = _frameListAnchor >= 0 ? Mathf.Clamp(_frameListAnchor, 0, Mathf.Max(0, count - 1))
+                : _selectedFrame;
 
-            if (toggle && _selectedFrames.Contains(frame))
+            switch (op)
             {
-                if (_selectedFrames.Count > 1)
+                case SelectionOp.Add:
+                    _selectedFrames.Add(frame);
+                    _selectedFrame = frame;
+                    _frameListAnchor = frame;
+                    break;
+                case SelectionOp.Toggle:
+                    if (_selectedFrames.Contains(frame) && _selectedFrames.Count > 1)
+                    {
+                        _selectedFrames.Remove(frame);
+                        if (!_selectedFrames.Contains(_selectedFrame))
+                            _selectedFrame = LowestSelectedFrame();
+                    }
+                    else
+                    {
+                        _selectedFrames.Add(frame);
+                        _selectedFrame = frame;
+                    }
+                    _frameListAnchor = frame;
+                    break;
+                case SelectionOp.Subtract:
+                    if (_selectedFrames.Contains(frame) && _selectedFrames.Count > 1)
+                    {
+                        _selectedFrames.Remove(frame);
+                        if (!_selectedFrames.Contains(_selectedFrame))
+                            _selectedFrame = LowestSelectedFrame();
+                    }
+                    break;
+                case SelectionOp.Range:
+                case SelectionOp.RangeAdd:
                 {
-                    _selectedFrames.Remove(frame);
-                    if (!_selectedFrames.Contains(_selectedFrame))
-                        _selectedFrame = LowestSelectedFrame();
+                    if (op == SelectionOp.Range)
+                        _selectedFrames.Clear();
+                    int a = Mathf.Min(anchor, frame);
+                    int b = Mathf.Max(anchor, frame);
+                    for (int i = a; i <= b; i++)
+                        _selectedFrames.Add(i);
+                    _selectedFrame = frame;
+                    if (_frameListAnchor < 0)
+                        _frameListAnchor = frame;
+                    break;
                 }
-                return;
+                case SelectionOp.Intersect:
+                {
+                    bool keep = _selectedFrames.Contains(frame);
+                    _selectedFrames.Clear();
+                    _selectedFrames.Add(keep ? frame : Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, count - 1)));
+                    _selectedFrame = keep ? frame : LowestSelectedFrame();
+                    break;
+                }
+                default:
+                    SelectOnlyFrame(frame);
+                    break;
             }
 
-            _selectedFrames.Add(frame);
-            _selectedFrame = frame;
+            if (_selectedFrames.Count == 0)
+                SelectOnlyFrame(frame);
         }
 
         void DrawToolbar(Rect rect)
@@ -679,6 +818,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedClip = -1;
             SelectOnlyFrame(0);
             _selectedEventFrame = -1;
+            _selectedSocketDrawFrame = -1;
             _selectedOnionFrame = -1;
             _previewTime = 0f;
             _playing = false;
@@ -1699,6 +1839,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             var clip = CurrentClip;
             var state = EvaluatePreview(clip, _previewTime);
+            _socketSampleFraction = _draggingSocket ? 0f : state.Fraction;
             string frameText = clip == null ? "No clip" :
                 $"Frame {state.Frame + 1}/{clip.Frames.Length}   •   {_previewTime:F2}s";
             if (clip != null)
@@ -1775,6 +1916,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawOnionGhostBadges(onionGhosts);
 
             DrawSocketCatalogPreviews(cell, clip, state.Frame, behind: false);
+            if (_selectedSockets.Count <= 1 && !SocketSelectionBusy)
+                DrawSocketMotionPaths(cell, clip, state.Frame);
             DrawSockets(cell, clip, state.Frame);
             DrawPivot(cell);
             if (_socketPlacementArmed && _colliderCreationMode == ColliderCreationMode.None)
@@ -1808,7 +1951,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             else
             {
-                if (TryHandleSocketContextClick(clip, state.Frame, cell))
+                // A captured marquee owns all pointer events until release. Selection-
+                // dependent gizmos can change IMGUI control IDs while the box crosses
+                // sockets, so route this before any socket/collider hit testing.
+                if (_colliderMarqueePending)
+                {
+                    HandlePreviewObjectSelectionInput(
+                        previewControlId, cell, new Rect(0f, 0f, contentW, contentH),
+                        clip, state.Frame, onionGhosts);
+                }
+                else if (TryHandleSocketContextClick(clip, state.Frame, cell))
                 {
                 }
                 else if (_draggingColliderTransform)
@@ -1877,7 +2029,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             bool beginPan = evt.type == EventType.MouseDown &&
-                (evt.button == 2 || (evt.button == 0 && evt.alt)) &&
+                evt.button == 2 &&
                 canvas.Contains(evt.mousePosition);
             if (beginPan)
             {
@@ -1907,19 +2059,21 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, 20f), "INSPECTOR", _sectionStyle);
             PrepareInspectorUndo();
-            float top = 38f;
+            // Always reserve the socket action bar so selecting a socket does not
+            // shrink the inspector and jump the list under the next click.
+            float top = 90f;
             if (!string.IsNullOrEmpty(_selectedSocketName) && CurrentClip != null)
             {
                 var bar = new Rect(rect.x + 9f, rect.y + 32f, rect.width - 18f, 54f);
                 DrawSelectedSocketBar(bar);
-                top = 90f;
             }
             var area = new Rect(rect.x + 9f, rect.y + top, rect.width - 18f, rect.height - top - 10f);
             int colliderRows = CurrentClip == null ? 0 : CurrentFrameColliders(CurrentClip, _selectedFrame).Count;
             int socketRows = 0;
             if (CurrentClip?.Sockets != null)
-                socketRows = SpriteSocketKeys.UniqueNamesInOrder(CurrentClip.Sockets).Count;
-            float socketExtra = 72f + socketRows * 40f + (_selectedSocketName != null ? 420f : 0f);
+                socketRows = CachedUniqueSocketNames(CurrentClip).Count;
+            float socketExtra = 72f + socketRows * 48f + 340f +
+                (_selectedSockets.Count == 1 ? 520f : 0f);
             var inspectorContent = new Rect(0f, 0f, area.width - 15f,
                 Mathf.Max(area.height, 1640f + colliderRows * 26f + socketExtra));
             _inspectorScroll = GUI.BeginScrollView(area, _inspectorScroll, inspectorContent);
@@ -2050,7 +2204,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_showTimelineInputHelp)
             {
                 EditorGUILayout.HelpBox(
-                    "Drag a frame to reorder. Drag empty track to box-select. Drag the right edge to change hold. Drag the ruler or playhead to scrub. Alt-drag or middle-mouse pans. Shift/Ctrl click adds to the selection.",
+                    "Drag a frame to reorder. Drag empty track to box-select. Drag the right edge to change hold. Drag the ruler or playhead to scrub. Middle-mouse pans. Shift = add/range, Ctrl/Cmd = toggle, Alt = subtract, Shift+Alt = intersect.",
                     MessageType.None);
             }
 
@@ -2167,6 +2321,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
 
                 DrawEventMarkerInspector(clip);
+                DrawSocketDrawKeyInspector(clip);
                 DrawSocketInspector(clip);
 
                 GUILayout.Space(9f);
@@ -2289,7 +2444,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _colliderCreationMode switch
                     {
                         ColliderCreationMode.None =>
-                            "Choose a shape to create, or click existing colliders to select them. Drag empty preview space for marquee selection.",
+                            "Choose a shape to create, or click existing colliders to select them. Drag empty preview space for marquee. Shift adds, Ctrl/Cmd toggles, Alt subtracts, Shift+Alt intersects.",
                         ColliderCreationMode.Polygon =>
                             "Click to draw polygon vertices. Click the first point, double-click, or press Enter to close. Right-click/Backspace removes the last point; Escape cancels.",
                         _ =>
@@ -2309,12 +2464,50 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             GUILayout.EndArea();
             GUI.EndScrollView();
+            ConsumeInspectorPointer(rect);
+        }
+
+        static void ConsumeInspectorPointer(Rect inspectorRect)
+        {
+            var evt = Event.current;
+            if (evt == null || !inspectorRect.Contains(evt.mousePosition))
+                return;
+            if (evt.type is EventType.MouseDown or EventType.MouseUp or EventType.MouseDrag
+                or EventType.ScrollWheel or EventType.ContextClick)
+                evt.Use();
         }
 
         void DrawTimeline(Rect rect, int controlId)
         {
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, 140f, 20f), "TIMELINE", _sectionStyle);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, 68f, 20f), "TIMELINE", _sectionStyle);
+            var frameTab = new Rect(rect.x + 78f, rect.y + 6f, 62f, 22f);
+            var socketTab = new Rect(frameTab.xMax, frameTab.y, 126f, frameTab.height);
+            bool frames = GUI.Toggle(frameTab, _timelineView == TimelineView.Frames,
+                new GUIContent("Frames", "Character frames, events, and Frame-Attached sockets."),
+                EditorStyles.miniButtonLeft);
+            bool sockets = GUI.Toggle(socketTab, _timelineView == TimelineView.Sockets,
+                new GUIContent("Independent Motion",
+                    "Companions, orbitals, and effects on their own timeline, anchored to the player pivot."),
+                EditorStyles.miniButtonRight);
+            TimelineView nextView = _timelineView;
+            if (frames && _timelineView != TimelineView.Frames)
+                nextView = TimelineView.Frames;
+            if (sockets && _timelineView != TimelineView.Sockets)
+                nextView = TimelineView.Sockets;
+            if (nextView != _timelineView)
+            {
+                if (_timelineDragMode != TimelineDragMode.None)
+                    EndTimelineDrag();
+                _timelineView = nextView;
+                GUI.FocusControl(null);
+            }
+
             var clip = CurrentClip;
+            if (_timelineView == TimelineView.Sockets)
+            {
+                DrawSocketTimeline(rect, clip);
+                return;
+            }
             if (clip == null)
             {
                 if (_timelineDragMode != TimelineDragMode.None)
@@ -2337,8 +2530,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             const float headerBtnGap = 4f;
             var deleteEmptyRect = new Rect(rect.xMax - deleteEmptyWidth - 8f, rect.y + 7f, deleteEmptyWidth, 20f);
             var addFrameRect = new Rect(deleteEmptyRect.x - addFrameWidth - headerBtnGap, rect.y + 7f, addFrameWidth, 20f);
-            GUI.Label(new Rect(rect.x + 105f, rect.y + 10f,
-                    Mathf.Max(40f, addFrameRect.x - rect.x - 113f), 16f),
+            GUI.Label(new Rect(rect.x + 274f, rect.y + 10f,
+                    Mathf.Max(40f, addFrameRect.x - rect.x - 282f), 16f),
                 $"{clip.Frames.Length} frames   •   {total:F3}s   •   drag = marquee   •   Alt+drag image = reorder   •   frame edge = duration   •   right-click lane = event{markerSelection}",
                 _mutedStyle);
             int emptyFrameCount = CountEmptyFrames(clip);
@@ -2362,7 +2555,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _timelineViewportGui = viewport;
             float contentWidth = Mathf.Max(viewport.width - 16f, total * pixelsPerSecond + 52f);
             _timelineContentWidth = contentWidth;
-            var content = new Rect(0f, 0f, contentWidth, 172f);
+            var content = new Rect(0f, 0f, contentWidth, 192f);
             Vector2 viewportScreenPosition = GUIUtility.GUIToScreenPoint(viewport.position);
             var viewportScreen = new Rect(viewportScreenPosition, viewport.size);
 
@@ -2375,15 +2568,24 @@ namespace InvertLab.Sprites.DOTS.Editor
             preview = EvaluatePreview(clip, _previewTime);
             playheadX = SpriteAnimPlayback.PlayheadX(preview.TimelineTime, 48f, pixelsPerSecond);
             if (_timelineDragMode is TimelineDragMode.Scrub or TimelineDragMode.Reorder or
-                    TimelineDragMode.ResizeFrame or TimelineDragMode.Event)
+                    TimelineDragMode.ResizeFrame or TimelineDragMode.Event or
+                    TimelineDragMode.SocketDraw)
                 playheadX = Mathf.Max(48f, _timelineDragContentMouse.x);
 
             DrawRuler(contentWidth, total, pixelsPerSecond);
-            EditorGUI.DrawRect(new Rect(0f, 27f, contentWidth, 27f), new Color(0.08f, 0.095f, 0.12f));
-            GUI.Label(new Rect(6f, 31f, 48f, 18f), "EVENT", _mutedStyle);
-            EditorGUIUtility.AddCursorRect(new Rect(0f, 0f, contentWidth, 27f), MouseCursor.SlideArrow);
-            EditorGUIUtility.AddCursorRect(new Rect(0f, 27f, contentWidth, 27f), MouseCursor.SlideArrow);
-            EditorGUIUtility.AddCursorRect(new Rect(0f, 54f, contentWidth, 118f), MouseCursor.Arrow);
+            EditorGUI.DrawRect(new Rect(0f, TimelineEventLaneY, contentWidth, TimelineEventLaneH),
+                new Color(0.08f, 0.095f, 0.12f));
+            GUI.Label(new Rect(6f, TimelineEventLaneY + 4f, 48f, 16f), "EVENT", _mutedStyle);
+            EditorGUI.DrawRect(new Rect(0f, TimelineDrawLaneY, contentWidth, TimelineDrawLaneH),
+                new Color(0.09f, 0.1f, 0.13f));
+            GUI.Label(new Rect(2f, TimelineDrawLaneY, 46f, TimelineDrawLaneH),
+                "SOCKET\nDRAW", _mutedWrapStyle);
+            EditorGUIUtility.AddCursorRect(new Rect(0f, 0f, contentWidth, TimelineEventLaneY), MouseCursor.SlideArrow);
+            EditorGUIUtility.AddCursorRect(new Rect(0f, TimelineEventLaneY, contentWidth, TimelineEventLaneH),
+                MouseCursor.SlideArrow);
+            EditorGUIUtility.AddCursorRect(new Rect(0f, TimelineDrawLaneY, contentWidth, TimelineDrawLaneH),
+                MouseCursor.Arrow);
+            EditorGUIUtility.AddCursorRect(new Rect(0f, TimelineCardsY, contentWidth, 118f), MouseCursor.Arrow);
             for (int i = 0; i < frameCount; i++)
             {
                 EditorGUIUtility.AddCursorRect(cards[i], MouseCursor.MoveArrow);
@@ -2402,14 +2604,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Color markerColor = EventMarkerColor(clip.EventIds[i]);
                 Color guideColor = markerColor;
                 guideColor.a = 0.38f;
-                EditorGUI.DrawRect(new Rect(markerX - 0.5f, 27f, 1f, 135f), guideColor);
+                EditorGUI.DrawRect(new Rect(markerX - 0.5f, TimelineEventLaneY, 1f, 145f), guideColor);
                 if (i == _selectedEventFrame)
-                    DrawDiamond(new Vector2(markerX, 40f), 9f, Color.white);
-                DrawDiamond(new Vector2(markerX, 40f), 6f, markerColor);
-                GUI.Label(new Rect(markerX + 8f, 29f, 76f, 16f), $"{markerTime:F3}s", _mutedStyle);
+                    DrawDiamond(new Vector2(markerX, TimelineEventLaneY + 13f), 9f, Color.white);
+                DrawDiamond(new Vector2(markerX, TimelineEventLaneY + 13f), 6f, markerColor);
+                GUI.Label(new Rect(markerX + 8f, TimelineEventLaneY + 2f, 76f, 16f), $"{markerTime:F3}s", _mutedStyle);
                 EditorGUIUtility.AddCursorRect(
-                    new Rect(markerX - 10f, 30f, 20f, 20f), MouseCursor.MoveArrow);
+                    new Rect(markerX - 10f, TimelineEventLaneY + 3f, 20f, 18f), MouseCursor.MoveArrow);
             }
+
+            DrawTimelineSocketDrawKeys(clip, frameTimes, pixelsPerSecond);
 
             for (int i = 0; i < frameCount; i++)
             {
@@ -2428,7 +2632,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawBorder(card, selected ? AccentColor : BorderColor, selected ? 2f : 1f);
                 GUI.Label(new Rect(card.x + 6f, card.y + 4f, card.width - 12f, 16f),
                     $"F{i + 1}  •  {duration:F3}s", _mutedStyle);
-                var thumbArea = new Rect(card.x + 7f, 83f, card.width - 14f, 62f);
+                var thumbArea = new Rect(card.x + 7f, TimelineCardsY + 23f, card.width - 14f, 62f);
                 DrawCheckerboard(thumbArea, 9f);
                 DrawClipFrame(clip, i, thumb, 1f);
                 bool hovered = ThumbnailContains(thumb, Event.current.mousePosition);
@@ -2447,14 +2651,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUIUtility.AddCursorRect(resizeHandle, MouseCursor.ResizeHorizontal);
             }
 
-            EditorGUI.DrawRect(new Rect(playheadX, 2f, 2f, 160f), new Color(1f, 0.28f, 0.3f));
+            EditorGUI.DrawRect(new Rect(playheadX, 2f, 2f, 178f), new Color(1f, 0.28f, 0.3f));
             DrawTriangle(new Vector2(playheadX + 1f, 2f), 6f, new Color(1f, 0.28f, 0.3f));
 
             if (_timelineDragMode == TimelineDragMode.Reorder && _reorderMoved && _dragFrameIndex >= 0)
             {
                 float insertionX = DropSlotX(_dropFrameSlot, cards);
-                EditorGUI.DrawRect(new Rect(insertionX - 2f, 54f, 4f, 112f), AccentColor);
-                DrawTriangle(new Vector2(insertionX, 53f), 7f, AccentColor);
+                EditorGUI.DrawRect(new Rect(insertionX - 2f, TimelineCardsY, 4f, 112f), AccentColor);
+                DrawTriangle(new Vector2(insertionX, TimelineCardsY - 1f), 7f, AccentColor);
 
                 var source = cards[Mathf.Clamp(_dragFrameIndex, 0, cards.Length - 1)];
                 var ghost = new Rect(
@@ -2483,6 +2687,265 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUI.EndScrollView();
         }
 
+        void DrawSocketTimeline(Rect rect, SpriteClipDef clip)
+        {
+            _profile.EnsureSocketCatalog();
+            _profile.EnsureSocketMotions();
+
+            const float captureWidth = 164f;
+            var captureRect = new Rect(
+                rect.xMax - captureWidth - 8f, rect.y + 7f, captureWidth, 20f);
+            using (new EditorGUI.DisabledScope(
+                       clip == null || _selectedSockets.Count == 0))
+            {
+                if (GUI.Button(captureRect,
+                        new GUIContent("Capture Selected Motion",
+                            "Promote selected socket keys into independent tracks. Their position is stored from the player pivot and no longer needs copying to every clip."),
+                        EditorStyles.miniButton))
+                    CaptureSelectedSocketMotions(clip);
+            }
+
+            GUI.Label(new Rect(rect.x + 274f, rect.y + 10f,
+                    Mathf.Max(40f, captureRect.x - rect.x - 282f), 16f),
+                $"{_profile.SocketMotions.Count} independent track{Plural(_profile.SocketMotions.Count)}   •   player pivot anchored   •   time is independent from clips",
+                _mutedStyle);
+
+            var viewport = new Rect(rect.x + 8f, rect.y + 34f, rect.width - 16f, rect.height - 42f);
+            float contentHeight = Mathf.Max(viewport.height - 16f,
+                34f + _profile.SocketMotions.Count * 38f);
+            var content = new Rect(0f, 0f, Mathf.Max(320f, viewport.width - 16f), contentHeight);
+            _socketTimelineScroll = GUI.BeginScrollView(
+                viewport, _socketTimelineScroll, content, false, true);
+
+            const float labelWidth = 154f;
+            float trackWidth = Mathf.Max(120f, content.width - labelWidth - 18f);
+            EditorGUI.DrawRect(new Rect(0f, 0f, content.width, 26f),
+                new Color(0.08f, 0.095f, 0.12f));
+            GUI.Label(new Rect(8f, 5f, labelWidth - 8f, 16f),
+                "SOCKET • ◆ KEY • ▲ TRIGGER", _mutedStyle);
+            for (int tick = 0; tick <= 4; tick++)
+            {
+                float u = tick / 4f;
+                float x = labelWidth + u * trackWidth;
+                EditorGUI.DrawRect(new Rect(x, 22f, 1f, contentHeight - 22f),
+                    new Color(1f, 1f, 1f, tick == 0 || tick == 4 ? 0.16f : 0.07f));
+                GUI.Label(new Rect(x - 16f, 4f, 36f, 16f), $"{u * 100f:0}%", _mutedStyle);
+            }
+
+            if (_profile.SocketMotions.Count == 0)
+            {
+                GUI.Label(new Rect(12f, 44f, content.width - 24f, 38f),
+                    "Select an Independent socket, then click Capture Selected Motion.\nThe track will continue when the character changes clips.",
+                    _mutedWrapStyle);
+                GUI.EndScrollView();
+                return;
+            }
+
+            for (int i = 0; i < _profile.SocketMotions.Count; i++)
+            {
+                var track = _profile.SocketMotions[i];
+                float y = 30f + i * 38f;
+                var row = new Rect(0f, y, content.width, 34f);
+                bool selected = IsSocketSelected(track.SocketName);
+                EditorGUI.DrawRect(row, selected
+                    ? new Color(0.16f, 0.4f, 0.56f, 0.65f)
+                    : new Color(0.11f, 0.125f, 0.15f, 0.9f));
+                DrawBorder(row, selected ? AccentColor : BorderColor, selected ? 1.5f : 1f);
+
+                var labelRect = new Rect(6f, y + 2f, labelWidth - 10f, 30f);
+                if (GUI.Button(labelRect,
+                        new GUIContent(
+                            $"{track.SocketName}\n{track.Duration:0.###}s  •  {(track.Loop ? "Loop" : "Once")}",
+                            "Select this independent socket track."),
+                        _mutedWrapStyle))
+                    SelectPreviewSocket(track.SocketName, SelectionOp.Replace);
+
+                var item = _profile.SocketCatalog.Find(track.SocketName);
+                float speed = item?.ResolvedSpeed ?? 1f;
+                for (int k = 0; k < track.Keys.Count; k++)
+                {
+                    var key = track.Keys[k];
+                    float x = labelWidth + Mathf.Clamp01(key.NormalizedTime) * trackWidth;
+                    var hit = new Rect(x - 7f, y + 10f, 14f, 14f);
+                    Color keyColor = SpriteSocketKeys.ColorForIndex(i);
+                    DrawDiamond(new Vector2(x, y + 17f), selected ? 6f : 5f, keyColor);
+                    EditorGUIUtility.AddCursorRect(hit, MouseCursor.Link);
+                    if (GUI.Button(hit,
+                            new GUIContent(string.Empty,
+                                $"Time {key.NormalizedTime * track.Duration:0.###}s • pivot offset {key.LocalPosition}"),
+                            GUIStyle.none))
+                    {
+                        SelectPreviewSocket(track.SocketName, SelectionOp.Replace);
+                        _playing = false;
+                        _previewTime = key.NormalizedTime * track.Duration /
+                                       Mathf.Max(0.01f, speed);
+                        if (clip != null)
+                            _selectedFrame = EvaluatePreview(clip, _previewTime).Frame;
+                        _status = $"{track.SocketName}  •  independent key {k + 1}/{track.Keys.Count}";
+                        Repaint();
+                    }
+                }
+
+                for (int t = 0; t < track.Triggers.Count; t++)
+                {
+                    var trigger = track.Triggers[t];
+                    float x = labelWidth + Mathf.Clamp01(trigger.NormalizedTime) * trackWidth;
+                    var hit = new Rect(x - 7f, y + 1f, 14f, 13f);
+                    bool triggerSelected = _selectedSocketTriggerTrack == i &&
+                                           _selectedSocketTriggerIndex == t;
+                    DrawTriangle(new Vector2(x, y + 9f), triggerSelected ? 7f : 5f,
+                        EventMarkerColor(trigger.EventId));
+                    EditorGUIUtility.AddCursorRect(hit, MouseCursor.Link);
+                    var evt = Event.current;
+                    if (hit.Contains(evt.mousePosition) && evt.type == EventType.MouseDown &&
+                        evt.button == 0)
+                    {
+                        _selectedSocketTriggerTrack = i;
+                        _selectedSocketTriggerIndex = t;
+                        SelectPreviewSocket(track.SocketName, SelectionOp.Replace);
+                        _playing = false;
+                        _previewTime = trigger.NormalizedTime * track.Duration /
+                                       Mathf.Max(0.01f, speed);
+                        _status = $"{track.SocketName} trigger: {EventName(trigger.EventId)}";
+                        evt.Use();
+                        Repaint();
+                    }
+                    else if (hit.Contains(evt.mousePosition) &&
+                             (evt.type == EventType.ContextClick ||
+                              evt.type == EventType.MouseDown && evt.button == 1))
+                    {
+                        ShowSocketTriggerMenu(i, t);
+                        evt.Use();
+                    }
+                }
+
+                var rowEvent = Event.current;
+                var triggerLane = new Rect(labelWidth, y, trackWidth, 14f);
+                if (triggerLane.Contains(rowEvent.mousePosition) &&
+                    (rowEvent.type == EventType.ContextClick ||
+                     rowEvent.type == EventType.MouseDown && rowEvent.button == 1))
+                {
+                    float normalized = Mathf.Clamp01(
+                        (rowEvent.mousePosition.x - labelWidth) / trackWidth);
+                    ShowAddSocketTriggerMenu(i, normalized);
+                    rowEvent.Use();
+                }
+            }
+            GUI.EndScrollView();
+        }
+
+        void ShowAddSocketTriggerMenu(int trackIndex, float normalizedTime)
+        {
+            var menu = new GenericMenu();
+            if (_profile.Events == null || _profile.Events.Count == 0)
+            {
+                menu.AddItem(new GUIContent("Event 1"), false,
+                    () => AddSocketTrigger(trackIndex, normalizedTime, 1));
+            }
+            else
+            {
+                for (int i = 0; i < _profile.Events.Count; i++)
+                {
+                    var definition = _profile.Events[i];
+                    if (definition == null || definition.Id == 0)
+                        continue;
+                    byte eventId = definition.Id;
+                    string eventName = string.IsNullOrWhiteSpace(definition.Name)
+                        ? $"Event {eventId}"
+                        : definition.Name;
+                    menu.AddItem(new GUIContent($"Add Trigger/{eventId}: {eventName}"), false,
+                        () => AddSocketTrigger(trackIndex, normalizedTime, eventId));
+                }
+            }
+            menu.ShowAsContext();
+        }
+
+        void ShowSocketTriggerMenu(int trackIndex, int triggerIndex)
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent("Delete Trigger"), false,
+                () => DeleteSocketTrigger(trackIndex, triggerIndex));
+            if (_profile.Events != null && _profile.Events.Count > 0)
+            {
+                menu.AddSeparator(string.Empty);
+                for (int i = 0; i < _profile.Events.Count; i++)
+                {
+                    var definition = _profile.Events[i];
+                    if (definition == null || definition.Id == 0)
+                        continue;
+                    byte eventId = definition.Id;
+                    string eventName = string.IsNullOrWhiteSpace(definition.Name)
+                        ? $"Event {eventId}"
+                        : definition.Name;
+                    menu.AddItem(new GUIContent($"Set Event/{eventId}: {eventName}"), false,
+                        () => SetSocketTriggerEvent(trackIndex, triggerIndex, eventId));
+                }
+            }
+            menu.ShowAsContext();
+        }
+
+        void AddSocketTrigger(int trackIndex, float normalizedTime, byte eventId)
+        {
+            if (trackIndex < 0 || trackIndex >= _profile.SocketMotions.Count || eventId == 0)
+                return;
+            RecordProfileUndo("Add Independent Socket Trigger");
+            var track = _profile.SocketMotions[trackIndex];
+            track.Triggers ??= new List<SpriteSocketTriggerDef>();
+            track.Triggers.Add(new SpriteSocketTriggerDef
+            {
+                NormalizedTime = Mathf.Clamp01(normalizedTime),
+                EventId = eventId,
+            });
+            track.Normalize(Mathf.Max(1, _profile.Sheets?.Count ?? 0));
+            _selectedSocketTriggerTrack = trackIndex;
+            _selectedSocketTriggerIndex = track.Triggers.FindIndex(trigger =>
+                trigger.EventId == eventId &&
+                Mathf.Approximately(trigger.NormalizedTime, Mathf.Clamp01(normalizedTime)));
+            _status = $"Added {EventName(eventId)} trigger to {track.SocketName}";
+            SaveDirty();
+            Repaint();
+        }
+
+        void SetSocketTriggerEvent(int trackIndex, int triggerIndex, byte eventId)
+        {
+            if (!TryGetSelectedSocketTrigger(trackIndex, triggerIndex, out _, out var trigger))
+                return;
+            RecordProfileUndo("Set Independent Socket Trigger Event");
+            trigger.EventId = eventId;
+            _status = $"Trigger event = {EventName(eventId)}";
+            SaveDirty();
+            Repaint();
+        }
+
+        void DeleteSocketTrigger(int trackIndex, int triggerIndex)
+        {
+            if (!TryGetSelectedSocketTrigger(trackIndex, triggerIndex, out var track, out _))
+                return;
+            RecordProfileUndo("Delete Independent Socket Trigger");
+            track.Triggers.RemoveAt(triggerIndex);
+            _selectedSocketTriggerTrack = -1;
+            _selectedSocketTriggerIndex = -1;
+            _status = $"Deleted trigger from {track.SocketName}";
+            SaveDirty();
+            Repaint();
+        }
+
+        bool TryGetSelectedSocketTrigger(int trackIndex, int triggerIndex,
+            out SpriteSocketMotionTrack track, out SpriteSocketTriggerDef trigger)
+        {
+            track = null;
+            trigger = null;
+            if (_profile?.SocketMotions == null || trackIndex < 0 ||
+                trackIndex >= _profile.SocketMotions.Count)
+                return false;
+            track = _profile.SocketMotions[trackIndex];
+            if (track?.Triggers == null || triggerIndex < 0 ||
+                triggerIndex >= track.Triggers.Count)
+                return false;
+            trigger = track.Triggers[triggerIndex];
+            return trigger != null;
+        }
+
         void BuildTimelineMetrics(SpriteClipDef clip, out float total, out float pixelsPerSecond,
                                   out Rect[] cards, out Rect[] thumbnails, out float[] frameTimes,
                                   out float[] durations, out float[] eventXs)
@@ -2503,8 +2966,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 float width = Mathf.Max(54f, duration * pixelsPerSecond - 5f);
                 frameTimes[i] = time;
                 durations[i] = duration;
-                cards[i] = new Rect(x, 60f, width, 102f);
-                thumbnails[i] = TimelineSpriteRect(new Rect(x + 7f, 83f, width - 14f, 62f));
+                cards[i] = new Rect(x, TimelineCardsY, width, 102f);
+                thumbnails[i] = TimelineSpriteRect(new Rect(x + 7f, TimelineCardsY + 23f, width - 14f, 62f));
                 eventXs[i] = 48f + (time + Mathf.Clamp01(clip.EventNormalizedTimes[i]) * duration) *
                     pixelsPerSecond;
                 time += duration;
@@ -2637,6 +3100,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                         AutoScrollTimelineAtScreenEdge(screenMouse, viewportScreen, maxScroll);
                     break;
 
+                case TimelineDragMode.SocketDraw:
+                    _timelineDragContentMouse = contentMouse;
+                    if (!_drawDragMoved &&
+                        Vector2.Distance(screenMouse, _timelineDragStartScreen) >= TimelineDragMoveThreshold)
+                        _drawDragMoved = true;
+                    _previewTime = PreviewTimeForAuthoredTime(clip,
+                        Mathf.Clamp((contentMouse.x - 48f) / pixelsPerSecond, 0f, Mathf.Max(0f, total - 0.0001f)));
+                    _selectedFrame = AuthoredFrameAtTime(clip,
+                        Mathf.Clamp((contentMouse.x - 48f) / pixelsPerSecond, 0f, Mathf.Max(0f, total - 0.0001f)),
+                        out _);
+                    if (_drawDragMoved)
+                        AutoScrollTimelineAtScreenEdge(screenMouse, viewportScreen, maxScroll);
+                    break;
+
                 case TimelineDragMode.Marquee:
                     if (!_timelineMarqueeMoved &&
                         Vector2.Distance(screenMouse, _timelineDragStartScreen) >= TimelineDragMoveThreshold)
@@ -2663,14 +3140,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _timelineScroll.x = Mathf.Min(maxScroll, _timelineScroll.x + 13f);
         }
 
-        void ConvertTimelineResizeToMarquee(Vector2 contentMouse, Rect[] cards, bool additive)
+        void ConvertTimelineResizeToMarquee(Vector2 contentMouse, Rect[] cards, SelectionOp op)
         {
             _resizeFrameIndex = -1;
             _timelineResizeCommitted = false;
             _timelineDragMode = TimelineDragMode.Marquee;
             _timelineMarqueeStart = _timelineDragStartContent;
             _timelineMarqueeMoved = true;
-            _timelineMarqueeAdditive = additive;
+            _timelineMarqueeOp = op;
             _timelineMarqueeBaseline.Clear();
             foreach (int index in _selectedFrames)
                 _timelineMarqueeBaseline.Add(index);
@@ -2695,6 +3172,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 else if (_timelineDragMode == TimelineDragMode.Event && _eventDragMoved)
                     CommitEventMove(clip, _dragEventSourceFrame, _dragEventId,
                         _dragEventAuthoredTime);
+                else if (_timelineDragMode == TimelineDragMode.SocketDraw && _drawDragMoved)
+                    CommitSocketDrawMove(clip, _dragDrawSourceFrame, _dragDrawSocketName, _dragDrawLayer,
+                        _timelineDragContentMouse.x);
                 else if (_timelineDragMode == TimelineDragMode.Pan && !_panMoved &&
                          _panClickPlacesPlayhead)
                     ScrubTimeline(clip, contentMouse.x, TotalAuthoredDuration(clip),
@@ -2727,6 +3207,37 @@ namespace InvertLab.Sprites.DOTS.Editor
             _ = viewportScreen;
 
             int markerFrame = EventMarkerAt(clip, eventXs, mouse);
+            bool hitDraw = TryHitSocketDrawKey(clip, frameTimes, pixelsPerSecond, mouse,
+                out int drawFrame, out string drawName);
+
+            if (evt.type == EventType.MouseDown && evt.button == 0 && hitDraw)
+            {
+                if (_timelineDragMode != TimelineDragMode.None)
+                    CommitTimelineDrag(clip, mouse);
+                SelectSocketDrawKey(clip, drawFrame, drawName);
+                BeginTimelineDrag(controlId, TimelineDragMode.SocketDraw, mouse);
+                _dragDrawSourceFrame = drawFrame;
+                _dragDrawSocketName = drawName;
+                _dragDrawLayer = SpriteSocketKeys.FindOnFrame(
+                    clip.Sockets, drawName, drawFrame)?.DrawLayer ?? SpriteSocketKeys.DrawFront;
+                _drawDragMoved = false;
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseDown && evt.button == 1 &&
+                mouse.y >= TimelineDrawLaneY && mouse.y <= TimelineDrawLaneY + TimelineDrawLaneH &&
+                mouse.x >= 48f)
+            {
+                if (hitDraw)
+                    SelectSocketDrawKey(clip, drawFrame, drawName);
+                ShowTimelineSocketDrawMenu(clip, mouse.x, total, pixelsPerSecond,
+                    hitDraw ? drawName : null, hitDraw ? drawFrame : -1);
+                evt.Use();
+                Repaint();
+                return;
+            }
 
             if (evt.type == EventType.MouseDown && evt.button == 0 && markerFrame >= 0)
             {
@@ -2745,7 +3256,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             if (evt.type == EventType.MouseDown && evt.button == 1 &&
-                mouse.y <= 54f && mouse.x >= 48f)
+                mouse.y >= TimelineEventLaneY && mouse.y < TimelineDrawLaneY && mouse.x >= 48f)
             {
                 if (markerFrame >= 0)
                     SelectEventMarker(clip, markerFrame, EventAuthoredTime(clip, markerFrame));
@@ -2770,9 +3281,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     CommitTimelineDrag(clip, mouse);
 
                 ReleaseShortcutKeyboardFocus();
-                if (evt.button == 0 && mouse.y >= 27f && mouse.y <= 54f)
+                if (evt.button == 0 && mouse.y >= TimelineEventLaneY && mouse.y < TimelineCardsY)
                 {
                     _selectedEventFrame = -1;
+                    if (mouse.y >= TimelineDrawLaneY)
+                    {
+                        _selectedSocketDrawFrame = -1;
+                        _selectedSocketDrawName = null;
+                    }
                     ClearColliderSelection();
                 }
                 bool onPlayhead = new Rect(playheadX - 7f, 0f, 14f, 30f).Contains(mouse);
@@ -2784,7 +3300,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
-                if (evt.button == 0 && mouse.y >= 27f && mouse.y <= 54f)
+                if (evt.button == 0 && mouse.y >= TimelineEventLaneY && mouse.y < TimelineCardsY)
                 {
                     BeginTimelineDrag(controlId, TimelineDragMode.Scrub, mouse);
                     ScrubTimeline(clip, mouse.x, total, pixelsPerSecond);
@@ -2793,7 +3309,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
-                if (evt.button == 0 && mouse.y > 54f)
+                if (evt.button == 0 && mouse.y > TimelineCardsY - 4f)
                 {
                     int card = FrameAt(cards, thumbnails, mouse);
                     if (card >= 0)
@@ -2811,29 +3327,34 @@ namespace InvertLab.Sprites.DOTS.Editor
                             _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
                             ClearColliderSelection();
                             _selectedEventFrame = -1;
+                            _selectedSocketDrawFrame = -1;
                             evt.Use();
                             Repaint();
                             return;
                         }
 
-                        bool additive = evt.shift || evt.control || evt.command;
-                        ApplyFrameModifierClick(card, additive, toggle: evt.control || evt.command);
+                        var op = ReadSelectionOp(evt, orderedList: true);
+                        ApplyFrameModifierClick(card, op);
                         _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
-                        BeginTimelineDrag(controlId, TimelineDragMode.Reorder, mouse);
-                        _dragFrameIndex = card;
-                        _dropFrameSlot = card;
-                        _reorderMoved = false;
+                        _selectedSocketDrawFrame = -1;
+                        if (op == SelectionOp.Replace)
+                        {
+                            BeginTimelineDrag(controlId, TimelineDragMode.Reorder, mouse);
+                            _dragFrameIndex = card;
+                            _dropFrameSlot = card;
+                            _reorderMoved = false;
+                        }
                         evt.Use();
                         Repaint();
                         return;
                     }
 
-                    bool additiveEmpty = evt.shift || evt.control || evt.command;
-                    BeginTimelineMarquee(controlId, mouse, additiveEmpty);
+                    BeginTimelineMarquee(controlId, mouse, ReadSelectionOp(evt));
                     ClearColliderSelection();
                     _selectedEventFrame = -1;
+                    _selectedSocketDrawFrame = -1;
                     evt.Use();
                     Repaint();
                     return;
@@ -2966,21 +3487,25 @@ namespace InvertLab.Sprites.DOTS.Editor
             _dragEventId = 0;
             _dragEventAuthoredTime = 0f;
             _eventDragMoved = false;
+            _dragDrawSourceFrame = -1;
+            _dragDrawSocketName = null;
+            _dragDrawLayer = 0;
+            _drawDragMoved = false;
             _panMoved = false;
             _panClickPlacesPlayhead = false;
             _timelineMarqueeMoved = false;
-            _timelineMarqueeAdditive = false;
+            _timelineMarqueeOp = SelectionOp.Replace;
             _timelineMarqueeRect = default;
             _timelineMarqueeBaseline.Clear();
         }
 
-        void BeginTimelineMarquee(int controlId, Vector2 contentMouse, bool additive)
+        void BeginTimelineMarquee(int controlId, Vector2 contentMouse, SelectionOp op)
         {
             BeginTimelineDrag(controlId, TimelineDragMode.Marquee, contentMouse);
             _timelineMarqueeStart = contentMouse;
             _timelineMarqueeRect = new Rect(contentMouse, Vector2.zero);
             _timelineMarqueeMoved = false;
-            _timelineMarqueeAdditive = additive;
+            _timelineMarqueeOp = op;
             _timelineMarqueeBaseline.Clear();
             foreach (int index in _selectedFrames)
                 _timelineMarqueeBaseline.Add(index);
@@ -3007,18 +3532,15 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void ApplyTimelineMarqueeSelection(Rect[] cards)
         {
-            _selectedFrames.Clear();
-            if (_timelineMarqueeAdditive)
-            {
-                foreach (int index in _timelineMarqueeBaseline)
-                    _selectedFrames.Add(index);
-            }
-
+            _selectionScratchFrames.Clear();
             for (int i = 0; i < cards.Length; i++)
             {
                 if (cards[i].Overlaps(_timelineMarqueeRect))
-                    _selectedFrames.Add(i);
+                    _selectionScratchFrames.Add(i);
             }
+
+            ApplyMarqueeOnto(_selectedFrames, _timelineMarqueeBaseline, _selectionScratchFrames,
+                _timelineMarqueeOp);
 
             if (_selectedFrames.Count == 0)
             {
@@ -3203,6 +3725,270 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ? $"Moved {EventName(eventId)} to {authoredTime:F3}s"
                 : $"Moved {EventName(eventId)} to frame {destinationFrame + 1} at {authoredTime:F3}s";
             SaveDirty();
+        }
+
+        void DrawTimelineSocketDrawKeys(SpriteClipDef clip, float[] frameTimes, float pixelsPerSecond)
+        {
+            if (clip?.Sockets == null || frameTimes == null)
+                return;
+            float laneY = TimelineDrawLaneY + TimelineDrawLaneH * 0.5f;
+            for (int i = 0; i < clip.Sockets.Count; i++)
+            {
+                var key = clip.Sockets[i];
+                if (key == null || key.DrawLayer == SpriteSocketKeys.DrawUnset)
+                    continue;
+                int frame = key.FrameIndex;
+                if (frame < 0 || frame >= frameTimes.Length)
+                    continue;
+                string name = SpriteSocketKeys.CanonicalName(key.Name);
+                bool dragging = _timelineDragMode == TimelineDragMode.SocketDraw &&
+                                _drawDragMoved &&
+                                frame == _dragDrawSourceFrame &&
+                                SpriteSocketKeys.NamesEqual(name, _dragDrawSocketName);
+                float time = dragging
+                    ? Mathf.Max(0f, (_timelineDragContentMouse.x - 48f) / Mathf.Max(0.01f, pixelsPerSecond))
+                    : frameTimes[frame];
+                float x = 48f + time * pixelsPerSecond + SocketDrawStackOffsetX(clip.Sockets, frame, name);
+                Color color = SocketDrawKeyColor(key.DrawLayer);
+                Color guide = color;
+                guide.a = 0.28f;
+                EditorGUI.DrawRect(new Rect(x - 0.5f, TimelineDrawLaneY, 1f, 146f), guide);
+                bool selected = frame == _selectedSocketDrawFrame &&
+                                SpriteSocketKeys.NamesEqual(name, _selectedSocketDrawName);
+                if (selected)
+                    DrawDiamond(new Vector2(x, laneY), 8f, Color.white);
+                DrawDiamond(new Vector2(x, laneY), 5.5f, color);
+                string side = key.DrawLayer == SpriteSocketKeys.DrawBehind ? "Behind"
+                    : key.DrawLayer == SpriteSocketKeys.DrawFront ? "Front" : "Default";
+                GUI.Label(new Rect(x + 8f, TimelineDrawLaneY + 2f, 92f, 16f),
+                    $"{name}  {side}", _mutedStyle);
+                EditorGUIUtility.AddCursorRect(new Rect(x - 10f, TimelineDrawLaneY, 20f, TimelineDrawLaneH),
+                    MouseCursor.MoveArrow);
+            }
+        }
+
+        static float SocketDrawStackOffsetX(IList<FrameSocketDef> sockets, int frame, string name)
+        {
+            int index = 0;
+            if (sockets == null)
+                return 0f;
+            for (int i = 0; i < sockets.Count; i++)
+            {
+                var key = sockets[i];
+                if (key == null || key.FrameIndex != frame ||
+                    key.DrawLayer == SpriteSocketKeys.DrawUnset)
+                    continue;
+                if (SpriteSocketKeys.NamesEqual(key.Name, name))
+                    return index * 10f;
+                index++;
+            }
+            return 0f;
+        }
+
+        static Color SocketDrawKeyColor(byte layer)
+        {
+            if (layer == SpriteSocketKeys.DrawBehind)
+                return SocketDrawBehindColor;
+            if (layer == SpriteSocketKeys.DrawFront)
+                return SocketDrawFrontColor;
+            return new Color(0.62f, 0.66f, 0.72f);
+        }
+
+        bool TryHitSocketDrawKey(SpriteClipDef clip, float[] frameTimes, float pixelsPerSecond,
+            Vector2 point, out int frame, out string name)
+        {
+            frame = -1;
+            name = null;
+            if (clip?.Sockets == null || frameTimes == null)
+                return false;
+            if (point.y < TimelineDrawLaneY || point.y > TimelineDrawLaneY + TimelineDrawLaneH)
+                return false;
+            float laneY = TimelineDrawLaneY + TimelineDrawLaneH * 0.5f;
+            float best = 110f;
+            for (int i = clip.Sockets.Count - 1; i >= 0; i--)
+            {
+                var key = clip.Sockets[i];
+                if (key == null || key.DrawLayer == SpriteSocketKeys.DrawUnset)
+                    continue;
+                int keyFrame = key.FrameIndex;
+                if (keyFrame < 0 || keyFrame >= frameTimes.Length)
+                    continue;
+                string keyName = SpriteSocketKeys.CanonicalName(key.Name);
+                float x = 48f + frameTimes[keyFrame] * pixelsPerSecond +
+                          SocketDrawStackOffsetX(clip.Sockets, keyFrame, keyName);
+                float sqr = (point - new Vector2(x, laneY)).sqrMagnitude;
+                if (sqr <= best)
+                {
+                    best = sqr;
+                    frame = keyFrame;
+                    name = keyName;
+                }
+            }
+            return frame >= 0;
+        }
+
+        void SelectSocketDrawKey(SpriteClipDef clip, int frame, string socketName)
+        {
+            socketName = SpriteSocketKeys.CanonicalName(socketName);
+            if (clip == null || string.IsNullOrEmpty(socketName) ||
+                frame < 0 || frame >= clip.Frames.Length)
+                return;
+            _selectedSocketDrawFrame = frame;
+            _selectedSocketDrawName = socketName;
+            _selectedEventFrame = -1;
+            _selectedFrame = Mathf.Max(0, frame);
+            _selectedFrames.Clear();
+            _selectedFrames.Add(_selectedFrame);
+            _selectedSocketName = socketName;
+            _selectedSockets.Clear();
+            _selectedSockets.Add(socketName);
+            _previewTime = PreviewTimeAtFrame(clip, frame);
+            _playing = false;
+            float time = AuthoredStartTime(clip, frame);
+            var key = SpriteSocketKeys.FindOnFrame(clip.Sockets, socketName, frame);
+            bool behind = key != null && key.DrawLayer == SpriteSocketKeys.DrawBehind;
+            bool front = key != null && key.DrawLayer == SpriteSocketKeys.DrawFront;
+            _status = front
+                ? $"{socketName}  Front at {time:0.00}s"
+                : behind
+                    ? $"{socketName}  Behind at {time:0.00}s"
+                    : $"{socketName}  draw at {time:0.00}s";
+        }
+
+        void ShowTimelineSocketDrawMenu(SpriteClipDef clip, float contentX, float total,
+                                        float pixelsPerSecond, string hitName, int hitFrame)
+        {
+            float authoredTime = Mathf.Clamp(
+                (contentX - 48f) / pixelsPerSecond, 0f, Mathf.Max(0f, total - 0.0001f));
+            int frame = hitFrame >= 0 ? hitFrame : AuthoredFrameAtTime(clip, authoredTime, out _);
+            SelectOnlyFrame(frame);
+            _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
+            _playing = false;
+            var names = ClipSocketNames(clip);
+            if (names.Count == 0)
+            {
+                _status = "Add a socket first to place Socket Draw keys";
+                return;
+            }
+
+            var menu = new GenericMenu();
+            if (!string.IsNullOrEmpty(_selectedSocketName) &&
+                names.Exists(n => SpriteSocketKeys.NamesEqual(n, _selectedSocketName)))
+            {
+                string selected = SpriteSocketKeys.CanonicalName(_selectedSocketName);
+                menu.AddItem(new GUIContent($"{selected}/Behind here"), false,
+                    () => KeySocketDrawAtTime(clip, frame, behind: true, selected));
+                menu.AddItem(new GUIContent($"{selected}/Front here"), false,
+                    () => KeySocketDrawAtTime(clip, frame, behind: false, selected));
+                menu.AddSeparator(string.Empty);
+            }
+            for (int i = 0; i < names.Count; i++)
+            {
+                string name = names[i];
+                if (!string.IsNullOrEmpty(_selectedSocketName) &&
+                    SpriteSocketKeys.NamesEqual(name, _selectedSocketName))
+                    continue;
+                string captured = name;
+                menu.AddItem(new GUIContent($"{captured}/Behind here"), false,
+                    () => KeySocketDrawAtTime(clip, frame, behind: true, captured));
+                menu.AddItem(new GUIContent($"{captured}/Front here"), false,
+                    () => KeySocketDrawAtTime(clip, frame, behind: false, captured));
+            }
+            if (!string.IsNullOrEmpty(hitName) && hitFrame >= 0)
+            {
+                menu.AddSeparator(string.Empty);
+                menu.AddItem(new GUIContent($"Clear {hitName}"), false,
+                    () => ClearSocketDrawKey(clip, hitFrame, hitName));
+            }
+            menu.ShowAsContext();
+        }
+
+        List<string> ClipSocketNames(SpriteClipDef clip)
+        {
+            var names = SpriteSocketKeys.UniqueNamesInOrder(clip?.Sockets);
+            var catalog = _profile?.SocketCatalog?.Items;
+            if (catalog == null)
+                return names;
+            for (int i = 0; i < catalog.Count; i++)
+            {
+                var item = catalog[i];
+                if (item == null || string.IsNullOrWhiteSpace(item.SocketName))
+                    continue;
+                string name = SpriteSocketKeys.CanonicalName(item.SocketName);
+                bool exists = false;
+                for (int n = 0; n < names.Count; n++)
+                {
+                    if (SpriteSocketKeys.NamesEqual(names[n], name))
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists)
+                    names.Add(name);
+            }
+            return names;
+        }
+
+        void CommitSocketDrawMove(SpriteClipDef clip, int sourceFrame, string socketName, byte layer,
+            float contentX)
+        {
+            float authoredTime = Mathf.Clamp(
+                (contentX - 48f) / Mathf.Max(0.01f, TimelinePixelsPerSecond(clip)),
+                0f, Mathf.Max(0f, TotalAuthoredDuration(clip) - 0.0001f));
+            MoveSocketDrawKeyToTime(clip, sourceFrame, socketName, layer, authoredTime);
+        }
+
+        void MoveSocketDrawKeyToTime(SpriteClipDef clip, int sourceFrame, string socketName, byte layer,
+            float authoredTime)
+        {
+            socketName = SpriteSocketKeys.CanonicalName(socketName);
+            if (clip?.Frames == null || string.IsNullOrEmpty(socketName) ||
+                sourceFrame < 0 || sourceFrame >= clip.Frames.Length)
+                return;
+            authoredTime = Mathf.Clamp(authoredTime, 0f,
+                Mathf.Max(0f, TotalAuthoredDuration(clip) - 0.0001f));
+            int dest = AuthoredFrameAtTime(clip, authoredTime, out _);
+            if (dest < 0 || dest >= clip.Frames.Length)
+                return;
+            RecordProfileUndo("Move Socket Draw Key");
+            if (dest != sourceFrame)
+            {
+                var sourceKey = SpriteSocketKeys.FindOnFrame(clip.Sockets, socketName, sourceFrame);
+                if (sourceKey != null)
+                    sourceKey.DrawLayer = SpriteSocketKeys.DrawUnset;
+            }
+            var destKey = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, socketName, dest);
+            destKey.DrawLayer = layer == SpriteSocketKeys.DrawUnset ? SpriteSocketKeys.DrawFront : layer;
+            _selectedSocketDrawFrame = dest;
+            _selectedSocketDrawName = socketName;
+            _selectedFrame = dest;
+            _selectedSocketName = socketName;
+            _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
+            _status = $"Moved {socketName} draw key to {authoredTime:0.00}s";
+            SaveDirty();
+        }
+
+        void ClearSocketDrawKey(SpriteClipDef clip, int frame, string socketName = null)
+        {
+            socketName = string.IsNullOrEmpty(socketName) ? _selectedSocketDrawName : socketName;
+            socketName = SpriteSocketKeys.CanonicalName(socketName);
+            if (clip == null || string.IsNullOrEmpty(socketName))
+                return;
+            var key = SpriteSocketKeys.FindOnFrame(clip.Sockets, socketName, frame);
+            if (key == null || key.DrawLayer == SpriteSocketKeys.DrawUnset)
+                return;
+            RecordProfileUndo("Clear Socket Draw Key");
+            key.DrawLayer = SpriteSocketKeys.DrawUnset;
+            if (_selectedSocketDrawFrame == frame &&
+                SpriteSocketKeys.NamesEqual(_selectedSocketDrawName, socketName))
+            {
+                _selectedSocketDrawFrame = -1;
+                _selectedSocketDrawName = null;
+            }
+            _status = $"Cleared Socket Draw on {socketName}";
+            SaveDirty();
+            Repaint();
         }
 
         void DrawRuler(float width, float duration, float pixelsPerSecond)
@@ -3553,7 +4339,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                                           List<OnionGhostLayout> ghosts)
         {
             var evt = Event.current;
-            bool ownsDrag = GUIUtility.hotControl == controlId && _colliderMarqueePending;
+            bool ownsDrag = _colliderMarqueePending &&
+                            (GUIUtility.hotControl == _previewMarqueeHotControl ||
+                             GUIUtility.hotControl == controlId ||
+                             GUIUtility.hotControl == 0);
+
+            if (ownsDrag && GUIUtility.hotControl == 0 && _previewMarqueeHotControl != 0)
+                GUIUtility.hotControl = _previewMarqueeHotControl;
 
             if (evt.type == EventType.MouseDrag && ownsDrag)
             {
@@ -3561,11 +4353,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Vector2.Distance(_colliderMarqueeStart, evt.mousePosition) >= 4f)
                     _draggingColliderMarquee = true;
                 if (_draggingColliderMarquee)
-                {
                     _colliderMarqueeRect = RectFromPoints(_colliderMarqueeStart, evt.mousePosition);
-                    SelectPreviewObjectsInMarquee(clip, frame, cell, _colliderMarqueeRect,
-                        _colliderMarqueeAdditive);
-                }
+                // Do not mutate selection here. Showing/hiding selection gizmos changes
+                // IMGUI's control allocation and made the marquee stutter or lose capture.
+                // Resolve the final box once on MouseUp instead.
                 evt.Use();
                 Repaint();
                 return true;
@@ -3576,16 +4367,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (_draggingColliderMarquee)
                 {
                     SelectPreviewObjectsInMarquee(clip, frame, cell, _colliderMarqueeRect,
-                        _colliderMarqueeAdditive);
+                        _previewMarqueeOp);
                 }
                 else
                 {
-                    if (!_colliderMarqueeAdditive)
+                    if (_previewMarqueeOp == SelectionOp.Replace)
                         ClearPreviewObjectSelection();
                     SelectOnionAtPoint(clip, ghosts, evt.mousePosition);
                 }
 
                 EndColliderMarquee(controlId);
+                _status = PreviewSelectionStatus("Marquee selected");
                 evt.Use();
                 Repaint();
                 return true;
@@ -3608,9 +4400,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 if (evt.button == 0)
                 {
-                    bool additive = evt.shift || evt.control || evt.command;
-                    SelectCollider(found, evt.shift, evt.control || evt.command);
-                    if (!additive)
+                    var op = ReadSelectionOp(evt);
+                    SelectCollider(found, op);
+                    if (op == SelectionOp.Replace)
                         BeginColliderTransform(controlId, found, ColliderHandleKind.Body, cell, evt.mousePosition);
                     evt.Use();
                     Repaint();
@@ -3642,10 +4434,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             _playing = false;
             _colliderMarqueePending = true;
             _draggingColliderMarquee = false;
-            _colliderMarqueeAdditive = evt.shift || evt.control || evt.command;
+            _previewMarqueeOp = ReadSelectionOp(evt);
             _colliderMarqueeStart = evt.mousePosition;
             _colliderMarqueeRect = new Rect(evt.mousePosition, Vector2.zero);
             CapturePreviewMarqueeBaseline();
+            CapturePreviewMarqueePins(clip, frame, cell);
+            _previewMarqueeHotControl = controlId;
             GUIUtility.hotControl = controlId;
             GUIUtility.keyboardControl = controlId;
             evt.Use();
@@ -3681,15 +4475,59 @@ namespace InvertLab.Sprites.DOTS.Editor
             return found;
         }
 
-        void SelectCollider(FrameBoxDef box, bool additive, bool toggle)
+        void SelectCollider(FrameBoxDef box, SelectionOp op)
         {
-            if (!additive && !toggle)
-                ClearColliderSelection();
-            if (toggle && _selectedColliders.Contains(box))
-                _selectedColliders.Remove(box);
-            else
-                _selectedColliders.Add(box);
+            if (box == null)
+                return;
+            switch (op)
+            {
+                case SelectionOp.Add:
+                    _selectedColliders.Add(box);
+                    break;
+                case SelectionOp.Toggle:
+                    if (!_selectedColliders.Add(box))
+                        _selectedColliders.Remove(box);
+                    break;
+                case SelectionOp.Subtract:
+                    _selectedColliders.Remove(box);
+                    break;
+                case SelectionOp.Intersect:
+                    bool keep = _selectedColliders.Contains(box);
+                    ClearColliderSelection();
+                    if (keep)
+                        _selectedColliders.Add(box);
+                    break;
+                default:
+                    ClearColliderSelection();
+                    _selectedColliders.Add(box);
+                    break;
+            }
             _status = PreviewSelectionStatus();
+        }
+
+        void SelectColliderFromList(List<FrameBoxDef> colliders, int index, SelectionOp op)
+        {
+            if (colliders == null || index < 0 || index >= colliders.Count)
+                return;
+            if (op is SelectionOp.Range or SelectionOp.RangeAdd)
+            {
+                if (_colliderListAnchor < 0 || _colliderListAnchor >= colliders.Count)
+                    _colliderListAnchor = index;
+                int a = Mathf.Min(_colliderListAnchor, index);
+                int b = Mathf.Max(_colliderListAnchor, index);
+                if (op == SelectionOp.Range)
+                    ClearColliderSelection();
+                for (int i = a; i <= b; i++)
+                    _selectedColliders.Add(colliders[i]);
+                if (_colliderListAnchor < 0)
+                    _colliderListAnchor = index;
+                _status = PreviewSelectionStatus();
+                return;
+            }
+
+            SelectCollider(colliders[index], op);
+            if (op is not (SelectionOp.Subtract or SelectionOp.Intersect))
+                _colliderListAnchor = index;
         }
 
         void CapturePreviewMarqueeBaseline()
@@ -3702,17 +4540,28 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _previewMarqueeSocketBaseline.Add(name);
         }
 
-        void SelectPreviewObjectsInMarquee(SpriteClipDef clip, int frame, Rect cell, Rect marquee, bool additive)
+        void CapturePreviewMarqueePins(SpriteClipDef clip, int frame, Rect cell)
         {
-            _selectedColliders.Clear();
-            _selectedSockets.Clear();
-            if (additive)
+            _previewMarqueeSocketNames.Clear();
+            _previewMarqueeSocketPins.Clear();
+            if (clip?.Sockets == null)
+                return;
+            var names = CachedUniqueSocketNames(clip);
+            for (int i = 0; i < names.Count; i++)
             {
-                foreach (var box in _previewMarqueeColliderBaseline)
-                    _selectedColliders.Add(box);
-                foreach (string name in _previewMarqueeSocketBaseline)
-                    _selectedSockets.Add(name);
+                string name = names[i];
+                if (!TryGetPreviewSocketPose(clip, name, frame, out var position, out _, out _, out _))
+                    continue;
+                _previewMarqueeSocketNames.Add(SpriteSocketKeys.CanonicalName(name));
+                _previewMarqueeSocketPins.Add(SocketToScreen(position, cell));
             }
+        }
+
+        void SelectPreviewObjectsInMarquee(SpriteClipDef clip, int frame, Rect cell, Rect marquee,
+            SelectionOp op)
+        {
+            _selectionScratchColliders.Clear();
+            _selectionScratchNames.Clear();
 
             if (_showHitboxes)
             {
@@ -3721,28 +4570,27 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (box.Hidden)
                         continue;
                     if (marquee.Overlaps(ColliderWorldAabb(box, cell), true))
-                        _selectedColliders.Add(box);
+                        _selectionScratchColliders.Add(box);
                 }
             }
 
-            if (clip?.Sockets != null)
+            const float pin = 14f;
+            for (int i = 0; i < _previewMarqueeSocketPins.Count; i++)
             {
-                var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
-                for (int i = 0; i < names.Count; i++)
-                {
-                    string name = names[i];
-                    if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
-                            out var position, out _, out _))
-                        continue;
-                    if (marquee.Overlaps(SocketWorldAabb(clip, name, frame, cell), true))
-                        _selectedSockets.Add(SpriteSocketKeys.CanonicalName(name));
-                }
+                Vector2 p = _previewMarqueeSocketPins[i];
+                var hit = new Rect(p.x - pin, p.y - pin, pin * 2f, pin * 2f);
+                if (marquee.Overlaps(hit, true))
+                    _selectionScratchNames.Add(_previewMarqueeSocketNames[i]);
             }
+
+            ApplyMarqueeOnto(_selectedColliders, _previewMarqueeColliderBaseline,
+                _selectionScratchColliders, op);
+            ApplyMarqueeOnto(_selectedSockets, _previewMarqueeSocketBaseline,
+                _selectionScratchNames, op);
 
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
             SyncSocketPrimaryFromSelection();
-            _status = PreviewSelectionStatus("Marquee selected");
         }
 
         string PreviewSelectionStatus(string prefix = "Selected")
@@ -3765,8 +4613,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             _colliderMarqueeRect = default;
             _previewMarqueeColliderBaseline.Clear();
             _previewMarqueeSocketBaseline.Clear();
-            if (GUIUtility.hotControl == controlId)
+            _previewMarqueeSocketNames.Clear();
+            _previewMarqueeSocketPins.Clear();
+            if (GUIUtility.hotControl == controlId ||
+                (_previewMarqueeHotControl != 0 &&
+                 GUIUtility.hotControl == _previewMarqueeHotControl))
                 GUIUtility.hotControl = 0;
+            _previewMarqueeHotControl = 0;
         }
 
         void SelectOnionAtPoint(SpriteClipDef clip, List<OnionGhostLayout> ghosts, Vector2 point)
@@ -4074,6 +4927,54 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
+        void DrawSocketDrawKeyInspector(SpriteClipDef clip)
+        {
+            if (clip == null || _selectedSocketDrawFrame < 0 ||
+                string.IsNullOrEmpty(_selectedSocketDrawName))
+                return;
+            var key = SpriteSocketKeys.FindOnFrame(
+                clip.Sockets, _selectedSocketDrawName, _selectedSocketDrawFrame);
+            if (key == null || key.DrawLayer == SpriteSocketKeys.DrawUnset)
+            {
+                _selectedSocketDrawFrame = -1;
+                _selectedSocketDrawName = null;
+                return;
+            }
+
+            GUILayout.Space(9f);
+            SectionLabel("SOCKET DRAW KEY");
+            EditorGUILayout.LabelField("Socket", _selectedSocketDrawName);
+            float time = AuthoredStartTime(clip, _selectedSocketDrawFrame);
+            float nextTime = EditorGUILayout.DelayedFloatField(
+                new GUIContent("Time (sec)",
+                    "Type a time to move this Socket Draw key. Snaps to the frame at that time."),
+                time);
+            EditorGUILayout.LabelField("Frame", $"{_selectedSocketDrawFrame + 1} of {clip.Frames.Length}");
+            if (!Mathf.Approximately(nextTime, time))
+            {
+                MoveSocketDrawKeyToTime(clip, _selectedSocketDrawFrame, _selectedSocketDrawName,
+                    key.DrawLayer, nextTime);
+                return;
+            }
+            int popup = key.DrawLayer == SpriteSocketKeys.DrawBehind ? 0
+                : key.DrawLayer == SpriteSocketKeys.DrawFront ? 1 : 2;
+            int next = EditorGUILayout.Popup(
+                new GUIContent("Draw", "Behind = purple. Front = amber. Default = catalog."),
+                popup, new[] { "Behind", "In Front", "Default" });
+            if (next != popup)
+            {
+                RecordProfileUndo("Edit Socket Draw Key");
+                key.DrawLayer = next == 0
+                    ? SpriteSocketKeys.DrawBehind
+                    : next == 1
+                        ? SpriteSocketKeys.DrawFront
+                        : SpriteSocketKeys.DrawCatalog;
+                SaveDirty();
+            }
+            if (GUILayout.Button("Delete Socket Draw Key"))
+                ClearSocketDrawKey(clip, _selectedSocketDrawFrame, _selectedSocketDrawName);
+        }
+
         void DrawEventDefinition(byte eventId)
         {
             if (eventId == 0)
@@ -4095,14 +4996,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawSocketInspector(SpriteClipDef clip)
         {
             GUILayout.Space(9f);
-            SectionLabel($"SOCKETS — FRAME {_selectedFrame + 1}");
             clip.Sockets ??= new List<FrameSocketDef>();
             _profile.EnsureSocketCatalog();
             PruneSocketSelection(clip);
-            var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
-            GUILayout.Label(
-                $"{names.Count} socket{(names.Count == 1 ? string.Empty : "s")} • {_selectedSockets.Count} selected",
-                _mutedStyle);
 
             bool nextShowPreviews = EditorGUILayout.Toggle(
                 new GUIContent("Show Previews",
@@ -4114,30 +5010,111 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _showSocketPreviews = nextShowPreviews;
             }
 
+            DrawSocketSection(clip, independentView: false);
+            GUILayout.Space(12f);
+            DrawSocketSection(clip, independentView: true);
+        }
+
+        void DrawSocketSection(SpriteClipDef clip, bool independentView)
+        {
+            SectionLabel(independentView
+                ? "SOCKET — INDEPENDENT MOTION"
+                : $"SOCKET — FRAME ATTACHED — FRAME {_selectedFrame + 1}");
+            var names = VisibleSocketNames(clip, independentView);
+            int visibleSelected = CountSelectedSocketNames(names);
+            GUILayout.Label(
+                $"{names.Count} {(independentView ? "independent track" : "frame-attached socket")}{Plural(names.Count)} • {visibleSelected} selected",
+                _mutedStyle);
+
+            bool sectionArmed = _socketPlacementArmed &&
+                                _socketPlacementIndependent == independentView;
             Color previous = GUI.backgroundColor;
-            if (_socketPlacementArmed)
+            if (sectionArmed)
                 GUI.backgroundColor = new Color(0.18f, 0.55f, 0.82f, 1f);
-            if (GUILayout.Button(_socketPlacementArmed
-                    ? "Click Preview to Place…"
-                    : "Add Socket"))
+            using (new EditorGUILayout.HorizontalScope())
             {
-                if (_socketPlacementArmed)
-                    CancelSocketPlacement("Socket placement cancelled");
-                else
-                    ArmSocketPlacement();
+                if (GUILayout.Button(sectionArmed
+                        ? "Click Preview to Place…"
+                        : independentView ? "Add Independent" : "Add Frame Socket"))
+                {
+                    if (sectionArmed)
+                        CancelSocketPlacement("Socket placement cancelled");
+                    else
+                    {
+                        if (_socketPlacementArmed)
+                            CancelSocketPlacement(null);
+                        ArmSocketPlacement(independentView);
+                    }
+                }
+                GUI.backgroundColor = previous;
+                using (new EditorGUI.DisabledScope(names.Count == 0))
+                {
+                    if (GUILayout.Button(new GUIContent("Select All",
+                            $"Select every {(independentView ? "independent motion track" : "frame-attached socket")} in this section."),
+                            GUILayout.Width(72f)))
+                        SelectAllVisibleSockets(names, independentView);
+                }
+                using (new EditorGUI.DisabledScope(visibleSelected == 0))
+                {
+                    if (GUILayout.Button(new GUIContent("Delete",
+                            "Delete selected sockets. Delete / Backspace also works."), GUILayout.Width(56f)))
+                    {
+                        _selectedSockets.RemoveWhere(selected =>
+                            !ListContainsSocketName(names, selected));
+                        SyncSocketPrimaryFromSelection();
+                        _selectedColliders.Clear();
+                        ClearColliderTransform();
+                        DeleteSelectedPreviewObjects();
+                        GUIUtility.ExitGUI();
+                    }
+                }
             }
             GUI.backgroundColor = previous;
 
-            if (_socketPlacementArmed)
+            using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.HelpBox("Click on the frame to place a socket. Escape or right-click cancels.",
+                if (!independentView)
+                {
+                    using (new EditorGUI.DisabledScope(names.Count == 0))
+                    {
+                        if (GUILayout.Button(new GUIContent("Delete This Clip…",
+                                "Remove every Frame-Attached socket from this clip only. Independent Motion tracks remain.")))
+                            DeleteAllFrameAttachedSockets(clip);
+                    }
+                }
+                else
+                {
+                    using (new EditorGUI.DisabledScope(names.Count == 0))
+                    {
+                        if (GUILayout.Button(new GUIContent("Delete Independent…",
+                                "Remove every Independent Motion track and its legacy clip keys.")))
+                            DeleteAllIndependentSockets();
+                    }
+                }
+                using (new EditorGUI.DisabledScope(!HasAnySocketData()))
+                {
+                    if (GUILayout.Button(new GUIContent("Delete All — All Clips…",
+                            "Profile-wide reset: remove Frame-Attached sockets, Independent Motion tracks, and socket catalog entries from every clip.")))
+                        DeleteAllSocketsAcrossProfile();
+                }
+            }
+
+            if (sectionArmed)
+            {
+                EditorGUILayout.HelpBox(
+                    independentView
+                        ? "Click the preview to place an Independent Motion socket. Its offset is measured from the player pivot. Escape or right-click cancels."
+                        : "Click the frame to place a Frame-Attached socket. Escape or right-click cancels.",
                     MessageType.Info);
             }
+
+            if (independentView)
+                DrawEllipticalOrbitTools(clip);
 
             if (names.Count == 0)
             {
                 EditorGUILayout.HelpBox(
-                    "Add Socket, then click the preview to place a named attach point.",
+                    "Add Socket and click the preview, or pick a Pattern and Create below.",
                     MessageType.None);
                 return;
             }
@@ -4146,39 +5123,158 @@ namespace InvertLab.Sprites.DOTS.Editor
                 "Preview only. Scene attachments are still created manually (or later from this catalog).",
                 MessageType.None);
 
+            DrawSocketSelectionProfileField();
+            GUILayout.Label(
+                "Click or drag a box. Shift = range, Ctrl/Cmd = toggle, Alt = subtract, Shift+Alt = intersect.",
+                _mutedStyle);
+
+            const float rowH = 32f;
+            const float checkW = 18f;
+            const float dupW = 72f;
+            const float thumbW = 32f;
+            _socketListRowRects.Clear();
             for (int i = 0; i < names.Count; i++)
             {
                 string name = names[i];
                 bool selected = IsSocketSelected(name);
                 SpriteSocketKeys.TryGetPose(clip.Sockets, name, _selectedFrame,
-                    out var pose, out var angle, out var poseScale, out bool onFrame);
+                    out _, out _, out _, out bool onFrame);
                 Color swatch = SpriteSocketKeys.ColorForIndex(i);
                 var catalogItem = _profile.SocketCatalog.Find(name);
-                using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                var row = GUILayoutUtility.GetRect(0f, rowH, GUILayout.ExpandWidth(true), GUILayout.Height(rowH));
+                GUILayout.Space(3f);
+                _socketListRowRects.Add(row);
+
+                if (Event.current.type == EventType.Repaint)
                 {
-                    using (new EditorGUILayout.HorizontalScope())
+                    EditorStyles.helpBox.Draw(row, false, false, false, false);
+                    if (selected)
+                        EditorGUI.DrawRect(row, new Color(0.22f, 0.4f, 0.55f, 0.55f));
+                }
+
+                var checkRect = new Rect(row.x + 4f, row.y, checkW, rowH);
+                var chipRect = new Rect(checkRect.xMax + 2f, row.y + 10f, 12f, 12f);
+                var dupRect = new Rect(row.xMax - dupW - 4f, row.y + 2f, dupW, rowH - 4f);
+                var thumbRect = new Rect(dupRect.x - thumbW - 4f, row.y, thumbW, rowH);
+                var labelRect = new Rect(chipRect.xMax + 6f, row.y,
+                    Mathf.Max(8f, thumbRect.x - chipRect.xMax - 8f), rowH);
+
+                var evt = Event.current;
+                if (evt.type == EventType.MouseDown && evt.button == 0 &&
+                    row.Contains(evt.mousePosition) && !dupRect.Contains(evt.mousePosition))
+                {
+                    if (_socketListAnchor >= 0 &&
+                        _socketListAnchorIndependent != independentView)
+                        _socketListAnchor = -1;
+                    bool onCheck = checkRect.Contains(evt.mousePosition);
+                    var op = onCheck ? SelectionOp.Toggle : ReadSelectionOp(evt, orderedList: true);
+                    bool canMarquee = !onCheck && SelectionOpAllowsMarquee(op);
+                    if (canMarquee)
                     {
-                        var chip = GUILayoutUtility.GetRect(12f, 12f, GUILayout.Width(16f), GUILayout.Height(32f));
-                        EditorGUI.DrawRect(new Rect(chip.x, chip.y + 10f, 12f, 12f), swatch);
-                        string rowLabel = onFrame ? $"{i}:{name}" : $"{i}:{name}  (other frame)";
-                        if (GUILayout.Button(rowLabel, selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton,
-                                GUILayout.Height(32f)))
-                        {
-                            var click = Event.current;
-                            SelectPreviewSocket(name, click.shift,
-                                click.control || click.command);
-                        }
-                        var thumb = GUILayoutUtility.GetRect(32f, 32f, GUILayout.Width(32f), GUILayout.Height(32f));
-                        DrawSocketPreviewThumbnail(thumb, catalogItem);
+                        _socketListMarqueeOp = op;
+                        _socketListMarqueeBaseline.Clear();
+                        foreach (string selectedName in _selectedSockets)
+                            _socketListMarqueeBaseline.Add(selectedName);
                     }
+                    SelectSocketsFromListRow(names, i, op);
+                    _socketListAnchorIndependent = independentView;
+                    _socketListMarqueeIndependent = independentView;
+                    _socketListMarqueePending = canMarquee;
+                    _socketListMarqueeActive = false;
+                    _socketListMarqueeStart = evt.mousePosition;
+                    evt.Use();
+                }
 
-                    var rowRect = GUILayoutUtility.GetLastRect();
-                    HandleSocketPreviewDragDrop(rowRect, name);
+                DrawSocketListCheckbox(checkRect, selected);
+                EditorGUI.DrawRect(chipRect, swatch);
+                var motionTrack = independentView ? _profile.FindSocketMotion(name) : null;
+                string rowLabel = independentView
+                    ? $"{i}:{name}  •  {motionTrack?.Keys?.Count ?? 0} keys"
+                    : onFrame ? $"{i}:{name}" : $"{i}:{name}  (other frame)";
+                GUI.Label(labelRect, rowLabel, selected ? EditorStyles.whiteLabel : EditorStyles.label);
+                DrawSocketPreviewThumbnail(thumbRect, catalogItem);
+                if (GUI.Button(dupRect, new GUIContent("Duplicate",
+                        "Copy this socket's keys and catalog onto a new name."),
+                    EditorStyles.miniButton))
+                {
+                    DuplicateSocketIdentity(clip, name);
+                    GUIUtility.ExitGUI();
+                }
 
-                    if (!selected || !SpriteSocketKeys.NamesEqual(name, _selectedSocketName))
-                        continue;
+                HandleSocketListRowContext(row, clip, names, i);
+                HandleSocketPreviewDragDrop(row, name);
+            }
+            if ((!_socketListMarqueePending && !_socketListMarqueeActive) ||
+                _socketListMarqueeIndependent == independentView)
+                HandleSocketListMarquee(names);
 
-                    if (!onFrame)
+            if (visibleSelected == 1 &&
+                !SocketSelectionBusy &&
+                !string.IsNullOrEmpty(_selectedSocketName) &&
+                IsSocketSelected(_selectedSocketName) &&
+                ListContainsSocketName(names, _selectedSocketName))
+            {
+                GUILayout.Space(8f);
+                GUILayout.Label($"SOCKET  {_selectedSocketName}", _sectionStyle);
+                DrawSocketIdentityInspector(clip, _selectedSocketName);
+            }
+            else if (visibleSelected > 1)
+            {
+                GUILayout.Space(6f);
+                GUILayout.Label(
+                    $"{visibleSelected} selected  •  right-click for Transform / Pattern",
+                    _mutedStyle);
+            }
+            if (independentView)
+                DrawSelectedSocketTriggerInspector();
+        }
+
+        void DrawSelectedSocketTriggerInspector()
+        {
+            if (!TryGetSelectedSocketTrigger(
+                    _selectedSocketTriggerTrack, _selectedSocketTriggerIndex,
+                    out var track, out var trigger))
+                return;
+            GUILayout.Space(8f);
+            SectionLabel("INDEPENDENT TRIGGER");
+            EditorGUILayout.LabelField("Socket", track.SocketName);
+            EditorGUI.BeginChangeCheck();
+            float seconds = EditorGUILayout.FloatField(
+                new GUIContent("Time (sec)", "Trigger time on this independent track."),
+                trigger.NormalizedTime * track.Duration);
+            int eventId = Mathf.Clamp(EditorGUILayout.IntField(
+                new GUIContent("Event ID", "References the profile Event list."),
+                trigger.EventId), 1, byte.MaxValue);
+            if (EditorGUI.EndChangeCheck())
+            {
+                RecordProfileUndo("Edit Independent Socket Trigger");
+                trigger.NormalizedTime = Mathf.Clamp01(seconds / Mathf.Max(0.01f, track.Duration));
+                trigger.EventId = (byte)eventId;
+                track.Normalize(Mathf.Max(1, _profile.Sheets?.Count ?? 0));
+                _selectedSocketTriggerIndex = track.Triggers.IndexOf(trigger);
+                _status = $"{track.SocketName} trigger = {EventName(trigger.EventId)} at {seconds:0.###}s";
+                SaveDirty();
+            }
+            if (GUILayout.Button("Delete Trigger"))
+            {
+                DeleteSocketTrigger(_selectedSocketTriggerTrack, _selectedSocketTriggerIndex);
+                GUIUtility.ExitGUI();
+            }
+        }
+
+        void DrawSocketIdentityInspector(SpriteClipDef clip, string name)
+        {
+            name = SpriteSocketKeys.CanonicalName(name);
+            SpriteSocketKeys.TryGetPose(clip.Sockets, name, _selectedFrame,
+                out var pose, out var angle, out var poseScale, out bool onFrame);
+            var catalogItem = _profile.SocketCatalog.Find(name);
+
+                    if (_timelineView == TimelineView.Sockets &&
+                        _profile.FindSocketMotion(name) != null)
+                        GUILayout.Label(
+                            "Independent Motion • player-pivot anchored • character clip timing does not affect this track.",
+                            _mutedWrapStyle);
+                    else if (!onFrame)
                         GUILayout.Label("No key on this frame yet. Drag or edit to add one.", _mutedStyle);
 
                     string nextName = DrawStringTextField("Name", name, "SocketName");
@@ -4187,6 +5283,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                         string previousName = name;
                         SpriteSocketKeys.RenameIdentity(clip.Sockets, previousName, nextName);
                         name = SpriteSocketKeys.CanonicalName(nextName);
+                        var motion = _profile.FindSocketMotion(previousName);
+                        if (motion != null)
+                            motion.SocketName = name;
                         _selectedSockets.Remove(SpriteSocketKeys.CanonicalName(previousName));
                         _selectedSockets.Add(name);
                         _selectedSocketName = name;
@@ -4194,6 +5293,96 @@ namespace InvertLab.Sprites.DOTS.Editor
                         _profile.SocketCatalog.SyncRename(previousName, name, oldStillUsed);
                         catalogItem = _profile.SocketCatalog.Find(name);
                     }
+
+                    catalogItem ??= _profile.SocketCatalog.Ensure(name);
+                    string socketId = catalogItem.SocketId;
+                    string nextSocketId = EditorGUILayout.DelayedTextField(
+                        new GUIContent("ID",
+                            "Stable code ID shared by Frame-Attached and Independent Motion sockets. Example: equipment.head or combat.muzzle."),
+                        socketId);
+                    if (!string.Equals(nextSocketId, socketId, StringComparison.Ordinal))
+                    {
+                        string canonical = SpriteSocketIdUtility.Canonical(nextSocketId, name);
+                        if (SocketIdUsedByOther(canonical, catalogItem))
+                        {
+                            _status = $"Socket ID '{canonical}' is already used";
+                        }
+                        else
+                        {
+                            RecordProfileUndo("Set Socket ID");
+                            catalogItem.SocketId = canonical;
+                            _status = $"{name} ID = {canonical}";
+                            SaveDirty();
+                        }
+                    }
+                    GUILayout.Label($"Code: SpriteSockets.Hash(\"{catalogItem.SocketId}\")", _mutedStyle);
+
+                    EditorGUI.BeginChangeCheck();
+                    bool closedPath = catalogItem == null || catalogItem.ClosedPath;
+                    bool nextClosedPath = EditorGUILayout.Toggle(
+                        new GUIContent("Closed Path",
+                            "On: last key returns to the first. Off: hold the last pose. Independent companions usually stay closed."),
+                        closedPath);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        RecordProfileUndo("Toggle Socket Closed Path");
+                        _profile.SocketCatalog.Ensure(name).PathWrap = nextClosedPath ? (byte)0 : (byte)1;
+                        catalogItem = _profile.SocketCatalog.Find(name);
+                        var motion = _profile.FindSocketMotion(name);
+                        if (motion != null)
+                            motion.Loop = nextClosedPath;
+                    }
+
+                    int clockPopup = catalogItem != null && catalogItem.UsesOwnClock ? 1 : 0;
+                    int nextClock = EditorGUILayout.Popup(
+                        new GUIContent("Motion",
+                            "Frame-Attached: follows character frames (helmet, weapon). Independent: its own timeline (companion, orbit, effect). Behind/Front still apply."),
+                        clockPopup, SocketClockModeLabels);
+                    if (nextClock != clockPopup)
+                    {
+                        RecordProfileUndo("Set Socket Motion");
+                        var item = _profile.SocketCatalog.Ensure(name);
+                        item.MotionMode = (byte)nextClock;
+                        if (nextClock == 1)
+                        {
+                            item.PathWrap = 0;
+                            if (item.Speed <= 0.0001f)
+                                item.Speed = 1f;
+                            CaptureSocketMotionsFromClip(clip, new[] { name }, replaceTiming: true);
+                        }
+                        catalogItem = item;
+                        _status = nextClock == 1
+                            ? $"{name}  Independent  (own timeline and speed)"
+                            : $"{name}  Frame-Attached  (follows character frames)";
+                        SaveDirty();
+                    }
+
+                    if (catalogItem != null && catalogItem.UsesOwnClock)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        float speed = EditorGUILayout.Slider(
+                            new GUIContent("Speed",
+                                "Independent motion only. 1 = authored speed. 0.5 = 2× slower. 0.33 = 3× slower."),
+                            catalogItem.ResolvedSpeed, 0.05f, 4f);
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            RecordProfileUndo("Set Socket Speed");
+                            catalogItem.Speed = speed;
+                            _status = $"{name}  Independent speed {speed:0.##}×";
+                            SaveDirty();
+                        }
+                    }
+
+                    _socketOrbitTilt = EditorGUILayout.Popup(
+                        new GUIContent("Orbit Tilt",
+                            "Apply this tilt to the selected socket. 0° is horizontal, 90° is vertical."),
+                        Mathf.Clamp(_socketOrbitTilt, 0, SocketOrbitTiltLabels.Length - 1),
+                        SocketOrbitTiltLabels);
+                    if (DrawOrbitCreateRow(
+                            "Apply Orbit to This Socket",
+                            "Restamp this socket as an elliptical orbit at the tilt above. Count > 1 adds coplanar orbs on the same ring, evenly phased.",
+                            ref _socketCoplanarCount, 1, 12))
+                        ApplySocketOrbitShape(clip, name, _socketCoplanarCount);
 
                     EditorGUI.BeginChangeCheck();
                     float offsetX = EditorGUILayout.FloatField("Offset X (px)", pose.x);
@@ -4208,6 +5397,44 @@ namespace InvertLab.Sprites.DOTS.Editor
                         key.LocalAngle = nextAngle;
                         key.LocalScale = new Vector2(scaleX, scaleY);
                         _status = $"Socket {name}  ({offsetX:0.##}, {offsetY:0.##})  {nextAngle:0.##}°  scale {scaleX:0.##},{scaleY:0.##}";
+                    }
+
+                    var drawKey = SpriteSocketKeys.FindOnFrame(clip.Sockets, name, _selectedFrame);
+                    int drawPopup = drawKey == null || drawKey.DrawLayer == SpriteSocketKeys.DrawUnset
+                        ? 0
+                        : drawKey.DrawLayer == SpriteSocketKeys.DrawBehind
+                            ? 1
+                            : drawKey.DrawLayer == SpriteSocketKeys.DrawFront
+                                ? 2
+                                : 0;
+                    int nextDrawPopup = EditorGUILayout.Popup(
+                        new GUIContent("Draw This Frame",
+                            "Hold until the next draw key. Default follows the catalog Behind/In Front. Do not use timeline events for this."),
+                        drawPopup, new[] { "Default", "Behind", "In Front" });
+                    if (nextDrawPopup != drawPopup)
+                    {
+                        RecordProfileUndo("Set Socket Draw Layer");
+                        var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, name, _selectedFrame);
+                        key.DrawLayer = nextDrawPopup == 1
+                            ? SpriteSocketKeys.DrawBehind
+                            : nextDrawPopup == 2
+                                ? SpriteSocketKeys.DrawFront
+                                : SpriteSocketKeys.DrawCatalog;
+                        _status = nextDrawPopup == 0
+                            ? $"{name} draw uses catalog default from frame {_selectedFrame + 1}"
+                            : $"{name} draws {(nextDrawPopup == 1 ? "behind" : "in front")} from frame {_selectedFrame + 1}";
+                        SaveDirty();
+                    }
+                    else if (drawKey == null || drawKey.DrawLayer == SpriteSocketKeys.DrawUnset)
+                    {
+                        bool heldBehind = SpriteSocketKeys.IsDrawnBehind(
+                            clip.Sockets, name, _selectedFrame,
+                            SpriteSocketKeys.CatalogDrawsBehind(catalogItem),
+                            SocketSampleClosed(clip, name));
+                        GUILayout.Label(
+                            heldBehind ? "Held: Behind (from an earlier frame or default)"
+                                       : "Held: In Front (from an earlier frame or default)",
+                            _mutedStyle);
                     }
 
                     if (GUILayout.Button(new GUIContent(
@@ -4300,7 +5527,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                             catalogItem.FlipX);
                         int drawIndex = catalogItem.SortingOffset < 0 ? 0 : 1;
                         int nextDraw = EditorGUILayout.Popup(
-                            new GUIContent("Draw", "Draw this preview behind or in front of the character."),
+                            new GUIContent("Default Draw",
+                                "Fallback behind/in front when a frame does not override Draw This Frame."),
                             drawIndex, new[] { "Behind", "In Front" });
                         catalogItem.SortingOffset = nextDraw == 0 ? -1 : 0;
                         if (GUILayout.Button(new GUIContent("Clear Preview",
@@ -4344,12 +5572,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                             GUIUtility.ExitGUI();
                         }
                     }
-                }
-            }
         }
 
         void OpenSocketInheritPanel(SpriteClipDef clip, string socketName, int sourceFrame,
-            Vector2 guiPoint = default)
+            Vector2 guiPoint = default, bool exitGui = true)
         {
             if (clip?.Frames == null || clip.Frames.Length == 0 || string.IsNullOrEmpty(socketName))
                 return;
@@ -4388,8 +5614,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             _socketInheritRotation = true;
             _socketInheritScale = true;
             _showSocketInheritPanel = true;
+            CloseSocketTransformPanel();
 
-            float width = 340f;
+            float width = 380f;
             float height = Mathf.Clamp(position.height - 80f, 360f, 540f);
             _socketInheritPanelRect = new Rect(
                 Mathf.Max(8f, (position.width - width) * 0.5f),
@@ -4400,7 +5627,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _status = _socketInheritNames.Count == 1
                 ? $"Socket {_socketInheritNames[0]}  — pick frames to inherit pose"
                 : $"{_socketInheritNames.Count} sockets  — pick frames to inherit pose";
-            GUIUtility.ExitGUI();
+            if (exitGui)
+                GUIUtility.ExitGUI();
         }
 
         SpriteClipDef SocketInheritClip()
@@ -4413,7 +5641,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         bool SocketInheritBlocksEditorInput()
         {
-            if (!_showSocketInheritPanel)
+            if (!_showSocketInheritPanel && !_showSocketTransformPanel)
                 return false;
             return Event.current.type is EventType.MouseDown or EventType.MouseUp
                 or EventType.MouseDrag or EventType.MouseMove or EventType.ContextClick
@@ -4465,11 +5693,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_draggingSocket)
                 EndSocketDrag(GUIUtility.hotControl, save: false);
-            if (!IsSocketSelected(hit))
-                SelectPreviewSocket(hit, additive: false, toggle: false);
-            else
-                _selectedSocketName = SpriteSocketKeys.CanonicalName(hit);
-            OpenSocketInheritPanel(clip, hit, frame);
+            ShowSocketContextMenu(clip, hit);
             evt.Use();
             Repaint();
         }
@@ -4511,14 +5735,92 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_draggingSocket)
                 EndSocketDrag(GUIUtility.hotControl, save: false);
-            if (!IsSocketSelected(hit))
-                SelectPreviewSocket(hit, additive: false, toggle: false);
-            else
-                _selectedSocketName = SpriteSocketKeys.CanonicalName(hit);
-            OpenSocketInheritPanel(clip, hit, frame, mouse);
+            ShowSocketContextMenu(clip, hit);
             evt.Use();
             Repaint();
             return true;
+        }
+
+        void ShowSocketContextMenu(SpriteClipDef clip, string hit)
+        {
+            if (clip == null || string.IsNullOrEmpty(hit))
+                return;
+            if (!IsSocketSelected(hit))
+                SelectPreviewSocket(hit, SelectionOp.Replace);
+            else
+                _selectedSocketName = SpriteSocketKeys.CanonicalName(hit);
+
+            var selected = new List<string>(_selectedSockets);
+            int count = selected.Count;
+            string name = SpriteSocketKeys.CanonicalName(hit);
+            var menu = new GenericMenu();
+            PopulateSocketContextMenu(menu, clip, name, selected, count);
+            menu.ShowAsContext();
+        }
+
+        void PopulateSocketContextMenu(GenericMenu menu, SpriteClipDef clip, string name,
+            List<string> selected, int count)
+        {
+            menu.AddItem(new GUIContent("Set Transform…"), false, OpenSocketTransformPanel);
+            menu.AddItem(new GUIContent("Apply to Frames…"), false,
+                () => OpenSocketInheritPanel(clip, name, _selectedFrame, default, exitGui: false));
+            AddSocketPatternMenuItems(menu, clip);
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent(count > 1
+                    ? $"Assign Profile to {count} Sockets…"
+                    : "Assign Profile…"),
+                false, () => ShowSocketProfilePicker(selected));
+            menu.AddItem(new GUIContent(count > 1 ? "Clear Profiles" : "Clear Profile"),
+                false, () => ClearSocketPreviewOnNames(selected));
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Duplicate"), false,
+                () => DuplicateSocketIdentity(clip, name));
+            menu.AddItem(new GUIContent(count > 1 ? $"Delete {count} Sockets" : "Delete"),
+                false, () =>
+                {
+                    ClearColliderSelection();
+                    DeleteSelectedPreviewObjects();
+                });
+        }
+
+        void OpenSocketTransformPanel()
+        {
+            var clip = CurrentClip;
+            if (clip == null)
+                return;
+
+            _socketTransformNames.Clear();
+            if (_selectedSockets.Count > 0)
+            {
+                foreach (string name in _selectedSockets)
+                    _socketTransformNames.Add(SpriteSocketKeys.CanonicalName(name));
+            }
+            if (_socketTransformNames.Count == 0 && !string.IsNullOrEmpty(_selectedSocketName))
+                _socketTransformNames.Add(SpriteSocketKeys.CanonicalName(_selectedSocketName));
+            if (_socketTransformNames.Count == 0)
+                return;
+
+            CloseSocketInheritPanel();
+            _socketTransformAllFrames = false;
+            _showSocketTransformPanel = true;
+            float width = 308f;
+            float height = 352f;
+            _socketTransformPanelRect = new Rect(
+                Mathf.Max(8f, (position.width - width) * 0.5f),
+                Mathf.Max(48f, (position.height - height) * 0.28f),
+                width, height);
+            _status = _socketTransformNames.Count == 1
+                ? $"Set Transform  •  {_socketTransformNames[0]}"
+                : $"Set Transform  •  {_socketTransformNames.Count} sockets";
+            Repaint();
+        }
+
+        void CloseSocketTransformPanel()
+        {
+            _showSocketTransformPanel = false;
+            _socketTransformDragging = false;
+            if (GUIUtility.hotControl != 0)
+                GUIUtility.hotControl = 0;
         }
 
         void CloseSocketInheritPanel()
@@ -4568,31 +5870,52 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
-        void ToggleSocketInheritFrame(int frame, bool additive, bool range)
+        void ToggleSocketInheritFrame(int frame, SelectionOp op)
         {
-            if (range && _socketInheritRangeAnchor >= 0)
+            switch (op)
             {
-                int a = Mathf.Min(_socketInheritRangeAnchor, frame);
-                int b = Mathf.Max(_socketInheritRangeAnchor, frame);
-                if (!additive)
+                case SelectionOp.Range:
+                case SelectionOp.RangeAdd:
+                    if (_socketInheritRangeAnchor >= 0)
+                    {
+                        int a = Mathf.Min(_socketInheritRangeAnchor, frame);
+                        int b = Mathf.Max(_socketInheritRangeAnchor, frame);
+                        if (op == SelectionOp.Range)
+                            _socketInheritFrames.Clear();
+                        for (int i = a; i <= b; i++)
+                            _socketInheritFrames.Add(i);
+                        return;
+                    }
+                    _socketInheritFrames.Add(frame);
+                    _socketInheritRangeAnchor = frame;
+                    return;
+                case SelectionOp.Add:
+                    _socketInheritFrames.Add(frame);
+                    _socketInheritRangeAnchor = frame;
+                    return;
+                case SelectionOp.Toggle:
+                    if (!_socketInheritFrames.Add(frame))
+                        _socketInheritFrames.Remove(frame);
+                    _socketInheritRangeAnchor = frame;
+                    return;
+                case SelectionOp.Subtract:
+                    _socketInheritFrames.Remove(frame);
+                    return;
+                case SelectionOp.Intersect:
+                {
+                    bool keep = _socketInheritFrames.Contains(frame);
                     _socketInheritFrames.Clear();
-                for (int i = a; i <= b; i++)
-                    _socketInheritFrames.Add(i);
-                return;
+                    if (keep)
+                        _socketInheritFrames.Add(frame);
+                    _socketInheritRangeAnchor = frame;
+                    return;
+                }
+                default:
+                    _socketInheritFrames.Clear();
+                    _socketInheritFrames.Add(frame);
+                    _socketInheritRangeAnchor = frame;
+                    return;
             }
-
-            _socketInheritRangeAnchor = frame;
-            if (!additive)
-            {
-                _socketInheritFrames.Clear();
-                _socketInheritFrames.Add(frame);
-                return;
-            }
-
-            if (_socketInheritFrames.Contains(frame))
-                _socketInheritFrames.Remove(frame);
-            else
-                _socketInheritFrames.Add(frame);
         }
 
         void JumpPreviewToFrame(SpriteClipDef clip, int frame)
@@ -4694,13 +6017,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             return changed;
         }
 
-        void ArmSocketPlacement()
+        void ArmSocketPlacement(bool independent)
         {
             CancelColliderCreation(null);
             _socketPlacementArmed = true;
+            _socketPlacementIndependent = independent;
             _draggingSocket = false;
             _socketHandleKind = ColliderHandleKind.None;
-            _status = "Socket tool armed — click the preview to place";
+            _status = _socketPlacementIndependent
+                ? "Independent Motion tool armed — click the preview to place"
+                : "Frame-Attached Socket tool armed — click the preview to place";
             Repaint();
         }
 
@@ -4728,6 +6054,207 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             _selectedSockets.Clear();
             _selectedSocketName = null;
+            _socketListAnchor = -1;
+            _socketListMarqueePending = false;
+            _socketListMarqueeActive = false;
+        }
+
+        void HandleSocketListMarquee(List<string> names)
+        {
+            var evt = Event.current;
+            if (evt == null || names == null || names.Count == 0 ||
+                _socketListRowRects.Count != names.Count)
+                return;
+
+            if (_socketListMarqueePending && evt.type == EventType.MouseDrag && evt.button == 0)
+            {
+                if (!_socketListMarqueeActive &&
+                    Vector2.Distance(_socketListMarqueeStart, evt.mousePosition) >= 4f)
+                    _socketListMarqueeActive = true;
+                if (_socketListMarqueeActive)
+                {
+                    var box = RectFromPoints(_socketListMarqueeStart, evt.mousePosition);
+                    _selectionScratchNames.Clear();
+                    for (int i = 0; i < names.Count; i++)
+                    {
+                        if (box.Overlaps(_socketListRowRects[i], true))
+                            _selectionScratchNames.Add(SpriteSocketKeys.CanonicalName(names[i]));
+                    }
+                    ApplyMarqueeOnto(_selectedSockets, _socketListMarqueeBaseline,
+                        _selectionScratchNames, _socketListMarqueeOp);
+                    SyncSocketPrimaryFromSelection();
+                    evt.Use();
+                }
+            }
+
+            if (_socketListMarqueeActive && evt.type == EventType.Repaint)
+            {
+                var box = RectFromPoints(_socketListMarqueeStart, evt.mousePosition);
+                EditorGUI.DrawRect(box, new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.14f));
+                DrawBorder(box, AccentColor, 1f);
+            }
+
+            if (_socketListMarqueePending &&
+                (evt.type == EventType.MouseUp || evt.rawType == EventType.MouseUp))
+            {
+                _socketListMarqueePending = false;
+                _socketListMarqueeActive = false;
+                _status = PreviewSelectionStatus("Marquee selected");
+                if (evt.type == EventType.MouseUp)
+                    evt.Use();
+            }
+        }
+
+        static void DrawSocketListCheckbox(Rect rowCheck, bool on)
+        {
+            var box = new Rect(rowCheck.x + 2f, rowCheck.y + 9f, 14f, 14f);
+            EditorGUI.DrawRect(box, new Color(0.12f, 0.12f, 0.12f, 1f));
+            DrawBorder(box, new Color(0.62f, 0.62f, 0.62f, 1f), 1f);
+            if (!on)
+                return;
+            EditorGUI.DrawRect(new Rect(box.x + 3f, box.y + 3f, 8f, 8f), AccentColor);
+        }
+
+        static bool PointerHasShift(Event evt)
+            => evt != null && (evt.shift || (evt.modifiers & EventModifiers.Shift) != 0);
+
+        static bool PointerHasAction(Event evt)
+            => evt != null && (evt.control || evt.command ||
+                               (evt.modifiers & EventModifiers.Control) != 0 ||
+                               (evt.modifiers & EventModifiers.Command) != 0);
+
+        static bool PointerHasAlt(Event evt)
+            => evt != null && (evt.alt || (evt.modifiers & EventModifiers.Alt) != 0);
+
+        static SelectionOp ReadSelectionOp(Event evt, bool orderedList = false)
+        {
+            bool shift = PointerHasShift(evt);
+            bool ctrl = PointerHasAction(evt);
+            bool alt = PointerHasAlt(evt);
+            if (shift && alt)
+                return SelectionOp.Intersect;
+            if (alt)
+                return SelectionOp.Subtract;
+            if (ctrl && shift && orderedList)
+                return SelectionOp.RangeAdd;
+            if (ctrl)
+                return SelectionOp.Toggle;
+            if (shift && orderedList)
+                return SelectionOp.Range;
+            if (shift)
+                return SelectionOp.Add;
+            return SelectionOp.Replace;
+        }
+
+        static bool SelectionOpAllowsMarquee(SelectionOp op)
+            => op is SelectionOp.Replace or SelectionOp.Add or SelectionOp.Subtract
+                or SelectionOp.Toggle or SelectionOp.Intersect;
+
+        static void ApplyMarqueeOnto<T>(HashSet<T> dest, HashSet<T> baseline, List<T> hits, SelectionOp op)
+        {
+            dest.Clear();
+            switch (op)
+            {
+                case SelectionOp.Add:
+                case SelectionOp.RangeAdd:
+                    foreach (var item in baseline)
+                        dest.Add(item);
+                    for (int i = 0; i < hits.Count; i++)
+                        dest.Add(hits[i]);
+                    break;
+                case SelectionOp.Subtract:
+                    foreach (var item in baseline)
+                        dest.Add(item);
+                    for (int i = 0; i < hits.Count; i++)
+                        dest.Remove(hits[i]);
+                    break;
+                case SelectionOp.Toggle:
+                    foreach (var item in baseline)
+                        dest.Add(item);
+                    for (int i = 0; i < hits.Count; i++)
+                    {
+                        T hit = hits[i];
+                        if (baseline.Contains(hit))
+                            dest.Remove(hit);
+                        else
+                            dest.Add(hit);
+                    }
+                    break;
+                case SelectionOp.Intersect:
+                    for (int i = 0; i < hits.Count; i++)
+                    {
+                        T hit = hits[i];
+                        if (baseline.Contains(hit))
+                            dest.Add(hit);
+                    }
+                    break;
+                default:
+                    for (int i = 0; i < hits.Count; i++)
+                        dest.Add(hits[i]);
+                    break;
+            }
+        }
+
+        void SelectSocketsFromListRow(List<string> names, int index, SelectionOp op)
+        {
+            if (names == null || index < 0 || index >= names.Count)
+                return;
+            ReleaseShortcutKeyboardFocus();
+            _selectedSocketDrawFrame = -1;
+            _selectedSocketDrawName = null;
+            string name = SpriteSocketKeys.CanonicalName(names[index]);
+            if (op is SelectionOp.Range or SelectionOp.RangeAdd)
+            {
+                // Keep the socket anchor and selection intact. ClearColliderSelection()
+                // also clears sockets, which previously erased the range anchor and made
+                // Shift-click select only the clicked row.
+                _selectedColliders.Clear();
+                ClearColliderTransform();
+                if (op == SelectionOp.Range)
+                    _selectedSockets.Clear();
+                if (_socketListAnchor >= 0 && _socketListAnchor < names.Count)
+                {
+                    int a = Mathf.Min(_socketListAnchor, index);
+                    int b = Mathf.Max(_socketListAnchor, index);
+                    for (int i = a; i <= b; i++)
+                        _selectedSockets.Add(SpriteSocketKeys.CanonicalName(names[i]));
+                }
+                else
+                    _selectedSockets.Add(name);
+                _selectedSocketName = name;
+                SyncSocketPrimaryFromSelection();
+                _selectedEventFrame = -1;
+                _selectedOnionFrame = -1;
+                if (_socketListAnchor < 0)
+                    _socketListAnchor = index;
+                _status = PreviewSelectionStatus();
+            }
+            else
+            {
+                SelectPreviewSocket(name, op);
+                if (op is not (SelectionOp.Subtract or SelectionOp.Intersect))
+                    _socketListAnchor = index;
+            }
+            Repaint();
+        }
+
+        void HandleSocketListRowContext(Rect rowRect, SpriteClipDef clip, List<string> names, int index)
+        {
+            var evt = Event.current;
+            if (evt.type != EventType.ContextClick &&
+                !(evt.type == EventType.MouseDown && evt.button == 1))
+                return;
+            if (!rowRect.Contains(evt.mousePosition))
+                return;
+            if (!IsSocketSelected(names[index]))
+                SelectSocketsFromListRow(names, index, SelectionOp.Replace);
+            var selected = new List<string>(_selectedSockets);
+            int count = selected.Count;
+            string name = names[index];
+            var menu = new GenericMenu();
+            PopulateSocketContextMenu(menu, clip, name, selected, count);
+            menu.ShowAsContext();
+            evt.Use();
         }
 
         void ClearPreviewObjectSelection()
@@ -4737,8 +6264,129 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         bool IsSocketSelected(string name)
-            => !string.IsNullOrEmpty(name) &&
-               _selectedSockets.Contains(SpriteSocketKeys.CanonicalName(name));
+        {
+            if (string.IsNullOrEmpty(name))
+                return false;
+            if (_selectedSockets.Contains(name))
+                return true;
+            return _selectedSockets.Contains(SpriteSocketKeys.CanonicalName(name));
+        }
+
+        bool SocketSelectionBusy
+            => _socketListMarqueeActive || _draggingColliderMarquee || _colliderMarqueePending;
+
+        List<string> CachedUniqueSocketNames(SpriteClipDef clip)
+        {
+            var sockets = clip?.Sockets;
+            if (_cachedSocketNamesGui == _guiPass &&
+                ReferenceEquals(_cachedSocketNamesSource, sockets) &&
+                _cachedSocketNamesCount == (sockets?.Count ?? 0))
+                return _cachedSocketNames;
+
+            _cachedSocketNamesGui = _guiPass;
+            _cachedSocketNamesSource = sockets;
+            _cachedSocketNamesCount = sockets?.Count ?? 0;
+            if (sockets != null)
+                SpriteSocketKeys.FillUniqueNamesInOrder(sockets, _cachedSocketNames);
+            else
+                _cachedSocketNames.Clear();
+            AppendIndependentSocketNames(_cachedSocketNames);
+            return _cachedSocketNames;
+        }
+
+        List<string> VisibleSocketNames(SpriteClipDef clip, bool independent)
+        {
+            var all = CachedUniqueSocketNames(clip);
+            _visibleSocketNames.Clear();
+            for (int i = 0; i < all.Count; i++)
+            {
+                string name = all[i];
+                var item = _profile?.SocketCatalog?.Find(name);
+                bool isIndependent = item != null && item.UsesOwnClock;
+                if (!isIndependent && _profile?.FindSocketMotion(name) != null)
+                    isIndependent = true;
+                if (isIndependent == independent)
+                    _visibleSocketNames.Add(name);
+            }
+            return _visibleSocketNames;
+        }
+
+        static bool ListContainsSocketName(IList<string> names, string target)
+        {
+            if (names == null)
+                return false;
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (SpriteSocketKeys.NamesEqual(names[i], target))
+                    return true;
+            }
+            return false;
+        }
+
+        int CountSelectedSocketNames(IList<string> names)
+        {
+            int count = 0;
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (IsSocketSelected(names[i]))
+                    count++;
+            }
+            return count;
+        }
+
+        bool SocketIdUsedByOther(string socketId, SpriteSocketCatalogItem except)
+        {
+            _profile.EnsureSocketCatalog();
+            for (int i = 0; i < _profile.SocketCatalog.Items.Count; i++)
+            {
+                var item = _profile.SocketCatalog.Items[i];
+                if (item == null || ReferenceEquals(item, except))
+                    continue;
+                if (string.Equals(item.SocketId, socketId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        void SelectAllVisibleSockets(IList<string> names, bool independent)
+        {
+            ClearColliderSelection();
+            _selectedSockets.Clear();
+            for (int i = 0; i < names.Count; i++)
+                _selectedSockets.Add(SpriteSocketKeys.CanonicalName(names[i]));
+            _selectedSocketName = names.Count > 0
+                ? SpriteSocketKeys.CanonicalName(names[0])
+                : null;
+            _socketListAnchor = names.Count > 0 ? 0 : -1;
+            _socketListAnchorIndependent = independent;
+            _status = $"Selected {names.Count} socket{Plural(names.Count)}";
+            Repaint();
+        }
+
+        void AppendIndependentSocketNames(List<string> names)
+        {
+            _profile?.EnsureSocketMotions();
+            if (_profile?.SocketMotions == null)
+                return;
+            for (int i = 0; i < _profile.SocketMotions.Count; i++)
+            {
+                string name = SpriteSocketKeys.CanonicalName(
+                    _profile.SocketMotions[i]?.SocketName);
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                bool exists = false;
+                for (int n = 0; n < names.Count; n++)
+                {
+                    if (string.Equals(names[n], name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists)
+                    names.Add(name);
+            }
+        }
 
         void SyncSocketPrimaryFromSelection()
         {
@@ -4761,33 +6409,58 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
-        void SelectPreviewSocket(string name, bool additive, bool toggle)
+        void SelectPreviewSocket(string name, SelectionOp op)
         {
             name = SpriteSocketKeys.CanonicalName(name);
-            if (!additive && !toggle)
-                ClearColliderSelection();
-            if (toggle && _selectedSockets.Contains(name))
-                _selectedSockets.Remove(name);
-            else
-                _selectedSockets.Add(name);
+            switch (op)
+            {
+                case SelectionOp.Add:
+                    _selectedSockets.Add(name);
+                    break;
+                case SelectionOp.Toggle:
+                    if (_selectedSockets.Contains(name))
+                        _selectedSockets.Remove(name);
+                    else
+                        _selectedSockets.Add(name);
+                    break;
+                case SelectionOp.Subtract:
+                    _selectedSockets.Remove(name);
+                    break;
+                case SelectionOp.Intersect:
+                    bool keep = _selectedSockets.Contains(name);
+                    ClearColliderSelection();
+                    _selectedSockets.Clear();
+                    if (keep)
+                        _selectedSockets.Add(name);
+                    break;
+                default:
+                    ClearColliderSelection();
+                    _selectedSockets.Clear();
+                    _selectedSockets.Add(name);
+                    break;
+            }
             _selectedSocketName = _selectedSockets.Contains(name) ? name : null;
             SyncSocketPrimaryFromSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
+            _selectedSocketDrawFrame = -1;
+            _selectedSocketDrawName = null;
             _status = PreviewSelectionStatus();
         }
 
         void PruneSocketSelection(SpriteClipDef clip)
         {
-            if (clip?.Sockets == null)
+            _profile?.EnsureSocketMotions();
+            if (clip?.Sockets == null && (_profile?.SocketMotions == null ||
+                                         _profile.SocketMotions.Count == 0))
             {
                 ClearSocketSelection();
                 return;
             }
 
-            _selectedSockets.RemoveWhere(name => SpriteSocketKeys.IdentityIndex(clip.Sockets, name) < 0);
+            _selectedSockets.RemoveWhere(name => !SocketExistsInClipOrMotion(clip, name));
             if (!string.IsNullOrEmpty(_selectedSocketName) &&
-                SpriteSocketKeys.IdentityIndex(clip.Sockets, _selectedSocketName) < 0)
+                !SocketExistsInClipOrMotion(clip, _selectedSocketName))
                 _selectedSocketName = null;
             SyncSocketPrimaryFromSelection();
             if (_selectedSockets.Count == 0)
@@ -4795,6 +6468,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _draggingSocket = false;
                 _socketHandleKind = ColliderHandleKind.None;
             }
+        }
+
+        bool SocketExistsInClipOrMotion(SpriteClipDef clip, string name)
+        {
+            if (clip?.Sockets != null && SpriteSocketKeys.NameExists(clip.Sockets, name))
+                return true;
+            return _profile?.FindSocketMotion(name) != null;
         }
 
         void DrawSocketPlacementBalloon(Rect canvas)
@@ -4810,16 +6490,24 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawSockets(Rect cell, SpriteClipDef clip, int frame)
         {
             clip.Sockets ??= new List<FrameSocketDef>();
-            var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
+            var names = CachedUniqueSocketNames(clip);
             for (int i = 0; i < names.Count; i++)
             {
                 string name = names[i];
                 bool selected = IsSocketSelected(name);
-                if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
-                        out var position, out var angle, out bool onFrame))
+                if (!TryGetPreviewSocketPose(clip, name, frame,
+                        out var position, out var angle, out _, out bool onFrame))
                     continue;
                 DrawSocketGizmo(cell, position, angle, $"{i}:{name}",
                     SpriteSocketKeys.ColorForIndex(i), selected, !onFrame);
+            }
+
+            if (_selectedSockets.Count >= 2)
+            {
+                if (TryGetSocketGroupTransformLayout(clip, frame, cell, out var groupLayout))
+                    DrawSocketTransformGizmo(groupLayout, true, boxMoves: false);
+                DrawSocketGroupPivot(clip, frame, cell);
+                return;
             }
 
             for (int i = 0; i < names.Count; i++)
@@ -4834,6 +6522,1398 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
+        bool TryGetSocketGroupCentroid(SpriteClipDef clip, int frame, out Vector2 source)
+        {
+            source = default;
+            if (clip == null || _selectedSockets.Count < 2)
+                return false;
+            Vector2 sum = Vector2.zero;
+            int count = 0;
+            foreach (string name in _selectedSockets)
+            {
+                if (!TryGetPreviewSocketPose(clip, name, frame, out var position, out _, out _, out _))
+                    continue;
+                sum += position;
+                count++;
+            }
+            if (count < 2)
+                return false;
+            source = sum / count;
+            return true;
+        }
+
+        bool TryGetSocketGroupPivot(SpriteClipDef clip, int frame, Rect cell, out Vector2 screen)
+        {
+            screen = default;
+            if (!TryGetSocketGroupCentroid(clip, frame, out var source))
+                return false;
+            screen = SocketToScreen(source, cell);
+            return true;
+        }
+
+        bool TryGetSocketGroupTransformLayout(SpriteClipDef clip, int frame, Rect cell,
+            out SocketTransformLayout layout)
+        {
+            layout = default;
+            if (!TryGetSocketGroupCentroid(clip, frame, out var source))
+                return false;
+
+            Vector2 pivot = SocketToScreen(source, cell);
+            float xMin = float.MaxValue;
+            float yMin = float.MaxValue;
+            float xMax = float.MinValue;
+            float yMax = float.MinValue;
+            int count = 0;
+            foreach (string name in _selectedSockets)
+            {
+                if (!TryGetPreviewSocketPose(clip, name, frame, out var position, out _, out _, out _))
+                    continue;
+                Vector2 pin = SocketToScreen(position, cell);
+                xMin = Mathf.Min(xMin, pin.x);
+                yMin = Mathf.Min(yMin, pin.y);
+                xMax = Mathf.Max(xMax, pin.x);
+                yMax = Mathf.Max(yMax, pin.y);
+                count++;
+            }
+            if (count < 2)
+                return false;
+
+            xMin -= SocketGroupGizmoPad;
+            yMin -= SocketGroupGizmoPad;
+            xMax += SocketGroupGizmoPad;
+            yMax += SocketGroupGizmoPad;
+            xMin = Mathf.Min(xMin, pivot.x - SocketGroupGizmoMinHalf);
+            yMin = Mathf.Min(yMin, pivot.y - SocketGroupGizmoMinHalf);
+            xMax = Mathf.Max(xMax, pivot.x + SocketGroupGizmoMinHalf);
+            yMax = Mathf.Max(yMax, pivot.y + SocketGroupGizmoMinHalf);
+            layout = new SocketTransformLayout(pivot, Rect.MinMaxRect(xMin, yMin, xMax, yMax),
+                0f, Vector2.one, source);
+            return true;
+        }
+
+        bool SocketGroupPivotContains(SpriteClipDef clip, int frame, Rect cell, Vector2 mouse)
+        {
+            if (!TryGetSocketGroupPivot(clip, frame, cell, out var screen))
+                return false;
+            return (mouse - screen).sqrMagnitude <= SocketGroupPivotHit * SocketGroupPivotHit;
+        }
+
+        void DrawSocketGroupPivot(SpriteClipDef clip, int frame, Rect cell)
+        {
+            if (!TryGetSocketGroupPivot(clip, frame, cell, out var point))
+                return;
+            float radius = 7f;
+            Handles.BeginGUI();
+            Handles.color = new Color(0.06f, 0.18f, 0.28f, 1f);
+            Handles.DrawSolidDisc(point, Vector3.forward, radius + 1.4f);
+            Handles.color = AccentColor;
+            Handles.DrawSolidDisc(point, Vector3.forward, radius);
+            Handles.color = Color.white;
+            Handles.DrawAAPolyLine(1.6f,
+                point + new Vector2(-10f, 0f), point + new Vector2(10f, 0f));
+            Handles.DrawAAPolyLine(1.6f,
+                point + new Vector2(0f, -10f), point + new Vector2(0f, 10f));
+            Handles.EndGUI();
+            EditorGUIUtility.AddCursorRect(
+                new Rect(point.x - SocketGroupPivotHit, point.y - SocketGroupPivotHit,
+                    SocketGroupPivotHit * 2f, SocketGroupPivotHit * 2f),
+                MouseCursor.MoveArrow);
+        }
+
+        void SyncOrbitCenterFromSelection(SpriteClipDef clip)
+        {
+            if (clip?.Sockets == null || _selectedSockets.Count == 0)
+                return;
+            Vector2 sum = Vector2.zero;
+            int count = 0;
+            for (int i = 0; i < clip.Sockets.Count; i++)
+            {
+                var key = clip.Sockets[i];
+                if (key == null || !IsSocketSelected(key.Name))
+                    continue;
+                sum += key.LocalPosition;
+                count++;
+            }
+            if (count == 0)
+                return;
+            _socketOrbitCenter = new Vector2(Mathf.Round(sum.x / count), Mathf.Round(sum.y / count));
+            _socketOrbitCenterSet = true;
+        }
+
+        bool TryGetPreviewSocketPose(SpriteClipDef clip, string name, int frame,
+            out Vector2 position, out float angle, out Vector2 scale, out bool onFrame)
+        {
+            position = Vector2.zero;
+            angle = 0f;
+            scale = Vector2.one;
+            onFrame = false;
+            if (clip == null || string.IsNullOrEmpty(name))
+                return false;
+            if (_draggingSocket && IsSocketSelected(name) && clip.Sockets != null &&
+                SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
+                    out position, out angle, out scale, out onFrame))
+                return true;
+            // While paused, selected sockets keep their keyed pose so a group scale
+            // does not snap back to an interpolated / Independent sample on mouse up.
+            if (_timelineView == TimelineView.Frames && !_playing && IsSocketSelected(name) &&
+                clip.Sockets != null &&
+                SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
+                    out position, out angle, out scale, out onFrame))
+                return true;
+            var item = _profile?.SocketCatalog?.Find(name);
+            if (item != null && item.UsesOwnClock &&
+                TrySampleIndependentSocketMotion(clip, name, item,
+                    out position, out angle, out scale))
+                return true;
+            if (clip.Sockets == null)
+                return false;
+            float sampleTime = SpriteSocketKeys.ResolveSampleTime(clip, item, _previewTime, _previewLoop);
+            bool ok = SpriteSocketKeys.TrySampleAtTime(clip.Sockets, name, clip, sampleTime,
+                SocketSampleClosed(clip, name), item != null && item.UsesOwnClock,
+                out position, out angle, out scale, out _);
+            onFrame = SpriteSocketKeys.FindOnFrame(clip.Sockets, name, frame) != null;
+            return ok;
+        }
+
+        bool TrySampleIndependentSocketMotion(SpriteClipDef clip, string name,
+            SpriteSocketCatalogItem item, out Vector2 position, out float angle,
+            out Vector2 scale)
+        {
+            position = Vector2.zero;
+            angle = 0f;
+            scale = Vector2.one;
+            var track = _profile?.FindSocketMotion(name);
+            if (track?.Keys == null || track.Keys.Count == 0)
+                return false;
+            track.Normalize(Mathf.Max(1, _profile.Sheets?.Count ?? 0));
+
+            float duration = Mathf.Max(0.01f, track.Duration);
+            float t = _previewTime * Mathf.Max(0.01f, item?.ResolvedSpeed ?? 1f) / duration;
+            t = track.Loop ? Mathf.Repeat(t, 1f) : Mathf.Clamp01(t);
+
+            SpriteSocketMotionKey a = track.Keys[0];
+            SpriteSocketMotionKey b = a;
+            int fromIndex = 0;
+            int toIndex = 0;
+            float blend = 0f;
+            if (track.Keys.Count > 1)
+            {
+                int last = track.Keys.Count - 1;
+                if (t < track.Keys[0].NormalizedTime && track.Loop)
+                {
+                    fromIndex = last;
+                    toIndex = 0;
+                    a = track.Keys[last];
+                    b = track.Keys[0];
+                    float span = 1f - a.NormalizedTime + b.NormalizedTime;
+                    blend = span > 0.0001f ? (t + 1f - a.NormalizedTime) / span : 0f;
+                }
+                else if (t >= track.Keys[last].NormalizedTime)
+                {
+                    if (track.Loop && t < 1f)
+                    {
+                        fromIndex = last;
+                        toIndex = 0;
+                        a = track.Keys[last];
+                        b = track.Keys[0];
+                        float span = 1f - a.NormalizedTime + b.NormalizedTime;
+                        blend = span > 0.0001f ? (t - a.NormalizedTime) / span : 0f;
+                    }
+                    else
+                    {
+                        fromIndex = toIndex = last;
+                        a = b = track.Keys[last];
+                    }
+                }
+                else
+                {
+                    for (int k = 0; k < last; k++)
+                    {
+                        if (t < track.Keys[k + 1].NormalizedTime)
+                        {
+                            fromIndex = k;
+                            toIndex = k + 1;
+                            a = track.Keys[k];
+                            b = track.Keys[k + 1];
+                            float span = b.NormalizedTime - a.NormalizedTime;
+                            blend = span > 0.0001f
+                                ? Mathf.Clamp01((t - a.NormalizedTime) / span)
+                                : 0f;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            float referencePpu = SpriteSheetProfile.GetPixelsPerUnit(
+                _profile.SheetAt(track.ReferenceSheetIndex));
+            float targetPpu = SpriteSheetProfile.GetPixelsPerUnit(
+                _profile.SheetAt(clip.SheetIndex));
+            Vector2 sampledPosition;
+            if (fromIndex == toIndex)
+            {
+                sampledPosition = a.LocalPosition;
+            }
+            else
+            {
+                int count = track.Keys.Count;
+                int before = track.Loop
+                    ? (fromIndex - 1 + count) % count
+                    : Mathf.Max(0, fromIndex - 1);
+                int after = track.Loop
+                    ? (toIndex + 1) % count
+                    : Mathf.Min(count - 1, toIndex + 1);
+                sampledPosition = CatmullMotionPosition(
+                    track.Keys[before].LocalPosition,
+                    a.LocalPosition,
+                    b.LocalPosition,
+                    track.Keys[after].LocalPosition,
+                    blend);
+            }
+            position = sampledPosition * (targetPpu / Mathf.Max(1f, referencePpu));
+            angle = Mathf.LerpAngle(a.LocalAngle, b.LocalAngle, blend);
+            scale = Vector2.LerpUnclamped(
+                SpriteSocketKeys.ResolvedScale(a.LocalScale),
+                SpriteSocketKeys.ResolvedScale(b.LocalScale), blend);
+            return true;
+        }
+
+        static Vector2 CatmullMotionPosition(
+            Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float t)
+        {
+            t = Mathf.Clamp01(t);
+            float t2 = t * t;
+            float t3 = t2 * t;
+            return 0.5f * ((2f * p1) +
+                           (-p0 + p2) * t +
+                           (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
+                           (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
+        }
+
+        float SocketPreviewSampleTime(SpriteClipDef clip, string name)
+        {
+            var item = _profile?.SocketCatalog?.Find(name);
+            return SpriteSocketKeys.ResolveSampleTime(clip, item, _previewTime, _previewLoop);
+        }
+
+        bool SocketSampleClosed(SpriteClipDef clip, string name)
+        {
+            if (!SpriteSocketKeys.UsesClosedPath(_profile?.SocketCatalog, name))
+                return false;
+            if (SpriteSocketKeys.UsesOwnClock(_profile?.SocketCatalog, name))
+                return true;
+            if (clip == null || clip.WrapMode == SpriteAnimWrap.PingPong)
+                return false;
+            return _previewLoop || clip.WrapMode != SpriteAnimWrap.Once;
+        }
+
+        void DrawEllipticalOrbitTools(SpriteClipDef clip)
+        {
+            GUILayout.Space(6f);
+            GUILayout.Label("ORBIT PATTERN", _sectionStyle);
+            _socketOrbitShape = EditorGUILayout.Popup(
+                new GUIContent("Shape", "Circle, or a flattened ellipse around the chest."),
+                Mathf.Clamp(_socketOrbitShape, 0, SocketOrbitShapeLabels.Length - 1),
+                SocketOrbitShapeLabels);
+            float orbitRadius = _socketOrbitRadius > 1f ? _socketOrbitRadius : DefaultSocketOrbitRadius();
+            float nextOrbitRadius = EditorGUILayout.FloatField(
+                new GUIContent("Radius (px)", "How far the ring sits from the center."),
+                orbitRadius);
+            if (!Mathf.Approximately(nextOrbitRadius, orbitRadius))
+                _socketOrbitRadius = Mathf.Max(4f, nextOrbitRadius);
+            Vector2 orbitCenter = _socketOrbitCenterSet
+                ? _socketOrbitCenter
+                : DefaultSocketOrbitCenter();
+            Vector2 nextOrbitCenter = EditorGUILayout.Vector2Field(
+                new GUIContent("Center (px)", "Nucleus of the rings. Default is the chest."),
+                orbitCenter);
+            if (nextOrbitCenter != orbitCenter)
+            {
+                _socketOrbitCenter = nextOrbitCenter;
+                _socketOrbitCenterSet = true;
+            }
+            using (new EditorGUI.DisabledScope(_selectedSockets.Count == 0))
+            {
+                if (GUILayout.Button(new GUIContent("Apply to Selected",
+                        "Move and/or scale the selected sockets to this Radius and Center. Does not create new sockets.")))
+                    ApplyOrbitSettingsToSelected(clip);
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                _socketOrbitPattern = EditorGUILayout.Popup(
+                    new GUIContent("Pattern", SocketOrbitPatternTooltip(_socketOrbitPattern)),
+                    Mathf.Clamp(_socketOrbitPattern, 0, SocketOrbitPatternLabels.Length - 1),
+                    SocketOrbitPatternLabels);
+                _socketOrbitCount = Mathf.Clamp(
+                    EditorGUILayout.IntField(_socketOrbitCount, GUILayout.Width(40f)),
+                    1, 12);
+                if (GUILayout.Button(new GUIContent("Create", SocketOrbitPatternTooltip(_socketOrbitPattern)),
+                        GUILayout.Width(64f)))
+                {
+                    ApplySocketOrbitPattern(clip, _socketOrbitPattern, restamp: false, _socketOrbitCount);
+                    GUIUtility.ExitGUI();
+                }
+            }
+            using (new EditorGUI.DisabledScope(_selectedSockets.Count == 0))
+            {
+                if (GUILayout.Button(new GUIContent("Restamp Selected",
+                        "Rebuild the selected sockets onto the Pattern above. Does not add sockets.")))
+                {
+                    ApplySocketOrbitPattern(clip, _socketOrbitPattern, restamp: true, _selectedSockets.Count);
+                    GUIUtility.ExitGUI();
+                }
+            }
+        }
+
+        void AddSocketPatternMenuItems(GenericMenu menu, SpriteClipDef clip)
+        {
+            int n = _selectedSockets.Count;
+            if (n == 0)
+            {
+                menu.AddDisabledItem(new GUIContent("Pattern/Select sockets first"));
+                return;
+            }
+
+            for (int i = 0; i < SocketOrbitPatternLabels.Length; i++)
+            {
+                int pattern = i;
+                menu.AddItem(new GUIContent($"Pattern/{SocketOrbitPatternLabels[i]}"),
+                    false,
+                    () => ApplySocketOrbitPattern(clip, pattern, restamp: true, createCount: n));
+            }
+        }
+
+        static string SocketOrbitPatternTooltip(int pattern)
+        {
+            int i = Mathf.Clamp(pattern, 0, SocketOrbitPatternTips.Length - 1);
+            return SocketOrbitPatternTips[i];
+        }
+
+        static bool DrawOrbitCreateRow(string label, string tooltip, ref int count, int min, int max)
+        {
+            bool clicked;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                clicked = GUILayout.Button(new GUIContent(label, tooltip));
+                count = Mathf.Clamp(
+                    EditorGUILayout.IntField(count, GUILayout.Width(48f)),
+                    min, max);
+            }
+            return clicked;
+        }
+
+        void ApplyOrbitSettingsToSelected(SpriteClipDef clip)
+        {
+            PruneSocketSelection(clip);
+            if (clip?.Sockets == null || _selectedSockets.Count == 0)
+            {
+                _status = "Select sockets to apply radius and center";
+                return;
+            }
+
+            Vector2 targetCenter = _socketOrbitCenterSet
+                ? _socketOrbitCenter
+                : DefaultSocketOrbitCenter();
+            bool scaleOrbit = _socketOrbitRadius > 1f;
+            float targetRadius = scaleOrbit ? _socketOrbitRadius : 0f;
+
+            Vector2 centroid = Vector2.zero;
+            int count = 0;
+            float maxDist = 0f;
+            for (int i = 0; i < clip.Sockets.Count; i++)
+            {
+                var key = clip.Sockets[i];
+                if (key == null || !IsSocketSelected(key.Name))
+                    continue;
+                centroid += key.LocalPosition;
+                count++;
+            }
+            if (count == 0)
+            {
+                _status = "Selected sockets have no keys to apply";
+                return;
+            }
+            centroid /= count;
+            for (int i = 0; i < clip.Sockets.Count; i++)
+            {
+                var key = clip.Sockets[i];
+                if (key == null || !IsSocketSelected(key.Name))
+                    continue;
+                maxDist = Mathf.Max(maxDist, (key.LocalPosition - centroid).magnitude);
+            }
+
+            float scale = scaleOrbit && maxDist > 0.5f ? targetRadius / maxDist : 1f;
+            RecordProfileUndo("Apply Orbit Settings");
+            for (int i = 0; i < clip.Sockets.Count; i++)
+            {
+                var key = clip.Sockets[i];
+                if (key == null || !IsSocketSelected(key.Name))
+                    continue;
+                Vector2 pos = targetCenter + (key.LocalPosition - centroid) * scale;
+                key.LocalPosition = new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y));
+                Vector2 local = pos - targetCenter;
+                key.DrawLayer = local.y > 0.5f
+                    ? SpriteSocketKeys.DrawBehind
+                    : SpriteSocketKeys.DrawFront;
+            }
+
+            _socketOrbitCenter = targetCenter;
+            _socketOrbitCenterSet = true;
+            CaptureSocketMotionsFromClip(clip, OrderedSelectedSocketNames(clip));
+            _status = scaleOrbit
+                ? $"Applied orbit  r={targetRadius:0}px  center ({targetCenter.x:0}, {targetCenter.y:0})  to {_selectedSockets.Count} sockets"
+                : $"Moved {_selectedSockets.Count} sockets to center ({targetCenter.x:0}, {targetCenter.y:0})";
+            SaveDirty();
+            GUIUtility.ExitGUI();
+        }
+
+        const float EllipticalOrbitFlatten = 0.58f;
+        const float FibonacciGoldenAngle = 137.508f;
+
+        void ApplySocketOrbitPattern(SpriteClipDef clip, int pattern, bool restamp, int createCount)
+        {
+            if (clip?.Frames == null || clip.Frames.Length < 4)
+            {
+                _status = "Orbit patterns need at least 4 frames in this clip";
+                return;
+            }
+
+            pattern = Mathf.Clamp(pattern, 0, SocketOrbitPatternLabels.Length - 1);
+            var names = new List<string>();
+            if (restamp)
+            {
+                names.AddRange(OrderedSelectedSocketNames(clip));
+                if (names.Count == 0)
+                {
+                    _status = "Select sockets to restamp";
+                    return;
+                }
+            }
+            else
+            {
+                int min = pattern == 1 ? 1 : 2;
+                createCount = Mathf.Clamp(createCount, min, 12);
+                clip.Sockets ??= new List<FrameSocketDef>();
+                for (int i = 0; i < createCount; i++)
+                    names.Add(UniquePatternSocketName(clip, names, pattern, i, createCount));
+            }
+
+            RecordProfileUndo(restamp
+                ? $"Restamp {SocketOrbitPatternLabels[pattern]}"
+                : $"Create {SocketOrbitPatternLabels[pattern]}");
+            _profile.EnsureSocketCatalog();
+            clip.Sockets ??= new List<FrameSocketDef>();
+            float radius = _socketOrbitRadius > 1f ? _socketOrbitRadius : DefaultSocketOrbitRadius();
+            Vector2 center = _socketOrbitCenterSet ? _socketOrbitCenter : DefaultSocketOrbitCenter();
+            float tilt = SocketOrbitTiltDegrees(_socketOrbitTilt);
+            StampSocketOrbitPattern(clip, pattern, names, radius, center, tilt);
+            CaptureSocketMotionsFromClip(clip, names, replaceTiming: true);
+
+            _selectedSockets.Clear();
+            for (int i = 0; i < names.Count; i++)
+                _selectedSockets.Add(names[i]);
+            _selectedSocketName = names[0];
+            _socketOrbitCenter = center;
+            _socketOrbitCenterSet = true;
+            _status = restamp
+                ? $"{SocketOrbitPatternLabels[pattern]}  •  restamped {names.Count} sockets"
+                : $"{SocketOrbitPatternLabels[pattern]}  •  created {names.Count} sockets";
+            SaveDirty();
+            Repaint();
+        }
+
+        void ApplySelectedSocketsToAllClips(SpriteClipDef sourceClip)
+        {
+            if (sourceClip?.Frames == null || sourceClip.Frames.Length == 0 ||
+                _profile?.Clips == null || _profile.Clips.Count < 2)
+                return;
+
+            var names = OrderedSelectedSocketNames(sourceClip);
+            if (names.Count == 0)
+                return;
+
+            int targetCount = 0;
+            for (int i = 0; i < _profile.Clips.Count; i++)
+            {
+                var target = _profile.Clips[i];
+                if (target != null && !ReferenceEquals(target, sourceClip) &&
+                    target.Frames != null && target.Frames.Length > 0)
+                    targetCount++;
+            }
+            if (targetCount == 0)
+                return;
+
+            string socketText = names.Count == 1
+                ? $"socket \"{names[0]}\""
+                : $"{names.Count} selected sockets";
+            if (!EditorUtility.DisplayDialog(
+                    "Apply Sockets to All Clips",
+                    $"Copy {socketText} from \"{sourceClip.Name}\" to {targetCount} other clip{Plural(targetCount)}?\n\n" +
+                    "Existing keys with the same socket names will be replaced. The motion is retimed to each clip and remains relative to its player pivot.",
+                    "Apply All",
+                    "Cancel"))
+                return;
+
+            RecordProfileUndo("Apply Sprite Sockets to All Clips");
+            _profile.EnsureSheets(_selectedSheet);
+            _profile.EnsureSocketCatalog();
+
+            float sourceDuration = Mathf.Max(0.0001f, TotalAuthoredDuration(sourceClip));
+            float sourcePpu = SpriteSheetProfile.GetPixelsPerUnit(_profile.SheetForClip(sourceClip));
+            int changedClips = 0;
+
+            for (int c = 0; c < _profile.Clips.Count; c++)
+            {
+                var target = _profile.Clips[c];
+                if (target == null || ReferenceEquals(target, sourceClip) ||
+                    target.Frames == null || target.Frames.Length == 0)
+                    continue;
+
+                target.EnsureFrameData();
+                target.Sockets ??= new List<FrameSocketDef>();
+                float targetDuration = Mathf.Max(0.0001f, TotalAuthoredDuration(target));
+                float targetPpu = SpriteSheetProfile.GetPixelsPerUnit(_profile.SheetForClip(target));
+                float pixelScale = targetPpu / sourcePpu;
+
+                for (int n = 0; n < names.Count; n++)
+                {
+                    string name = names[n];
+                    var item = _profile.SocketCatalog.Find(name);
+                    bool closed = SpriteSocketKeys.UsesClosedPath(_profile.SocketCatalog, name);
+                    bool curved = item != null && item.UsesOwnClock;
+                    SpriteSocketKeys.DeleteIdentity(target.Sockets, name);
+
+                    for (int frame = 0; frame < target.Frames.Length; frame++)
+                    {
+                        float phase = AuthoredStartTime(target, frame) / targetDuration;
+                        float sourceTime = Mathf.Clamp01(phase) * sourceDuration;
+                        if (!SpriteSocketKeys.TrySampleAtTime(
+                                sourceClip.Sockets, name, sourceClip, sourceTime, closed, curved,
+                                out var position, out var angle, out var scale, out _))
+                            continue;
+
+                        int sourceFrame = SpriteAnimPlayback.AuthoredFrameAtTime(
+                            sourceClip, sourceTime, out _);
+                        target.Sockets.Add(new FrameSocketDef
+                        {
+                            Name = name,
+                            FrameIndex = frame,
+                            LocalPosition = new Vector2(
+                                Mathf.Round(position.x * pixelScale),
+                                Mathf.Round(position.y * pixelScale)),
+                            LocalAngle = angle,
+                            LocalScale = scale,
+                            DrawLayer = SpriteSocketKeys.ResolveDrawLayer(
+                                sourceClip.Sockets, name, sourceFrame, closed),
+                        });
+                    }
+                }
+                changedClips++;
+            }
+
+            _status = $"Applied {names.Count} socket{Plural(names.Count)} to {changedClips} clip{Plural(changedClips)} using player pivots";
+            SaveDirty();
+            Repaint();
+        }
+
+        void CaptureSelectedSocketMotions(SpriteClipDef sourceClip)
+        {
+            var names = OrderedSelectedSocketNames(sourceClip);
+            if (names.Count == 0)
+                return;
+            RecordProfileUndo("Capture Independent Socket Motion");
+            _profile.EnsureSocketCatalog();
+            for (int i = 0; i < names.Count; i++)
+            {
+                var item = _profile.SocketCatalog.Ensure(names[i]);
+                item.MotionMode = (byte)SpriteSocketClockMode.OwnClock;
+                if (item.Speed <= 0.0001f)
+                    item.Speed = 1f;
+            }
+            CaptureSocketMotionsFromClip(sourceClip, names, replaceTiming: true);
+            _timelineView = TimelineView.Sockets;
+            _status = $"Captured {names.Count} independent socket track{Plural(names.Count)} from player pivot";
+            SaveDirty();
+            Repaint();
+        }
+
+        void CaptureSocketMotionsFromClip(SpriteClipDef sourceClip, IList<string> names,
+            bool replaceTiming = false)
+        {
+            if (sourceClip?.Sockets == null || sourceClip.Frames == null ||
+                sourceClip.Frames.Length == 0 || names == null)
+                return;
+            _profile.EnsureSocketMotions();
+            float duration = Mathf.Max(0.01f, TotalAuthoredDuration(sourceClip));
+
+            for (int n = 0; n < names.Count; n++)
+            {
+                string name = SpriteSocketKeys.CanonicalName(names[n]);
+                var item = _profile.SocketCatalog.Find(name);
+                if (item == null || !item.UsesOwnClock)
+                    continue;
+
+                var track = _profile.FindSocketMotion(name);
+                bool created = track == null;
+                track ??= _profile.EnsureSocketMotion(name);
+                track.SocketName = name;
+                track.Loop = item.ClosedPath;
+                SpriteSocketKeys.CollectKeysSorted(sourceClip.Sockets, name, _socketPathKeys);
+                bool rebuildTiming = created || replaceTiming ||
+                                     track.Keys.Count != _socketPathKeys.Count;
+                if (rebuildTiming)
+                {
+                    track.ReferenceSheetIndex = sourceClip.SheetIndex;
+                    track.Duration = duration;
+                    track.Keys.Clear();
+                }
+
+                float sourcePpu = SpriteSheetProfile.GetPixelsPerUnit(
+                    _profile.SheetAt(sourceClip.SheetIndex));
+                float referencePpu = SpriteSheetProfile.GetPixelsPerUnit(
+                    _profile.SheetAt(track.ReferenceSheetIndex));
+                for (int k = 0; k < _socketPathKeys.Count; k++)
+                {
+                    var source = _socketPathKeys[k];
+                    Vector2 referencePosition = source.LocalPosition *
+                                                (referencePpu / Mathf.Max(1f, sourcePpu));
+                    if (rebuildTiming)
+                    {
+                        track.Keys.Add(new SpriteSocketMotionKey
+                        {
+                            NormalizedTime = Mathf.Clamp01(
+                                AuthoredStartTime(sourceClip, source.FrameIndex) / duration),
+                            LocalPosition = referencePosition,
+                            LocalAngle = source.LocalAngle,
+                            LocalScale = SpriteSocketKeys.ResolvedScale(source.LocalScale),
+                            DrawLayer = source.DrawLayer,
+                        });
+                    }
+                    else
+                    {
+                        var target = track.Keys[k];
+                        target.LocalPosition = referencePosition;
+                        target.LocalAngle = source.LocalAngle;
+                        target.LocalScale = SpriteSocketKeys.ResolvedScale(source.LocalScale);
+                        target.DrawLayer = source.DrawLayer;
+                    }
+                }
+                track.Normalize(Mathf.Max(1, _profile.Sheets?.Count ?? 0));
+            }
+        }
+
+        List<string> OrderedSelectedSocketNames(SpriteClipDef clip)
+        {
+            var ordered = new List<string>();
+            if (clip?.Sockets == null)
+                return ordered;
+            var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (IsSocketSelected(names[i]))
+                    ordered.Add(SpriteSocketKeys.CanonicalName(names[i]));
+            }
+            return ordered;
+        }
+
+        string UniquePatternSocketName(SpriteClipDef clip, List<string> pending, int pattern, int index, int count)
+        {
+            if (pattern == 0)
+            {
+                float tilt = count == 3 ? index * 60f : index * (360f / Mathf.Max(1, count));
+                string orbitName = UniqueOrbitTiltName(clip, tilt);
+                if (!pending.Contains(orbitName))
+                    return orbitName;
+            }
+
+            string prefix = SocketOrbitPatternPrefixes[
+                Mathf.Clamp(pattern, 0, SocketOrbitPatternPrefixes.Length - 1)];
+            int n = index + 1;
+            while (true)
+            {
+                string candidate = SpriteSocketKeys.CanonicalName($"{prefix} {n}");
+                if (SpriteSocketKeys.IdentityIndex(clip.Sockets, candidate) < 0 &&
+                    !pending.Contains(candidate))
+                    return candidate;
+                n++;
+            }
+        }
+
+        void StampSocketOrbitPattern(SpriteClipDef clip, int pattern, List<string> names,
+            float radius, Vector2 center, float tilt)
+        {
+            switch (pattern)
+            {
+                case 0:
+                    StampAtomicPattern(clip, names, radius, center);
+                    break;
+                case 1:
+                    StampCoplanarPattern(clip, names, radius, center, tilt);
+                    break;
+                case 2:
+                    StampNestedShellPattern(clip, names, radius, center, tilt);
+                    break;
+                case 3:
+                    StampFigureEightPattern(clip, names, radius, center, tilt);
+                    break;
+                case 4:
+                    StampSpiralPattern(clip, names, radius, center, tilt);
+                    break;
+                case 5:
+                    StampFibonacciPattern(clip, names, radius, center, tilt);
+                    break;
+                default:
+                    StampVesicaPattern(clip, names, radius, center, tilt);
+                    break;
+            }
+        }
+
+        void StampAtomicPattern(SpriteClipDef clip, List<string> names, float radius, Vector2 center)
+        {
+            int count = names.Count;
+            for (int i = 0; i < count; i++)
+            {
+                float tilt = count == 3 ? i * 60f : i * (360f / count);
+                SocketOrbitAxes(1, radius, tilt, EllipticalOrbitFlatten, out float rx, out float ry, out tilt);
+                StampSocketOrbit(clip, names[i], rx, ry, tilt, center, 0f);
+            }
+        }
+
+        void StampCoplanarPattern(SpriteClipDef clip, List<string> names, float radius, Vector2 center, float tilt)
+        {
+            SocketOrbitAxes(_socketOrbitShape, radius, tilt, EllipticalOrbitFlatten,
+                out float rx, out float ry, out tilt);
+            int count = names.Count;
+            for (int i = 0; i < count; i++)
+                StampSocketOrbit(clip, names[i], rx, ry, tilt, center, i / (float)count);
+        }
+
+        void StampNestedShellPattern(SpriteClipDef clip, List<string> names, float radius, Vector2 center, float tilt)
+        {
+            int count = names.Count;
+            int shells = Mathf.Clamp(Mathf.RoundToInt(Mathf.Sqrt(count)), 1, 4);
+            if (count <= 3)
+                shells = count == 1 ? 1 : 2;
+            int cursor = 0;
+            int remaining = count;
+            for (int s = 0; s < shells && cursor < count; s++)
+            {
+                int take = s == shells - 1 ? remaining : Mathf.Max(1, remaining / (shells - s));
+                take = Mathf.Min(take, remaining);
+                float ringRadius = radius * (s + 1) / shells;
+                SocketOrbitAxes(_socketOrbitShape, ringRadius, tilt, EllipticalOrbitFlatten,
+                    out float rx, out float ry, out float ringTilt);
+                for (int o = 0; o < take; o++)
+                    StampSocketOrbit(clip, names[cursor + o], rx, ry, ringTilt, center, o / (float)take);
+                cursor += take;
+                remaining -= take;
+            }
+        }
+
+        void StampFigureEightPattern(SpriteClipDef clip, List<string> names, float radius, Vector2 center, float tilt)
+        {
+            SocketOrbitAxes(_socketOrbitShape, radius, 0f, EllipticalOrbitFlatten,
+                out float rx, out float ry, out _);
+            int count = names.Count;
+            for (int i = 0; i < count; i++)
+            {
+                float phase = i / (float)count;
+                StampSocketPath(clip, names[i], center, t =>
+                {
+                    float a = (t + phase) * Mathf.PI * 2f;
+                    var point = new Vector2(rx * Mathf.Sin(a), ry * Mathf.Sin(a) * Mathf.Cos(a));
+                    return RotateSocketOffset(point, tilt);
+                });
+            }
+        }
+
+        void StampSpiralPattern(SpriteClipDef clip, List<string> names, float radius, Vector2 center, float tilt)
+        {
+            int count = names.Count;
+            for (int i = 0; i < count; i++)
+            {
+                float u = count == 1 ? 1f : (i + 1f) / count;
+                float ringRadius = radius * Mathf.Lerp(0.28f, 1f, u);
+                float ringTilt = tilt + u * 40f;
+                SocketOrbitAxes(_socketOrbitShape, ringRadius, ringTilt, EllipticalOrbitFlatten,
+                    out float rx, out float ry, out ringTilt);
+                StampSocketOrbit(clip, names[i], rx, ry, ringTilt, center, i / (float)count);
+            }
+        }
+
+        void StampFibonacciPattern(SpriteClipDef clip, List<string> names, float radius, Vector2 center, float tilt)
+        {
+            int count = names.Count;
+            float small = Mathf.Max(6f, radius * 0.22f);
+            SocketOrbitAxes(0, small, 0f, EllipticalOrbitFlatten, out float rx, out float ry, out _);
+            for (int i = 0; i < count; i++)
+            {
+                float homeR = radius * Mathf.Sqrt((i + 0.5f) / count);
+                float ang = (i * FibonacciGoldenAngle + tilt) * Mathf.Deg2Rad;
+                Vector2 home = center + new Vector2(Mathf.Cos(ang) * homeR, Mathf.Sin(ang) * homeR);
+                StampSocketOrbit(clip, names[i], rx, ry, 0f, home, i / (float)count);
+            }
+        }
+
+        void StampVesicaPattern(SpriteClipDef clip, List<string> names, float radius, Vector2 center, float tilt)
+        {
+            int count = names.Count;
+            int left = Mathf.Max(1, (count + 1) / 2);
+            int right = Mathf.Max(1, count - left);
+            Vector2 offset = RotateSocketOffset(new Vector2(radius * 0.55f, 0f), tilt);
+            SocketOrbitAxes(_socketOrbitShape, radius, tilt, EllipticalOrbitFlatten,
+                out float rx, out float ry, out float ringTilt);
+            for (int i = 0; i < count; i++)
+            {
+                bool onLeft = i < left;
+                int group = onLeft ? left : right;
+                int local = onLeft ? i : i - left;
+                Vector2 ringCenter = onLeft ? center - offset : center + offset;
+                StampSocketOrbit(clip, names[i], rx, ry, ringTilt, ringCenter, local / (float)group);
+            }
+        }
+
+        static Vector2 RotateSocketOffset(Vector2 point, float tiltDegrees)
+        {
+            if (Mathf.Abs(tiltDegrees) < 0.01f)
+                return point;
+            float r = tiltDegrees * Mathf.Deg2Rad;
+            float c = Mathf.Cos(r);
+            float s = Mathf.Sin(r);
+            return new Vector2(point.x * c - point.y * s, point.x * s + point.y * c);
+        }
+
+        string UniqueOrbitTiltName(SpriteClipDef clip, float tilt)
+        {
+            string baseName = $"Orbit {Mathf.RoundToInt(Mathf.Repeat(tilt, 360f))}°";
+            if (SpriteSocketKeys.IdentityIndex(clip.Sockets, baseName) < 0)
+                return SpriteSocketKeys.CanonicalName(baseName);
+            int n = 2;
+            while (true)
+            {
+                string candidate = $"{baseName} {n}";
+                if (SpriteSocketKeys.IdentityIndex(clip.Sockets, candidate) < 0)
+                    return SpriteSocketKeys.CanonicalName(candidate);
+                n++;
+            }
+        }
+
+        void DuplicateSocketIdentity(SpriteClipDef clip, string name)
+        {
+            name = SpriteSocketKeys.CanonicalName(name);
+            if (clip?.Sockets == null || string.IsNullOrEmpty(name))
+                return;
+            string copyName = UniqueSocketCopyName(clip, name);
+            RecordProfileUndo("Duplicate Socket");
+            var copies = new List<FrameSocketDef>();
+            for (int i = 0; i < clip.Sockets.Count; i++)
+            {
+                var src = clip.Sockets[i];
+                if (src == null || !SpriteSocketKeys.NamesEqual(src.Name, name))
+                    continue;
+                copies.Add(new FrameSocketDef
+                {
+                    Name = copyName,
+                    FrameIndex = src.FrameIndex,
+                    LocalPosition = src.LocalPosition,
+                    LocalAngle = src.LocalAngle,
+                    LocalScale = src.LocalScale,
+                    DrawLayer = src.DrawLayer,
+                });
+            }
+
+            if (copies.Count == 0)
+            {
+                SpriteSocketKeys.TryGetPose(clip.Sockets, name, _selectedFrame,
+                    out var pose, out var angle, out var scale, out _);
+                copies.Add(new FrameSocketDef
+                {
+                    Name = copyName,
+                    FrameIndex = _selectedFrame,
+                    LocalPosition = pose,
+                    LocalAngle = angle,
+                    LocalScale = scale,
+                });
+            }
+
+            clip.Sockets.AddRange(copies);
+            CopySocketOrbitCatalog(name, copyName);
+            _selectedSockets.Clear();
+            _selectedSockets.Add(copyName);
+            _selectedSocketName = copyName;
+            _status = $"Duplicated {name} → {copyName}";
+            SaveDirty();
+            Repaint();
+        }
+
+        string UniqueSocketCopyName(SpriteClipDef clip, string name)
+        {
+            string baseName = $"{name} copy";
+            if (SpriteSocketKeys.IdentityIndex(clip.Sockets, baseName) < 0)
+                return SpriteSocketKeys.CanonicalName(baseName);
+            int n = 2;
+            while (true)
+            {
+                string candidate = $"{name} copy {n}";
+                if (SpriteSocketKeys.IdentityIndex(clip.Sockets, candidate) < 0)
+                    return SpriteSocketKeys.CanonicalName(candidate);
+                n++;
+            }
+        }
+
+        void DeleteAllSockets(SpriteClipDef clip)
+        {
+            var names = SpriteSocketKeys.UniqueNamesInOrder(clip?.Sockets);
+            if (names.Count == 0)
+                return;
+            if (!EditorUtility.DisplayDialog(
+                    "Delete All Sockets",
+                    $"Delete {names.Count} socket{(names.Count == 1 ? string.Empty : "s")} on this clip?",
+                    "Delete All",
+                    "Cancel"))
+            {
+                GUIUtility.ExitGUI();
+                return;
+            }
+
+            RecordProfileUndo("Delete All Sockets");
+            for (int i = 0; i < names.Count; i++)
+            {
+                SpriteSocketKeys.DeleteIdentity(clip.Sockets, names[i]);
+                bool stillUsed = SpriteSocketKeys.NameExistsOnAnyClip(_profile.Clips, names[i]) ||
+                                 _profile.FindSocketMotion(names[i]) != null;
+                _profile.SocketCatalog.SyncDelete(names[i], stillUsed);
+            }
+
+            _selectedSockets.Clear();
+            _selectedSocketName = null;
+            _draggingSocket = false;
+            _socketHandleKind = ColliderHandleKind.None;
+            _status = "Deleted all sockets on this clip";
+            SaveDirty();
+            GUIUtility.ExitGUI();
+        }
+
+        void DeleteAllFrameAttachedSockets(SpriteClipDef clip)
+        {
+            var all = SpriteSocketKeys.UniqueNamesInOrder(clip?.Sockets);
+            var names = new List<string>();
+            for (int i = 0; i < all.Count; i++)
+            {
+                var item = _profile.SocketCatalog.Find(all[i]);
+                if (item == null || !item.UsesOwnClock)
+                    names.Add(all[i]);
+            }
+            if (names.Count == 0)
+                return;
+            if (!EditorUtility.DisplayDialog(
+                    "Delete Frame-Attached Sockets From This Clip",
+                    $"Delete {names.Count} Frame-Attached socket{Plural(names.Count)} from '{clip.Name}'?\n\nIndependent Motion tracks are not affected.",
+                    "Delete This Clip",
+                    "Cancel"))
+            {
+                GUIUtility.ExitGUI();
+                return;
+            }
+
+            RecordProfileUndo("Delete Frame-Attached Sockets From Clip");
+            for (int i = 0; i < names.Count; i++)
+            {
+                SpriteSocketKeys.DeleteIdentity(clip.Sockets, names[i]);
+                bool stillUsed = SpriteSocketKeys.NameExistsOnAnyClip(_profile.Clips, names[i]) ||
+                                 _profile.FindSocketMotion(names[i]) != null;
+                _profile.SocketCatalog.SyncDelete(names[i], stillUsed);
+            }
+            ClearSocketSelection();
+            _status = $"Deleted Frame-Attached sockets from {clip.Name}";
+            SaveDirty();
+            GUIUtility.ExitGUI();
+        }
+
+        void DeleteAllIndependentSockets()
+        {
+            var names = new List<string>();
+            _profile.EnsureSocketMotions();
+            _profile.EnsureSocketCatalog();
+            for (int i = 0; i < _profile.SocketMotions.Count; i++)
+                AddUniqueSocketName(names, _profile.SocketMotions[i]?.SocketName);
+            for (int i = 0; i < _profile.SocketCatalog.Items.Count; i++)
+            {
+                var item = _profile.SocketCatalog.Items[i];
+                if (item != null && item.UsesOwnClock)
+                    AddUniqueSocketName(names, item.SocketName);
+            }
+            if (names.Count == 0)
+                return;
+            if (!EditorUtility.DisplayDialog(
+                    "Delete Independent Motion",
+                    $"Delete {names.Count} Independent Motion socket{Plural(names.Count)}?\n\nTheir profile tracks and matching legacy keys will be removed from every clip.",
+                    "Delete Independent",
+                    "Cancel"))
+            {
+                GUIUtility.ExitGUI();
+                return;
+            }
+
+            RecordProfileUndo("Delete All Independent Socket Motion");
+            for (int c = 0; c < _profile.Clips.Count; c++)
+            {
+                var sockets = _profile.Clips[c]?.Sockets;
+                if (sockets == null)
+                    continue;
+                for (int i = 0; i < names.Count; i++)
+                    SpriteSocketKeys.DeleteIdentity(sockets, names[i]);
+            }
+            for (int i = 0; i < names.Count; i++)
+                _profile.SocketCatalog.Remove(names[i]);
+            _profile.SocketMotions.Clear();
+            ClearSocketSelection();
+            _status = $"Deleted {names.Count} Independent Motion socket{Plural(names.Count)}";
+            SaveDirty();
+            GUIUtility.ExitGUI();
+        }
+
+        void DeleteAllSocketsAcrossProfile()
+        {
+            var names = new List<string>();
+            if (_profile.Clips != null)
+            {
+                for (int c = 0; c < _profile.Clips.Count; c++)
+                {
+                    var clipNames = SpriteSocketKeys.UniqueNamesInOrder(_profile.Clips[c]?.Sockets);
+                    for (int i = 0; i < clipNames.Count; i++)
+                        AddUniqueSocketName(names, clipNames[i]);
+                }
+            }
+            _profile.EnsureSocketMotions();
+            for (int i = 0; i < _profile.SocketMotions.Count; i++)
+                AddUniqueSocketName(names, _profile.SocketMotions[i]?.SocketName);
+            _profile.EnsureSocketCatalog();
+            for (int i = 0; i < _profile.SocketCatalog.Items.Count; i++)
+                AddUniqueSocketName(names, _profile.SocketCatalog.Items[i]?.SocketName);
+            if (names.Count == 0)
+                return;
+
+            if (!EditorUtility.DisplayDialog(
+                    "Delete All Sockets From All Clips",
+                    $"Permanently delete all {names.Count} socket identit{(names.Count == 1 ? "y" : "ies")} from this profile?\n\nThis removes Frame-Attached keys from every clip, all Independent Motion tracks, and all socket catalog previews.",
+                    "Delete Everything",
+                    "Cancel"))
+            {
+                GUIUtility.ExitGUI();
+                return;
+            }
+
+            RecordProfileUndo("Delete All Sockets From All Clips");
+            for (int c = 0; c < _profile.Clips.Count; c++)
+            {
+                if (_profile.Clips[c]?.Sockets != null)
+                    _profile.Clips[c].Sockets.Clear();
+            }
+            _profile.SocketMotions.Clear();
+            _profile.SocketCatalog.Items.Clear();
+            ClearSocketSelection();
+            _socketPlacementArmed = false;
+            _draggingSocket = false;
+            _socketHandleKind = ColliderHandleKind.None;
+            _status = $"Deleted all sockets from all {_profile.Clips.Count} clips";
+            SaveDirty();
+            GUIUtility.ExitGUI();
+        }
+
+        bool HasAnySocketData()
+        {
+            if (_profile?.SocketMotions != null && _profile.SocketMotions.Count > 0)
+                return true;
+            if (_profile?.SocketCatalog?.Items != null && _profile.SocketCatalog.Items.Count > 0)
+                return true;
+            if (_profile?.Clips == null)
+                return false;
+            for (int i = 0; i < _profile.Clips.Count; i++)
+            {
+                if (_profile.Clips[i]?.Sockets != null && _profile.Clips[i].Sockets.Count > 0)
+                    return true;
+            }
+            return false;
+        }
+
+        static void AddUniqueSocketName(List<string> names, string candidate)
+        {
+            candidate = SpriteSocketKeys.CanonicalName(candidate);
+            if (string.IsNullOrEmpty(candidate) || ListContainsSocketName(names, candidate))
+                return;
+            names.Add(candidate);
+        }
+
+        float DefaultSocketOrbitRadius()
+        {
+            if (_profile?.Sheet == null)
+                return 32f;
+            float w = _profile.Sheet.width / (float)Mathf.Max(1, _profile.Columns);
+            float h = _profile.Sheet.height / (float)Mathf.Max(1, _profile.Rows);
+            return Mathf.Max(16f, Mathf.Min(w, h) * 0.55f);
+        }
+
+        Vector2 DefaultSocketOrbitCenter()
+        {
+            if (_profile?.Sheet == null)
+                return new Vector2(0f, 24f);
+            float h = _profile.Sheet.height / (float)Mathf.Max(1, _profile.Rows);
+            return new Vector2(0f, Mathf.Round(h * 0.32f));
+        }
+
+        void ApplySocketOrbitShape(SpriteClipDef clip, string name, int orbs)
+        {
+            name = SpriteSocketKeys.CanonicalName(name);
+            if (clip?.Frames == null || clip.Frames.Length == 0 || string.IsNullOrEmpty(name))
+                return;
+            if (clip.Frames.Length < 4)
+            {
+                _status = "Orbit needs at least 4 frames in this clip";
+                return;
+            }
+
+            orbs = Mathf.Clamp(orbs, 1, 12);
+            RecordProfileUndo("Apply Elliptical Orbit");
+            _profile.EnsureSocketCatalog();
+            clip.Sockets ??= new List<FrameSocketDef>();
+
+            float radius = _socketOrbitRadius > 1f ? _socketOrbitRadius : DefaultSocketOrbitRadius();
+            Vector2 center = _socketOrbitCenterSet ? _socketOrbitCenter : DefaultSocketOrbitCenter();
+            float tilt = SocketOrbitTiltDegrees(_socketOrbitTilt);
+            SocketOrbitAxes(_socketOrbitShape, radius, tilt, EllipticalOrbitFlatten,
+                out float rx, out float ry, out tilt);
+
+            var names = new string[orbs];
+            names[0] = name;
+            for (int o = 1; o < orbs; o++)
+                names[o] = NextOrbitSocketName(clip, name, o + 1);
+
+            for (int o = 0; o < orbs; o++)
+            {
+                StampSocketOrbit(clip, names[o], rx, ry, tilt, center, o / (float)orbs);
+                if (o > 0)
+                    CopySocketOrbitCatalog(name, names[o]);
+            }
+            CaptureSocketMotionsFromClip(clip, names, replaceTiming: true);
+
+            _selectedSockets.Clear();
+            for (int o = 0; o < orbs; o++)
+                _selectedSockets.Add(names[o]);
+            _selectedSocketName = names[0];
+            string shape = SocketOrbitShapeLabels[Mathf.Clamp(_socketOrbitShape, 0, SocketOrbitShapeLabels.Length - 1)];
+            _status = orbs == 1
+                ? $"{name}  {shape}  {tilt:0}°  r={radius:0}px"
+                : $"{name}  {orbs} coplanar orbs  {shape}  {tilt:0}°  {360f / orbs:0.#}° phase";
+            SaveDirty();
+            GUIUtility.ExitGUI();
+        }
+
+        string NextOrbitSocketName(SpriteClipDef clip, string baseName, int index)
+        {
+            string candidate = $"{baseName} {index}";
+            if (SpriteSocketKeys.IdentityIndex(clip.Sockets, candidate) < 0)
+                return SpriteSocketKeys.CanonicalName(candidate);
+            return SpriteSocketKeys.NextDefaultName(clip.Sockets);
+        }
+
+        void CopySocketOrbitCatalog(string fromName, string toName)
+        {
+            var source = _profile.SocketCatalog.Find(fromName);
+            var dest = _profile.SocketCatalog.Ensure(toName);
+            dest.MotionMode = (byte)SpriteSocketClockMode.OwnClock;
+            dest.PathWrap = 0;
+            if (source == null)
+            {
+                dest.Speed = 1f;
+                return;
+            }
+            dest.Texture = source.Texture;
+            dest.Profile = source.Profile;
+            dest.ClipName = source.ClipName;
+            dest.PlayMode = source.PlayMode;
+            dest.Columns = source.Columns;
+            dest.Rows = source.Rows;
+            dest.Pivot = source.Pivot;
+            dest.CellIndex = source.CellIndex;
+            dest.GripPixels = source.GripPixels;
+            dest.Scale = source.Scale;
+            dest.FlipX = source.FlipX;
+            dest.SortingOffset = source.SortingOffset;
+            dest.PreviewEnabled = source.PreviewEnabled;
+            dest.Speed = source.ResolvedSpeed;
+        }
+
+        void StampSocketOrbit(SpriteClipDef clip, string name, float rx, float ry, float tilt,
+            Vector2 center, float phase)
+        {
+            StampSocketPath(clip, name, center, t => SocketOrbitPoint(t + phase, rx, ry, tilt));
+        }
+
+        void StampSocketPath(SpriteClipDef clip, string name, Vector2 center, Func<float, Vector2> localAt)
+        {
+            var item = _profile.SocketCatalog.Ensure(name);
+            item.MotionMode = (byte)SpriteSocketClockMode.OwnClock;
+            item.PathWrap = 0;
+            if (item.Speed <= 0.0001f)
+                item.Speed = 1f;
+
+            int n = clip.Frames.Length;
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 local = localAt(i / (float)n);
+                Vector2 pos = center + local;
+                var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, name, i);
+                key.LocalPosition = new Vector2(Mathf.Round(pos.x), Mathf.Round(pos.y));
+                key.DrawLayer = local.y > 0.5f
+                    ? SpriteSocketKeys.DrawBehind
+                    : SpriteSocketKeys.DrawFront;
+            }
+        }
+
+        static void SocketOrbitAxes(int shape, float radius, float tiltDegrees, float flatten,
+            out float rx, out float ry, out float tilt)
+        {
+            radius = Mathf.Max(4f, radius);
+            tilt = tiltDegrees;
+            if (shape == 0)
+            {
+                rx = radius;
+                ry = radius;
+                return;
+            }
+
+            flatten = Mathf.Clamp(flatten, 0.12f, 1f);
+            rx = radius;
+            ry = radius * flatten;
+        }
+
+        static float SocketOrbitTiltDegrees(int index)
+            => Mathf.Clamp(index, 0, 11) * 15f;
+
+        static Vector2 SocketOrbitPoint(float t, float rx, float ry, float tiltDegrees)
+        {
+            float a = t * Mathf.PI * 2f;
+            var point = new Vector2(Mathf.Cos(a) * rx, Mathf.Sin(a) * ry);
+            if (Mathf.Abs(tiltDegrees) < 0.01f)
+                return point;
+            float r = tiltDegrees * Mathf.Deg2Rad;
+            float c = Mathf.Cos(r);
+            float s = Mathf.Sin(r);
+            return new Vector2(point.x * c - point.y * s, point.x * s + point.y * c);
+        }
+
+        void DrawSocketMotionPaths(Rect cell, SpriteClipDef clip, int frame)
+        {
+            if (clip?.Sockets == null || _profile?.Sheet == null)
+                return;
+            var names = CachedUniqueSocketNames(clip);
+            if (names.Count == 0)
+                return;
+
+            Handles.BeginGUI();
+            for (int i = 0; i < names.Count; i++)
+            {
+                string name = names[i];
+                bool selected = IsSocketSelected(name);
+                if (_selectedSockets.Count > 0 && !selected)
+                    continue;
+                SpriteSocketKeys.CollectKeysSorted(clip.Sockets, name, _socketPathKeys);
+                if (_socketPathKeys.Count == 0)
+                    continue;
+
+                Color color = SpriteSocketKeys.ColorForIndex(i);
+                color.a = selected ? 0.95f : 0.45f;
+                _socketPathPoints.Clear();
+                Handles.color = color;
+                bool ownClock = SpriteSocketKeys.UsesOwnClock(_profile.SocketCatalog, name);
+                bool closed = SpriteSocketKeys.UsesClosedPath(_profile.SocketCatalog, name);
+                if (ownClock && _socketPathKeys.Count >= 2)
+                {
+                    float duration = TotalAuthoredDuration(clip);
+                    const int steps = 40;
+                    for (int s = 0; s <= steps; s++)
+                    {
+                        float t = duration * s / steps;
+                        if (!SpriteSocketKeys.TrySampleAtTime(clip.Sockets, name, clip, t,
+                                closed, true, out var pathPos, out _, out _, out _))
+                            continue;
+                        _socketPathPoints.Add(SocketToScreen(pathPos, cell));
+                    }
+                }
+                else
+                {
+                    for (int k = 0; k < _socketPathKeys.Count; k++)
+                        _socketPathPoints.Add(SocketToScreen(_socketPathKeys[k].LocalPosition, cell));
+                    if (closed && _socketPathPoints.Count >= 2)
+                        _socketPathPoints.Add(_socketPathPoints[0]);
+                }
+
+                if (_socketPathPoints.Count >= 2)
+                    Handles.DrawAAPolyLine(selected ? 3f : 1.6f, _socketPathPoints.ToArray());
+
+                for (int k = 0; k < _socketPathKeys.Count; k++)
+                {
+                    Vector2 screen = SocketToScreen(_socketPathKeys[k].LocalPosition, cell);
+                    bool isCurrent = _socketPathKeys[k].FrameIndex == frame;
+                    Handles.color = isCurrent ? Color.white : color;
+                    Handles.DrawSolidDisc(screen, Vector3.forward, isCurrent ? 4.5f : 3f);
+                }
+
+                if (!TryGetPreviewSocketPose(clip, name, frame,
+                        out var live, out _, out _, out _))
+                    continue;
+                Vector2 traveler = SocketToScreen(live, cell);
+                Handles.color = new Color(1f, 1f, 1f, selected ? 0.95f : 0.55f);
+                Handles.DrawSolidDisc(traveler, Vector3.forward, 5.5f);
+                Handles.color = color;
+                Handles.DrawSolidDisc(traveler, Vector3.forward, 3.4f);
+            }
+            Handles.EndGUI();
+        }
+
+        static readonly string[] SocketClockModeLabels = { "Frame-Attached", "Independent" };
+        static readonly string[] SocketOrbitShapeLabels =
+        {
+            "Circle",
+            "Elliptical",
+        };
+        static readonly string[] SocketOrbitPatternLabels =
+        {
+            "Atomic",
+            "Coplanar",
+            "Nested Shells",
+            "Figure-8",
+            "Spiral",
+            "Fibonacci",
+            "Vesica",
+        };
+        static readonly string[] SocketOrbitPatternPrefixes =
+        {
+            "Orbit",
+            "Orb",
+            "Shell",
+            "Loop",
+            "Spiral",
+            "Cloud",
+            "Vesica",
+        };
+        static readonly string[] SocketOrbitPatternTips =
+        {
+            "Intersecting orbital planes (Bohr). 3 = 0°, 60°, 120°.",
+            "N sockets on one ellipse, evenly phased.",
+            "Concentric rings, like electron shells.",
+            "Infinity / lemniscate path, evenly phased.",
+            "Growing ellipses with a slow tilt, like a spiral arm.",
+            "Golden-angle cloud of small orbits around the nucleus.",
+            "Two overlapping rings (vesica piscis).",
+        };
+        static readonly string[] SocketOrbitTiltLabels =
+        {
+            "0°", "15°", "30°", "45°", "60°", "75°", "90°",
+            "105°", "120°", "135°", "150°", "165°",
+        };
         static readonly string[] SocketPreviewPlayModeLabels = { "Cell", "Play Clip", "Follow Character" };
 
         void DrawSocketProfilePreviewFields(SpriteSocketCatalogItem item, SpriteClipDef hostClip)
@@ -4923,7 +8003,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             EditorGUI.DrawRect(rect, new Color(0.08f, 0.09f, 0.11f, 1f));
             DrawBorder(rect, new Color(0.28f, 0.3f, 0.34f, 1f), 1f);
-            if (item == null || !item.HasPreview)
+            if (SocketSelectionBusy || item == null || !item.HasPreview)
                 return;
             if (!TryResolveSocketPreview(item, CurrentClip, _selectedFrame,
                     out var texture, out int columns, out int rows, out int cellIndex,
@@ -4959,7 +8039,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 DragAndDrop.AcceptDrag();
                 if (hasProfile)
-                    AssignSocketPreviewProfile(socketName, profile);
+                {
+                    if (IsSocketSelected(socketName) && _selectedSockets.Count > 1)
+                        AssignSocketPreviewProfileToNames(_selectedSockets, profile);
+                    else
+                        AssignSocketPreviewProfile(socketName, profile);
+                }
+                else if (IsSocketSelected(socketName) && _selectedSockets.Count > 1)
+                    AssignSocketPreviewTextureToNames(_selectedSockets, texture);
                 else
                     AssignSocketPreviewTexture(socketName, texture);
             }
@@ -5007,28 +8094,157 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void AssignSocketPreviewTexture(string socketName, Texture2D texture)
         {
-            if (texture == null)
-                return;
-            _profile.EnsureSocketCatalog();
-            _profile.SocketCatalog.Ensure(socketName).Texture = texture;
-            _status = $"Preview {texture.name} on {SpriteSocketKeys.CanonicalName(socketName)}";
-            SaveDirty();
-            Repaint();
+            AssignSocketPreviewTextureToNames(new[] { socketName }, texture);
         }
 
         void AssignSocketPreviewProfile(string socketName, ScriptableSpriteSheetProfile profile)
         {
-            if (profile == null)
+            AssignSocketPreviewProfileToNames(new[] { socketName }, profile);
+        }
+
+        void AssignSocketPreviewTextureToNames(IEnumerable<string> names, Texture2D texture)
+        {
+            if (texture == null)
                 return;
+            var list = CollectSocketNames(names);
+            if (list.Count == 0)
+                return;
+            RecordProfileUndo(list.Count == 1 ? "Assign Socket Preview" : "Assign Socket Previews");
             _profile.EnsureSocketCatalog();
-            var item = _profile.SocketCatalog.Ensure(socketName);
-            bool firstProfile = item.Profile == null;
-            item.Profile = profile;
-            if (firstProfile)
-                ApplyDefaultSocketPreviewClip(item);
-            _status = $"Profile {profile.name} on {SpriteSocketKeys.CanonicalName(socketName)}";
+            for (int i = 0; i < list.Count; i++)
+                _profile.SocketCatalog.Ensure(list[i]).Texture = texture;
+            _status = list.Count == 1
+                ? $"Preview {texture.name} on {list[0]}"
+                : $"Preview {texture.name} on {list.Count} sockets";
             SaveDirty();
             Repaint();
+        }
+
+        void AssignSocketPreviewProfileToNames(IEnumerable<string> names, ScriptableSpriteSheetProfile profile)
+        {
+            if (profile == null)
+                return;
+            var list = CollectSocketNames(names);
+            if (list.Count == 0)
+                return;
+            RecordProfileUndo(list.Count == 1 ? "Assign Socket Profile" : "Assign Socket Profiles");
+            _profile.EnsureSocketCatalog();
+            for (int i = 0; i < list.Count; i++)
+            {
+                var item = _profile.SocketCatalog.Ensure(list[i]);
+                bool firstProfile = item.Profile == null;
+                item.Profile = profile;
+                if (firstProfile)
+                    ApplyDefaultSocketPreviewClip(item);
+            }
+            _status = list.Count == 1
+                ? $"Profile {profile.name} on {list[0]}"
+                : $"Profile {profile.name} on {list.Count} sockets";
+            SaveDirty();
+            Repaint();
+        }
+
+        void ClearSocketPreviewOnNames(IEnumerable<string> names)
+        {
+            var list = CollectSocketNames(names);
+            if (list.Count == 0)
+                return;
+            RecordProfileUndo(list.Count == 1 ? "Clear Socket Profile" : "Clear Socket Profiles");
+            _profile.EnsureSocketCatalog();
+            for (int i = 0; i < list.Count; i++)
+            {
+                var item = _profile.SocketCatalog.Find(list[i]);
+                if (item == null)
+                    continue;
+                if (item.Texture == null)
+                    _profile.SocketCatalog.Remove(list[i]);
+                else
+                    item.Profile = null;
+            }
+            _status = list.Count == 1
+                ? $"Cleared profile on {list[0]}"
+                : $"Cleared profiles on {list.Count} sockets";
+            SaveDirty();
+            Repaint();
+        }
+
+        static List<string> CollectSocketNames(IEnumerable<string> names)
+        {
+            var list = new List<string>();
+            if (names == null)
+                return list;
+            foreach (string name in names)
+            {
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                string canonical = SpriteSocketKeys.CanonicalName(name);
+                if (!list.Contains(canonical))
+                    list.Add(canonical);
+            }
+            return list;
+        }
+
+        void DrawSocketSelectionProfileField()
+        {
+            if (_selectedSockets.Count == 0)
+                return;
+            _profile.EnsureSocketCatalog();
+            ScriptableSpriteSheetProfile shared = null;
+            bool hasShared = false;
+            bool mixed = false;
+            foreach (string name in _selectedSockets)
+            {
+                var profile = _profile.SocketCatalog.Find(name)?.Profile;
+                if (!hasShared)
+                {
+                    shared = profile;
+                    hasShared = true;
+                }
+                else if (profile != shared)
+                    mixed = true;
+            }
+
+            EditorGUI.BeginChangeCheck();
+            EditorGUI.showMixedValue = mixed;
+            var next = (ScriptableSpriteSheetProfile)EditorGUILayout.ObjectField(
+                new GUIContent("Profile",
+                    "Assign this animation profile to every selected socket."),
+                mixed ? null : shared, typeof(ScriptableSpriteSheetProfile), false);
+            EditorGUI.showMixedValue = false;
+            if (!EditorGUI.EndChangeCheck())
+                return;
+            if (next == null)
+                ClearSocketPreviewOnNames(_selectedSockets);
+            else
+                AssignSocketPreviewProfileToNames(_selectedSockets, next);
+        }
+
+        void ShowSocketProfilePicker(IEnumerable<string> names)
+        {
+            _socketProfileAssignNames.Clear();
+            _socketProfileAssignNames.AddRange(CollectSocketNames(names));
+            if (_socketProfileAssignNames.Count == 0)
+                return;
+            ScriptableSpriteSheetProfile current = _socketProfileAssignNames.Count == 1
+                ? _profile.SocketCatalog.Find(_socketProfileAssignNames[0])?.Profile
+                : null;
+            EditorGUIUtility.ShowObjectPicker<ScriptableSpriteSheetProfile>(
+                current, false, string.Empty, SocketProfilePickerId);
+        }
+
+        void PollSocketProfilePicker()
+        {
+            var evt = Event.current;
+            if (evt.type != EventType.ExecuteCommand)
+                return;
+            if (evt.commandName != "ObjectSelectorClosed")
+                return;
+            if (EditorGUIUtility.GetObjectPickerControlID() != SocketProfilePickerId)
+                return;
+            var picked = EditorGUIUtility.GetObjectPickerObject() as ScriptableSpriteSheetProfile;
+            evt.Use();
+            if (picked != null && _socketProfileAssignNames.Count > 0)
+                AssignSocketPreviewProfileToNames(_socketProfileAssignNames, picked);
         }
 
         bool TryResolveSocketPreview(SpriteSocketCatalogItem item, SpriteClipDef hostClip, int hostFrame,
@@ -5100,28 +8316,33 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawSocketCatalogPreviews(Rect cell, SpriteClipDef clip, int frame, bool behind)
         {
+            if (SocketSelectionBusy)
+                return;
             if (!_showSocketPreviews || _profile.Sheet == null || clip == null)
                 return;
             _profile.EnsureSocketCatalog();
             clip.Sockets ??= new List<FrameSocketDef>();
-            var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
+            var names = CachedUniqueSocketNames(clip);
             for (int i = 0; i < names.Count; i++)
             {
                 var item = _profile.SocketCatalog.Find(names[i]);
                 if (item == null || !item.HasPreview || !item.PreviewEnabled)
                     continue;
-                bool itemBehind = item.SortingOffset < 0;
+                bool itemBehind = SpriteSocketKeys.IsDrawnBehindAtTime(
+                    clip.Sockets, names[i], clip, SocketPreviewSampleTime(clip, names[i]),
+                    SpriteSocketKeys.CatalogDrawsBehind(item),
+                    SocketSampleClosed(clip, names[i]));
                 if (itemBehind != behind)
                     continue;
                 if (!TryResolveSocketPreview(item, clip, frame,
                         out var texture, out int columns, out int rows, out int cellIndex,
                         out _, out _, out _))
                     continue;
-                if (!SpriteSocketKeys.TryGetPose(clip.Sockets, names[i], frame,
-                        out var position, out var angle, out var scale, out bool onFrame))
+                if (!TryGetPreviewSocketPose(clip, names[i], frame,
+                        out var position, out var angle, out var scale, out _))
                     continue;
                 DrawSocketCatalogItem(cell, item, texture, columns, rows, cellIndex,
-                    position, angle, scale, onFrame ? 1f : 0.4f);
+                    position, angle, scale, 1f);
             }
         }
 
@@ -5302,7 +8523,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Mathf.Max(box.yMax, pin.yMax));
             }
 
-            if (SpriteSocketKeys.TryGetPose(clip?.Sockets, name, frame, out var position, out _, out _))
+            if (TryGetPreviewSocketPose(clip, name, frame, out var position, out _, out _, out _))
                 return SocketWorldAabb(position, cell, name);
             return default;
         }
@@ -5321,8 +8542,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int i = names.Count - 1; i >= 0; i--)
             {
                 string name = names[i];
-                if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
-                        out var position, out _, out _))
+                if (!TryGetPreviewSocketPose(clip, name, frame, out var position, out _, out _, out _))
                     continue;
                 bool inBox = TryGetSocketTransformLayout(clip, name, frame, cell, out var layout) &&
                              SocketTransformContains(layout, point);
@@ -5364,7 +8584,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             string hit = FindSocketAt(clip, frame, cell, evt.mousePosition);
             if (hit != null)
             {
-                SelectPreviewSocket(hit, additive: false, toggle: false);
+                SelectPreviewSocket(hit, SelectionOp.Replace);
                 _socketPlacementArmed = false;
                 _status = $"Selected socket {hit}";
                 evt.Use();
@@ -5388,9 +8608,21 @@ namespace InvertLab.Sprites.DOTS.Editor
                 placed.LocalScale = Vector2.one;
             }
             _selectedSocketName = name;
-            SelectPreviewSocket(name, additive: false, toggle: false);
+            SelectPreviewSocket(name, SelectionOp.Replace);
+            if (_socketPlacementIndependent)
+            {
+                _profile.EnsureSocketCatalog();
+                var item = _profile.SocketCatalog.Ensure(name);
+                item.MotionMode = (byte)SpriteSocketClockMode.OwnClock;
+                item.PathWrap = 0;
+                if (item.Speed <= 0.0001f)
+                    item.Speed = 1f;
+                CaptureSocketMotionsFromClip(clip, new[] { name }, replaceTiming: true);
+            }
             _socketPlacementArmed = false;
-            _status = $"Placed {name} on frame {frame + 1}";
+            _status = _socketPlacementIndependent
+                ? $"Placed Independent Motion socket {name}"
+                : $"Placed Frame-Attached socket {name} on frame {frame + 1}";
             SaveDirty();
             evt.Use();
             Repaint();
@@ -5430,6 +8662,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.type == EventType.MouseUp && evt.button == 0 && ownsDrag)
             {
+                if (_socketHandleKind == ColliderHandleKind.None ||
+                    _socketHandleKind == ColliderHandleKind.Body)
+                    ApplySocketBodyMove(clip, frame, evt.mousePosition, cell);
+                else
+                    ApplySocketTransform(clip, frame, evt.mousePosition, evt.shift);
                 EndSocketDrag(controlId, save: true);
                 evt.Use();
                 Repaint();
@@ -5445,16 +8682,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return false;
 
             var handle = HitSelectedSocketHandle(cell, clip, frame, evt.mousePosition);
-            bool additive = evt.shift || evt.control || evt.command;
-            if (!additive && handle != ColliderHandleKind.None && handle != ColliderHandleKind.Body)
+            var op = ReadSelectionOp(evt);
+            bool modify = op != SelectionOp.Replace;
+            if (!modify && handle != ColliderHandleKind.None && handle != ColliderHandleKind.Body)
             {
-                BeginSocketTransform(clip, frame, handle, cell, evt.mousePosition, controlId);
+                if (_selectedSockets.Count >= 2)
+                    BeginSocketGroupTransform(clip, frame, handle, cell, evt.mousePosition, controlId);
+                else
+                    BeginSocketTransform(clip, frame, handle, cell, evt.mousePosition, controlId);
                 evt.Use();
                 Repaint();
                 return true;
             }
 
-            if (!additive && handle == ColliderHandleKind.Body)
+            if (!modify && handle == ColliderHandleKind.Body)
             {
                 _playing = false;
                 _selectedFrame = frame;
@@ -5472,16 +8713,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             _playing = false;
             _selectedFrame = frame;
             bool alreadySelected = IsSocketSelected(hit);
-            if (additive)
+            if (modify)
             {
-                SelectPreviewSocket(hit, additive: true, toggle: evt.control || evt.command);
+                SelectPreviewSocket(hit, op);
                 evt.Use();
                 Repaint();
                 return true;
             }
 
             if (!alreadySelected)
-                SelectPreviewSocket(hit, additive: false, toggle: false);
+                SelectPreviewSocket(hit, SelectionOp.Replace);
             else
             {
                 _selectedSocketName = SpriteSocketKeys.CanonicalName(hit);
@@ -5503,31 +8744,60 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _socketMoveUndoRecorded = true;
             }
             Vector2 sourceDelta = ScreenToSourcePixelDelta(mouse - _socketDragStart, cell);
-            for (int i = 0; i < _socketMoveNames.Count; i++)
+            for (int i = 0; i < _socketMoveKeys.Count; i++)
             {
-                var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, _socketMoveNames[i], frame);
+                var key = _socketMoveKeys[i];
+                if (key == null)
+                    continue;
                 key.LocalPosition = new Vector2(
                     Mathf.Round(_socketMoveStarts[i].x + sourceDelta.x),
                     Mathf.Round(_socketMoveStarts[i].y + sourceDelta.y));
             }
         }
 
-        void BeginSocketGroupMove(SpriteClipDef clip, int frame, Vector2 mouse, int controlId)
+        void CaptureSelectedSocketDragKeys(SpriteClipDef clip, int frame)
         {
             _socketMoveNames.Clear();
+            _socketMoveKeys.Clear();
             _socketMoveStarts.Clear();
+            _socketMoveStartScales.Clear();
+            _socketMoveStartAngles.Clear();
             if (_selectedSockets.Count == 0 && !string.IsNullOrEmpty(_selectedSocketName))
                 _selectedSockets.Add(_selectedSocketName);
+            clip.Sockets ??= new List<FrameSocketDef>();
             foreach (string name in _selectedSockets)
             {
-                if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame, out var pose, out _, out _))
+                if (!TryGetPreviewSocketPose(clip, name, frame,
+                        out var pose, out var angle, out var scale, out bool onFrame))
                     continue;
+                var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, name, frame);
+                if (!onFrame)
+                {
+                    key.LocalPosition = pose;
+                    key.LocalAngle = angle;
+                    key.LocalScale = scale;
+                }
                 _socketMoveNames.Add(name);
-                _socketMoveStarts.Add(pose);
             }
-            if (_socketMoveNames.Count == 0)
+            for (int i = 0; i < clip.Sockets.Count; i++)
+            {
+                var key = clip.Sockets[i];
+                if (key == null || !IsSocketSelected(key.Name))
+                    continue;
+                _socketMoveKeys.Add(key);
+                _socketMoveStarts.Add(key.LocalPosition);
+                _socketMoveStartScales.Add(key.LocalScale);
+                _socketMoveStartAngles.Add(key.LocalAngle);
+            }
+        }
+
+        void BeginSocketGroupMove(SpriteClipDef clip, int frame, Vector2 mouse, int controlId)
+        {
+            CaptureSelectedSocketDragKeys(clip, frame);
+            if (_socketMoveKeys.Count == 0)
                 return;
             _draggingSocket = true;
+            _socketGroupTransform = false;
             _socketHandleKind = ColliderHandleKind.Body;
             _socketTransformName = _selectedSocketName;
             _socketDragStart = mouse;
@@ -5538,13 +8808,43 @@ namespace InvertLab.Sprites.DOTS.Editor
             _playing = false;
         }
 
+        void BeginSocketGroupTransform(SpriteClipDef clip, int frame, ColliderHandleKind kind,
+            Rect cell, Vector2 mouse, int controlId)
+        {
+            if (!TryGetSocketGroupTransformLayout(clip, frame, cell, out var layout) ||
+                !TryGetSocketGroupCentroid(clip, frame, out _socketGroupCentroidStart))
+                return;
+
+            CaptureSelectedSocketDragKeys(clip, frame);
+            if (_socketMoveKeys.Count == 0)
+                return;
+
+            _draggingSocket = true;
+            _socketGroupTransform = true;
+            _socketHandleKind = kind;
+            _socketTransformName = _selectedSocketName;
+            _socketDragStart = mouse;
+            _socketMoveUndoRecorded = false;
+            _socketScaleStart = Vector2.one;
+            _socketAngleStart = 0f;
+            _socketPivotStart = layout.Pivot;
+            _socketStartAtan = Mathf.Atan2(mouse.y - _socketPivotStart.y, mouse.x - _socketPivotStart.x);
+            Vector2 handle = SocketHandlePosition(layout, kind);
+            _socketHandleLocalStart = UnrotateAround(handle, layout.Pivot, layout.GuiAngle) - layout.Pivot;
+            _socketHotControl = controlId;
+            GUIUtility.hotControl = controlId;
+            GUIUtility.keyboardControl = controlId;
+            _playing = false;
+            _selectedOnionFrame = -1;
+        }
+
         bool TryGetSocketTransformLayout(SpriteClipDef clip, string name, int frame, Rect cell,
             out SocketTransformLayout layout)
         {
             layout = default;
             if (clip?.Sockets == null || string.IsNullOrEmpty(name) || _profile?.Sheet == null)
                 return false;
-            if (!SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
+            if (!TryGetPreviewSocketPose(clip, name, frame,
                     out var position, out var angle, out var scale, out _))
                 return false;
 
@@ -5630,34 +8930,57 @@ namespace InvertLab.Sprites.DOTS.Editor
             return RotateAround(local, layout.Pivot, layout.GuiAngle);
         }
 
-        ColliderHandleKind HitSelectedSocketHandle(Rect cell, SpriteClipDef clip, int frame, Vector2 mouse)
+        static readonly ColliderHandleKind[] SocketGizmoHandleKinds =
         {
-            if (string.IsNullOrEmpty(_selectedSocketName) ||
-                !TryGetSocketTransformLayout(clip, _selectedSocketName, frame, cell, out var layout))
-                return ColliderHandleKind.None;
+            ColliderHandleKind.Rotate,
+            ColliderHandleKind.CornerTL, ColliderHandleKind.CornerTR,
+            ColliderHandleKind.CornerBR, ColliderHandleKind.CornerBL,
+            ColliderHandleKind.EdgeT, ColliderHandleKind.EdgeR,
+            ColliderHandleKind.EdgeB, ColliderHandleKind.EdgeL,
+        };
 
-            var kinds = new[]
-            {
-                ColliderHandleKind.Rotate,
-                ColliderHandleKind.CornerTL, ColliderHandleKind.CornerTR,
-                ColliderHandleKind.CornerBR, ColliderHandleKind.CornerBL,
-                ColliderHandleKind.EdgeT, ColliderHandleKind.EdgeR,
-                ColliderHandleKind.EdgeB, ColliderHandleKind.EdgeL,
-            };
+        static ColliderHandleKind HitSocketTransformHandles(in SocketTransformLayout layout, Vector2 mouse)
+        {
             float rotateHit = SocketHandleHit * SocketHandleHit;
             float knobHit = SocketHandleHit * SocketHandleHit;
-            foreach (var kind in kinds)
+            for (int i = 0; i < SocketGizmoHandleKinds.Length; i++)
             {
+                var kind = SocketGizmoHandleKinds[i];
                 float limit = kind == ColliderHandleKind.Rotate ? rotateHit : knobHit;
                 if ((mouse - SocketHandlePosition(layout, kind)).sqrMagnitude <= limit)
                     return kind;
             }
+            return ColliderHandleKind.None;
+        }
+
+        ColliderHandleKind HitSelectedSocketHandle(Rect cell, SpriteClipDef clip, int frame, Vector2 mouse)
+        {
+            if (_selectedSockets.Count >= 2)
+            {
+                if (TryGetSocketGroupTransformLayout(clip, frame, cell, out var groupLayout))
+                {
+                    var kind = HitSocketTransformHandles(groupLayout, mouse);
+                    if (kind != ColliderHandleKind.None)
+                        return kind;
+                }
+                if (SocketGroupPivotContains(clip, frame, cell, mouse))
+                    return ColliderHandleKind.Body;
+                return ColliderHandleKind.None;
+            }
+
+            if (string.IsNullOrEmpty(_selectedSocketName) ||
+                !TryGetSocketTransformLayout(clip, _selectedSocketName, frame, cell, out var layout))
+                return ColliderHandleKind.None;
+
+            var handle = HitSocketTransformHandles(layout, mouse);
+            if (handle != ColliderHandleKind.None)
+                return handle;
             if (SocketTransformContains(layout, mouse))
                 return ColliderHandleKind.Body;
             return ColliderHandleKind.None;
         }
 
-        void DrawSocketTransformGizmo(in SocketTransformLayout layout, bool handles)
+        void DrawSocketTransformGizmo(in SocketTransformLayout layout, bool handles, bool boxMoves = true)
         {
             var outline = PivotRotatedRectCorners(layout.Unrotated, layout.Pivot, layout.GuiAngle, true);
             var fill = PivotRotatedRectCorners(layout.Unrotated, layout.Pivot, layout.GuiAngle, false);
@@ -5706,9 +9029,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Mathf.Min(fill[0].y, Mathf.Min(fill[1].y, Mathf.Min(fill[2].y, fill[3].y))),
                 Mathf.Max(fill[0].x, Mathf.Max(fill[1].x, Mathf.Max(fill[2].x, fill[3].x))),
                 Mathf.Max(fill[0].y, Mathf.Max(fill[1].y, Mathf.Max(fill[2].y, fill[3].y))));
-            EditorGUIUtility.AddCursorRect(aabb, MouseCursor.MoveArrow);
             EditorGUIUtility.AddCursorRect(HandleCursorRect(rotatePos, SocketHandleHit), MouseCursor.RotateArrow);
             AddSocketScaleCursors(layout);
+            if (boxMoves)
+                EditorGUIUtility.AddCursorRect(aabb, MouseCursor.MoveArrow);
         }
 
         void AddSocketScaleCursors(in SocketTransformLayout layout)
@@ -5748,7 +9072,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                 !TryGetSocketTransformLayout(clip, _selectedSocketName, frame, cell, out var layout))
                 return;
 
+            if (TryGetPreviewSocketPose(clip, _selectedSocketName, frame,
+                    out var pose, out var angle, out var scale, out bool onFrame) &&
+                !onFrame)
+            {
+                var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, _selectedSocketName, frame);
+                key.LocalPosition = pose;
+                key.LocalAngle = angle;
+                key.LocalScale = scale;
+            }
+
             _draggingSocket = true;
+            _socketGroupTransform = false;
             _socketHandleKind = kind;
             _socketTransformName = _selectedSocketName;
             _socketDragStart = mouse;
@@ -5762,6 +9097,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             Vector2 handle = SocketHandlePosition(layout, kind);
             _socketHandleLocalStart = UnrotateAround(handle, layout.Pivot, layout.GuiAngle) - layout.Pivot;
             _socketMoveNames.Clear();
+            _socketMoveKeys.Clear();
             _socketMoveStarts.Clear();
             _socketMoveNames.Add(_selectedSocketName);
             _socketMoveStarts.Add(layout.Position);
@@ -5774,6 +9110,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void ApplySocketTransform(SpriteClipDef clip, int frame, Vector2 mouse, bool snap)
         {
+            if (_socketGroupTransform)
+            {
+                ApplySocketGroupTransform(clip, mouse, snap);
+                return;
+            }
             if (string.IsNullOrEmpty(_socketTransformName) || clip?.Sockets == null)
                 return;
             if (!_socketMoveUndoRecorded)
@@ -5797,9 +9138,67 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
+            ResolveDragScale(mouse, snap, out float sx, out float sy);
+            key.LocalScale = new Vector2(ClampAbsScale(sx), ClampAbsScale(sy));
+            _status = $"Socket {_socketTransformName}  scale {key.LocalScale.x:0.##}, {key.LocalScale.y:0.##}";
+        }
+
+        void ApplySocketGroupTransform(SpriteClipDef clip, Vector2 mouse, bool snap)
+        {
+            if (clip?.Sockets == null || _socketMoveKeys.Count == 0)
+                return;
+            if (!_socketMoveUndoRecorded)
+            {
+                RecordProfileUndo(_socketHandleKind == ColliderHandleKind.Rotate
+                    ? "Rotate Sprite Sockets"
+                    : "Scale Sprite Sockets");
+                _socketMoveUndoRecorded = true;
+            }
+
+            if (_socketHandleKind == ColliderHandleKind.Rotate)
+            {
+                float atan = Mathf.Atan2(mouse.y - _socketPivotStart.y, mouse.x - _socketPivotStart.x);
+                float guiDelta = (atan - _socketStartAtan) * Mathf.Rad2Deg;
+                float angle = _socketAngleStart - guiDelta;
+                if (snap)
+                    angle = Mathf.Round(angle / 15f) * 15f;
+                for (int i = 0; i < _socketMoveKeys.Count; i++)
+                {
+                    var key = _socketMoveKeys[i];
+                    if (key == null)
+                        continue;
+                    key.LocalPosition = RotateAround(
+                        _socketMoveStarts[i], _socketGroupCentroidStart, angle);
+                    key.LocalAngle = _socketMoveStartAngles[i] + angle;
+                }
+                _status = $"Selection  {angle:0.#}°";
+                return;
+            }
+
+            ResolveDragScale(mouse, snap, out float sx, out float sy);
+            for (int i = 0; i < _socketMoveKeys.Count; i++)
+            {
+                var key = _socketMoveKeys[i];
+                if (key == null)
+                    continue;
+                Vector2 delta = _socketMoveStarts[i] - _socketGroupCentroidStart;
+                key.LocalPosition = new Vector2(
+                    Mathf.Round(_socketGroupCentroidStart.x + delta.x * sx),
+                    Mathf.Round(_socketGroupCentroidStart.y + delta.y * sy));
+                Vector2 startScale = SpriteSocketKeys.ResolvedScale(
+                    i < _socketMoveStartScales.Count ? _socketMoveStartScales[i] : Vector2.one);
+                key.LocalScale = new Vector2(
+                    ClampAbsScale(startScale.x * sx),
+                    ClampAbsScale(startScale.y * sy));
+            }
+            _status = $"Selection scale  {sx:0.##}, {sy:0.##}";
+        }
+
+        void ResolveDragScale(Vector2 mouse, bool snap, out float sx, out float sy)
+        {
             Vector2 local = UnrotateAround(mouse, _socketPivotStart, -_socketAngleStart) - _socketPivotStart;
-            float sx = _socketScaleStart.x;
-            float sy = _socketScaleStart.y;
+            sx = _socketScaleStart.x;
+            sy = _socketScaleStart.y;
             bool scaleX = _socketHandleKind is ColliderHandleKind.CornerTL or ColliderHandleKind.CornerTR
                 or ColliderHandleKind.CornerBR or ColliderHandleKind.CornerBL
                 or ColliderHandleKind.EdgeL or ColliderHandleKind.EdgeR;
@@ -5818,17 +9217,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                     sx = _socketScaleStart.x * r;
                     sy = _socketScaleStart.y * r;
                 }
-            }
-            else
-            {
-                if (scaleX && Mathf.Abs(_socketHandleLocalStart.x) > 1f)
-                    sx = _socketScaleStart.x * (local.x / _socketHandleLocalStart.x);
-                if (scaleY && Mathf.Abs(_socketHandleLocalStart.y) > 1f)
-                    sy = _socketScaleStart.y * (local.y / _socketHandleLocalStart.y);
+                return;
             }
 
-            key.LocalScale = new Vector2(ClampAbsScale(sx), ClampAbsScale(sy));
-            _status = $"Socket {_socketTransformName}  scale {key.LocalScale.x:0.##}, {key.LocalScale.y:0.##}";
+            if (scaleX && Mathf.Abs(_socketHandleLocalStart.x) > 1f)
+                sx = _socketScaleStart.x * (local.x / _socketHandleLocalStart.x);
+            if (scaleY && Mathf.Abs(_socketHandleLocalStart.y) > 1f)
+                sy = _socketScaleStart.y * (local.y / _socketHandleLocalStart.y);
         }
 
         static float ClampAbsScale(float value)
@@ -5845,12 +9240,29 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_socketHandleKind == ColliderHandleKind.Body ||
                 _socketHandleKind == ColliderHandleKind.None)
             {
-                for (int i = 0; i < _socketMoveNames.Count; i++)
+                for (int i = 0; i < _socketMoveKeys.Count; i++)
                 {
-                    var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, _socketMoveNames[i], frame);
-                    key.LocalPosition = _socketMoveStarts[i];
+                    if (_socketMoveKeys[i] == null)
+                        continue;
+                    _socketMoveKeys[i].LocalPosition = _socketMoveStarts[i];
                 }
                 _status = "Socket move cancelled";
+                return;
+            }
+
+            if (_socketGroupTransform)
+            {
+                for (int i = 0; i < _socketMoveKeys.Count; i++)
+                {
+                    if (_socketMoveKeys[i] == null)
+                        continue;
+                    _socketMoveKeys[i].LocalPosition = _socketMoveStarts[i];
+                    if (i < _socketMoveStartAngles.Count)
+                        _socketMoveKeys[i].LocalAngle = _socketMoveStartAngles[i];
+                    if (i < _socketMoveStartScales.Count)
+                        _socketMoveKeys[i].LocalScale = _socketMoveStartScales[i];
+                }
+                _status = "Socket transform cancelled";
                 return;
             }
 
@@ -5866,18 +9278,30 @@ namespace InvertLab.Sprites.DOTS.Editor
         void EndSocketDrag(int controlId, bool save)
         {
             bool dirty = save && _socketMoveUndoRecorded;
+            bool syncOrbit = dirty &&
+                (_socketHandleKind == ColliderHandleKind.Body || _socketGroupTransform);
             int hot = _socketHotControl;
             _draggingSocket = false;
+            _socketGroupTransform = false;
             _socketHandleKind = ColliderHandleKind.None;
             _socketTransformName = null;
             _socketHotControl = 0;
             _socketMoveNames.Clear();
+            _socketMoveKeys.Clear();
             _socketMoveStarts.Clear();
+            _socketMoveStartScales.Clear();
+            _socketMoveStartAngles.Clear();
             _socketMoveUndoRecorded = false;
             if (GUIUtility.hotControl == controlId || (hot != 0 && GUIUtility.hotControl == hot))
                 GUIUtility.hotControl = 0;
+            if (syncOrbit)
+                SyncOrbitCenterFromSelection(CurrentClip);
             if (dirty)
+            {
+                CaptureSocketMotionsFromClip(
+                    CurrentClip, OrderedSelectedSocketNames(CurrentClip));
                 SaveDirty();
+            }
         }
 
         void AddClip()
@@ -5943,6 +9367,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         LocalPosition = socket.LocalPosition,
                         LocalAngle = socket.LocalAngle,
                         LocalScale = socket.LocalScale,
+                        DrawLayer = socket.DrawLayer,
                     });
                 }
             }
@@ -6691,6 +10116,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _selectedSheet = Mathf.Clamp(_selectedSheet, 0, _profile.Sheets.Count - 1);
             _profile.EnsureTimelineHitPolygon();
             _profile.EnsureSocketCatalog();
+            _profile.EnsureSocketMotions();
             if (!_profile.OnionSettingsInitialized)
             {
                 _profile.OnionSettingsInitialized = true;
@@ -6776,13 +10202,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                         GUI.backgroundColor = AccentColor;
                     if (GUILayout.Button(new GUIContent(
                             $"{i + 1}. {box.Shape}   •   ID {box.Id}{(box.Hidden ? "  (hidden)" : string.Empty)}",
-                            "Select this collider. Shift adds; Ctrl/Cmd toggles."),
+                            "Select this collider. Shift = add/range, Ctrl/Cmd = toggle, Alt = subtract."),
                         EditorStyles.miniButton, GUILayout.Height(22f)))
                     {
                         var evt = Event.current;
                         _playing = false;
                         _previewTime = PreviewTimeAtFrame(clip, _selectedFrame);
-                        SelectCollider(box, evt.shift, evt.control || evt.command);
+                        SelectColliderFromList(colliders, i, ReadSelectionOp(Event.current, orderedList: true));
                         _selectedEventFrame = -1;
                         _selectedOnionFrame = -1;
                         Repaint();
@@ -6895,6 +10321,27 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
+        void SelectAllSockets(SpriteClipDef clip)
+        {
+            if (clip?.Sockets == null)
+                return;
+            ReleaseShortcutKeyboardFocus();
+            _playing = false;
+            ClearColliderSelection();
+            _selectedSockets.Clear();
+            var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
+            for (int i = 0; i < names.Count; i++)
+                _selectedSockets.Add(SpriteSocketKeys.CanonicalName(names[i]));
+            _socketListAnchor = names.Count > 0 ? 0 : -1;
+            SyncSocketPrimaryFromSelection();
+            _selectedEventFrame = -1;
+            _selectedSocketDrawFrame = -1;
+            _selectedSocketDrawName = null;
+            _selectedOnionFrame = -1;
+            _status = PreviewSelectionStatus("Selected all");
+            Repaint();
+        }
+
         void DeleteCollider(FrameBoxDef box)
         {
             if (box == null || !_profile.Hitboxes.Contains(box))
@@ -6945,8 +10392,22 @@ namespace InvertLab.Sprites.DOTS.Editor
                 var names = new List<string>(_selectedSockets);
                 for (int i = 0; i < names.Count; i++)
                 {
-                    SpriteSocketKeys.DeleteIdentity(clip.Sockets, names[i]);
-                    bool stillUsed = SpriteSocketKeys.NameExistsOnAnyClip(_profile.Clips, names[i]);
+                    var catalogItem = _profile.SocketCatalog.Find(names[i]);
+                    bool independent = catalogItem != null && catalogItem.UsesOwnClock ||
+                                       _profile.FindSocketMotion(names[i]) != null;
+                    if (independent)
+                    {
+                        for (int c = 0; c < _profile.Clips.Count; c++)
+                            SpriteSocketKeys.DeleteIdentity(_profile.Clips[c].Sockets, names[i]);
+                        _profile.SocketMotions.RemoveAll(track =>
+                            track != null && SpriteSocketKeys.NamesEqual(track.SocketName, names[i]));
+                    }
+                    else
+                    {
+                        SpriteSocketKeys.DeleteIdentity(clip.Sockets, names[i]);
+                    }
+                    bool stillUsed = SpriteSocketKeys.NameExistsOnAnyClip(_profile.Clips, names[i]) ||
+                                     _profile.FindSocketMotion(names[i]) != null;
                     _profile.SocketCatalog.SyncDelete(names[i], stillUsed);
                 }
             }
@@ -7061,6 +10522,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (clip == null || frame < 0 || frame >= clip.EventIds.Length || clip.EventIds[frame] == 0)
                 return;
             _selectedEventFrame = frame;
+            _selectedSocketDrawFrame = -1;
+            _selectedSocketDrawName = null;
             _selectedFrame = frame;
             _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
             _playing = false;
@@ -7087,13 +10550,14 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         static int EventMarkerAt(SpriteClipDef clip, float[] eventXs, Vector2 point)
         {
-            if (point.y < 27f || point.y > 54f)
+            if (point.y < TimelineEventLaneY || point.y >= TimelineDrawLaneY)
                 return -1;
+            float laneY = TimelineEventLaneY + 13f;
             for (int i = eventXs.Length - 1; i >= 0; i--)
             {
                 if (clip.EventIds[i] == 0)
                     continue;
-                Vector2 center = new(eventXs[i], 40f);
+                Vector2 center = new(eventXs[i], laneY);
                 if ((point - center).sqrMagnitude <= 100f)
                     return i;
             }
@@ -8227,7 +11691,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.keyCode is KeyCode.Delete or KeyCode.Backspace)
             {
-                if (IsEditingStringTextField())
+                if (IsEditingAnyTextField())
+                    return;
+                if (_showSocketTransformPanel || _showSocketInheritPanel)
                     return;
 
                 if (evt.keyCode == KeyCode.Backspace &&
@@ -8242,13 +11708,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ReleaseShortcutKeyboardFocus();
                 PruneColliderSelection(CurrentClip, _selectedFrame);
                 PruneSocketSelection(CurrentClip);
+                PruneEventSelection(CurrentClip);
+                PruneSocketDrawSelection(CurrentClip);
+                if (_selectedSocketDrawFrame >= 0)
+                {
+                    ClearSocketDrawKey(CurrentClip, _selectedSocketDrawFrame, _selectedSocketDrawName);
+                    evt.Use();
+                    return;
+                }
                 if (_selectedColliders.Count > 0 || _selectedSockets.Count > 0)
                 {
                     DeleteSelectedPreviewObjects();
                     evt.Use();
                     return;
                 }
-                PruneEventSelection(CurrentClip);
                 if (_selectedEventFrame >= 0)
                 {
                     DeleteSelectedEventMarker();
@@ -8298,6 +11771,14 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.keyCode == KeyCode.Escape)
             {
+                if (_showSocketTransformPanel)
+                {
+                    CloseSocketTransformPanel();
+                    _status = "Socket transform panel closed";
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
                 if (_showSocketInheritPanel)
                 {
                     CloseSocketInheritPanel();
@@ -8309,7 +11790,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (_draggingColliderTransform)
                     RestoreColliderTransform();
                 bool hadSelection = _selectedColliders.Count > 0 || _selectedSockets.Count > 0 ||
-                                    _selectedEventFrame >= 0 ||
+                                    _selectedEventFrame >= 0 || _selectedSocketDrawFrame >= 0 ||
                                     _selectedOnionFrame >= 0 || _colliderCreationMode != ColliderCreationMode.None ||
                                     _colliderMarqueePending || _socketPlacementArmed ||
                                     !string.IsNullOrEmpty(_selectedSocketName) ||
@@ -8317,6 +11798,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                                     _draggingSocket;
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
+                _selectedSocketDrawFrame = -1;
+                _selectedSocketDrawName = null;
                 _selectedOnionFrame = -1;
                 CancelColliderCreation("Selection and active tools cleared");
                 CancelSocketPlacement(null);
@@ -8332,6 +11815,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GUIUtility.hotControl = 0;
                 _colliderMarqueePending = false;
                 _draggingColliderMarquee = false;
+                _previewMarqueeHotControl = 0;
                 if (hadSelection)
                 {
                     _status = "Selection and active tools cleared";
@@ -8373,6 +11857,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             PruneEventSelection(clip);
             _colliderMarqueePending = false;
             _draggingColliderMarquee = false;
+            _previewMarqueeHotControl = 0;
             _draggingBox = false;
             _draggingOnion = false;
             _draggingSocket = false;
@@ -8496,7 +11981,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (clip?.Frames == null)
                 return;
 
-            float width = Mathf.Clamp(_socketInheritPanelRect.width, 280f, Mathf.Max(280f, position.width - 16f));
+            float width = Mathf.Clamp(_socketInheritPanelRect.width, 360f, Mathf.Max(360f, position.width - 16f));
             float height = Mathf.Clamp(_socketInheritPanelRect.height, 320f, Mathf.Max(320f, position.height - 24f));
             float x = Mathf.Clamp(_socketInheritPanelRect.x, 8f, Mathf.Max(8f, position.width - width - 8f));
             float y = Mathf.Clamp(_socketInheritPanelRect.y, 8f, Mathf.Max(8f, position.height - height - 8f));
@@ -8552,12 +12037,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             EventType forControl = evt.GetTypeForControl(controlId);
             if (forControl == EventType.MouseDown && !_socketInheritDragging)
             {
-                GUIUtility.hotControl = controlId;
-                GUI.FocusControl(null);
                 if (!_socketInheritPanelRect.Contains(evt.mousePosition))
+                {
+                    GUIUtility.hotControl = controlId;
+                    GUI.FocusControl(null);
                     CloseSocketInheritPanel();
-                evt.Use();
-                Repaint();
+                    evt.Use();
+                    Repaint();
+                }
                 return;
             }
 
@@ -8570,6 +12057,274 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 evt.Use();
             }
+        }
+
+        void DrawSocketTransformOverlay()
+        {
+            if (!_showSocketTransformPanel)
+                return;
+            var clip = CurrentClip;
+            if (clip == null || _socketTransformNames.Count == 0)
+            {
+                CloseSocketTransformPanel();
+                return;
+            }
+
+            float width = Mathf.Clamp(_socketTransformPanelRect.width, 280f, Mathf.Max(280f, position.width - 16f));
+            float height = Mathf.Clamp(_socketTransformPanelRect.height, 300f, Mathf.Max(300f, position.height - 24f));
+            float x = Mathf.Clamp(_socketTransformPanelRect.x, 8f, Mathf.Max(8f, position.width - width - 8f));
+            float y = Mathf.Clamp(_socketTransformPanelRect.y, 8f, Mathf.Max(8f, position.height - height - 8f));
+            _socketTransformPanelRect = new Rect(x, y, width, height);
+
+            var evt = Event.current;
+            var shade = new Rect(Vector2.zero, position.size);
+            int controlId = GUIUtility.GetControlID(
+                "SpriteSocketTransformOverlay".GetHashCode(), FocusType.Passive, shade);
+            bool owns = GUIUtility.hotControl == controlId;
+
+            if (evt.type == EventType.Repaint)
+                EditorGUI.DrawRect(shade, new Color(0f, 0f, 0f, 0.45f));
+
+            var title = new Rect(_socketTransformPanelRect.x, _socketTransformPanelRect.y, width, 26f);
+            if (evt.GetTypeForControl(controlId) == EventType.MouseDown && evt.button == 0 &&
+                title.Contains(evt.mousePosition))
+            {
+                GUIUtility.hotControl = controlId;
+                _socketTransformDragging = true;
+                _socketTransformDragOffset = evt.mousePosition - _socketTransformPanelRect.position;
+                GUI.FocusControl(null);
+                evt.Use();
+            }
+            else if (evt.GetTypeForControl(controlId) == EventType.MouseDrag && owns && _socketTransformDragging)
+            {
+                _socketTransformPanelRect.position = evt.mousePosition - _socketTransformDragOffset;
+                evt.Use();
+                Repaint();
+            }
+            else if (evt.GetTypeForControl(controlId) == EventType.MouseUp && owns && _socketTransformDragging)
+            {
+                GUIUtility.hotControl = 0;
+                _socketTransformDragging = false;
+                evt.Use();
+            }
+
+            EditorGUI.DrawRect(_socketTransformPanelRect, new Color(0.09f, 0.11f, 0.14f, 0.98f));
+            DrawBorder(_socketTransformPanelRect, AccentColor, 2f);
+            EditorGUI.DrawRect(title, new Color(0.14f, 0.22f, 0.3f, 1f));
+            GUI.Label(new Rect(title.x + 8f, title.y + 4f, title.width - 16f, 18f),
+                "Set Transform", EditorStyles.boldLabel);
+
+            var body = new Rect(
+                _socketTransformPanelRect.x + 10f,
+                _socketTransformPanelRect.y + 32f,
+                _socketTransformPanelRect.width - 20f,
+                _socketTransformPanelRect.height - 42f);
+            GUILayout.BeginArea(body);
+            DrawSocketTransformContents(clip);
+            GUILayout.EndArea();
+
+            EventType forControl = evt.GetTypeForControl(controlId);
+            if (forControl == EventType.MouseDown && !_socketTransformDragging)
+            {
+                if (!_socketTransformPanelRect.Contains(evt.mousePosition))
+                {
+                    GUIUtility.hotControl = controlId;
+                    GUI.FocusControl(null);
+                    CloseSocketTransformPanel();
+                    evt.Use();
+                    Repaint();
+                }
+                return;
+            }
+
+            if (forControl == EventType.MouseUp && owns)
+            {
+                GUIUtility.hotControl = 0;
+                evt.Use();
+            }
+            else if (forControl is EventType.MouseDrag or EventType.ScrollWheel or EventType.ContextClick)
+            {
+                evt.Use();
+            }
+        }
+
+        void DrawSocketTransformContents(SpriteClipDef clip)
+        {
+            if (clip?.Sockets == null || _socketTransformNames.Count == 0)
+            {
+                GUILayout.Label("No sockets.", _mutedStyle);
+                return;
+            }
+
+            _profile.EnsureSocketCatalog();
+            string label = _socketTransformNames.Count == 1
+                ? _socketTransformNames[0]
+                : $"{_socketTransformNames.Count} sockets";
+            GUILayout.Label($"{label}  •  {clip.Name}  •  frame {_selectedFrame + 1}", EditorStyles.boldLabel);
+            GUILayout.Label("Pose is per frame. Pivot is the preview art grip (0–1).", _mutedStyle);
+
+            Vector2 position = Vector2.zero;
+            float angle = 0f;
+            Vector2 scale = Vector2.one;
+            Vector2 pivot = new Vector2(0.5f, 0.5f);
+            bool mixedPos = false;
+            bool mixedAngle = false;
+            bool mixedScale = false;
+            bool mixedPivot = false;
+            bool hasPose = false;
+            bool hasPivot = false;
+            for (int i = 0; i < _socketTransformNames.Count; i++)
+            {
+                string name = _socketTransformNames[i];
+                if (SpriteSocketKeys.TryGetPose(clip.Sockets, name, _selectedFrame,
+                        out var pose, out var poseAngle, out var poseScale, out _))
+                {
+                    if (!hasPose)
+                    {
+                        position = pose;
+                        angle = poseAngle;
+                        scale = SpriteSocketKeys.ResolvedScale(poseScale);
+                        hasPose = true;
+                    }
+                    else
+                    {
+                        if (pose != position)
+                            mixedPos = true;
+                        if (!Mathf.Approximately(poseAngle, angle))
+                            mixedAngle = true;
+                        if (SpriteSocketKeys.ResolvedScale(poseScale) != scale)
+                            mixedScale = true;
+                    }
+                }
+
+                var item = _profile.SocketCatalog.Find(name);
+                Vector2 itemPivot = item != null ? item.Pivot : new Vector2(0.5f, 0.5f);
+                if (!hasPivot)
+                {
+                    pivot = itemPivot;
+                    hasPivot = true;
+                }
+                else if (itemPivot != pivot)
+                    mixedPivot = true;
+            }
+
+            _socketTransformAllFrames = EditorGUILayout.Toggle(
+                new GUIContent("All Frames",
+                    "Write position, rotation, and scale onto every key of the selected sockets."),
+                _socketTransformAllFrames);
+
+            EditorGUI.showMixedValue = mixedPos;
+            EditorGUI.BeginChangeCheck();
+            Vector2 nextPos = EditorGUILayout.Vector2Field("Position (px)", position);
+            EditorGUI.showMixedValue = false;
+            if (EditorGUI.EndChangeCheck())
+                WriteSocketTransformPose(clip, nextPos, angle, scale, writePos: true, writeAngle: false, writeScale: false);
+
+            EditorGUI.showMixedValue = mixedAngle;
+            EditorGUI.BeginChangeCheck();
+            float nextAngle = EditorGUILayout.FloatField("Rotation (deg)", angle);
+            EditorGUI.showMixedValue = false;
+            if (EditorGUI.EndChangeCheck())
+                WriteSocketTransformPose(clip, nextPos, nextAngle, scale, writePos: false, writeAngle: true, writeScale: false);
+
+            EditorGUI.showMixedValue = mixedScale;
+            EditorGUI.BeginChangeCheck();
+            Vector2 nextScale = EditorGUILayout.Vector2Field("Scale", scale);
+            EditorGUI.showMixedValue = false;
+            if (EditorGUI.EndChangeCheck())
+                WriteSocketTransformPose(clip, nextPos, nextAngle, nextScale,
+                    writePos: false, writeAngle: false, writeScale: true);
+
+            EditorGUI.showMixedValue = mixedPivot;
+            EditorGUI.BeginChangeCheck();
+            Vector2 nextPivot = EditorGUILayout.Vector2Field(
+                new GUIContent("Pivot", "Normalized sprite pivot (0-1). Same for every frame."),
+                pivot);
+            EditorGUI.showMixedValue = false;
+            if (EditorGUI.EndChangeCheck())
+                WriteSocketTransformPivot(nextPivot);
+
+            GUILayout.Space(8f);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button(new GUIContent("Reset Pose",
+                        "Position 0,0  •  rotation 0°  •  scale 1,1")))
+                    WriteSocketTransformPose(clip, Vector2.zero, 0f, Vector2.one,
+                        writePos: true, writeAngle: true, writeScale: true);
+                if (GUILayout.Button(new GUIContent("Reset Pivot", "Pivot 0.5, 0.5")))
+                    WriteSocketTransformPivot(new Vector2(0.5f, 0.5f));
+            }
+            if (GUILayout.Button("Close"))
+            {
+                CloseSocketTransformPanel();
+                GUIUtility.ExitGUI();
+            }
+        }
+
+        void WriteSocketTransformPose(SpriteClipDef clip, Vector2 position, float angle, Vector2 scale,
+            bool writePos, bool writeAngle, bool writeScale)
+        {
+            if (clip == null || _socketTransformNames.Count == 0)
+                return;
+            RecordProfileUndo("Set Socket Transform");
+            scale = SpriteSocketKeys.ResolvedScale(scale);
+            for (int n = 0; n < _socketTransformNames.Count; n++)
+            {
+                string name = _socketTransformNames[n];
+                if (_socketTransformAllFrames)
+                {
+                    SpriteSocketKeys.CollectKeysSorted(clip.Sockets, name, _socketPathKeys);
+                    if (_socketPathKeys.Count == 0)
+                    {
+                        WriteSocketTransformKey(
+                            SpriteSocketKeys.EnsureFrameKey(clip.Sockets, name, _selectedFrame),
+                            position, angle, scale, writePos, writeAngle, writeScale);
+                        continue;
+                    }
+                    for (int k = 0; k < _socketPathKeys.Count; k++)
+                        WriteSocketTransformKey(_socketPathKeys[k], position, angle, scale,
+                            writePos, writeAngle, writeScale);
+                }
+                else
+                {
+                    WriteSocketTransformKey(
+                        SpriteSocketKeys.EnsureFrameKey(clip.Sockets, name, _selectedFrame),
+                        position, angle, scale, writePos, writeAngle, writeScale);
+                }
+            }
+
+            _status = _socketTransformAllFrames
+                ? $"Set transform on {_socketTransformNames.Count} sockets  •  all frames"
+                : $"Set transform on {_socketTransformNames.Count} sockets  •  frame {_selectedFrame + 1}";
+            SaveDirty();
+            Repaint();
+        }
+
+        static void WriteSocketTransformKey(FrameSocketDef key, Vector2 position, float angle, Vector2 scale,
+            bool writePos, bool writeAngle, bool writeScale)
+        {
+            if (key == null)
+                return;
+            if (writePos)
+                key.LocalPosition = new Vector2(Mathf.Round(position.x * 100f) / 100f, Mathf.Round(position.y * 100f) / 100f);
+            if (writeAngle)
+                key.LocalAngle = angle;
+            if (writeScale)
+                key.LocalScale = scale;
+        }
+
+        void WriteSocketTransformPivot(Vector2 pivot)
+        {
+            if (_socketTransformNames.Count == 0)
+                return;
+            RecordProfileUndo("Set Socket Pivot");
+            pivot = new Vector2(Mathf.Clamp01(pivot.x), Mathf.Clamp01(pivot.y));
+            _profile.EnsureSocketCatalog();
+            for (int i = 0; i < _socketTransformNames.Count; i++)
+                _profile.SocketCatalog.Ensure(_socketTransformNames[i]).Pivot = pivot;
+            _status = $"Pivot {pivot.x:0.##}, {pivot.y:0.##}  •  {_socketTransformNames.Count} sockets";
+            SaveDirty();
+            Repaint();
         }
 
         static bool DrawSocketInheritChannelToggle(string label, string tooltip, bool on, GUIStyle style)
@@ -8597,28 +12352,59 @@ namespace InvertLab.Sprites.DOTS.Editor
             int source = Mathf.Clamp(_socketInheritSourceFrame, 0, clip.Frames.Length - 1);
             SpriteSocketKeys.TryGetPose(clip.Sockets, _socketInheritNames[0], source,
                 out var sourcePos, out var sourceAngle, out var sourceScale, out bool sourceKeyed);
+            bool sourceBehind = SocketInheritDrawsBehind(clip, _socketInheritNames[0], source);
+            float sourceTime = AuthoredStartTime(clip, source);
+            float sourceDur = FrameDuration(clip, source);
             GUILayout.Label($"{socketLabel}  •  {clip.Name}", EditorStyles.boldLabel);
             GUILayout.Label(
-                $"Source frame {source + 1}" +
+                $"Source  {sourceTime:0.00}s  ({sourceDur:0.00}s)  •  frame {source + 1}" +
                 (sourceKeyed ? "  key" : "  inherited") +
                 $"   ({sourcePos.x:0.#}, {sourcePos.y:0.#})  {sourceAngle:0.#}°  {sourceScale.x:0.##},{sourceScale.y:0.##}",
                 _mutedStyle);
+            GUILayout.Label(
+                sourceBehind
+                    ? "Now  Behind  (purple)  under the character"
+                    : "Now  Front  (amber)  over the character",
+                _mutedStyle);
             if (_selectedFrame != source)
             {
-                if (GUILayout.Button($"Use preview frame {_selectedFrame + 1} as source", EditorStyles.miniButton))
+                float previewTime = AuthoredStartTime(clip, _selectedFrame);
+                if (GUILayout.Button($"Use preview {previewTime:0.00}s as source", EditorStyles.miniButton))
                     _socketInheritSourceFrame = _selectedFrame;
             }
+
+            int previewFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
+            float drawTime = AuthoredStartTime(clip, previewFrame);
+            bool previewBehind = SocketInheritDrawsBehind(clip, _socketInheritNames[0], previewFrame);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button(new GUIContent(
+                        $"Draw Behind at {drawTime:0.00}s",
+                        "Key this socket behind the character at the current preview time."),
+                        EditorStyles.miniButtonLeft))
+                    KeySocketDrawAtTime(clip, previewFrame, behind: true);
+                if (GUILayout.Button(new GUIContent(
+                        $"Draw Front at {drawTime:0.00}s",
+                        "Key this socket in front of the character at the current preview time."),
+                        EditorStyles.miniButtonRight))
+                    KeySocketDrawAtTime(clip, previewFrame, behind: false);
+            }
+            GUILayout.Label(
+                previewBehind
+                    ? $"Current {drawTime:0.00}s is Behind"
+                    : $"Current {drawTime:0.00}s is Front",
+                _mutedStyle);
 
             using (new EditorGUILayout.HorizontalScope())
             {
                 _socketInheritPosition = DrawSocketInheritChannelToggle(
-                    "Position", "Copy Offset X/Y from the source frame.",
+                    "Position", "Copy Offset X/Y from the source time.",
                     _socketInheritPosition, EditorStyles.miniButtonLeft);
                 _socketInheritRotation = DrawSocketInheritChannelToggle(
-                    "Rotation", "Copy angle from the source frame.",
+                    "Rotation", "Copy angle from the source time.",
                     _socketInheritRotation, EditorStyles.miniButtonMid);
                 _socketInheritScale = DrawSocketInheritChannelToggle(
-                    "Scale", "Copy Scale X/Y from the source frame.",
+                    "Scale", "Copy Scale X/Y from the source time.",
                     _socketInheritScale, EditorStyles.miniButtonRight);
             }
 
@@ -8629,19 +12415,19 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SelectSocketInheritFrames(clip, "all");
                 if (GUILayout.Button(new GUIContent("None", "Clear the frame selection."), EditorStyles.miniButton))
                     SelectSocketInheritFrames(clip, "none");
-                if (GUILayout.Button(new GUIContent("Missing", "Frames that have no key yet."), EditorStyles.miniButton))
+                if (GUILayout.Button(new GUIContent("Missing", "Times that have no key yet."), EditorStyles.miniButton))
                     SelectSocketInheritFrames(clip, "missing");
-                if (GUILayout.Button(new GUIContent("This→End", "From the source frame to the last frame."),
+                if (GUILayout.Button(new GUIContent("This→End", "From the source time to the end of the clip."),
                         EditorStyles.miniButton))
                     SelectSocketInheritFrames(clip, "rest");
-                if (GUILayout.Button(new GUIContent("Timeline", "Use the timeline frame selection."),
+                if (GUILayout.Button(new GUIContent("Timeline", "Use the timeline selection."),
                         EditorStyles.miniButton))
                     SelectSocketInheritFrames(clip, "timeline");
             }
 
             GUILayout.Space(4f);
             GUILayout.Label(
-                $"Frames  •  {_socketInheritFrames.Count} selected  •  Shift+click range, click name to preview",
+                $"Time  •  {_socketInheritFrames.Count} selected  •  click a row to preview",
                 _mutedStyle);
             _socketInheritScroll = GUILayout.BeginScrollView(_socketInheritScroll, GUILayout.ExpandHeight(true));
             for (int i = 0; i < clip.Frames.Length; i++)
@@ -8657,29 +12443,35 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 bool chosen = _socketInheritFrames.Contains(i);
                 bool isSource = i == source;
+                bool behind = SocketInheritDrawsBehind(clip, _socketInheritNames[0], i);
+                float time = AuthoredStartTime(clip, i);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     bool nextChosen = GUILayout.Toggle(chosen, GUIContent.none, GUILayout.Width(18f));
                     if (nextChosen != chosen)
-                        ToggleSocketInheritFrame(i, additive: true, range: Event.current.shift);
+                        ToggleSocketInheritFrame(i, SelectionOp.Toggle);
 
                     var evt = Event.current;
-                    var row = GUILayoutUtility.GetRect(1f, 18f, GUILayout.ExpandWidth(true));
+                    var row = GUILayoutUtility.GetRect(1f, 22f, GUILayout.ExpandWidth(true));
+                    var swatch = new Rect(row.xMax - 12f, row.y + 6f, 10f, 10f);
+                    var labelRect = new Rect(row.x, row.y, Mathf.Max(8f, row.width - 16f), row.height);
                     string text = isSource
-                        ? $"{i + 1}  source"
+                        ? $"{time:0.00}s  source  {(behind ? "Behind" : "Front")}"
                         : keyed
-                            ? $"{i + 1}  key"
-                            : $"{i + 1}  inherit";
+                            ? $"{time:0.00}s  key  {(behind ? "Behind" : "Front")}"
+                            : $"{time:0.00}s  inherit  {(behind ? "Behind" : "Front")}";
                     if (i == _selectedFrame)
                         EditorGUI.DrawRect(row, new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.18f));
                     else if (chosen)
                         EditorGUI.DrawRect(row, new Color(1f, 1f, 1f, 0.06f));
-                    GUI.Label(row, text, isSource ? EditorStyles.boldLabel : EditorStyles.label);
+                    GUI.Label(labelRect, text, isSource ? EditorStyles.boldLabel : EditorStyles.label);
+                    EditorGUI.DrawRect(swatch, behind ? SocketDrawBehindColor : SocketDrawFrontColor);
                     if (evt.type == EventType.MouseDown && evt.button == 0 && row.Contains(evt.mousePosition))
                     {
-                        if (evt.shift || evt.control || evt.command)
-                            ToggleSocketInheritFrame(i, additive: true, range: evt.shift);
+                        ToggleSocketInheritFrame(i, ReadSelectionOp(evt, orderedList: true));
                         JumpPreviewToFrame(clip, i);
+                        _status = $"{socketLabel}  {time:0.00}s  (frame {i + 1})  •  " +
+                                  (behind ? "Behind" : "In Front");
                         evt.Use();
                         GUI.FocusControl(null);
                     }
@@ -8692,7 +12484,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             using (new EditorGUI.DisabledScope(!canApply))
             {
                 if (GUILayout.Button(new GUIContent("Apply to selected",
-                        "Copy checked channels from the source frame onto the checked frames.")))
+                        "Copy checked channels from the source time onto the checked times.")))
                 {
                     int changed = ApplySocketInherit(clip, _socketInheritPosition, _socketInheritRotation,
                         _socketInheritScale, _socketInheritFrames, "Inherit Sprite Socket Pose");
@@ -8701,17 +12493,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button(new GUIContent("Next",
-                            "Copy checked channels onto the following frame.")))
+                            "Copy checked channels onto the following time.")))
                     {
                         var next = new[] { source + 1 };
                         int changed = ApplySocketInherit(clip, _socketInheritPosition, _socketInheritRotation,
                             _socketInheritScale, next, "Copy Sprite Socket to Next Frame");
                         _status = changed > 0
-                            ? $"Copied pose to frame {source + 2}"
+                            ? $"Copied pose to {AuthoredStartTime(clip, source + 1):0.00}s"
                             : "No next frame";
                     }
                     if (GUILayout.Button(new GUIContent("Rest of clip",
-                            "Copy checked channels from this frame through the last frame.")))
+                            "Copy checked channels from this time through the end of the clip.")))
                     {
                         var rest = new List<int>();
                         for (int i = source + 1; i < clip.Frames.Length; i++)
@@ -8721,7 +12513,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         _status = $"Copied pose to {changed} frame key{Plural(changed)}";
                     }
                     if (GUILayout.Button(new GUIContent("Fill missing",
-                            "Write keys only on frames that do not have one yet.")))
+                            "Write keys only on times that do not have one yet.")))
                     {
                         SelectSocketInheritFrames(clip, "missing");
                         int changed = ApplySocketInherit(clip, _socketInheritPosition, _socketInheritRotation,
@@ -8732,13 +12524,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button(new GUIContent("Reset selected",
-                            "Set checked channels to identity (0,0 / 0° / 1,1) on checked frames.")))
+                            "Set checked channels to identity (0,0 / 0° / 1,1) on checked times.")))
                     {
                         int changed = ResetSocketInherit(clip, _socketInheritFrames);
                         _status = $"Reset {changed} frame key{Plural(changed)}";
                     }
                     if (GUILayout.Button(new GUIContent("Clear keys",
-                            "Delete keys on checked frames so they fall back to the last pose.")))
+                            "Delete keys on checked times so they fall back to the last pose.")))
                     {
                         int changed = ClearSocketInheritKeys(clip, _socketInheritFrames);
                         _status = $"Cleared {changed} socket key{Plural(changed)}";
@@ -8748,6 +12540,72 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (GUILayout.Button("Close"))
                 CloseSocketInheritPanel();
+        }
+
+        bool SocketInheritDrawsBehind(SpriteClipDef clip, string name, int frame)
+        {
+            var item = _profile?.SocketCatalog?.Find(name);
+            return SpriteSocketKeys.IsDrawnBehind(
+                clip?.Sockets, name, frame,
+                SpriteSocketKeys.CatalogDrawsBehind(item),
+                SocketSampleClosed(clip, name));
+        }
+
+        void PruneSocketDrawSelection(SpriteClipDef clip)
+        {
+            if (clip == null || string.IsNullOrEmpty(_selectedSocketDrawName) ||
+                _selectedSocketDrawFrame < 0 || _selectedSocketDrawFrame >= clip.Frames.Length)
+            {
+                _selectedSocketDrawFrame = -1;
+                _selectedSocketDrawName = null;
+                return;
+            }
+            var key = SpriteSocketKeys.FindOnFrame(
+                clip.Sockets, _selectedSocketDrawName, _selectedSocketDrawFrame);
+            if (key == null || key.DrawLayer == SpriteSocketKeys.DrawUnset)
+            {
+                _selectedSocketDrawFrame = -1;
+                _selectedSocketDrawName = null;
+            }
+        }
+
+        void KeySocketDrawAtTime(SpriteClipDef clip, int frame, bool behind, string socketName = null)
+        {
+            if (clip?.Frames == null || frame < 0 || frame >= clip.Frames.Length)
+                return;
+            socketName = string.IsNullOrEmpty(socketName) ? null : SpriteSocketKeys.CanonicalName(socketName);
+            bool fromInherit = string.IsNullOrEmpty(socketName) &&
+                               _showSocketInheritPanel && _socketInheritNames.Count > 0;
+            if (string.IsNullOrEmpty(socketName) && !fromInherit)
+                socketName = SpriteSocketKeys.CanonicalName(_selectedSocketName);
+            if (!fromInherit && string.IsNullOrEmpty(socketName))
+            {
+                _status = "Add a socket first to place Socket Draw keys";
+                return;
+            }
+            RecordProfileUndo(behind ? "Draw Socket Behind" : "Draw Socket In Front");
+            byte layer = behind ? SpriteSocketKeys.DrawBehind : SpriteSocketKeys.DrawFront;
+            if (fromInherit)
+            {
+                for (int n = 0; n < _socketInheritNames.Count; n++)
+                {
+                    var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, _socketInheritNames[n], frame);
+                    key.DrawLayer = layer;
+                }
+                socketName = SpriteSocketKeys.CanonicalName(_socketInheritNames[0]);
+            }
+            else
+            {
+                var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, socketName, frame);
+                key.DrawLayer = layer;
+            }
+            SelectSocketDrawKey(clip, frame, socketName);
+            float time = AuthoredStartTime(clip, frame);
+            _status = behind
+                ? $"{socketName}  Behind at {time:0.00}s"
+                : $"{socketName}  Front at {time:0.00}s";
+            SaveDirty();
+            Repaint();
         }
 
         static string Plural(int count) => count == 1 ? string.Empty : "s";
@@ -8809,6 +12667,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     normal = { textColor = TextMuted },
                     clipping = TextClipping.Clip,
+                };
+                _mutedWrapStyle = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    wordWrap = true,
+                    fontSize = 9,
+                    alignment = TextAnchor.MiddleLeft,
+                    clipping = TextClipping.Overflow,
+                    normal = { textColor = TextMuted },
                 };
                 _frameLabelStyle = new GUIStyle(EditorStyles.centeredGreyMiniLabel)
                 {

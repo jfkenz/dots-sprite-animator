@@ -221,6 +221,8 @@ namespace InvertLab.Sprites.DOTS
                 buffer.Add(new SpriteSocketBuffer
                 {
                     Name = socket.Name,
+                    SocketId = socket.SocketId,
+                    SocketIdHash = socket.SocketIdHash,
                     LocalPosition = socket.LocalPosition,
                     LocalAngle = socket.LocalAngle,
                     LocalScale = socket.LocalScale,

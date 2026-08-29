@@ -209,7 +209,7 @@ namespace InvertLab.Sprites.DOTS
     /// <summary>
     /// Named attach point authored on one frame (source pixels, +x right, +y up).
     /// Name is the identity across frames; LocalPosition, LocalAngle, and LocalScale
-    /// are per-frame keys.
+    /// are per-frame keys. DrawLayer overrides catalog behind/front on that frame.
     /// </summary>
     [Serializable]
     public class FrameSocketDef
@@ -219,6 +219,101 @@ namespace InvertLab.Sprites.DOTS
         public Vector2 LocalPosition = Vector2.zero;
         public float LocalAngle;
         public Vector2 LocalScale = Vector2.one;
+        /// <summary>0 unset (hold previous), 1 behind, 2 in front, 3 catalog default.</summary>
+        public byte DrawLayer;
+    }
+
+    /// <summary>
+    /// One key on a profile-level socket motion track. Time is normalized so the
+    /// motion is independent of every character clip's frame count and frame rate.
+    /// Position is measured from the player pivot in source-sheet pixels.
+    /// </summary>
+    [Serializable]
+    public class SpriteSocketMotionKey
+    {
+        [Range(0f, 1f)] public float NormalizedTime;
+        public Vector2 LocalPosition = Vector2.zero;
+        public float LocalAngle;
+        public Vector2 LocalScale = Vector2.one;
+        public byte DrawLayer;
+    }
+
+    [Serializable]
+    public class SpriteSocketTriggerDef
+    {
+        [Range(0f, 1f)] public float NormalizedTime;
+        public byte EventId = 1;
+    }
+
+    /// <summary>
+    /// Independent motion shared by all character clips (pets, orbitals, drones).
+    /// The reference sheet supplies pixels-per-unit; the player pivot is always
+    /// the local origin, so switching character clips cannot move the anchor.
+    /// </summary>
+    [Serializable]
+    public class SpriteSocketMotionTrack
+    {
+        public string SocketName = "Socket";
+        public int ReferenceSheetIndex;
+        [Min(0.01f)] public float Duration = 1f;
+        public bool Loop = true;
+        public List<SpriteSocketMotionKey> Keys = new();
+        public List<SpriteSocketTriggerDef> Triggers = new();
+
+        public void Normalize(int sheetCount)
+        {
+            SocketName = string.IsNullOrWhiteSpace(SocketName) ? "Socket" : SocketName.Trim();
+            ReferenceSheetIndex = Mathf.Clamp(ReferenceSheetIndex, 0, Mathf.Max(0, sheetCount - 1));
+            Duration = Mathf.Max(0.01f, Duration);
+            Keys ??= new List<SpriteSocketMotionKey>();
+            Keys.RemoveAll(key => key == null);
+            for (int i = 0; i < Keys.Count; i++)
+            {
+                Keys[i].NormalizedTime = Mathf.Clamp01(Keys[i].NormalizedTime);
+                if (Mathf.Approximately(Keys[i].LocalScale.x, 0f) &&
+                    Mathf.Approximately(Keys[i].LocalScale.y, 0f))
+                    Keys[i].LocalScale = Vector2.one;
+            }
+            Keys.Sort((a, b) => a.NormalizedTime.CompareTo(b.NormalizedTime));
+            Triggers ??= new List<SpriteSocketTriggerDef>();
+            Triggers.RemoveAll(trigger => trigger == null || trigger.EventId == 0);
+            for (int i = 0; i < Triggers.Count; i++)
+                Triggers[i].NormalizedTime = Mathf.Clamp01(Triggers[i].NormalizedTime);
+            Triggers.Sort((a, b) => a.NormalizedTime.CompareTo(b.NormalizedTime));
+        }
+    }
+
+    public static class SpriteSocketIdUtility
+    {
+        public static string Canonical(string value, string fallback = "socket")
+        {
+            value = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+            var chars = new char[value.Length];
+            int count = 0;
+            bool separator = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = char.ToLowerInvariant(value[i]);
+                bool valid = c is >= 'a' and <= 'z' or >= '0' and <= '9' || c == '_';
+                if (valid)
+                {
+                    chars[count++] = c;
+                    separator = false;
+                }
+                else if (count > 0 && !separator)
+                {
+                    chars[count++] = '.';
+                    separator = true;
+                }
+            }
+            while (count > 0 && chars[count - 1] == '.')
+                count--;
+            return count == 0 ? "socket" : new string(chars, 0, count);
+        }
+
+        public static bool IsValid(string value)
+            => !string.IsNullOrWhiteSpace(value) &&
+               string.Equals(value, Canonical(value), StringComparison.Ordinal);
     }
 
     /// <summary>How a socket catalog preview chooses its displayed cell.</summary>
@@ -230,6 +325,16 @@ namespace InvertLab.Sprites.DOTS
     }
 
     /// <summary>
+    /// How a socket pose is timed. Follow Clip stays glued to the character.
+    /// Own Clock is an independent loop (pet, orbit) and uses a Catmull-Rom path.
+    /// </summary>
+    public enum SpriteSocketClockMode : byte
+    {
+        FollowClip = 0,
+        OwnClock = 1,
+    }
+
+    /// <summary>
     /// Editor preview visual for one socket identity. Pose stays on
     /// <see cref="FrameSocketDef"/>; this catalog is shared across clips.
     /// </summary>
@@ -237,6 +342,7 @@ namespace InvertLab.Sprites.DOTS
     public class SpriteSocketCatalogItem
     {
         public string SocketName = "Weapon";
+        public string SocketId = string.Empty;
         public Texture2D Texture;
         public ScriptableSpriteSheetProfile Profile;
         public string ClipName = string.Empty;
@@ -250,15 +356,34 @@ namespace InvertLab.Sprites.DOTS
         public bool FlipX;
         public int SortingOffset;
         public bool PreviewEnabled = true;
+        /// <summary>
+        /// 0 = lerp last key back to first (closed loop, default).
+        /// 1 = hold the last key until the clip wraps (teleport).
+        /// Missing serialized values stay 0 so existing sockets close by default.
+        /// </summary>
+        public byte PathWrap;
+        /// <summary>0 = follow the character clip (weapon). 1 = own loop (pet).</summary>
+        public byte MotionMode;
+        /// <summary>Own Clock only. 1 = same pace as the clip, 0.5 = 2× slower. 0 means 1.</summary>
+        public float Speed;
 
         public int CellCount => Mathf.Max(1, Columns) * Mathf.Max(1, Rows);
         public bool HasPreview => Texture != null || Profile != null;
+        public bool ClosedPath => PathWrap == 0;
+        public bool UsesOwnClock => MotionMode == (byte)SpriteSocketClockMode.OwnClock;
+        public float ResolvedSpeed => Speed <= 0.0001f ? 1f : Mathf.Clamp(Speed, 0.05f, 8f);
 
         public SpriteSocketPreviewPlayMode PreviewPlayMode =>
             (SpriteSocketPreviewPlayMode)PlayMode;
 
+        public SpriteSocketClockMode ClockMode =>
+            MotionMode == (byte)SpriteSocketClockMode.OwnClock
+                ? SpriteSocketClockMode.OwnClock
+                : SpriteSocketClockMode.FollowClip;
+
         public void Normalize()
         {
+            SocketId = SpriteSocketIdUtility.Canonical(SocketId, SocketName);
             Columns = Mathf.Max(1, Columns);
             Rows = Mathf.Max(1, Rows);
             CellIndex = Mathf.Clamp(CellIndex, 0, CellCount - 1);
@@ -267,6 +392,11 @@ namespace InvertLab.Sprites.DOTS
             Pivot = new Vector2(Mathf.Clamp01(Pivot.x), Mathf.Clamp01(Pivot.y));
             if (PlayMode > (byte)SpriteSocketPreviewPlayMode.FollowHost)
                 PlayMode = (byte)SpriteSocketPreviewPlayMode.Cell;
+            if (MotionMode > (byte)SpriteSocketClockMode.OwnClock)
+                MotionMode = (byte)SpriteSocketClockMode.FollowClip;
+            if (Speed <= 0f)
+                Speed = 1f;
+            Speed = Mathf.Clamp(Speed, 0.05f, 8f);
         }
     }
 
@@ -362,6 +492,9 @@ namespace InvertLab.Sprites.DOTS
                 FlipX = source.FlipX,
                 SortingOffset = source.SortingOffset,
                 PreviewEnabled = source.PreviewEnabled,
+                PathWrap = source.PathWrap,
+                MotionMode = source.MotionMode,
+                Speed = source.Speed,
             };
         }
     }
@@ -405,6 +538,7 @@ namespace InvertLab.Sprites.DOTS
         public List<SpriteEventDef> Events = new();
         public List<FrameBoxDef> Hitboxes = new();
         public SpriteSocketCatalog SocketCatalog = new();
+        public List<SpriteSocketMotionTrack> SocketMotions = new();
         public bool OnionSettingsInitialized = true;
         public bool OnionSkinEnabled;
         public int OnionPastFrames = DefaultOnionFrameCount;
@@ -433,6 +567,82 @@ namespace InvertLab.Sprites.DOTS
         {
             SocketCatalog ??= new SpriteSocketCatalog();
             SocketCatalog.EnsureItems();
+            if (Clips != null)
+            {
+                for (int c = 0; c < Clips.Count; c++)
+                {
+                    var sockets = Clips[c]?.Sockets;
+                    if (sockets == null)
+                        continue;
+                    for (int s = 0; s < sockets.Count; s++)
+                    {
+                        if (sockets[s] != null)
+                            SocketCatalog.Ensure(sockets[s].Name);
+                    }
+                }
+            }
+            if (SocketMotions != null)
+            {
+                for (int i = 0; i < SocketMotions.Count; i++)
+                {
+                    var motion = SocketMotions[i];
+                    if (motion == null)
+                        continue;
+                    var item = SocketCatalog.Ensure(motion.SocketName);
+                    item.MotionMode = (byte)SpriteSocketClockMode.OwnClock;
+                }
+            }
+            var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < SocketCatalog.Items.Count; i++)
+            {
+                var item = SocketCatalog.Items[i];
+                if (item == null)
+                    continue;
+                item.Normalize();
+                string root = SpriteSocketIdUtility.Canonical(item.SocketId, item.SocketName);
+                string unique = root;
+                int suffix = 2;
+                while (!usedIds.Add(unique))
+                    unique = $"{root}.{suffix++}";
+                item.SocketId = unique;
+            }
+        }
+
+        public void EnsureSocketMotions()
+        {
+            SocketMotions ??= new List<SpriteSocketMotionTrack>();
+            SocketMotions.RemoveAll(track => track == null);
+            int sheetCount = Mathf.Max(1, Sheets?.Count ?? 0);
+            for (int i = 0; i < SocketMotions.Count; i++)
+                SocketMotions[i].Normalize(sheetCount);
+        }
+
+        public SpriteSocketMotionTrack FindSocketMotion(string socketName)
+        {
+            EnsureSocketMotions();
+            if (string.IsNullOrWhiteSpace(socketName))
+                return null;
+            for (int i = 0; i < SocketMotions.Count; i++)
+            {
+                var track = SocketMotions[i];
+                if (string.Equals(track.SocketName, socketName.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                    return track;
+            }
+            return null;
+        }
+
+        public SpriteSocketMotionTrack EnsureSocketMotion(string socketName)
+        {
+            var found = FindSocketMotion(socketName);
+            if (found != null)
+                return found;
+            var track = new SpriteSocketMotionTrack
+            {
+                SocketName = string.IsNullOrWhiteSpace(socketName) ? "Socket" : socketName.Trim(),
+            };
+            SocketMotions.Add(track);
+            return track;
         }
 
         public static Vector2[] CreateRegularHitPolygon(int vertexCount)
