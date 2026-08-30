@@ -89,6 +89,9 @@ namespace InvertLab.Sprites.DOTS
         public float Time;
         public float Speed;
         public byte Playing;
+        public float3 OriginPosition;
+        public float OriginAngle;
+        public byte OriginInitialized;
     }
 
     [InternalBufferCapacity(2)]
@@ -102,6 +105,30 @@ namespace InvertLab.Sprites.DOTS
     }
 
     public struct SpriteSocketEventsPending : IComponentData, IEnableableComponent { }
+
+    /// <summary>Present when this character has one or more socket inventories.</summary>
+    public struct SpriteSocketInventoryTag : IComponentData { }
+
+    /// <summary>
+    /// Frame sockets stay glued to the clip. Independent sockets run their own motion clock.
+    /// </summary>
+    public enum SpriteSocketInventoryKind : byte
+    {
+        Frame = 0,
+        Independent = 1,
+    }
+
+    /// <summary>One socket inside a named inventory. Query by GroupHash then Kind.</summary>
+    [InternalBufferCapacity(8)]
+    public struct SpriteSocketInventoryMember : IBufferElementData
+    {
+        public uint GroupHash;
+        public FixedString32Bytes GroupName;
+        public ulong SocketIdHash;
+        public FixedString64Bytes SocketId;
+        public FixedString64Bytes SocketName;
+        public byte Kind;
+    }
 
     /// <summary>Moves this child entity to a named socket on its animated source.</summary>
     public struct SpriteSocketAttachment : IComponentData
@@ -157,6 +184,82 @@ namespace InvertLab.Sprites.DOTS
             }
             return hash;
         }
+
+        public static uint InventoryHash(string name)
+            => (uint)Hash(SpriteSocketIdUtility.Canonical(name, "inventory"));
+
+        public static uint InventoryHash(in FixedString32Bytes name)
+        {
+            ulong hash = 14695981039346656037UL;
+            for (int i = 0; i < name.Length; i++)
+            {
+                hash ^= name[i];
+                hash *= 1099511628211UL;
+            }
+            return (uint)hash;
+        }
+
+        /// <summary>
+        /// Copy live poses in a named inventory that match <paramref name="kind"/>.
+        /// Use Frame for clip-glued slots, Independent for own-clock tracks.
+        /// </summary>
+        public static int CollectInventory(
+            DynamicBuffer<SpriteSocketInventoryMember> members,
+            DynamicBuffer<SpriteSocketBuffer> sockets,
+            uint inventoryHash,
+            NativeList<SpriteSocketBuffer> dest,
+            SpriteSocketInventoryKind kind)
+        {
+            byte kindByte = (byte)kind;
+            int wrote = 0;
+            for (int i = 0; i < members.Length; i++)
+            {
+                var member = members[i];
+                if (member.GroupHash != inventoryHash || member.Kind != kindByte)
+                    continue;
+                if (!TryGetPose(sockets, member.SocketIdHash, out var pose))
+                    continue;
+                dest.Add(pose);
+                wrote++;
+            }
+            return wrote;
+        }
+
+        public static int CollectInventory(
+            DynamicBuffer<SpriteSocketInventoryMember> members,
+            DynamicBuffer<SpriteSocketBuffer> sockets,
+            string inventoryName,
+            NativeList<SpriteSocketBuffer> dest,
+            SpriteSocketInventoryKind kind)
+            => CollectInventory(members, sockets, InventoryHash(inventoryName), dest, kind);
+
+        public static int CollectFrameInventory(
+            DynamicBuffer<SpriteSocketInventoryMember> members,
+            DynamicBuffer<SpriteSocketBuffer> sockets,
+            uint inventoryHash,
+            NativeList<SpriteSocketBuffer> dest)
+            => CollectInventory(members, sockets, inventoryHash, dest, SpriteSocketInventoryKind.Frame);
+
+        public static int CollectFrameInventory(
+            DynamicBuffer<SpriteSocketInventoryMember> members,
+            DynamicBuffer<SpriteSocketBuffer> sockets,
+            string inventoryName,
+            NativeList<SpriteSocketBuffer> dest)
+            => CollectInventory(members, sockets, inventoryName, dest, SpriteSocketInventoryKind.Frame);
+
+        public static int CollectIndependentInventory(
+            DynamicBuffer<SpriteSocketInventoryMember> members,
+            DynamicBuffer<SpriteSocketBuffer> sockets,
+            uint inventoryHash,
+            NativeList<SpriteSocketBuffer> dest)
+            => CollectInventory(members, sockets, inventoryHash, dest, SpriteSocketInventoryKind.Independent);
+
+        public static int CollectIndependentInventory(
+            DynamicBuffer<SpriteSocketInventoryMember> members,
+            DynamicBuffer<SpriteSocketBuffer> sockets,
+            string inventoryName,
+            NativeList<SpriteSocketBuffer> dest)
+            => CollectInventory(members, sockets, inventoryName, dest, SpriteSocketInventoryKind.Independent);
 
         public static ulong Hash(in FixedString64Bytes socketId)
         {

@@ -355,6 +355,43 @@ namespace InvertLab.Sprites.DOTS
             return result;
         }
 
+        static SpriteAnimSetBuilder.SocketInventoryInput[] BuildSocketInventoryInputs(
+            SpriteSheetProfile profile)
+        {
+            profile?.EnsureSocketInventories();
+            if (profile?.SocketInventories == null || profile.SocketInventories.Count == 0)
+                return null;
+            var result = new SpriteAnimSetBuilder.SocketInventoryInput[profile.SocketInventories.Count];
+            for (int i = 0; i < profile.SocketInventories.Count; i++)
+            {
+                var inv = profile.SocketInventories[i];
+                int memberCount = inv.SocketNames?.Count ?? 0;
+                var ids = new string[memberCount];
+                var names = new string[memberCount];
+                var kinds = new byte[memberCount];
+                for (int m = 0; m < memberCount; m++)
+                {
+                    string socketName = inv.SocketNames[m];
+                    var item = profile.SocketCatalog?.Find(socketName);
+                    names[m] = socketName;
+                    ids[m] = SpriteSocketIdUtility.Canonical(item != null ? item.SocketId : null, socketName);
+                    bool independent = item != null && item.UsesOwnClock
+                        || profile.FindSocketMotion(socketName) != null;
+                    kinds[m] = independent
+                        ? (byte)SpriteSocketInventoryKind.Independent
+                        : (byte)SpriteSocketInventoryKind.Frame;
+                }
+                result[i] = new SpriteAnimSetBuilder.SocketInventoryInput
+                {
+                    Name = string.IsNullOrWhiteSpace(inv.Name) ? "Inventory" : inv.Name.Trim(),
+                    SocketIds = ids,
+                    SocketNames = names,
+                    Kinds = kinds,
+                };
+            }
+            return result;
+        }
+
         class Baker : Baker<SpriteAnimSetAuthoring>
         {
             public override void Bake(SpriteAnimSetAuthoring authoring)
@@ -568,13 +605,15 @@ namespace InvertLab.Sprites.DOTS
                         Duration = profile.IndependentMotionDuration,
                         Speed = 1f,
                         Loop = profile.IndependentMotionLoop,
+                        AnchorSpace = motion.AnchorSpace,
                         Keys = keys,
                         Triggers = triggers,
                     };
                 }
 
+                var inventoryInputs = BuildSocketInventoryInputs(profile);
                 var (setRef, player) = SpriteAnimSetBuilder.Build(
-                    Allocator.Persistent, inputs, motionInputs);
+                    Allocator.Persistent, inputs, motionInputs, inventoryInputs);
                 AddComponent(entity, setRef);
                 var playerAuthoring = GetComponent<SpriteAnimPlayerAuthoring>();
                 int initialClip;
@@ -614,6 +653,35 @@ namespace InvertLab.Sprites.DOTS
                 AddBuffer<SpriteAnimEventBuffer>(entity);
                 AddComponent(entity, new SpriteAnimEventsPending());
                 AddBuffer<SpriteSocketBuffer>(entity);
+                if (inventoryInputs != null && inventoryInputs.Length > 0)
+                {
+                    AddComponent<SpriteSocketInventoryTag>(entity);
+                    var inventoryBuffer = AddBuffer<SpriteSocketInventoryMember>(entity);
+                    for (int i = 0; i < inventoryInputs.Length; i++)
+                    {
+                        var inv = inventoryInputs[i];
+                        string invName = string.IsNullOrWhiteSpace(inv.Name) ? "inventory" : inv.Name.Trim();
+                        uint groupHash = SpriteSockets.InventoryHash(invName);
+                        int memberCount = inv.SocketIds?.Length ?? 0;
+                        for (int m = 0; m < memberCount; m++)
+                        {
+                            string socketId = inv.SocketIds[m];
+                            string socketName = inv.SocketNames != null && m < inv.SocketNames.Length
+                                ? inv.SocketNames[m] : socketId;
+                            inventoryBuffer.Add(new SpriteSocketInventoryMember
+                            {
+                                GroupHash = groupHash,
+                                GroupName = invName,
+                                SocketIdHash = SpriteSockets.Hash(socketId),
+                                SocketId = socketId,
+                                SocketName = socketName,
+                                Kind = inv.Kinds != null && m < inv.Kinds.Length
+                                    ? inv.Kinds[m]
+                                    : (byte)SpriteSocketInventoryKind.Frame,
+                            });
+                        }
+                    }
+                }
                 if (motionCount > 0)
                 {
                     AddComponent(entity, new SpriteSocketMotionPlayer

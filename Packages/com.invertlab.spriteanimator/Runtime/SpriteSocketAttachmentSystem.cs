@@ -23,12 +23,21 @@ namespace InvertLab.Sprites.DOTS
             var eventBuffers = SystemAPI.GetBufferLookup<SpriteSocketEventBuffer>();
             var eventPending = SystemAPI.GetComponentLookup<SpriteSocketEventsPending>();
 
-            foreach (var (player, setRef, entity) in
-                     SystemAPI.Query<RefRW<SpriteSocketMotionPlayer>, RefRO<SpriteAnimSetRef>>()
-                         .WithEntityAccess())
+            foreach (var (player, setRef, sourceWorld, entity) in
+                     SystemAPI.Query<RefRW<SpriteSocketMotionPlayer>, RefRO<SpriteAnimSetRef>,
+                             RefRO<LocalToWorld>>()
+                          .WithEntityAccess())
             {
                 if (!buffers.HasBuffer(entity))
                     continue;
+                if (player.ValueRO.OriginInitialized == 0)
+                {
+                    float3 x = math.normalizesafe(
+                        sourceWorld.ValueRO.Value.c0.xyz, new float3(1f, 0f, 0f));
+                    player.ValueRW.OriginPosition = sourceWorld.ValueRO.Value.c3.xyz;
+                    player.ValueRW.OriginAngle = math.degrees(math.atan2(x.y, x.x));
+                    player.ValueRW.OriginInitialized = 1;
+                }
                 float previousTime = player.ValueRO.Time;
                 if (player.ValueRO.Playing != 0)
                     player.ValueRW.Time += dt * math.select(
@@ -53,6 +62,12 @@ namespace InvertLab.Sprites.DOTS
                         : math.saturate(normalized);
                     Sample(ref motion, normalized, out float2 position, out float angle,
                         out float2 scale);
+                    if (motion.AnchorSpace == (byte)SpriteSocketAnchorSpace.World)
+                    {
+                        ResolveWorldAnchor(player.ValueRO.OriginPosition,
+                            player.ValueRO.OriginAngle,
+                            sourceWorld.ValueRO.Value, ref position, ref angle);
+                    }
 
                     int existing = -1;
                     for (int b = 0; b < buffer.Length; b++)
@@ -80,6 +95,25 @@ namespace InvertLab.Sprites.DOTS
                         buffer.Add(pose);
                 }
             }
+        }
+
+        public static void ResolveWorldAnchor(float3 originPosition, float originAngle,
+            float4x4 sourceWorld, ref float2 position, ref float angle)
+        {
+            float radians = math.radians(originAngle);
+            float sin = math.sin(radians);
+            float cos = math.cos(radians);
+            float2 worldOffset = new(
+                cos * position.x - sin * position.y,
+                sin * position.x + cos * position.y);
+            float3 target = originPosition + new float3(worldOffset, 0f);
+
+            float3 x = math.normalizesafe(sourceWorld.c0.xyz, new float3(1f, 0f, 0f));
+            float3 y = math.normalizesafe(sourceWorld.c1.xyz, new float3(0f, 1f, 0f));
+            float3 delta = target - sourceWorld.c3.xyz;
+            position = new float2(math.dot(delta, x), math.dot(delta, y));
+            float sourceAngle = math.degrees(math.atan2(x.y, x.x));
+            angle = originAngle + angle - sourceAngle;
         }
 
         static void EmitTriggers(Entity entity, ref SpriteSocketMotionBlob motion,

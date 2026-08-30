@@ -385,6 +385,7 @@ namespace InvertLab.Sprites.DOTS
         public byte DefaultEaseMode = (byte)SpriteEaseMode.SmoothStep;
         public byte DefaultPathMode = (byte)SpriteSocketPathMode.SmoothPath;
         public byte DefaultRotationMode = (byte)SpriteSocketRotationMode.Shortest;
+        public byte AnchorSpace = (byte)SpriteSocketAnchorSpace.CharacterPivot;
         public List<SpriteSocketMotionKey> Keys = new();
         public List<SpriteSocketTriggerDef> Triggers = new();
 
@@ -399,6 +400,8 @@ namespace InvertLab.Sprites.DOTS
                 DefaultPathMode = (byte)SpriteSocketPathMode.SmoothPath;
             if (DefaultRotationMode > (byte)SpriteSocketRotationMode.None)
                 DefaultRotationMode = (byte)SpriteSocketRotationMode.Shortest;
+            if (AnchorSpace > (byte)SpriteSocketAnchorSpace.World)
+                AnchorSpace = (byte)SpriteSocketAnchorSpace.CharacterPivot;
             Keys ??= new List<SpriteSocketMotionKey>();
             Keys.RemoveAll(key => key == null);
             for (int i = 0; i < Keys.Count; i++)
@@ -427,6 +430,16 @@ namespace InvertLab.Sprites.DOTS
                 Triggers[i].NormalizedTime = Mathf.Clamp01(Triggers[i].NormalizedTime);
             Triggers.Sort((a, b) => a.NormalizedTime.CompareTo(b.NormalizedTime));
         }
+    }
+
+    /// <summary>Named collapsible socket set (Inventory, Pets, ...). Baked as an ECS tag plus member buffer.</summary>
+    [Serializable]
+    public class SpriteSocketInventory
+    {
+        public string Name = "Inventory";
+        public bool Folded;
+        public byte AnchorSpace;
+        public List<string> SocketNames = new();
     }
 
     public static class SpriteSocketIdUtility
@@ -478,6 +491,13 @@ namespace InvertLab.Sprites.DOTS
     {
         FollowClip = 0,
         OwnClock = 1,
+    }
+
+    /// <summary>Whether an independent track follows the character or its spawn pivot.</summary>
+    public enum SpriteSocketAnchorSpace : byte
+    {
+        CharacterPivot = 0,
+        World = 1,
     }
 
     /// <summary>
@@ -685,6 +705,7 @@ namespace InvertLab.Sprites.DOTS
         public List<FrameBoxDef> Hitboxes = new();
         public SpriteSocketCatalog SocketCatalog = new();
         public List<SpriteSocketMotionTrack> SocketMotions = new();
+        public List<SpriteSocketInventory> SocketInventories = new();
         public bool IndependentTimelineInitialized;
         public bool IndependentTimelineUsesSeconds;
         [Min(0.01f)] public float IndependentMotionDurationSeconds = 1f;
@@ -801,6 +822,7 @@ namespace InvertLab.Sprites.DOTS
                 SocketMotions[i].Loop = IndependentMotionLoop;
                 SocketMotions[i].Normalize(sheetCount);
             }
+            EnsureSocketInventories();
         }
 
         public float IndependentMotionDuration
@@ -826,6 +848,99 @@ namespace InvertLab.Sprites.DOTS
             IndependentMotionDurationSeconds = newDuration;
             IndependentTimelineUsesSeconds = true;
             return true;
+        }
+
+
+        public void EnsureSocketInventories()
+        {
+            SocketInventories ??= new List<SpriteSocketInventory>();
+            SocketInventories.RemoveAll(group => group == null);
+            var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < SocketInventories.Count; i++)
+            {
+                var group = SocketInventories[i];
+                if (string.IsNullOrWhiteSpace(group.Name))
+                    group.Name = i == 0 ? "Inventory" : $"Inventory {i + 1}";
+                else
+                    group.Name = group.Name.Trim();
+                group.SocketNames ??= new List<string>();
+                for (int n = group.SocketNames.Count - 1; n >= 0; n--)
+                {
+                    string socketName = group.SocketNames[n];
+                    if (string.IsNullOrWhiteSpace(socketName) ||
+                        !claimed.Add(socketName.Trim()))
+                    {
+                        group.SocketNames.RemoveAt(n);
+                        continue;
+                    }
+                    group.SocketNames[n] = socketName.Trim();
+                }
+                if (group.AnchorSpace > (byte)SpriteSocketAnchorSpace.World)
+                    group.AnchorSpace = (byte)SpriteSocketAnchorSpace.CharacterPivot;
+            }
+            SocketInventories.RemoveAll(group =>
+                group.SocketNames == null || group.SocketNames.Count == 0);
+        }
+
+        public SpriteSocketInventory FindSocketInventory(string socketName)
+        {
+            EnsureSocketInventories();
+            if (string.IsNullOrWhiteSpace(socketName))
+                return null;
+            for (int i = 0; i < SocketInventories.Count; i++)
+            {
+                var group = SocketInventories[i];
+                for (int n = 0; n < group.SocketNames.Count; n++)
+                {
+                    if (string.Equals(group.SocketNames[n], socketName.Trim(),
+                            StringComparison.OrdinalIgnoreCase))
+                        return group;
+                }
+            }
+            return null;
+        }
+
+        public void RemoveSocketFromInventories(string socketName)
+        {
+            EnsureSocketInventories();
+            if (string.IsNullOrWhiteSpace(socketName))
+                return;
+            for (int i = SocketInventories.Count - 1; i >= 0; i--)
+            {
+                var group = SocketInventories[i];
+                group.SocketNames.RemoveAll(name =>
+                    string.Equals(name, socketName.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (group.SocketNames.Count == 0)
+                    SocketInventories.RemoveAt(i);
+            }
+        }
+
+        public void RenameSocketInInventories(string fromName, string toName)
+        {
+            var group = FindSocketInventory(fromName);
+            if (group == null || string.IsNullOrWhiteSpace(toName))
+                return;
+            for (int i = 0; i < group.SocketNames.Count; i++)
+            {
+                if (string.Equals(group.SocketNames[i], fromName.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                    group.SocketNames[i] = toName.Trim();
+            }
+        }
+
+        public void SetInventorySpace(SpriteSocketInventory group, byte space)
+        {
+            if (group == null)
+                return;
+            if (space > (byte)SpriteSocketAnchorSpace.World)
+                space = (byte)SpriteSocketAnchorSpace.CharacterPivot;
+            group.AnchorSpace = space;
+            for (int i = 0; i < group.SocketNames.Count; i++)
+            {
+                var track = FindSocketMotion(group.SocketNames[i]);
+                if (track != null)
+                    track.AnchorSpace = space;
+            }
         }
 
         public SpriteSocketMotionTrack FindSocketMotion(string socketName)

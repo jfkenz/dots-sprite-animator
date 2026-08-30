@@ -333,6 +333,7 @@ namespace InvertLab.Sprites.DOTS.Tests
                 DefaultEaseMode = (byte)SpriteEaseMode.BounceOut,
                 DefaultPathMode = (byte)SpriteSocketPathMode.Arc,
                 DefaultRotationMode = (byte)SpriteSocketRotationMode.FacePath,
+                AnchorSpace = (byte)SpriteSocketAnchorSpace.World,
             };
 
             track.Normalize(1);
@@ -341,16 +342,20 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual((byte)SpriteSocketPathMode.Arc, track.DefaultPathMode);
             Assert.AreEqual((byte)SpriteSocketRotationMode.FacePath,
                 track.DefaultRotationMode);
+            Assert.AreEqual((byte)SpriteSocketAnchorSpace.World, track.AnchorSpace);
 
             track.DefaultEaseMode = 99;
             track.DefaultPathMode = 99;
             track.DefaultRotationMode = 99;
+            track.AnchorSpace = 99;
             track.Normalize(1);
 
             Assert.AreEqual((byte)SpriteEaseMode.SmoothStep, track.DefaultEaseMode);
             Assert.AreEqual((byte)SpriteSocketPathMode.SmoothPath, track.DefaultPathMode);
             Assert.AreEqual((byte)SpriteSocketRotationMode.Shortest,
                 track.DefaultRotationMode);
+            Assert.AreEqual((byte)SpriteSocketAnchorSpace.CharacterPivot,
+                track.AnchorSpace);
         }
 
         [Test]
@@ -456,6 +461,7 @@ namespace InvertLab.Sprites.DOTS.Tests
                     Duration = 1f,
                     Speed = 1f,
                     Loop = true,
+                    AnchorSpace = (byte)SpriteSocketAnchorSpace.World,
                     Keys = new[]
                     {
                         new SpriteAnimSetBuilder.SocketMotionInput.SocketMotionPointInput
@@ -493,6 +499,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                 setRef.Set.Value.Clips[0].FrameSockets[0].SocketIdHash);
             Assert.AreEqual(SpriteSockets.Hash("effect.orb"),
                 setRef.Set.Value.SocketMotions[0].SocketIdHash);
+            Assert.AreEqual((byte)SpriteSocketAnchorSpace.World,
+                setRef.Set.Value.SocketMotions[0].AnchorSpace);
             Assert.AreEqual((byte)SpriteEaseMode.EaseOut,
                 setRef.Set.Value.SocketMotions[0].Keys[0].EaseMode);
             Assert.AreEqual((byte)SpriteSocketPathMode.Linear,
@@ -514,6 +522,24 @@ namespace InvertLab.Sprites.DOTS.Tests
                 setRef.Set.Value.SocketMotions[0].Keys[0].RotationTurns);
             Assert.AreEqual(7, setRef.Set.Value.SocketMotions[0].Triggers[0].EventId);
             setRef.Set.Dispose();
+        }
+
+        [Test]
+        public void WorldAnchorCompensatesForCharacterTranslationAndRotation()
+        {
+            float2 position = new(2f, 0f);
+            float angle = 15f;
+            float4x4 movedCharacter = float4x4.TRS(
+                new float3(13f, 5f, 0f),
+                quaternion.RotateZ(math.radians(90f)),
+                new float3(1f));
+
+            SpriteSocketMotionSystem.ResolveWorldAnchor(
+                new float3(10f, 5f, 0f), 0f, movedCharacter, ref position, ref angle);
+
+            Assert.AreEqual(0f, position.x, 0.0001f);
+            Assert.AreEqual(1f, position.y, 0.0001f);
+            Assert.AreEqual(-75f, angle, 0.0001f);
         }
 
         [Test]

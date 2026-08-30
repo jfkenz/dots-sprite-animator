@@ -80,6 +80,7 @@ namespace InvertLab.Sprites.DOTS
         public float Duration;
         public float Speed;
         public byte Loop;
+        public byte AnchorSpace;
         public BlobArray<SpriteSocketMotionPoint> Keys;
         public BlobArray<SpriteSocketTriggerPoint> Triggers;
     }
@@ -95,6 +96,15 @@ namespace InvertLab.Sprites.DOTS
         // (sheet cell / render slot shown at time t of that clip).
         public BlobArray<float4> Frames;
         public BlobArray<SpriteSocketMotionBlob> SocketMotions;
+        public BlobArray<SpriteSocketInventoryBlob> SocketInventories;
+    }
+
+    public struct SpriteSocketInventoryBlob
+    {
+        public FixedString32Bytes Name;
+        public uint GroupHash;
+        public BlobArray<ulong> SocketIdHashes;
+        public BlobArray<byte> Kinds;
     }
 
     /// <summary>The character's animation library (e.g. the soldier's 4 states).</summary>
@@ -173,6 +183,7 @@ namespace InvertLab.Sprites.DOTS
             public float Duration;
             public float Speed;
             public bool Loop;
+            public byte AnchorSpace;
             public SocketMotionPointInput[] Keys;
             public SocketTriggerInput[] Triggers;
 
@@ -204,9 +215,18 @@ namespace InvertLab.Sprites.DOTS
             }
         }
 
+        public struct SocketInventoryInput
+        {
+            public string Name;
+            public string[] SocketIds;
+            public string[] SocketNames;
+            public byte[] Kinds;
+        }
+
         /// <summary>Build the blob + initial player state.</summary>
         public static (SpriteAnimSetRef, SpriteAnimPlayer) Build(
-            Allocator allocator, ClipInput[] clips, SocketMotionInput[] socketMotions = null)
+            Allocator allocator, ClipInput[] clips, SocketMotionInput[] socketMotions = null,
+            SocketInventoryInput[] socketInventories = null)
         {
             var builder = new BlobBuilder(Allocator.Temp);
             ref var root = ref builder.ConstructRoot<SpriteAnimSetBlob>();
@@ -313,6 +333,9 @@ namespace InvertLab.Sprites.DOTS
                 motion.Duration = math.max(0.01f, input.Duration);
                 motion.Speed = math.max(0.01f, input.Speed);
                 motion.Loop = input.Loop ? (byte)1 : (byte)0;
+                motion.AnchorSpace = input.AnchorSpace <= (byte)SpriteSocketAnchorSpace.World
+                    ? input.AnchorSpace
+                    : (byte)SpriteSocketAnchorSpace.CharacterPivot;
                 int keyCount = input.Keys?.Length ?? 0;
                 var keys = builder.Allocate(ref motion.Keys, keyCount);
                 for (int k = 0; k < keyCount; k++)
@@ -355,6 +378,27 @@ namespace InvertLab.Sprites.DOTS
                         NormalizedTime = math.saturate(input.Triggers[t].NormalizedTime),
                         EventId = input.Triggers[t].EventId,
                     };
+                }
+            }
+
+            int inventoryCount = socketInventories?.Length ?? 0;
+            var inventories = builder.Allocate(ref root.SocketInventories, inventoryCount);
+            for (int i = 0; i < inventoryCount; i++)
+            {
+                var input = socketInventories[i];
+                ref var inv = ref inventories[i];
+                string invName = string.IsNullOrWhiteSpace(input.Name) ? "inventory" : input.Name.Trim();
+                inv.Name = new FixedString32Bytes(invName.Length <= 30 ? invName : invName.Substring(0, 30));
+                inv.GroupHash = SpriteSockets.InventoryHash(invName);
+                int memberCount = input.SocketIds?.Length ?? 0;
+                var hashes = builder.Allocate(ref inv.SocketIdHashes, memberCount);
+                var kinds = builder.Allocate(ref inv.Kinds, memberCount);
+                for (int m = 0; m < memberCount; m++)
+                {
+                    hashes[m] = SpriteSockets.Hash(input.SocketIds[m] ?? input.SocketNames?[m]);
+                    kinds[m] = input.Kinds != null && m < input.Kinds.Length
+                        ? input.Kinds[m]
+                        : (byte)SpriteSocketInventoryKind.Frame;
                 }
             }
 
