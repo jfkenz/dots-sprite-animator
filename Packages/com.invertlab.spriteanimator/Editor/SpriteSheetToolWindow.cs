@@ -180,6 +180,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         Vector2 _historyScroll;
         readonly List<string> _undoNames = new();
         readonly List<string> _redoNames = new();
+        readonly List<int> _sheetClipCounts = new();
         int _selectedClip;
         int _selectedSheet;
         bool _showTimelineInputHelp;
@@ -1128,6 +1129,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             int sheetCount = _profile.Sheets.Count;
             int clipCount = _profile.Clips != null ? _profile.Clips.Count : 0;
+            CacheSheetClipCounts(sheetCount);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, 20f), "CLIPS", _sectionStyle);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 31f, rect.width - 24f, 16f),
                 $"{sheetCount} sheet{(sheetCount == 1 ? "" : "s")} · {clipCount} clip{(clipCount == 1 ? "" : "s")}",
@@ -1151,7 +1153,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int s = 0; s < sheetCount; s++)
             {
                 bool expanded = s == _selectedSheet;
-                int n = expanded ? CountClipsOnSheet(s) : 0;
+                int n = expanded ? _sheetClipCounts[s] : 0;
                 float cardH = cardPad + headerH + cardPad;
                 if (expanded)
                 {
@@ -1181,7 +1183,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 var def = _profile.Sheets[s];
                 bool expanded = s == _selectedSheet;
-                int clipsOnSheet = CountClipsOnSheet(s);
+                int clipsOnSheet = _sheetClipCounts[s];
 
                 float insetH = 0f;
                 if (expanded)
@@ -1258,7 +1260,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                             var clip = _profile.Clips[i];
                             if (clip == null || clip.SheetIndex != s)
                                 continue;
-                            clip.EnsureFrameData();
                             var itemRect = new Rect(inset.x + 4f, clipY, inset.width - 8f, clipRowH - 2f);
                             var clipNameRect = new Rect(itemRect.x + 8f, itemRect.y + 2f,
                                 itemRect.width - 12f, 16f);
@@ -1293,8 +1294,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                                     new GUIContent(clipName, "Click to select. F2 or double-click the name to rename."),
                                     EditorStyles.boldLabel);
                             }
+                            int frameCount = clip.Frames?.Length ?? 0;
                             GUI.Label(new Rect(itemRect.x + 8f, itemRect.y + 18f, itemRect.width - 12f, 13f),
-                                $"{clip.Frames.Length} frames   {clip.FrameRate:F1} fps", _mutedStyle);
+                                $"{frameCount} frames   {clip.FrameRate:F1} fps", _mutedStyle);
                             clipY += clipRowH;
                         }
                     }
@@ -1450,6 +1452,21 @@ namespace InvertLab.Sprites.DOTS.Editor
             return n;
         }
 
+        void CacheSheetClipCounts(int sheetCount)
+        {
+            _sheetClipCounts.Clear();
+            for (int i = 0; i < sheetCount; i++)
+                _sheetClipCounts.Add(0);
+            if (_profile?.Clips == null)
+                return;
+            for (int i = 0; i < _profile.Clips.Count; i++)
+            {
+                var clip = _profile.Clips[i];
+                if (clip != null && clip.SheetIndex >= 0 && clip.SheetIndex < sheetCount)
+                    _sheetClipCounts[clip.SheetIndex]++;
+            }
+        }
+
         int FirstClipIndexOfSheet(int sheetIndex)
         {
             if (_profile?.Clips == null)
@@ -1467,6 +1484,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_profile?.Sheets == null || index < 0 || index >= _profile.Sheets.Count)
                 return;
             CommitAllRenames();
+            if (_selectedSheet == index)
+            {
+                ReleaseShortcutKeyboardFocus();
+                return;
+            }
             _selectedSheet = index;
             _collapsedSheets.Clear();
             if (_profile.Sheets.Count > 1)
@@ -1760,6 +1782,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CancelClipRename();
             if (_renamingSheet >= 0)
                 CommitSheetRename();
+            if (_selectedClip == index)
+            {
+                ReleaseShortcutKeyboardFocus();
+                return;
+            }
             if (_selectedClip != index)
             {
                 _selectedOnionFrame = -1;
@@ -1908,9 +1935,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                         "Toggle Independent Motion path lines when Preview Debug is on."),
                     EditorStyles.miniButton))
             {
-                Undo.RecordObject(this, "Toggle Independent Motion Paths");
+                RecordWindowUndo("Toggle Independent Motion Paths");
                 _showIndependentMotionPaths = !_showIndependentMotionPaths;
-                PushUndoName("Toggle Independent Motion Paths");
                 _status = _showIndependentMotionPaths
                     ? "Independent Motion paths visible"
                     : "Independent Motion paths hidden";
@@ -1933,7 +1959,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Toggle between authored per-frame playback offsets and centered source cells."),
                 EditorStyles.miniButton))
             {
-                Undo.RecordObject(this, "Change Sprite Offset Preview");
+                RecordWindowUndo("Change Sprite Offset Preview");
                 _previewOffsetMode = _previewOffsetMode == PreviewOffsetMode.Authored
                     ? PreviewOffsetMode.Centered
                     : PreviewOffsetMode.Authored;
@@ -2146,9 +2172,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                         "Show or hide preview debug overlays: socket pins, labels, transform gizmos, and Independent Motion / frame paths."),
                     EditorStyles.miniButton))
                 return;
-            Undo.RecordObject(this, "Toggle Preview Debug");
+            RecordWindowUndo("Toggle Preview Debug");
             _showPreviewDebug = !_showPreviewDebug;
-            PushUndoName("Toggle Preview Debug");
             _status = _showPreviewDebug
                 ? "Preview debug overlays visible"
                 : "Preview debug overlays hidden";
@@ -2280,7 +2305,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GUILayout.Width(92f));
                 if (nextShowPivot != _showPivot)
                 {
-                    Undo.RecordObject(this, "Toggle Show Pivot");
+                    RecordWindowUndo("Toggle Show Pivot");
                     _showPivot = nextShowPivot;
                     if (!_showPivot)
                     {
@@ -2509,7 +2534,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         "Playback Preview", _previewOffsetMode);
                     if (nextPreviewMode != _previewOffsetMode)
                     {
-                        Undo.RecordObject(this, "Change Sprite Offset Preview");
+                        RecordWindowUndo("Change Sprite Offset Preview");
                         _previewOffsetMode = nextPreviewMode;
                         _status = _previewOffsetMode == PreviewOffsetMode.Authored
                             ? "Preview applies authored frame offsets"
@@ -2654,9 +2679,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorStyles.miniButton);
             if (nextBoth != _spacePlaysBothClocks)
             {
-                Undo.RecordObject(this, "Toggle Space Plays Both Clocks");
+                RecordWindowUndo("Toggle Space Plays Both Clocks");
                 _spacePlaysBothClocks = nextBoth;
-                PushUndoName("Toggle Space Plays Both Clocks");
                 _status = _spacePlaysBothClocks
                     ? "Space plays Frames and Independent Motion"
                     : "Space plays the selected timeline only";
@@ -6706,7 +6730,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _showSocketPreviews);
             if (nextShowPreviews != _showSocketPreviews)
             {
-                Undo.RecordObject(this, "Toggle Socket Previews");
+                RecordWindowUndo("Toggle Socket Previews");
                 _showSocketPreviews = nextShowPreviews;
             }
 
@@ -6762,12 +6786,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _independentKeyStepCount));
             if (EditorGUI.EndChangeCheck())
             {
-                Undo.RecordObject(this, "Edit Independent Key Step");
+                RecordWindowUndo("Edit Independent Key Step");
                 _independentKeyStepMode = mode;
                 _independentKeyStepSeconds = seconds;
                 _independentKeyStepFps = fps;
                 _independentKeyStepCount = count;
-                PushUndoName("Edit Independent Key Step");
             }
             EditorGUILayout.LabelField(
                 $"Next offset: +{ResolvedIndependentKeyStepSeconds():0.###}s",
@@ -15440,6 +15463,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             PushUndoName(operation);
         }
 
+        void RecordWindowUndo(string operation)
+        {
+            Undo.RecordObject(this, operation);
+            PushUndoName(operation);
+        }
+
 
         void PushUndoName(string operation)
         {
@@ -15453,13 +15482,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (info.isRedo)
             {
-                if (_redoNames.Count == 0)
+                if (_redoNames.Count == 0 || _redoNames[^1] != info.undoName)
                     return;
                 int last = _redoNames.Count - 1;
                 _undoNames.Add(_redoNames[last]);
                 _redoNames.RemoveAt(last);
             }
-            else if (_undoNames.Count > 0)
+            else if (_undoNames.Count > 0 && _undoNames[^1] == info.undoName)
             {
                 int last = _undoNames.Count - 1;
                 _redoNames.Add(_undoNames[last]);
