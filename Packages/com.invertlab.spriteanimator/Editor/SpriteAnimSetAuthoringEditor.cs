@@ -15,6 +15,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         SerializedProperty _sizeUnits;
         SerializedProperty _tint;
         SerializedProperty _showScenePreview;
+        SerializedProperty _bakeUnityColliders;
+        SerializedProperty _bakeFrameColliders;
+        SerializedProperty _showSceneColliderGizmos;
 
         void OnEnable()
         {
@@ -27,6 +30,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             _sizeUnits = serializedObject.FindProperty("SizeUnits");
             _tint = serializedObject.FindProperty("Tint");
             _showScenePreview = serializedObject.FindProperty("ShowScenePreview");
+            _bakeUnityColliders = serializedObject.FindProperty("BakeUnityColliders");
+            _bakeFrameColliders = serializedObject.FindProperty("BakeFrameColliders");
+            _showSceneColliderGizmos = serializedObject.FindProperty("ShowSceneColliderGizmos");
         }
 
         public override void OnInspectorGUI()
@@ -98,6 +104,41 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (previewRenderer != null)
                     Undo.RecordObject(previewRenderer, "Toggle Scene Preview");
                 authoring.ApplyQuadPreview();
+            }
+
+            EditorGUILayout.Space(8f);
+            EditorGUILayout.LabelField("Colliders", EditorStyles.boldLabel);
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(_bakeUnityColliders);
+            using (new EditorGUI.DisabledScope(!_bakeUnityColliders.boolValue))
+                EditorGUILayout.PropertyField(_bakeFrameColliders);
+            EditorGUILayout.PropertyField(_showSceneColliderGizmos);
+            bool colliderSettingsChanged = EditorGUI.EndChangeCheck();
+            serializedObject.ApplyModifiedProperties();
+            EditorGUILayout.HelpBox(
+                "Query AABB stays on the profile for custom physics. Unity 2D spawns BoxCollider2D / CircleCollider2D / PolygonCollider2D children you can see in the Scene view. Character and This Clip boxes spawn with Bake Unity Colliders; Bake Frame Colliders adds slash windows. Socket profiles keep their own collider data and draw in the Sprite Animator debug overlay.",
+                MessageType.None);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Sync Unity Colliders"))
+                {
+                    Undo.RegisterFullObjectHierarchyUndo(authoring.gameObject, "Bake Sprite Colliders");
+                    authoring.BakeUnityColliders = true;
+                    authoring.SyncUnityColliders();
+                    EditorUtility.SetDirty(authoring);
+                }
+                if (GUILayout.Button("Clear Unity Colliders"))
+                {
+                    Undo.RegisterFullObjectHierarchyUndo(authoring.gameObject, "Clear Sprite Colliders");
+                    SpriteColliderWorld.ClearUnityColliders(authoring.transform);
+                    EditorUtility.SetDirty(authoring);
+                }
+            }
+            if (colliderSettingsChanged && authoring.BakeUnityColliders)
+            {
+                Undo.RegisterFullObjectHierarchyUndo(authoring.gameObject, "Bake Sprite Colliders");
+                authoring.SyncUnityColliders();
+                EditorUtility.SetDirty(authoring);
             }
         }
     }

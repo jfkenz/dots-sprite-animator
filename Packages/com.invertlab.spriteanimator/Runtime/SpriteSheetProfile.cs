@@ -93,6 +93,29 @@ namespace InvertLab.Sprites.DOTS
         Polygon = 2,
     }
 
+    /// <summary>
+    /// Frame = this cell only (slash). Clip = whole time that clip plays
+    /// (crouch vs stand hurt). Character = every clip (body).
+    /// Character stays 1 so existing profiles keep their body boxes.
+    /// </summary>
+    public enum SpriteColliderLifetime : byte
+    {
+        Frame = 0,
+        Character = 1,
+        Clip = 2,
+    }
+
+    /// <summary>
+    /// Query = custom AABB / SpriteHitboxLive. Unity2D = BoxCollider2D, CircleCollider2D,
+    /// or PolygonCollider2D on the authoring object. Both = both pipelines.
+    /// </summary>
+    public enum SpriteColliderPhysics : byte
+    {
+        Query = 0,
+        Unity2D = 1,
+        Both = 2,
+    }
+
     /// <summary>One animation clip definition inside a sheet profile.</summary>
     [Serializable]
     public class SpriteClipDef
@@ -238,6 +261,52 @@ namespace InvertLab.Sprites.DOTS
         public float Angle;
         /// <summary>Editor visibility only. Hidden colliders are not drawn in the preview; they still bake.</summary>
         public bool Hidden;
+        /// <summary>Editor authoring lock only. Locked colliders still preview and bake.</summary>
+        public bool Locked;
+        /// <summary>0 = this cell, 1 = character body on every clip, 2 = whole clip.</summary>
+        public byte Lifetime;
+        /// <summary>0 = query AABB, 1 = Unity 2D collider, 2 = both.</summary>
+        public byte Physics;
+        /// <summary>Unity 2D colliders only. Query hitboxes ignore this.</summary>
+        public bool IsTrigger = true;
+
+        public bool IsCharacter => Lifetime == (byte)SpriteColliderLifetime.Character;
+        public bool IsClip => Lifetime == (byte)SpriteColliderLifetime.Clip;
+        public bool IsFrame => !IsCharacter && !IsClip;
+        public bool UsesQuery => Physics != (byte)SpriteColliderPhysics.Unity2D;
+        public bool UsesUnity2D => Physics != (byte)SpriteColliderPhysics.Query;
+
+        public void BindLifetime(string clipName, int frame)
+        {
+            if (IsCharacter)
+            {
+                FrameIndex = -1;
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(clipName))
+                ClipName = clipName;
+            FrameIndex = IsClip ? -1 : frame;
+        }
+
+        public FrameBoxDef Clone(string clipName = null, int? frameIndex = null)
+        {
+            return new FrameBoxDef
+            {
+                ClipName = clipName ?? ClipName,
+                FrameIndex = frameIndex ?? FrameIndex,
+                RectUV = RectUV,
+                Id = Id,
+                Shape = Shape,
+                PolygonUV = PolygonUV == null ? null : (Vector2[])PolygonUV.Clone(),
+                Angle = Angle,
+                Hidden = Hidden,
+                Locked = Locked,
+                Lifetime = Lifetime,
+                Physics = Physics,
+                IsTrigger = IsTrigger,
+            };
+        }
 
         public void EnsurePolygon(int vertexCount = 6)
         {

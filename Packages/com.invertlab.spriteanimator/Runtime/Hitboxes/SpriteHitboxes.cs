@@ -21,6 +21,8 @@ namespace InvertLab.Sprites.DOTS
     public struct SpriteHitboxSetBlob
     {
         public BlobArray<SpriteHitboxClip> Clips;
+        /// <summary>Character-lifetime query boxes, live on every clip.</summary>
+        public BlobArray<SpriteHitboxEntry> Shared;
     }
 
     public struct SpriteHitboxClip
@@ -79,7 +81,7 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>Build the blob. Groups inputs by clip name (order of first appearance).</summary>
         public static BlobAssetReference<SpriteHitboxSetBlob> Build(
-            Allocator allocator, BoxInput[] boxes)
+            Allocator allocator, BoxInput[] boxes, BoxInput[] shared = null)
         {
             var builder = new BlobBuilder(Allocator.Temp);
             ref var root = ref builder.ConstructRoot<SpriteHitboxSetBlob>();
@@ -109,26 +111,34 @@ namespace InvertLab.Sprites.DOTS
                 clip.ClipHash = Fnv(nameOrder[c]);
                 var dst = builder.Allocate(ref clip.Boxes, list.Count);
                 for (int b = 0; b < list.Count; b++)
-                {
-                    dst[b] = new SpriteHitboxEntry
-                    {
-                        FrameIndex = list[b].FrameIndex,
-                        Box = new FrameBox
-                        {
-                            Center  = list[b].Center,
-                            Extents = list[b].Extents,
-                            Angle   = list[b].Angle,
-                            Id      = list[b].Id,
-                            Shape   = list[b].Shape,
-                            Polygon = list[b].Polygon,
-                        }
-                    };
-                }
+                    dst[b] = ToEntry(list[b]);
             }
+
+            int sharedCount = shared?.Length ?? 0;
+            var sharedDst = builder.Allocate(ref root.Shared, sharedCount);
+            for (int s = 0; s < sharedCount; s++)
+                sharedDst[s] = ToEntry(shared[s]);
 
             var result = builder.CreateBlobAssetReference<SpriteHitboxSetBlob>(allocator);
             builder.Dispose();
             return result;
+        }
+
+        static SpriteHitboxEntry ToEntry(in BoxInput input)
+        {
+            return new SpriteHitboxEntry
+            {
+                FrameIndex = input.FrameIndex,
+                Box = new FrameBox
+                {
+                    Center  = input.Center,
+                    Extents = input.Extents,
+                    Angle   = input.Angle,
+                    Id      = input.Id,
+                    Shape   = input.Shape,
+                    Polygon = input.Polygon,
+                }
+            };
         }
 
         /// <summary>Build straight from an authored SpriteSheetProfile asset.</summary>
@@ -138,32 +148,43 @@ namespace InvertLab.Sprites.DOTS
             if (profile?.Hitboxes == null || profile.Hitboxes.Count == 0)
                 return Build(allocator, null);
 
-            var inputs = new BoxInput[profile.Hitboxes.Count];
-            for (int i = 0; i < inputs.Length; i++)
+            var frameInputs = new List<BoxInput>(profile.Hitboxes.Count);
+            var sharedInputs = new List<BoxInput>(4);
+            for (int i = 0; i < profile.Hitboxes.Count; i++)
             {
                 var hb = profile.Hitboxes[i];
-                var input = Rect(
-                    string.IsNullOrEmpty(hb.ClipName) ? "clip" : hb.ClipName,
-                    hb.FrameIndex, hb.RectUV, hb.Id);
-                input.Shape = hb.Shape;
-                // Authoring Angle is y-down; runtime UV is y-up, so the OBB sign flips.
-                input.Angle = -hb.Angle;
-                if (hb.Shape == SpriteColliderShape.Polygon)
-                {
-                    Vector2[] polygon = hb.PolygonUV != null && hb.PolygonUV.Length >= 3
-                        ? hb.PolygonUV
-                        : FrameBoxDef.CreateRegularPolygon();
-                    for (int point = 0; point < polygon.Length && point < 12; point++)
-                    {
-                        Vector2 local = polygon[point];
-                        input.Polygon.Add(new float2(
-                            hb.RectUV.x + local.x * hb.RectUV.width,
-                            1f - (hb.RectUV.y + local.y * hb.RectUV.height)));
-                    }
-                }
-                inputs[i] = input;
+                if (hb == null || !hb.UsesQuery)
+                    continue;
+                var input = ToInput(hb);
+                if (hb.IsCharacter)
+                    sharedInputs.Add(input);
+                else
+                    frameInputs.Add(input);
             }
-            return Build(allocator, inputs);
+            return Build(allocator, frameInputs.ToArray(), sharedInputs.ToArray());
+        }
+
+        static BoxInput ToInput(FrameBoxDef hb)
+        {
+            var input = Rect(
+                string.IsNullOrEmpty(hb.ClipName) ? "clip" : hb.ClipName,
+                hb.FrameIndex, hb.RectUV, hb.Id);
+            input.Shape = hb.Shape;
+            input.Angle = -hb.Angle;
+            if (hb.Shape == SpriteColliderShape.Polygon)
+            {
+                Vector2[] polygon = hb.PolygonUV != null && hb.PolygonUV.Length >= 3
+                    ? hb.PolygonUV
+                    : FrameBoxDef.CreateRegularPolygon();
+                for (int point = 0; point < polygon.Length && point < 12; point++)
+                {
+                    Vector2 local = polygon[point];
+                    input.Polygon.Add(new float2(
+                        hb.RectUV.x + local.x * hb.RectUV.width,
+                        1f - (hb.RectUV.y + local.y * hb.RectUV.height)));
+                }
+            }
+            return input;
         }
 
         /// <summary>

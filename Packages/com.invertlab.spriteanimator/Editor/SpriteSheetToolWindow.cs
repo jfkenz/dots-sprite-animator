@@ -148,6 +148,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float SocketMinAbsScale = 0.05f;
         const float SocketMaxAbsScale = 32f;
         const float SocketHandleHit = 14f;
+        const float SocketDragThreshold = 3f;
         const float SocketGroupPivotHit = 16f;
         const float SocketGroupGizmoPad = 28f;
         const float SocketGroupGizmoMinHalf = 36f;
@@ -297,6 +298,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _playing = false;
         bool _previewLoop = true;
         bool _showHitboxes = true;
+        byte _newColliderLifetime;
+        byte _newColliderPhysics;
+        bool _newColliderIsTrigger = true;
+        static readonly string[] ColliderLifetimeLabels = { "This Frame", "This Clip", "Character" };
+        static readonly string[] ColliderPhysicsLabels = { "Query AABB", "Unity 2D", "Both" };
         float _speed = 1f;
         [SerializeField] float _previewZoom = 1f;
         [SerializeField] Vector2 _previewPan = Vector2.zero;
@@ -314,12 +320,14 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         Vector2 _clipScroll;
         Vector2 _inspectorScroll;
+        float _inspectorMeasuredHeight;
         Vector2 _timelineScroll;
         Vector2 _socketTimelineScroll;
         [SerializeField] float _frameTimelineZoom = 1f;
         [SerializeField] float _independentTimelineZoom = 1f;
         [SerializeField] bool _showIndependentMotionPaths = true;
         [SerializeField] bool _showPreviewDebug = true;
+        [SerializeField] bool _showPreviewSize = true;
         [SerializeField] IndependentKeyStepMode _independentKeyStepMode;
         [SerializeField] float _independentKeyStepSeconds = 0.1f;
         [SerializeField] float _independentKeyStepFps = 12f;
@@ -396,6 +404,14 @@ namespace InvertLab.Sprites.DOTS.Editor
         SelectionOp _previewMarqueeOp = SelectionOp.Replace;
         int _previewMarqueeHotControl;
         int _colliderListAnchor = -1;
+        [SerializeField] bool _colliderFrameExpanded = true;
+        [SerializeField] bool _colliderOnThisFrameExpanded = true;
+        [SerializeField] bool _colliderOtherFramesExpanded = true;
+        [SerializeField] bool _colliderClipExpanded = true;
+        [SerializeField] bool _colliderCharacterExpanded = true;
+        [SerializeField] bool _colliderOtherClipsExpanded = true;
+        [SerializeField] bool _colliderRowDetailsExpanded = true;
+        FrameBoxDef _colliderDetailsBox;
         Vector2 _colliderMarqueeStart;
         Rect _colliderMarqueeRect;
         readonly HashSet<FrameBoxDef> _previewMarqueeColliderBaseline = new();
@@ -2017,6 +2033,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             var activeSpriteRect = new Rect(cell.position + activeScreenOffset, cell.size);
             DrawSocketCatalogPreviews(cell, clip, state.Frame, behind: true);
             DrawClipFrame(clip, state.Frame, activeSpriteRect, 1f);
+            if (_showPreviewSize)
+                DrawPreviewSpriteSizeBox(clip, activeSpriteRect);
 
             if (_showHitboxes)
             {
@@ -2027,8 +2045,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                         continue;
                     Color color = selected
                         ? new Color(0.18f, 0.72f, 1f, box.Hidden ? 0.16f : 0.42f)
-                        : new Color(1f, 0.27f, 0.25f, 0.34f);
+                        : box.IsCharacter
+                            ? new Color(0.25f, 0.85f, 0.78f, 0.34f)
+                            : box.IsClip
+                                ? new Color(0.95f, 0.72f, 0.22f, 0.34f)
+                                : new Color(1f, 0.27f, 0.25f, 0.34f);
                     DrawColliderUV(box, cell, color, selected);
+                    if (box.Locked)
+                        DrawColliderLockBadge(box, cell);
                     if (selected)
                         DrawColliderSelectionBadge(box, cell);
                 }
@@ -2149,9 +2173,16 @@ namespace InvertLab.Sprites.DOTS.Editor
         static Rect PreviewDebugToggleRect(Rect canvas)
             => new(canvas.xMax - 88f, canvas.yMax - 30f, 80f, 22f);
 
+        static Rect PreviewSizeToggleRect(Rect canvas)
+            => new(canvas.xMax - 176f, canvas.yMax - 30f, 80f, 22f);
+
+        static bool PreviewOverlayToggleContains(Rect canvas, Vector2 mouse)
+            => PreviewDebugToggleRect(canvas).Contains(mouse) ||
+               PreviewSizeToggleRect(canvas).Contains(mouse);
+
         static bool PreviewDebugToggleBlocksEditorInput(Rect canvas)
         {
-            if (!PreviewDebugToggleRect(canvas).Contains(Event.current.mousePosition))
+            if (!PreviewOverlayToggleContains(canvas, Event.current.mousePosition))
                 return false;
             return Event.current.type is EventType.MouseDown or EventType.MouseUp
                 or EventType.MouseDrag or EventType.MouseMove or EventType.ContextClick
@@ -2162,7 +2193,23 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (debugBlocksPreview)
                 Event.current.type = previewEvent;
+            DrawPreviewSizeToggle(canvas);
             DrawPreviewDebugToggle(canvas);
+        }
+
+        void DrawPreviewSizeToggle(Rect canvas)
+        {
+            if (!GUI.Button(PreviewSizeToggleRect(canvas),
+                    new GUIContent(_showPreviewSize ? "Size: On" : "Size: Off",
+                        "Show the sprite cell box in preview: pixel size and world size (cell / PPU). Independent of Debug."),
+                    EditorStyles.miniButton))
+                return;
+            RecordWindowUndo("Toggle Preview Size Box");
+            _showPreviewSize = !_showPreviewSize;
+            _status = _showPreviewSize
+                ? "Sprite size box visible"
+                : "Sprite size box hidden";
+            Repaint();
         }
 
         void DrawPreviewDebugToggle(Rect canvas)
@@ -2178,6 +2225,45 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ? "Preview debug overlays visible"
                 : "Preview debug overlays hidden";
             Repaint();
+        }
+
+        void DrawPreviewSpriteSizeBox(SpriteClipDef clip, Rect spriteRect)
+        {
+            var sheet = _profile.SheetForClip(clip);
+            if (!SpriteSheetProfile.TryGetCellPixels(sheet, out float cellW, out float cellH))
+                return;
+            float ppu = SpriteSheetProfile.GetPixelsPerUnit(sheet);
+            float worldW = cellW / ppu;
+            float worldH = cellH / ppu;
+            Color box = new(0.28f, 0.92f, 0.82f, 0.95f);
+            DrawBorder(spriteRect, box, 1.5f);
+            DrawPreviewSizeCorners(spriteRect, 11f, box);
+
+            Vector2 pivot = new(
+                spriteRect.x + Mathf.Clamp01(_profile.Pivot.x) * spriteRect.width,
+                spriteRect.y + (1f - Mathf.Clamp01(_profile.Pivot.y)) * spriteRect.height);
+            EditorGUI.DrawRect(new Rect(pivot.x - 6f, pivot.y - 0.5f, 12f, 1f), box);
+            EditorGUI.DrawRect(new Rect(pivot.x - 0.5f, pivot.y - 6f, 1f, 12f), box);
+
+            string text = $"{cellW:0.#} × {cellH:0.#} px   •   {worldW:0.###} × {worldH:0.###} u";
+            var label = new Rect(spriteRect.x, spriteRect.y - 18f, 230f, 16f);
+            if (label.y < 2f)
+                label.y = spriteRect.yMax + 2f;
+            EditorGUI.DrawRect(label, new Color(0.05f, 0.07f, 0.09f, 0.72f));
+            GUI.Label(label, text, _mutedStyle);
+        }
+
+        static void DrawPreviewSizeCorners(Rect rect, float arm, Color color)
+        {
+            arm = Mathf.Min(arm, rect.width * 0.25f, rect.height * 0.25f);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, arm, 2f), color);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 2f, arm), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - arm, rect.y, arm, 2f), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - 2f, rect.y, 2f, arm), color);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 2f, arm, 2f), color);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - arm, 2f, arm), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - arm, rect.yMax - 2f, arm, 2f), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - 2f, rect.yMax - arm, 2f, arm), color);
         }
 
         void HandlePreviewNavigationInput(Rect canvas)
@@ -2238,14 +2324,27 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawSelectedSocketBar(bar);
             }
             var area = new Rect(rect.x + 9f, rect.y + top, rect.width - 18f, rect.height - top - 10f);
-            int colliderRows = CurrentClip == null ? 0 : CurrentFrameColliders(CurrentClip, _selectedFrame).Count;
+            int colliderRows = _profile?.Hitboxes != null ? _profile.Hitboxes.Count : 0;
             int socketRows = 0;
             if (CurrentClip?.Sockets != null)
                 socketRows = CachedUniqueSocketNames(CurrentClip).Count;
             float socketExtra = 72f + socketRows * 48f + 340f +
                 (_selectedSockets.Count == 1 ? 520f : 0f);
+            float colliderGroupExtra = CurrentClip == null ? 0f : 90f +
+                (_colliderFrameExpanded ? 42f : 0f) +
+                (_colliderOnThisFrameExpanded ? 28f : 0f) +
+                (_colliderOtherFramesExpanded ? 28f : 0f) +
+                (_colliderClipExpanded ? 42f : 0f) +
+                (_colliderCharacterExpanded ? 42f : 0f) +
+                (_colliderOtherClipsExpanded ? 42f : 0f);
+            float colliderDetailsExtra = _colliderRowDetailsExpanded &&
+                _selectedColliders.Count == 1
+                ? 340f
+                : 0f;
+            float estimatedHeight = 1640f + colliderRows * 28f +
+                colliderGroupExtra + colliderDetailsExtra + socketExtra;
             var inspectorContent = new Rect(0f, 0f, area.width - 15f,
-                Mathf.Max(area.height, 1640f + colliderRows * 26f + socketExtra));
+                Mathf.Max(area.height, estimatedHeight, _inspectorMeasuredHeight));
             _inspectorScroll = GUI.BeginScrollView(area, _inspectorScroll, inspectorContent);
             GUILayout.BeginArea(inspectorContent);
             EditorGUI.BeginChangeCheck();
@@ -2603,6 +2702,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                         "Continuous Placement", _continuousColliderPlacement);
                     _newHitboxId = Mathf.Clamp(EditorGUILayout.IntField(
                         "New Collider ID", _newHitboxId), 1, 255);
+                    _newColliderLifetime = ColliderLifetimeFromPopup(EditorGUILayout.Popup(
+                        new GUIContent("Lives On",
+                            "This Frame = slash on this cell. This Clip = whole time that clip plays (crouch vs stand hurt). Character = body on every clip."),
+                        ColliderLifetimeToPopup(_newColliderLifetime), ColliderLifetimeLabels));
+                    _newColliderPhysics = (byte)EditorGUILayout.Popup(
+                        new GUIContent("Physics",
+                            "Query AABB = custom live boxes. Unity 2D = BoxCollider2D / CircleCollider2D on the authoring object. Both = both."),
+                        _newColliderPhysics, ColliderPhysicsLabels);
+                    _newColliderIsTrigger = EditorGUILayout.Toggle(
+                        new GUIContent("Unity Trigger",
+                            "Only Unity 2D colliders. Query AABB ignores this."),
+                        _newColliderIsTrigger);
 
                     using (new EditorGUI.DisabledScope(_colliderCreationMode == ColliderCreationMode.None))
                     {
@@ -2631,6 +2742,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 WriteActiveSheetFromLegacy();
                 RematchSheetsWorldSize(_selectedSheet);
                 SaveDirty();
+            }
+            if (Event.current.type == EventType.Repaint)
+            {
+                float measuredHeight = Mathf.Max(area.height,
+                    GUILayoutUtility.GetLastRect().yMax + 28f);
+                if (Mathf.Abs(measuredHeight - _inspectorMeasuredHeight) > 1f)
+                {
+                    _inspectorMeasuredHeight = measuredHeight;
+                    Repaint();
+                }
             }
             GUILayout.EndArea();
             GUI.EndScrollView();
@@ -5848,7 +5969,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Id = (byte)_newHitboxId,
                     Shape = ColliderShapeOf(_colliderCreationMode),
                     RectUV = ScreenToUv(_liveBox, cell),
+                    Lifetime = _newColliderLifetime,
+                    Physics = _newColliderPhysics,
+                    IsTrigger = _newColliderIsTrigger,
                 };
+                definition.BindLifetime(clip.Name, frame);
                 AddCreatedCollider(definition, frame);
 
                 GUIUtility.hotControl = 0;
@@ -6018,7 +6143,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Shape = SpriteColliderShape.Polygon,
                 RectUV = new Rect(min, size),
                 PolygonUV = localPoints,
+                Lifetime = _newColliderLifetime,
+                Physics = _newColliderPhysics,
+                IsTrigger = _newColliderIsTrigger,
             };
+            definition.BindLifetime(clip.Name, frame);
             AddCreatedCollider(definition, frame);
             ClearPolygonDraft();
             if (!_continuousColliderPlacement)
@@ -6031,8 +6160,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             _profile.Hitboxes.Add(definition);
             _selectedColliders.Clear();
             _selectedColliders.Add(definition);
+            OpenColliderRowDetails(definition);
             _selectedEventFrame = -1;
-            _status = $"Created {definition.Shape} collider on frame {frame + 1}";
+            _status = definition.IsCharacter
+                ? $"Created {definition.Shape} Character collider"
+                : definition.IsClip
+                    ? $"Created {definition.Shape} This Clip collider"
+                    : $"Created {definition.Shape} collider on frame {frame + 1}";
             SaveDirty();
         }
 
@@ -6190,6 +6324,31 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             int selectedCount = _selectedColliders.Count;
             var menu = new GenericMenu();
+            AddColliderLifetimeMenuItem(menu, "Lives On/Current Frame",
+                (byte)SpriteColliderLifetime.Frame, clip, frame);
+            AddColliderLifetimeMenuItem(menu, "Lives On/This Clip",
+                (byte)SpriteColliderLifetime.Clip, clip, frame);
+            AddColliderLifetimeMenuItem(menu, "Lives On/Character — All Clips",
+                (byte)SpriteColliderLifetime.Character, clip, frame);
+            menu.AddSeparator("Lives On/");
+            AddColliderPhysicsMenuItem(menu, "Physics/Query AABB",
+                (byte)SpriteColliderPhysics.Query);
+            AddColliderPhysicsMenuItem(menu, "Physics/Unity 2D",
+                (byte)SpriteColliderPhysics.Unity2D);
+            AddColliderPhysicsMenuItem(menu, "Physics/Both",
+                (byte)SpriteColliderPhysics.Both);
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Visibility/Show Selected"),
+                SelectedCollidersMatch(box => !box.Hidden),
+                () => SetSelectedColliderVisibility(false));
+            menu.AddItem(new GUIContent("Visibility/Hide Selected"),
+                SelectedCollidersMatch(box => box.Hidden),
+                () => SetSelectedColliderVisibility(true));
+            menu.AddItem(new GUIContent(selectedCount > 1
+                    ? $"Lock Selected ({selectedCount})"
+                    : "Lock Collider"),
+                false, LockSelectedColliders);
+            menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent(selectedCount > 1
                     ? $"Delete Selected Colliders ({selectedCount})"
                     : $"Delete {clicked.Shape} Collider"),
@@ -6202,12 +6361,132 @@ namespace InvertLab.Sprites.DOTS.Editor
             menu.ShowAsContext();
         }
 
+        void AddColliderLifetimeMenuItem(GenericMenu menu, string path, byte lifetime,
+            SpriteClipDef clip, int frame)
+        {
+            menu.AddItem(new GUIContent(path),
+                SelectedCollidersMatch(box => box.Lifetime == lifetime),
+                () => SetSelectedColliderLifetime(lifetime, clip, frame));
+        }
+
+        void AddColliderPhysicsMenuItem(GenericMenu menu, string path, byte physics)
+        {
+            menu.AddItem(new GUIContent(path),
+                SelectedCollidersMatch(box => box.Physics == physics),
+                () => SetSelectedColliderPhysics(physics));
+        }
+
+        bool SelectedCollidersMatch(Predicate<FrameBoxDef> predicate)
+        {
+            if (_selectedColliders.Count == 0)
+                return false;
+            foreach (var box in _selectedColliders)
+            {
+                if (box == null || !predicate(box))
+                    return false;
+            }
+            return true;
+        }
+
+        void SetSelectedColliderLifetime(byte lifetime, SpriteClipDef clip, int frame)
+        {
+            if (clip == null || _selectedColliders.Count == 0)
+                return;
+            RecordProfileUndo("Set Selected Collider Lifetime");
+            int changed = 0;
+            foreach (var box in _selectedColliders)
+            {
+                if (box == null || box.Locked)
+                    continue;
+                box.Lifetime = lifetime;
+                box.BindLifetime(clip.Name, frame);
+                changed++;
+            }
+            SaveDirty();
+            SealUndoGroup();
+            _status = $"Set {changed} collider{Plural(changed)} to {ColliderLifetimeDisplayName(lifetime)}";
+            if (_selectedColliders.Count == 1)
+            {
+                foreach (var box in _selectedColliders)
+                {
+                    OpenColliderRowDetails(box);
+                    break;
+                }
+            }
+            Repaint();
+        }
+
+        void SetSelectedColliderPhysics(byte physics)
+        {
+            if (_selectedColliders.Count == 0)
+                return;
+            RecordProfileUndo("Set Selected Collider Physics");
+            int changed = 0;
+            foreach (var box in _selectedColliders)
+            {
+                if (box == null || box.Locked)
+                    continue;
+                box.Physics = physics;
+                changed++;
+            }
+            SaveDirty();
+            SealUndoGroup();
+            _status = $"Changed physics on {changed} collider{Plural(changed)}";
+            Repaint();
+        }
+
+        void SetSelectedColliderVisibility(bool hidden)
+        {
+            if (_selectedColliders.Count == 0)
+                return;
+            RecordProfileUndo(hidden ? "Hide Selected Colliders" : "Show Selected Colliders");
+            foreach (var box in _selectedColliders)
+            {
+                if (box != null)
+                    box.Hidden = hidden;
+            }
+            SaveDirty();
+            SealUndoGroup();
+            _status = hidden ? "Hid selected colliders" : "Showed selected colliders";
+            Repaint();
+        }
+
+        void LockSelectedColliders()
+        {
+            if (_selectedColliders.Count == 0)
+                return;
+            RecordProfileUndo("Lock Selected Colliders");
+            int count = 0;
+            foreach (var box in _selectedColliders)
+            {
+                if (box == null)
+                    continue;
+                box.Locked = true;
+                count++;
+            }
+            _selectedColliders.Clear();
+            ClearColliderTransform();
+            SaveDirty();
+            SealUndoGroup();
+            _status = $"Locked {count} collider{Plural(count)}";
+            Repaint();
+        }
+
+        static string ColliderLifetimeDisplayName(byte lifetime)
+        {
+            if (lifetime == (byte)SpriteColliderLifetime.Clip)
+                return "This Clip";
+            if (lifetime == (byte)SpriteColliderLifetime.Character)
+                return "Character — All Clips";
+            return "Current Frame";
+        }
+
         FrameBoxDef FindColliderAt(SpriteClipDef clip, int frame, Rect cell, Vector2 point)
         {
             FrameBoxDef found = null;
             foreach (var box in BoxesFor(clip, frame))
             {
-                if (box.Hidden)
+                if (box.Hidden || box.Locked)
                     continue;
                 if (ColliderContains(box, cell, point))
                     found = box;
@@ -6217,7 +6496,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void SelectCollider(FrameBoxDef box, SelectionOp op)
         {
-            if (box == null)
+            if (box == null || box.Locked)
                 return;
             switch (op)
             {
@@ -6242,6 +6521,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _selectedColliders.Add(box);
                     break;
             }
+            if (_selectedColliders.Count == 1)
+            {
+                foreach (var selected in _selectedColliders)
+                {
+                    OpenColliderRowDetails(selected);
+                    break;
+                }
+            }
             _status = PreviewSelectionStatus();
         }
 
@@ -6258,7 +6545,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (op == SelectionOp.Range)
                     ClearColliderSelection();
                 for (int i = a; i <= b; i++)
-                    _selectedColliders.Add(colliders[i]);
+                {
+                    if (!colliders[i].Locked)
+                        _selectedColliders.Add(colliders[i]);
+                }
                 if (_colliderListAnchor < 0)
                     _colliderListAnchor = index;
                 _status = PreviewSelectionStatus();
@@ -6307,7 +6597,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 foreach (var box in BoxesFor(clip, frame))
                 {
-                    if (box.Hidden)
+                    if (box.Hidden || box.Locked)
                         continue;
                     if (marquee.Overlaps(ColliderWorldAabb(box, cell), true))
                         _selectionScratchColliders.Add(box);
@@ -8338,16 +8628,23 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (_profile != null && _profile.FindSocketInventory(selected[s]) != null)
                     canUngroup = true;
             }
+            bool independentGroup = SelectedSocketsUseIndependentGroup(selected, name);
+            string groupLabel = independentGroup
+                ? "Group Independent Sockets"
+                : "Group Frame Sockets";
+            string ungroupLabel = independentGroup
+                ? "Ungroup Independent Sockets"
+                : "Ungroup Frame Sockets";
             if (canGroup)
-                menu.AddItem(new GUIContent("Group as Inventory"), false,
+                menu.AddItem(new GUIContent(groupLabel), false,
                     GroupSelectedSocketInventory);
             else
-                menu.AddDisabledItem(new GUIContent("Group as Inventory"));
+                menu.AddDisabledItem(new GUIContent(groupLabel));
             if (canUngroup)
-                menu.AddItem(new GUIContent("Ungroup Inventory"), false,
+                menu.AddItem(new GUIContent(ungroupLabel), false,
                     UngroupSelectedSocketInventory);
             else
-                menu.AddDisabledItem(new GUIContent("Ungroup Inventory"));
+                menu.AddDisabledItem(new GUIContent(ungroupLabel));
             menu.AddItem(new GUIContent(count > 1 ? $"Delete {count} Sockets" : "Delete"),
                 false, () =>
                 {
@@ -8922,8 +9219,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             string nextName = EditorGUI.DelayedTextField(nameRect, inventory.Name);
             if (!string.Equals(nextName, inventory.Name, StringComparison.Ordinal))
             {
-                RecordProfileUndo("Rename Socket Inventory");
-                inventory.Name = string.IsNullOrWhiteSpace(nextName) ? UniqueInventoryName() : nextName.Trim();
+                RecordProfileUndo("Rename Socket Group");
+                inventory.Name = string.IsNullOrWhiteSpace(nextName)
+                    ? UniqueSocketGroupName(independentView)
+                    : nextName.Trim();
                 SaveDirty();
             }
             GUI.Label(new Rect(nameRect.xMax + 6f, header.y + 6f, 80f, 16f),
@@ -8934,13 +9233,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 var spaceLabel = new Rect(header.xMax - 168f, header.y + 5f, 38f, 18f);
                 var spaceRect = new Rect(spaceLabel.xMax, header.y + 4f, 120f, 20f);
                 GUI.Label(spaceLabel, new GUIContent("Space",
-                    "Shared by every Independent Motion socket in this inventory."),
+                    "Shared by every Independent Motion socket in this group."),
                     EditorStyles.miniLabel);
                 int anchorSpace = Mathf.Clamp(inventory.AnchorSpace, 0, SocketAnchorSpaceLabels.Length - 1);
                 int nextAnchor = EditorGUI.Popup(spaceRect, anchorSpace, SocketAnchorSpaceLabels);
                 if (nextAnchor != anchorSpace)
                 {
-                    RecordProfileUndo("Set Inventory Space");
+                    RecordProfileUndo("Set Socket Group Space");
                     _profile.SetInventorySpace(inventory, (byte)nextAnchor);
                     SaveDirty();
                     SealUndoGroup();
@@ -9106,12 +9405,29 @@ namespace InvertLab.Sprites.DOTS.Editor
             return row;
         }
 
-        string UniqueInventoryName()
+        bool SelectedSocketsUseIndependentGroup(IEnumerable<string> selected, string fallbackName)
+        {
+            if (_timelineView == TimelineView.Sockets)
+                return true;
+            if (!string.IsNullOrEmpty(fallbackName) && IsIndependentSocketName(fallbackName))
+                return true;
+            if (selected == null)
+                return false;
+            foreach (string name in selected)
+            {
+                if (IsIndependentSocketName(name))
+                    return true;
+            }
+            return false;
+        }
+
+        string UniqueSocketGroupName(bool independent)
         {
             _profile.EnsureSocketInventories();
+            string stem = independent ? "Independent Group" : "Frame Group";
             for (int n = 1; n < 99; n++)
             {
-                string candidate = n == 1 ? "Inventory" : $"Inventory {n}";
+                string candidate = n == 1 ? stem : $"{stem} {n}";
                 bool used = false;
                 for (int i = 0; i < _profile.SocketInventories.Count; i++)
                 {
@@ -9122,17 +9438,21 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (!used)
                     return candidate;
             }
-            return "Inventory";
+            return stem;
         }
 
         void GroupSelectedSocketInventory()
         {
             if (_selectedSockets.Count < 2)
             {
-                _status = "Select 2+ sockets to make an Inventory";
+                _status = "Select 2+ sockets to group";
                 return;
             }
-            RecordProfileUndo("Group Socket Inventory");
+            bool independent = SelectedSocketsUseIndependentGroup(
+                _selectedSockets, _selectedSocketName);
+            RecordProfileUndo(independent
+                ? "Group Independent Sockets"
+                : "Group Frame Sockets");
             _profile.EnsureSocketInventories();
             var names = new List<string>(_selectedSockets);
             byte space = 0;
@@ -9143,7 +9463,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _profile.RemoveSocketFromInventories(names[i]);
             var inventory = new SpriteSocketInventory
             {
-                Name = UniqueInventoryName(),
+                Name = UniqueSocketGroupName(independent),
                 Folded = false,
                 AnchorSpace = space,
                 SocketNames = new List<string>(names),
@@ -9153,7 +9473,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             _profile.EnsureSocketInventories();
             SaveDirty();
             SealUndoGroup();
-            _status = $"{inventory.Name}  •  {inventory.SocketNames.Count} sockets";
+            _status = independent
+                ? $"{inventory.Name}  •  {inventory.SocketNames.Count} Independent sockets"
+                : $"{inventory.Name}  •  {inventory.SocketNames.Count} Frame sockets";
             Repaint();
         }
 
@@ -9161,10 +9483,14 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (_selectedSockets.Count == 0)
             {
-                _status = "Select an Inventory to ungroup";
+                _status = "Select a socket group to ungroup";
                 return;
             }
-            RecordProfileUndo("Ungroup Socket Inventory");
+            bool independent = SelectedSocketsUseIndependentGroup(
+                _selectedSockets, _selectedSocketName);
+            RecordProfileUndo(independent
+                ? "Ungroup Independent Sockets"
+                : "Ungroup Frame Sockets");
             var names = new List<string>(_selectedSockets);
             int removed = 0;
             for (int i = 0; i < names.Count; i++)
@@ -11743,19 +12069,19 @@ namespace InvertLab.Sprites.DOTS.Editor
                     continue;
                 if (!TryResolveSocketPreview(item, clip, frame,
                         out var texture, out int columns, out int rows, out int cellIndex,
-                        out _, out _, out _))
+                        out _, out _, out int playFrame))
                     continue;
                 if (!TryGetPreviewSocketPose(clip, names[i], frame,
                         out var position, out var angle, out var scale, out _))
                     continue;
                 DrawSocketCatalogItem(cell, item, texture, columns, rows, cellIndex,
-                    position, angle, scale, 1f);
+                    position, angle, scale, 1f, playFrame);
             }
         }
 
         void DrawSocketCatalogItem(Rect cell, SpriteSocketCatalogItem item, Texture2D texture,
             int columns, int rows, int cellIndex, Vector2 localPixels, float angleDegrees,
-            Vector2 poseScale, float alpha)
+            Vector2 poseScale, float alpha, int playFrame = 0)
         {
             if (!TryBuildSocketPreviewScreen(cell, item, texture, columns, rows, localPixels,
                     angleDegrees, poseScale, out var attachScreen, out var spriteRect,
@@ -11768,7 +12094,30 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUIUtility.ScaleAroundPivot(new Vector2(signX, signY), attachScreen);
             DrawCellTinted(texture, cellIndex, spriteRect, new Color(1f, 1f, 1f, alpha),
                 columns, rows);
+            if (_showHitboxes || _showPreviewDebug)
+                DrawSocketProfileColliders(item, spriteRect, playFrame);
             GUI.matrix = previous;
+        }
+
+        void DrawSocketProfileColliders(SpriteSocketCatalogItem item, Rect spriteRect, int playFrame)
+        {
+            var data = item?.Profile?.Data;
+            if (data?.Hitboxes == null || data.Hitboxes.Count == 0)
+                return;
+            string clipName = item.ClipName;
+            if (string.IsNullOrEmpty(clipName) && data.Clips != null && data.Clips.Count > 0)
+                clipName = data.Clips[0].Name;
+            var color = new Color(1f, 0.72f, 0.22f, 0.4f);
+            foreach (var box in SpriteColliderWorld.VisibleOn(data.Hitboxes, clipName, playFrame))
+            {
+                if (box.Hidden)
+                    continue;
+                DrawColliderUV(box, spriteRect, box.IsCharacter
+                    ? new Color(0.35f, 0.95f, 0.7f, 0.38f)
+                    : box.IsClip
+                        ? new Color(0.95f, 0.72f, 0.22f, 0.4f)
+                        : color);
+            }
         }
 
         bool TryBuildSocketPreviewScreen(Rect cell, SpriteSocketCatalogItem item, Texture2D texture,
@@ -12080,11 +12429,14 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.type == EventType.MouseDrag && ownsDrag)
             {
-                if (_socketHandleKind == ColliderHandleKind.None ||
-                    _socketHandleKind == ColliderHandleKind.Body)
-                    ApplySocketBodyMove(clip, frame, evt.mousePosition, cell);
-                else
-                    ApplySocketTransform(clip, frame, evt.mousePosition, evt.shift);
+                if (SocketDragPassedThreshold(evt.mousePosition))
+                {
+                    if (_socketHandleKind == ColliderHandleKind.None ||
+                        _socketHandleKind == ColliderHandleKind.Body)
+                        ApplySocketBodyMove(clip, frame, evt.mousePosition, cell);
+                    else
+                        ApplySocketTransform(clip, frame, evt.mousePosition, evt.shift);
+                }
                 evt.Use();
                 Repaint();
                 return true;
@@ -12092,11 +12444,14 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.type == EventType.MouseUp && evt.button == 0 && ownsDrag)
             {
-                if (_socketHandleKind == ColliderHandleKind.None ||
-                    _socketHandleKind == ColliderHandleKind.Body)
-                    ApplySocketBodyMove(clip, frame, evt.mousePosition, cell);
-                else
-                    ApplySocketTransform(clip, frame, evt.mousePosition, evt.shift);
+                if (SocketDragPassedThreshold(evt.mousePosition))
+                {
+                    if (_socketHandleKind == ColliderHandleKind.None ||
+                        _socketHandleKind == ColliderHandleKind.Body)
+                        ApplySocketBodyMove(clip, frame, evt.mousePosition, cell);
+                    else
+                        ApplySocketTransform(clip, frame, evt.mousePosition, evt.shift);
+                }
                 EndSocketDrag(controlId, save: true);
                 evt.Use();
                 Repaint();
@@ -12169,11 +12524,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void ApplySocketBodyMove(SpriteClipDef clip, int frame, Vector2 mouse, Rect cell)
         {
-            Vector2 sourceDelta = _socketMoveWholePath
-                ? ScreenToSocketLocal(mouse, cell) - _socketGroupCentroidStart
-                : ScreenToSourcePixelDelta(mouse - _socketDragStart, cell);
+            Vector2 sourceDelta = ScreenToSourcePixelDelta(mouse - _socketDragStart, cell);
             if (_socketMoveWholePath)
-                _socketGroupCentroidCurrent = ScreenToSocketLocal(mouse, cell);
+                _socketGroupCentroidCurrent = _socketGroupCentroidStart + sourceDelta;
             if (sourceDelta.sqrMagnitude <= 0.0001f && !_socketMoveUndoRecorded)
                 return;
             if (!_socketMoveUndoRecorded)
@@ -12192,6 +12545,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                     : new Vector2(Mathf.Round(next.x), Mathf.Round(next.y));
             }
             ApplySocketMotionKeyBodyMove(clip, sourceDelta);
+        }
+
+        bool SocketDragPassedThreshold(Vector2 mouse)
+        {
+            return _socketMoveUndoRecorded ||
+                   (mouse - _socketDragStart).sqrMagnitude >= SocketDragThreshold * SocketDragThreshold;
         }
 
         void ApplySocketMotionKeyBodyMove(SpriteClipDef clip, Vector2 sourceDelta)
@@ -12339,8 +12698,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _socketGroupCentroidStart = hasLiveCentroid
                     ? liveCentroid
                     : ScreenToSocketLocal(mouse, cell);
-                _socketGroupCentroidCurrent = ScreenToSocketLocal(mouse, cell);
-                ApplySocketBodyMove(clip, frame, mouse, cell);
+                _socketGroupCentroidCurrent = _socketGroupCentroidStart;
             }
         }
 
@@ -13052,21 +13410,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int i = 0; i < _profile.Hitboxes.Count; i++)
             {
                 var box = _profile.Hitboxes[i];
-                if (box.ClipName != source.Name)
+                if (box.IsCharacter || box.ClipName != source.Name)
                     continue;
-                copiedHitboxes.Add(new FrameBoxDef
-                {
-                    ClipName = clone.Name,
-                    FrameIndex = box.FrameIndex,
-                    RectUV = box.RectUV,
-                    Id = box.Id,
-                    Shape = box.Shape,
-                    PolygonUV = box.PolygonUV == null
-                        ? null
-                        : (Vector2[])box.PolygonUV.Clone(),
-                    Angle = box.Angle,
-                    Hidden = box.Hidden,
-                });
+                copiedHitboxes.Add(box.Clone(clone.Name));
             }
             _profile.Hitboxes.AddRange(copiedHitboxes);
             _profile.Clips.Insert(_selectedClip + 1, clone);
@@ -13093,7 +13439,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             var clip = _profile.Clips[clipIndex];
             bool deletedSelected = clipIndex == _selectedClip;
             RecordProfileUndo("Delete Sprite Animation Clip");
-            _profile.Hitboxes.RemoveAll(box => box.ClipName == clip.Name);
+            _profile.Hitboxes.RemoveAll(box =>
+                box != null && !box.IsCharacter && box.ClipName == clip.Name);
             _profile.Clips.RemoveAt(clipIndex);
             if (_profile.Clips.Count == 0)
                 _selectedClip = -1;
@@ -13849,9 +14196,10 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         IEnumerable<FrameBoxDef> BoxesFor(SpriteClipDef clip, int frame)
         {
-            foreach (var box in _profile.Hitboxes)
-                if (box.ClipName == clip.Name && box.FrameIndex == frame)
-                    yield return box;
+            if (_profile?.Hitboxes == null || clip == null)
+                yield break;
+            foreach (var box in SpriteColliderWorld.VisibleOn(_profile.Hitboxes, clip.Name, frame))
+                yield return box;
         }
 
         List<FrameBoxDef> CurrentFrameColliders(SpriteClipDef clip, int frame)
@@ -13867,88 +14215,64 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawColliderList(SpriteClipDef clip)
         {
             PruneColliderSelection(clip, _selectedFrame);
-            var colliders = CurrentFrameColliders(clip, _selectedFrame);
-            SectionLabel($"COLLIDERS — FRAME {_selectedFrame + 1}");
+            SyncColliderRowDetails(PrimarySelectedCollider());
+            var onThisFrame = new List<FrameBoxDef>();
+            var otherFrames = new List<FrameBoxDef>();
+            var clipColliders = new List<FrameBoxDef>();
+            var characterColliders = new List<FrameBoxDef>();
+            var otherClips = new List<FrameBoxDef>();
+            CollectColliderScopes(clip, _selectedFrame,
+                onThisFrame, otherFrames, clipColliders, characterColliders, otherClips);
+            int listed = onThisFrame.Count + otherFrames.Count + clipColliders.Count +
+                characterColliders.Count + otherClips.Count;
+            SectionLabel("COLLIDERS");
             GUILayout.Label(
-                $"{colliders.Count} collider{(colliders.Count == 1 ? string.Empty : "s")} • {_selectedColliders.Count} selected",
+                $"Frame {_selectedFrame + 1} • {onThisFrame.Count} on this frame • {otherFrames.Count} other frames • {_selectedColliders.Count} selected",
                 _mutedStyle);
 
-            if (colliders.Count == 0)
+            if (listed == 0)
             {
-                EditorGUILayout.HelpBox("This frame has no colliders. Arm a shape above, then click the preview.",
+                EditorGUILayout.HelpBox("This profile has no colliders. Arm a shape above, then click the preview.",
                     MessageType.None);
                 return;
             }
 
-            for (int i = 0; i < colliders.Count; i++)
+            _colliderFrameExpanded = EditorGUILayout.Foldout(_colliderFrameExpanded,
+                new GUIContent(
+                    $"CURRENT FRAME  {_selectedFrame + 1}  ({onThisFrame.Count} here • {otherFrames.Count} other)",
+                    "Frame-lifetime slash windows. On this frame vs other frames of this clip."),
+                true);
+            if (_colliderFrameExpanded)
             {
-                FrameBoxDef box = colliders[i];
-                bool selected = _selectedColliders.Contains(box);
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    Color previous = GUI.backgroundColor;
-                    if (GUILayout.Button(ColliderVisibilityContent(box.Hidden),
-                        EditorStyles.miniButton, GUILayout.Width(28f), GUILayout.Height(22f)))
-                    {
-                        RecordProfileUndo(box.Hidden ? "Show Sprite Collider" : "Hide Sprite Collider");
-                        box.Hidden = !box.Hidden;
-                        _status = box.Hidden
-                            ? $"Hid {box.Shape} collider #{box.Id}"
-                            : $"Showed {box.Shape} collider #{box.Id}";
-                        SaveDirty();
-                        Repaint();
-                    }
-                    if (selected)
-                        GUI.backgroundColor = AccentColor;
-                    if (GUILayout.Button(new GUIContent(
-                            $"{i + 1}. {box.Shape}   •   ID {box.Id}{(box.Hidden ? "  (hidden)" : string.Empty)}",
-                            "Select this collider. Shift = add/range, Ctrl/Cmd = toggle, Alt = subtract."),
-                        EditorStyles.miniButton, GUILayout.Height(22f)))
-                    {
-                        var evt = Event.current;
-                        _playing = false;
-                        _previewTime = PreviewTimeAtFrame(clip, _selectedFrame);
-                        SelectColliderFromList(colliders, i, ReadSelectionOp(Event.current, orderedList: true));
-                        _selectedEventFrame = -1;
-                        _selectedOnionFrame = -1;
-                        Repaint();
-                    }
-                    GUI.backgroundColor = previous;
-
-                    if (GUILayout.Button(new GUIContent("×", "Delete this collider."),
-                        EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
-                    {
-                        DeleteCollider(box);
-                        return;
-                    }
-                }
+                EditorGUI.indentLevel++;
+                if (DrawColliderScopeGroup(clip, onThisFrame, ref _colliderOnThisFrameExpanded,
+                        "ON THIS FRAME",
+                        "Only active on this animation frame. Best for attacks, parries, and one-frame contacts."))
+                    return;
+                if (DrawColliderScopeGroup(clip, otherFrames, ref _colliderOtherFramesExpanded,
+                        "OTHER FRAMES IN THIS CLIP",
+                        "Frame colliders that live on another frame of this clip. Click the search icon next to lock to jump there."))
+                    return;
+                EditorGUI.indentLevel--;
             }
+            if (DrawColliderScopeGroup(clip, clipColliders, ref _colliderClipExpanded,
+                    "THIS CLIP",
+                    "Active throughout this clip. Best for stance-specific hurtboxes and interaction zones."))
+                return;
+            if (DrawColliderScopeGroup(clip, characterColliders, ref _colliderCharacterExpanded,
+                    "CHARACTER — ALL CLIPS",
+                    "Shared by every clip. Best for the main body, pickup radius, and persistent sensors."))
+                return;
+            if (otherClips.Count > 0 &&
+                DrawColliderScopeGroup(clip, otherClips, ref _colliderOtherClipsExpanded,
+                    "OTHER CLIPS",
+                    "Frame or clip colliders that belong to another clip. Click the search icon next to lock to jump there."))
+                return;
 
-            FrameBoxDef primary = PrimarySelectedCollider();
-            if (primary != null)
-            {
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    float nextAngle = EditorGUILayout.FloatField(
-                        new GUIContent("Angle (deg)", "Rotation around the collider center. Saved on the profile."),
-                        primary.Angle);
-                    if (!Mathf.Approximately(nextAngle, primary.Angle))
-                    {
-                        RecordProfileUndo("Rotate Sprite Collider");
-                        primary.Angle = nextAngle;
-                        _status = $"Collider angle {primary.Angle:0.##}°";
-                    }
-                    using (new EditorGUI.DisabledScope(Mathf.Approximately(primary.Angle, 0f)))
-                    {
-                        if (ResetValueButton("Reset this collider's rotation to 0°."))
-                        {
-                            RecordProfileUndo("Reset Sprite Collider Angle");
-                            primary.Angle = 0f;
-                            _status = "Reset collider angle to 0°";
-                        }
-                    }
-                }
-            }
+            if (_selectedColliders.Count > 1)
+                EditorGUILayout.HelpBox(
+                    $"{_selectedColliders.Count} colliders selected. Click one row to open its details, or right-click for bulk Lives On, Physics, visibility, and lock.",
+                    MessageType.None);
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -13963,16 +14287,505 @@ namespace InvertLab.Sprites.DOTS.Editor
                 using (new EditorGUI.DisabledScope(_selectedFrame >= clip.Frames.Length - 1))
                 {
                     if (GUILayout.Button(new GUIContent("Copy to Next Frame",
-                        "Clone current-frame colliders onto the next frame.")))
+                        "Clone this-frame slash colliders onto the next frame. This Clip and Character boxes stay as they are.")))
                         CopyCollidersToNextFrame(clip, _selectedFrame);
                 }
                 if (GUILayout.Button(new GUIContent("Copy to All Frames",
-                    "Clone current-frame colliders onto every other frame in this clip.")))
+                    "Clone this-frame slash colliders onto every other frame. Prefer This Clip for crouch vs stand hurt.")))
                     CopyCollidersToAllFrames(clip, _selectedFrame);
             }
             if (GUILayout.Button(new GUIContent("Delete All on This Frame",
-                "Delete every collider on the current frame. This action supports Undo.")))
+                "Delete this-frame slash colliders only. This Clip and Character boxes stay.")))
                 DeleteAllFrameColliders(clip, _selectedFrame);
+        }
+
+        void SyncColliderRowDetails(FrameBoxDef primary)
+        {
+            if (primary == null || _selectedColliders.Count != 1)
+                return;
+            if (_colliderDetailsBox != primary)
+                OpenColliderRowDetails(primary);
+        }
+
+        void OpenColliderRowDetails(FrameBoxDef box)
+        {
+            if (box == null || box.Locked)
+                return;
+            _colliderDetailsBox = box;
+            _colliderRowDetailsExpanded = true;
+            if (box.IsCharacter)
+                _colliderCharacterExpanded = true;
+            else if (box.IsClip)
+            {
+                if (CurrentClip != null && string.Equals(box.ClipName, CurrentClip.Name))
+                    _colliderClipExpanded = true;
+                else
+                    _colliderOtherClipsExpanded = true;
+            }
+            else
+            {
+                _colliderFrameExpanded = true;
+                if (CurrentClip != null && string.Equals(box.ClipName, CurrentClip.Name) &&
+                    box.FrameIndex == _selectedFrame)
+                    _colliderOnThisFrameExpanded = true;
+                else if (CurrentClip != null && string.Equals(box.ClipName, CurrentClip.Name))
+                    _colliderOtherFramesExpanded = true;
+                else
+                    _colliderOtherClipsExpanded = true;
+            }
+        }
+
+        void DrawColliderBasicDetails(SpriteClipDef clip, FrameBoxDef box)
+        {
+            int nextId = Mathf.Clamp(EditorGUILayout.IntField(
+                new GUIContent("Collider ID", "Gameplay collider identifier, from 1 to 255."),
+                box.Id), 1, byte.MaxValue);
+            if (nextId != box.Id)
+            {
+                RecordProfileUndo("Set Sprite Collider ID");
+                box.Id = (byte)nextId;
+                SaveDirty();
+            }
+
+            var nextShape = (SpriteColliderShape)EditorGUILayout.EnumPopup(
+                new GUIContent("Shape", "Change the collider geometry type while keeping its bounds."),
+                box.Shape);
+            if (nextShape != box.Shape)
+            {
+                RecordProfileUndo("Change Sprite Collider Shape");
+                box.Shape = nextShape;
+                if (box.Shape == SpriteColliderShape.Polygon)
+                    box.EnsurePolygon();
+                SaveDirty();
+            }
+
+            var sheet = _profile.SheetForClip(clip);
+            if (SpriteSheetProfile.TryGetCellPixels(sheet, out float cellW, out float cellH))
+            {
+                Vector2 centerPixels = new(
+                    box.RectUV.center.x * cellW, box.RectUV.center.y * cellH);
+                Vector2 sizePixels = new(
+                    box.RectUV.width * cellW, box.RectUV.height * cellH);
+                EditorGUI.BeginChangeCheck();
+                Vector2 nextCenter = EditorGUILayout.Vector2Field(
+                    new GUIContent("Center (px)", "Collider center measured from the cell's top-left corner."),
+                    centerPixels);
+                Vector2 nextSize = EditorGUILayout.Vector2Field(
+                    new GUIContent("Size (px)", "Collider width and height in source pixels."),
+                    sizePixels);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    nextSize.x = Mathf.Max(1f, nextSize.x);
+                    nextSize.y = Mathf.Max(1f, nextSize.y);
+                    RecordProfileUndo("Edit Sprite Collider Bounds");
+                    box.RectUV = new Rect(
+                        (nextCenter.x - nextSize.x * 0.5f) / cellW,
+                        (nextCenter.y - nextSize.y * 0.5f) / cellH,
+                        nextSize.x / cellW,
+                        nextSize.y / cellH);
+                    SaveDirty();
+                }
+                EditorGUILayout.LabelField("Bounds (UV)",
+                    $"{box.RectUV.x:0.###}, {box.RectUV.y:0.###}, {box.RectUV.width:0.###}, {box.RectUV.height:0.###}");
+            }
+            else
+            {
+                Rect nextRect = EditorGUILayout.RectField("Bounds (UV)", box.RectUV);
+                if (nextRect != box.RectUV)
+                {
+                    RecordProfileUndo("Edit Sprite Collider Bounds");
+                    box.RectUV = nextRect;
+                    SaveDirty();
+                }
+            }
+
+            int nextLife = EditorGUILayout.Popup(
+                new GUIContent("Lives On",
+                    "Editing a This Clip or Character collider updates that same collider everywhere its scope is active."),
+                ColliderLifetimeToPopup(box.Lifetime), ColliderLifetimeLabels);
+            byte life = ColliderLifetimeFromPopup(nextLife);
+            if (life != box.Lifetime)
+                SetSelectedColliderLifetime(life, clip, _selectedFrame);
+
+            int nextPhysics = EditorGUILayout.Popup(
+                new GUIContent("Physics"), Mathf.Clamp(box.Physics, 0, 2),
+                ColliderPhysicsLabels);
+            if (nextPhysics != box.Physics)
+                SetSelectedColliderPhysics((byte)nextPhysics);
+
+            if (box.UsesUnity2D)
+            {
+                bool nextTrigger = EditorGUILayout.Toggle("Unity Trigger", box.IsTrigger);
+                if (nextTrigger != box.IsTrigger)
+                {
+                    RecordProfileUndo("Set Collider Trigger");
+                    box.IsTrigger = nextTrigger;
+                    SaveDirty();
+                }
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                float nextAngle = EditorGUILayout.FloatField(
+                    new GUIContent("Angle (deg)", "Rotation around the collider center."),
+                    box.Angle);
+                if (!Mathf.Approximately(nextAngle, box.Angle))
+                {
+                    RecordProfileUndo("Rotate Sprite Collider");
+                    box.Angle = nextAngle;
+                    SaveDirty();
+                }
+                using (new EditorGUI.DisabledScope(Mathf.Approximately(box.Angle, 0f)))
+                {
+                    if (ResetValueButton("Reset this collider's rotation to 0°."))
+                    {
+                        RecordProfileUndo("Reset Sprite Collider Angle");
+                        box.Angle = 0f;
+                        SaveDirty();
+                    }
+                }
+            }
+
+            DrawColliderBinding(clip, box);
+        }
+
+        void CollectColliderScopes(SpriteClipDef clip, int frame,
+            List<FrameBoxDef> onThisFrame, List<FrameBoxDef> otherFrames,
+            List<FrameBoxDef> thisClip, List<FrameBoxDef> character, List<FrameBoxDef> otherClips)
+        {
+            if (_profile?.Hitboxes == null || clip == null)
+                return;
+            for (int i = 0; i < _profile.Hitboxes.Count; i++)
+            {
+                var box = _profile.Hitboxes[i];
+                if (box == null)
+                    continue;
+                if (box.IsCharacter)
+                    character.Add(box);
+                else if (string.Equals(box.ClipName, clip.Name))
+                {
+                    if (box.IsClip)
+                        thisClip.Add(box);
+                    else if (box.FrameIndex == frame)
+                        onThisFrame.Add(box);
+                    else
+                        otherFrames.Add(box);
+                }
+                else
+                    otherClips.Add(box);
+            }
+            if (otherFrames.Count > 1)
+                otherFrames.Sort((a, b) => a.FrameIndex.CompareTo(b.FrameIndex));
+        }
+
+        static bool ColliderLivesHere(FrameBoxDef box, SpriteClipDef clip, int frame)
+        {
+            if (box == null || clip == null)
+                return false;
+            if (box.IsCharacter)
+                return true;
+            if (!string.Equals(box.ClipName, clip.Name))
+                return false;
+            return box.IsClip || box.FrameIndex == frame;
+        }
+
+        static string ColliderHomeLabel(FrameBoxDef box)
+        {
+            if (box == null)
+                return "Collider";
+            if (box.IsCharacter)
+                return "All clips";
+            string clipName = string.IsNullOrEmpty(box.ClipName) ? "Clip" : box.ClipName;
+            if (box.IsClip)
+                return clipName;
+            return $"{clipName}  •  Frame {box.FrameIndex + 1}";
+        }
+
+        void DrawColliderBinding(SpriteClipDef clip, FrameBoxDef box)
+        {
+            bool here = ColliderLivesHere(box, clip, _selectedFrame);
+            string home = ColliderHomeLabel(box);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.PrefixLabel(new GUIContent("Binding",
+                    "Jump to the clip and frame this collider lives on."));
+                using (new EditorGUI.DisabledScope(box.IsCharacter || here))
+                {
+                    if (GUILayout.Button(new GUIContent(here && !box.IsCharacter ? $"{home}  •  here" : home,
+                            box.IsCharacter
+                                ? "Character colliders are shared by every clip."
+                                : here
+                                    ? "Already viewing the clip and frame this collider lives on."
+                                    : "Jump to the clip and frame this collider lives on.")))
+                        JumpToColliderHome(box);
+                }
+            }
+        }
+
+        int FindClipIndexByName(string clipName)
+        {
+            if (_profile?.Clips == null || string.IsNullOrEmpty(clipName))
+                return -1;
+            for (int i = 0; i < _profile.Clips.Count; i++)
+            {
+                if (_profile.Clips[i] != null && string.Equals(_profile.Clips[i].Name, clipName))
+                    return i;
+            }
+            return -1;
+        }
+
+        void JumpToColliderHome(FrameBoxDef box)
+        {
+            if (box == null || _profile?.Clips == null || _profile.Clips.Count == 0)
+                return;
+
+            int clipIndex = _selectedClip;
+            if (!box.IsCharacter)
+            {
+                int found = FindClipIndexByName(box.ClipName);
+                if (found >= 0)
+                    clipIndex = found;
+            }
+            clipIndex = Mathf.Clamp(clipIndex, 0, _profile.Clips.Count - 1);
+
+            if (_renamingClip >= 0 && _renamingClip != clipIndex)
+                CancelClipRename();
+            if (_renamingSheet >= 0)
+                CommitSheetRename();
+
+            bool clipChanged = _selectedClip != clipIndex;
+            if (clipChanged)
+            {
+                _selectedOnionFrame = -1;
+                _selectedEventFrame = -1;
+                ClearSocketSelection();
+                _selectedClip = clipIndex;
+                var destClip = _profile.Clips[clipIndex];
+                if (destClip != null && _profile.Sheets != null && _profile.Sheets.Count > 0)
+                {
+                    _selectedSheet = Mathf.Clamp(destClip.SheetIndex, 0, _profile.Sheets.Count - 1);
+                    _collapsedSheets.Remove(_selectedSheet);
+                    _profile.SyncLegacyFromSheet(_selectedSheet);
+                    InvalidateSheetPixelCache();
+                }
+            }
+
+            var clip = _profile.Clips[_selectedClip];
+            int frame = _selectedFrame;
+            if (box.IsFrame && box.FrameIndex >= 0)
+                frame = box.FrameIndex;
+            else if (clipChanged)
+                frame = 0;
+            if (clip?.Frames != null && clip.Frames.Length > 0)
+                frame = Mathf.Clamp(frame, 0, clip.Frames.Length - 1);
+            else
+                frame = Mathf.Max(0, frame);
+
+            SelectOnlyFrame(frame);
+            _previewTime = clip != null ? PreviewTimeAtFrame(clip, frame) : 0f;
+            _playing = false;
+            _selectedColliders.Clear();
+            if (!box.Locked)
+                _selectedColliders.Add(box);
+            OpenColliderRowDetails(box);
+            _selectedEventFrame = -1;
+            _status = box.IsCharacter
+                ? "Character collider is shared by every clip"
+                : $"Jumped to {ColliderHomeLabel(box)}";
+            ReleaseShortcutKeyboardFocus();
+            Repaint();
+        }
+
+        bool DrawColliderScopeGroup(SpriteClipDef clip, List<FrameBoxDef> group,
+            ref bool expanded, string title, string description)
+        {
+            int selectedCount = 0;
+            int lockedCount = 0;
+            for (int i = 0; i < group.Count; i++)
+            {
+                selectedCount += _selectedColliders.Contains(group[i]) ? 1 : 0;
+                lockedCount += group[i].Locked ? 1 : 0;
+            }
+
+            string summary = $"{title}  ({group.Count})";
+            if (selectedCount > 0)
+                summary += $"  •  {selectedCount} selected";
+            if (lockedCount > 0)
+                summary += $"  •  {lockedCount} locked";
+            expanded = EditorGUILayout.Foldout(expanded, new GUIContent(summary, description), true);
+            if (!expanded)
+                return false;
+
+            GUILayout.Label(description, _mutedWrapStyle);
+            if (group.Count == 0)
+            {
+                GUILayout.Label("No colliders in this scope.", _mutedStyle);
+                GUILayout.Space(3f);
+                return false;
+            }
+
+            for (int i = 0; i < group.Count; i++)
+            {
+                FrameBoxDef box = group[i];
+                bool selected = _selectedColliders.Contains(box);
+                bool foldOpen = !box.Locked &&
+                    _colliderDetailsBox == box &&
+                    _colliderRowDetailsExpanded &&
+                    _selectedColliders.Count == 1 &&
+                    selected;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    Color previous = GUI.backgroundColor;
+                    if (GUILayout.Button(ColliderVisibilityContent(box.Hidden),
+                        EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
+                    {
+                        RecordProfileUndo(box.Hidden ? "Show Sprite Collider" : "Hide Sprite Collider");
+                        box.Hidden = !box.Hidden;
+                        _status = box.Hidden
+                            ? $"Hid {box.Shape} collider #{box.Id}"
+                            : $"Showed {box.Shape} collider #{box.Id}";
+                        SaveDirty();
+                        Repaint();
+                    }
+                    if (GUILayout.Button(ColliderLockContent(box.Locked),
+                        EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
+                    {
+                        RecordProfileUndo(box.Locked ? "Unlock Sprite Collider" : "Lock Sprite Collider");
+                        box.Locked = !box.Locked;
+                        if (box.Locked)
+                        {
+                            _selectedColliders.Remove(box);
+                            if (_colliderTransformBox == box)
+                                ClearColliderTransform();
+                            if (_colliderDetailsBox == box)
+                                _colliderRowDetailsExpanded = false;
+                        }
+                        _status = box.Locked
+                            ? $"Locked {box.Shape} collider #{box.Id}"
+                            : $"Unlocked {box.Shape} collider #{box.Id}";
+                        SaveDirty();
+                        Repaint();
+                    }
+                    if (!box.IsCharacter)
+                    {
+                        bool here = ColliderLivesHere(box, clip, _selectedFrame);
+                        using (new EditorGUI.DisabledScope(here))
+                        {
+                            if (GUILayout.Button(ColliderGoToContent(box),
+                                EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
+                            {
+                                JumpToColliderHome(box);
+                                Repaint();
+                            }
+                        }
+                    }
+
+                    using (new EditorGUI.DisabledScope(box.Locked))
+                    {
+                        Rect foldRect = GUILayoutUtility.GetRect(16f, 22f, GUILayout.Width(16f));
+                        bool nextOpen = EditorGUI.Foldout(foldRect, foldOpen, GUIContent.none, true);
+                        if (nextOpen != foldOpen && !box.Locked)
+                        {
+                            if (nextOpen)
+                            {
+                                if (!selected || _selectedColliders.Count != 1)
+                                    SelectColliderFromList(group, i, SelectionOp.Replace);
+                                _colliderDetailsBox = box;
+                                _colliderRowDetailsExpanded = true;
+                            }
+                            else
+                            {
+                                _colliderDetailsBox = box;
+                                _colliderRowDetailsExpanded = false;
+                            }
+                            _playing = false;
+                            _previewTime = PreviewTimeAtFrame(clip, _selectedFrame);
+                            _selectedEventFrame = -1;
+                            _selectedOnionFrame = -1;
+                            Repaint();
+                        }
+                    }
+
+                    if (selected)
+                        GUI.backgroundColor = AccentColor;
+                    using (new EditorGUI.DisabledScope(box.Locked))
+                    {
+                        string state = box.Hidden ? "  (hidden)" : string.Empty;
+                        bool away = !ColliderLivesHere(box, clip, _selectedFrame);
+                        bool rowClicked = GUILayout.Button(new GUIContent(
+                                $"{i + 1}. {box.Shape}  •  ID {box.Id}{(away ? "  •  " + ColliderHomeLabel(box) : string.Empty)}{state}",
+                                box.Locked
+                                    ? "Unlock this collider before selecting or editing it."
+                                    : "Click to select and open details. Click again to collapse. Use the search icon to jump to this collider's clip and frame."),
+                            EditorStyles.miniButton, GUILayout.Height(22f));
+                        Rect selectionRect = GUILayoutUtility.GetLastRect();
+                        if (rowClicked)
+                        {
+                            bool wasSolePrimary = selected && _selectedColliders.Count == 1;
+                            SelectionOp op = ReadSelectionOp(Event.current, orderedList: true);
+                            _playing = false;
+                            _previewTime = PreviewTimeAtFrame(clip, _selectedFrame);
+                            SelectColliderFromList(group, i, op);
+                            _selectedEventFrame = -1;
+                            _selectedOnionFrame = -1;
+                            if (_selectedColliders.Count == 1 && _selectedColliders.Contains(box))
+                            {
+                                _colliderDetailsBox = box;
+                                _colliderRowDetailsExpanded = !(wasSolePrimary &&
+                                    op == SelectionOp.Replace && _colliderRowDetailsExpanded);
+                            }
+                            Repaint();
+                        }
+                        HandleColliderListRowContext(selectionRect, clip, box);
+                    }
+                    GUI.backgroundColor = previous;
+
+                    using (new EditorGUI.DisabledScope(box.Locked))
+                    {
+                        if (GUILayout.Button(new GUIContent("×",
+                                box.Locked ? "Unlock this collider before deleting it." : "Delete this collider."),
+                            EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
+                        {
+                            DeleteCollider(box);
+                            return true;
+                        }
+                    }
+                }
+
+                if (box.Locked ||
+                    _colliderDetailsBox != box ||
+                    !_colliderRowDetailsExpanded ||
+                    _selectedColliders.Count != 1 ||
+                    !_selectedColliders.Contains(box))
+                    continue;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Space(16f);
+                    using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                        DrawColliderBasicDetails(clip, box);
+                }
+            }
+            GUILayout.Space(4f);
+            return false;
+        }
+
+        void HandleColliderListRowContext(Rect rowRect, SpriteClipDef clip, FrameBoxDef box)
+        {
+            var evt = Event.current;
+            if (box == null || box.Locked ||
+                (evt.type != EventType.ContextClick &&
+                 !(evt.type == EventType.MouseDown && evt.button == 1)) ||
+                !rowRect.Contains(evt.mousePosition))
+                return;
+            if (!_selectedColliders.Contains(box))
+            {
+                _selectedColliders.Clear();
+                _selectedColliders.Add(box);
+                ClearSocketSelection();
+            }
+            ShowColliderContextMenu(clip, _selectedFrame, box);
+            evt.Use();
+            Repaint();
         }
 
         void SelectAllFrameColliders(SpriteClipDef clip, int frame)
@@ -13982,7 +14795,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             _previewTime = PreviewTimeAtFrame(clip, frame);
             _selectedColliders.Clear();
             foreach (var box in BoxesFor(clip, frame))
-                _selectedColliders.Add(box);
+            {
+                if (!box.Locked)
+                    _selectedColliders.Add(box);
+            }
             ClearSocketSelection();
             _selectedEventFrame = -1;
             _selectedOnionFrame = -1;
@@ -14001,7 +14817,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_showHitboxes)
             {
                 foreach (var box in BoxesFor(clip, frame))
-                    _selectedColliders.Add(box);
+                {
+                    if (!box.Locked)
+                        _selectedColliders.Add(box);
+                }
             }
             _selectedSockets.Clear();
             if (clip.Sockets != null)
@@ -14044,7 +14863,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DeleteCollider(FrameBoxDef box)
         {
-            if (box == null || !_profile.Hitboxes.Contains(box))
+            if (box == null || box.Locked || !_profile.Hitboxes.Contains(box))
                 return;
             RecordProfileUndo("Delete Sprite Collider");
             _profile.Hitboxes.Remove(box);
@@ -14133,13 +14952,21 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (clip == null)
                 return;
-            int count = CurrentFrameColliders(clip, frame).Count;
+            int count = 0;
+            var visible = CurrentFrameColliders(clip, frame);
+            for (int i = 0; i < visible.Count; i++)
+            {
+                if (visible[i] != null && visible[i].IsFrame && !visible[i].Locked)
+                    count++;
+            }
             if (count == 0)
                 return;
             RecordProfileUndo("Delete All Sprite Colliders on Frame");
-            _profile.Hitboxes.RemoveAll(box => box.ClipName == clip.Name && box.FrameIndex == frame);
-            _selectedColliders.Clear();
-            _status = $"Deleted all {count} colliders on frame {frame + 1}";
+            _profile.Hitboxes.RemoveAll(box =>
+                box != null && box.IsFrame &&
+                !box.Locked && box.ClipName == clip.Name && box.FrameIndex == frame);
+            PruneColliderSelection(clip, frame);
+            _status = $"Deleted {count} unlocked collider{Plural(count)} on frame {frame + 1}";
             SaveDirty();
             Repaint();
         }
@@ -14184,25 +15011,20 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         int CopyCollidersToFrameInternal(SpriteClipDef clip, int sourceFrame, int destinationFrame)
         {
-            _profile.Hitboxes.RemoveAll(box => box.ClipName == clip.Name && box.FrameIndex == destinationFrame);
+            _profile.Hitboxes.RemoveAll(box =>
+                box != null && box.IsFrame &&
+                box.ClipName == clip.Name && box.FrameIndex == destinationFrame);
             var source = CurrentFrameColliders(clip, sourceFrame);
+            int copied = 0;
             for (int i = 0; i < source.Count; i++)
             {
                 var box = source[i];
-                var clone = new FrameBoxDef
-                {
-                    ClipName = clip.Name,
-                    FrameIndex = destinationFrame,
-                    RectUV = box.RectUV,
-                    Id = box.Id,
-                    Shape = box.Shape,
-                    PolygonUV = box.PolygonUV == null ? null : (Vector2[])box.PolygonUV.Clone(),
-                    Angle = box.Angle,
-                    Hidden = box.Hidden,
-                };
-                _profile.Hitboxes.Add(clone);
+                if (!box.IsFrame)
+                    continue;
+                _profile.Hitboxes.Add(box.Clone(clip.Name, destinationFrame));
+                copied++;
             }
-            return source.Count;
+            return copied;
         }
 
         void ClearColliderSelection()
@@ -14214,9 +15036,13 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void PruneColliderSelection(SpriteClipDef clip, int frame)
         {
-            _selectedColliders.RemoveWhere(box => box == null ||
+            _selectedColliders.RemoveWhere(box => box == null || box.Locked ||
                 !_profile.Hitboxes.Contains(box) || clip == null ||
-                box.ClipName != clip.Name || box.FrameIndex != frame);
+                (box.IsCharacter
+                    ? false
+                    : box.IsClip
+                        ? box.ClipName != clip.Name
+                        : box.ClipName != clip.Name || box.FrameIndex != frame));
         }
 
         void SelectEventMarker(SpriteClipDef clip, int frame, float authoredTime)
@@ -14817,6 +15643,32 @@ namespace InvertLab.Sprites.DOTS.Editor
             return null;
         }
 
+        static int ColliderLifetimeToPopup(byte lifetime)
+        {
+            if (lifetime == (byte)SpriteColliderLifetime.Clip)
+                return 1;
+            if (lifetime == (byte)SpriteColliderLifetime.Character)
+                return 2;
+            return 0;
+        }
+
+        static byte ColliderLifetimeFromPopup(int index)
+        {
+            if (index == 1)
+                return (byte)SpriteColliderLifetime.Clip;
+            if (index == 2)
+                return (byte)SpriteColliderLifetime.Character;
+            return (byte)SpriteColliderLifetime.Frame;
+        }
+
+        static string ColliderLifetimeListLabel(FrameBoxDef box)
+        {
+            if (box == null)
+                return "Collider";
+            string life = box.IsCharacter ? "Body" : box.IsClip ? "Clip" : "Frame";
+            return $"{life} {box.Shape}";
+        }
+
         static GUIContent ColliderVisibilityContent(bool hidden)
         {
             var icon = EditorGUIUtility.IconContent(hidden
@@ -14831,6 +15683,43 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             return new GUIContent(hidden ? "Show" : "Hide",
                 hidden ? "Show this collider in the preview" : "Hide this collider in the preview");
+        }
+
+        static GUIContent ColliderGoToContent(FrameBoxDef box)
+        {
+            string tooltip = box != null && box.IsClip
+                ? "Go to the clip this collider lives on"
+                : "Go to the clip and frame this collider lives on";
+            var icon = EditorGUIUtility.IconContent("Search Icon");
+            if (icon == null || icon.image == null)
+                icon = EditorGUIUtility.IconContent("ViewToolZoom");
+            if (icon != null && icon.image != null)
+            {
+                icon.tooltip = tooltip;
+                return icon;
+            }
+            return new GUIContent("?", tooltip);
+        }
+
+        static GUIContent ColliderLockContent(bool locked)
+        {
+            var icon = EditorGUIUtility.IconContent(locked ? "LockIcon-On" : "LockIcon");
+            string tooltip = locked
+                ? "Unlock this collider to select, transform, or delete it"
+                : "Lock this collider against selection, transforms, and deletion";
+            if (icon != null && icon.image != null)
+            {
+                icon.tooltip = tooltip;
+                return icon;
+            }
+            return new GUIContent(locked ? "L" : "U", tooltip);
+        }
+
+        static void DrawColliderLockBadge(FrameBoxDef box, Rect cell)
+        {
+            Rect bounds = ColliderWorldAabb(box, cell);
+            var badge = new Rect(bounds.xMax - 15f, bounds.yMin + 2f, 14f, 14f);
+            GUI.Label(badge, ColliderLockContent(true));
         }
 
         static Vector2 ColliderHandlePosition(FrameBoxDef box, Rect cell, ColliderHandleKind kind)
@@ -14979,14 +15868,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     foreach (var selected in _selectedColliders)
                     {
-                        if (!selected.Hidden && ColliderContains(selected, cell, evt.mousePosition))
+                        if (!selected.Hidden && !selected.Locked &&
+                            ColliderContains(selected, cell, evt.mousePosition))
                         {
                             box = selected;
                             break;
                         }
                     }
                 }
-                if (box == null)
+                if (box == null || box.Locked)
                     return;
                 BeginColliderTransform(controlId, box, kind, cell, evt.mousePosition);
                 evt.Use();
@@ -15015,6 +15905,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         void BeginColliderTransform(int controlId, FrameBoxDef box, ColliderHandleKind kind,
                                     Rect cell, Vector2 mouse)
         {
+            if (box == null || box.Locked)
+                return;
             _draggingColliderTransform = true;
             _colliderHandleKind = kind;
             _colliderTransformBox = box;
@@ -15031,6 +15923,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 foreach (var selected in _selectedColliders)
                 {
+                    if (selected.Locked)
+                        continue;
                     _colliderMoveBoxes.Add(selected);
                     _colliderMoveStartRects.Add(selected.RectUV);
                 }

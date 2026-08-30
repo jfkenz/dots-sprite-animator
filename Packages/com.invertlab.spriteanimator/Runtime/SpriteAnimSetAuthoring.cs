@@ -75,6 +75,15 @@ namespace InvertLab.Sprites.DOTS
         [Tooltip("Show the top clip first frame on this Quad in the Scene view. Uncheck to hide the preview mesh.")]
         public bool ShowScenePreview = true;
 
+        [Tooltip("Spawn Unity 2D Box/Circle/Polygon colliders on this object from the profile.")]
+        public bool BakeUnityColliders;
+
+        [Tooltip("Also spawn this-frame slash colliders. Off = Character and This Clip body colliders only.")]
+        public bool BakeFrameColliders;
+
+        [Tooltip("Draw Query AABB gizmos in the Scene view (custom physics, not Unity colliders).")]
+        public bool ShowSceneColliderGizmos = true;
+
 
         public bool ApplyFromProfile()
         {
@@ -151,6 +160,8 @@ namespace InvertLab.Sprites.DOTS
                 ApplyFromProfile();
 #if UNITY_EDITOR
             RefreshQuadPreview();
+            if (BakeUnityColliders)
+                SyncUnityColliders();
 #endif
         }
 
@@ -286,6 +297,75 @@ namespace InvertLab.Sprites.DOTS
                     transform.localScale = scale;
                 }
             }
+        }
+
+        public void SyncUnityColliders()
+        {
+            var data = Profile?.Data;
+            if (!BakeUnityColliders || data?.Hitboxes == null)
+            {
+                SpriteColliderWorld.ClearUnityColliders(transform);
+                return;
+            }
+            int clipIndex = InitialClipIndex;
+            int frame = 0;
+            var player = GetComponent<SpriteAnimPlayerAuthoring>();
+            if (player != null)
+            {
+                clipIndex = player.ClipIndex;
+                frame = player.Frame;
+            }
+            string clipName = "clip";
+            if (Clips != null && clipIndex >= 0 && clipIndex < Clips.Length)
+                clipName = string.IsNullOrEmpty(Clips[clipIndex].Name)
+                    ? "clip" : Clips[clipIndex].Name;
+            else if (data.Clips != null && clipIndex >= 0 && clipIndex < data.Clips.Count)
+                clipName = data.Clips[clipIndex].Name;
+            SpriteColliderWorld.SyncUnityColliders(
+                transform, data.Hitboxes, clipName, frame, BakeFrameColliders);
+        }
+
+        void OnDrawGizmos()
+        {
+            if (!ShowSceneColliderGizmos)
+                return;
+            var data = Profile?.Data;
+            if (data?.Hitboxes == null)
+                return;
+            int clipIndex = InitialClipIndex;
+            int frame = 0;
+            var player = GetComponent<SpriteAnimPlayerAuthoring>();
+            if (player != null)
+            {
+                clipIndex = player.ClipIndex;
+                frame = player.Frame;
+            }
+            string clipName = Clips != null && clipIndex >= 0 && clipIndex < Clips.Length
+                ? Clips[clipIndex].Name
+                : data.Clips != null && clipIndex >= 0 && clipIndex < data.Clips.Count
+                    ? data.Clips[clipIndex].Name
+                    : "clip";
+            Gizmos.matrix = transform.localToWorldMatrix;
+            foreach (var box in SpriteColliderWorld.VisibleOn(data.Hitboxes, clipName, frame))
+            {
+                if (box.Hidden || !box.UsesQuery)
+                    continue;
+                if (!SpriteColliderWorld.TryLocalFromUv(box, out var offset, out var size, out float angle))
+                    continue;
+                Gizmos.color = box.IsCharacter
+                    ? new Color(0.25f, 0.9f, 0.8f, 0.9f)
+                    : box.IsClip
+                        ? new Color(0.95f, 0.72f, 0.22f, 0.9f)
+                        : new Color(1f, 0.35f, 0.28f, 0.9f);
+                var rotation = Quaternion.Euler(0f, 0f, angle);
+                Gizmos.matrix = transform.localToWorldMatrix *
+                                Matrix4x4.TRS(offset, rotation, Vector3.one);
+                if (box.Shape == SpriteColliderShape.Circle)
+                    Gizmos.DrawWireSphere(Vector3.zero, Mathf.Max(size.x, size.y) * 0.5f);
+                else
+                    Gizmos.DrawWireCube(Vector3.zero, new Vector3(size.x, size.y, 0.02f));
+            }
+            Gizmos.matrix = Matrix4x4.identity;
         }
 #endif
 
@@ -692,6 +772,12 @@ namespace InvertLab.Sprites.DOTS
                     });
                     AddBuffer<SpriteSocketEventBuffer>(entity);
                     AddComponent(entity, new SpriteSocketEventsPending());
+                }
+                if (useProfile && profile.Hitboxes != null && profile.Hitboxes.Count > 0)
+                {
+                    var hitboxBlob = SpriteHitboxSetBuilder.FromProfile(profile, Allocator.Persistent);
+                    AddComponent(entity, new SpriteHitboxSetRef { Set = hitboxBlob });
+                    AddBuffer<SpriteHitboxLive>(entity);
                 }
             }
         }

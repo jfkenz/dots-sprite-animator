@@ -90,145 +90,145 @@ MonoBehaviour:
       Sockets:
       - Name: "Orbit 0\xB0"
         FrameIndex: 0
-        LocalPosition: {x: 62, y: 0}
+        LocalPosition: {x: 103.44, y: 23.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 0\xB0"
         FrameIndex: 1
-        LocalPosition: {x: 44, y: 25}
+        LocalPosition: {x: 85.44, y: 48.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 0\xB0"
         FrameIndex: 2
-        LocalPosition: {x: 0, y: 36}
+        LocalPosition: {x: 41.44, y: 59.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 0\xB0"
         FrameIndex: 3
-        LocalPosition: {x: -44, y: 25}
+        LocalPosition: {x: -2.5600014, y: 48.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 0\xB0"
         FrameIndex: 4
-        LocalPosition: {x: -62, y: 0}
+        LocalPosition: {x: -20.560001, y: 23.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 0\xB0"
         FrameIndex: 5
-        LocalPosition: {x: -44, y: -25}
+        LocalPosition: {x: -2.5600014, y: -1.3199997}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 0\xB0"
         FrameIndex: 6
-        LocalPosition: {x: 0, y: -36}
+        LocalPosition: {x: 41.44, y: -12.32}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 0\xB0"
         FrameIndex: 7
-        LocalPosition: {x: 44, y: -25}
+        LocalPosition: {x: 85.44, y: -1.3199997}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 60\xB0"
         FrameIndex: 0
-        LocalPosition: {x: -42, y: -11}
+        LocalPosition: {x: -0.5600014, y: 12.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 60\xB0"
         FrameIndex: 1
-        LocalPosition: {x: -38, y: -47}
+        LocalPosition: {x: 3.4399986, y: -23.32}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 60\xB0"
         FrameIndex: 2
-        LocalPosition: {x: -11, y: -55}
+        LocalPosition: {x: 30.439999, y: -31.32}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 60\xB0"
         FrameIndex: 3
-        LocalPosition: {x: 22, y: -31}
+        LocalPosition: {x: 63.44, y: -7.3199997}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 60\xB0"
         FrameIndex: 4
-        LocalPosition: {x: 42, y: 11}
+        LocalPosition: {x: 83.44, y: 34.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 60\xB0"
         FrameIndex: 5
-        LocalPosition: {x: 38, y: 47}
+        LocalPosition: {x: 79.44, y: 70.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 60\xB0"
         FrameIndex: 6
-        LocalPosition: {x: 11, y: 55}
+        LocalPosition: {x: 52.44, y: 78.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 60\xB0"
         FrameIndex: 7
-        LocalPosition: {x: -22, y: 31}
+        LocalPosition: {x: 19.439999, y: 54.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 120\xB0"
         FrameIndex: 0
-        LocalPosition: {x: 42, y: -11}
+        LocalPosition: {x: 83.44, y: 12.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 120\xB0"
         FrameIndex: 1
-        LocalPosition: {x: 22, y: 31}
+        LocalPosition: {x: 63.44, y: 54.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 120\xB0"
         FrameIndex: 2
-        LocalPosition: {x: -11, y: 55}
+        LocalPosition: {x: 30.439999, y: 78.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 120\xB0"
         FrameIndex: 3
-        LocalPosition: {x: -38, y: 47}
+        LocalPosition: {x: 3.4399986, y: 70.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 120\xB0"
         FrameIndex: 4
-        LocalPosition: {x: -42, y: 11}
+        LocalPosition: {x: -0.5600014, y: 34.68}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
       - Name: "Orbit 120\xB0"
         FrameIndex: 5
-        LocalPosition: {x: -22, y: -31}
+        LocalPosition: {x: 19.439999, y: -7.3199997}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 120\xB0"
         FrameIndex: 6
-        LocalPosition: {x: 11, y: -55}
+        LocalPosition: {x: 52.44, y: -31.32}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
       - Name: "Orbit 120\xB0"
         FrameIndex: 7
-        LocalPosition: {x: 38, y: -47}
+        LocalPosition: {x: 79.44, y: -23.32}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -1779,7 +1779,41 @@ MonoBehaviour:
     - Id: 2
       Name: Attack
       Color: {r: 1, g: 0.35, b: 0.3, a: 1}
-    Hitboxes: []
+    Hitboxes:
+    - ClipName: attack5
+      FrameIndex: 0
+      RectUV:
+        serializedVersion: 2
+        x: 0.7771622
+        y: 0.0557864
+        width: 0.13434908
+        height: 0.13434908
+      Id: 1
+      Shape: 0
+      PolygonUV: []
+      Angle: 0
+      Hidden: 0
+      Locked: 0
+      Lifetime: 0
+      Physics: 0
+      IsTrigger: 1
+    - ClipName: idlle
+      FrameIndex: 0
+      RectUV:
+        serializedVersion: 2
+        x: 0.4077778
+        y: 0.37777776
+        width: 0.1711111
+        height: 0.34555554
+      Id: 1
+      Shape: 0
+      PolygonUV: []
+      Angle: 0
+      Hidden: 0
+      Locked: 0
+      Lifetime: 0
+      Physics: 0
+      IsTrigger: 1
     SocketCatalog:
       Items:
       - SocketName: "Orbit 0\xB0"
@@ -1844,6 +1878,7 @@ MonoBehaviour:
       DefaultEaseMode: 1
       DefaultPathMode: 0
       DefaultRotationMode: 0
+      AnchorSpace: 0
       Keys:
       - NormalizedTime: 0
         LocalPosition: {x: 62, y: 0}
@@ -1894,7 +1929,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.25
-        LocalPosition: {x: 0, y: 36}
+        LocalPosition: {x: -0.0000038146973, y: 36}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
@@ -1918,7 +1953,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.375
-        LocalPosition: {x: -44, y: 25}
+        LocalPosition: {x: -44.000004, y: 25}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
@@ -1942,7 +1977,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.5
-        LocalPosition: {x: -62, y: 0}
+        LocalPosition: {x: -62.000004, y: 0}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -1966,7 +2001,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.625
-        LocalPosition: {x: -44, y: -25}
+        LocalPosition: {x: -44.000004, y: -25}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -1990,7 +2025,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.75
-        LocalPosition: {x: 0, y: -36}
+        LocalPosition: {x: -0.0000038146973, y: -36}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -2045,9 +2080,10 @@ MonoBehaviour:
       DefaultEaseMode: 1
       DefaultPathMode: 0
       DefaultRotationMode: 0
+      AnchorSpace: 0
       Keys:
       - NormalizedTime: 0
-        LocalPosition: {x: -42, y: -11}
+        LocalPosition: {x: -42.000004, y: -11}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -2071,7 +2107,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.125
-        LocalPosition: {x: -38, y: -47}
+        LocalPosition: {x: -38.000004, y: -47}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -2095,7 +2131,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.25
-        LocalPosition: {x: -11, y: -55}
+        LocalPosition: {x: -11.000004, y: -55}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -2119,7 +2155,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.375
-        LocalPosition: {x: 22, y: -31}
+        LocalPosition: {x: 21.999996, y: -31}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -2191,7 +2227,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.75
-        LocalPosition: {x: 11, y: 55}
+        LocalPosition: {x: 10.999996, y: 55}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
@@ -2215,7 +2251,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.875
-        LocalPosition: {x: -22, y: 31}
+        LocalPosition: {x: -22.000004, y: 31}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
@@ -2246,6 +2282,7 @@ MonoBehaviour:
       DefaultEaseMode: 1
       DefaultPathMode: 0
       DefaultRotationMode: 0
+      AnchorSpace: 0
       Keys:
       - NormalizedTime: 0
         LocalPosition: {x: 42, y: -11}
@@ -2272,7 +2309,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.125
-        LocalPosition: {x: 22, y: 31}
+        LocalPosition: {x: 21.999996, y: 31}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
@@ -2296,7 +2333,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.25
-        LocalPosition: {x: -11, y: 55}
+        LocalPosition: {x: -11.000004, y: 55}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
@@ -2320,7 +2357,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.375
-        LocalPosition: {x: -38, y: 47}
+        LocalPosition: {x: -38.000004, y: 47}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
@@ -2344,7 +2381,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.5
-        LocalPosition: {x: -42, y: 11}
+        LocalPosition: {x: -42.000004, y: 11}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
@@ -2368,7 +2405,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.625
-        LocalPosition: {x: -22, y: -31}
+        LocalPosition: {x: -22.000004, y: -31}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -2392,7 +2429,7 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       - NormalizedTime: 0.75
-        LocalPosition: {x: 11, y: -55}
+        LocalPosition: {x: 10.999996, y: -55}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -2440,6 +2477,14 @@ MonoBehaviour:
         CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
         CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
       Triggers: []
+    SocketInventories:
+    - Name: orbit
+      Folded: 0
+      AnchorSpace: 0
+      SocketNames:
+      - "Orbit 0\xB0"
+      - "Orbit 60\xB0"
+      - "Orbit 120\xB0"
     IndependentTimelineInitialized: 1
     IndependentTimelineUsesSeconds: 1
     IndependentMotionDurationSeconds: 1.25
@@ -2448,9 +2493,9 @@ MonoBehaviour:
     IndependentMotionSpeed: 1
     IndependentMotionLoop: 1
     OnionSettingsInitialized: 1
-    OnionSkinEnabled: 0
-    OnionPastFrames: 0
-    OnionFutureFrames: 0
+    OnionSkinEnabled: 1
+    OnionPastFrames: 1
+    OnionFutureFrames: 1
     ShowOnionLayerNumbers: 1
     TimelineHitShape: 0
     TimelineHitPolygon:

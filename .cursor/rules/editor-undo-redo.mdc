@@ -24,6 +24,7 @@ alwaysApply: true
 - Create preview debug toggles pinned to the canvas (not the header) when the user asks to show/hide paths or gizmos.
 - `Debug: On` is the only master gate for socket pins, labels, group gizmos, and motion paths. Do not hide paths because multiple sockets are selected.
 - `Paths: On` only filters Independent Motion lines and only while Debug is on.
+- `Size: On` is independent of Debug. It draws the sprite cell box (pixel size and world size from cell / PPU) plus a small pivot cross on that quad. Use the same canvas overlay click-block as Debug.
 
 # Independent Motion and group transform
 
@@ -35,3 +36,5 @@ alwaysApply: true
 - Independent Motion scale and rotate must write the live track keys (and matching clip keys). Never write only a leftover frame key — the preview samples the track, so that looks locked.
 - Space playback: `Space: Both` (default on) starts or pauses Frames and Independent Motion together. Off keeps Space on the selected tab only. Per-timeline Play buttons stay single-clock.
 - Draw keys follow the socket clock. Frames DRAW lane shows Frame-Attached only. Independent Motion DRAW lane shows Own-Clock `DrawLayer` keys. Do not mix leftover Independent clip keys onto Frames.
+- Colliders: Frame = slash on this cell, Clip = whole time that clip plays (crouch vs stand hurt), Character = body on every clip. Physics Query AABB is custom live boxes; Unity 2D spawns BoxCollider2D / CircleCollider2D / PolygonCollider2D on SpriteAnimSetAuthoring. Socket-loaded profiles draw their colliders in preview with the socket pose.
+- Collider inspector uses three scope foldouts. Current Frame splits into On this frame vs Other frames. Other Clips lists boxes that belong elsewhere. Details open inline under the selected row. Row click only selects. A search icon next to lock jumps Frame and Clip colliders to their home clip/frame. Binding does the same. Do not add a second global Details section.

@@ -1,6 +1,6 @@
 {
     "Sheet": {
-        "instanceID": 568105584918834996
+        "instanceID": 568105584918834998
     },
     "Columns": 8,
     "Rows": 8,
@@ -13,7 +13,7 @@
         {
             "Name": "Sword Character Prototype_All Frames",
             "Texture": {
-                "instanceID": 568105584918834996
+                "instanceID": 568105584918834998
             },
             "Columns": 8,
             "Rows": 8,
@@ -26,7 +26,7 @@
         {
             "Name": "Prototype Character_All Frames",
             "Texture": {
-                "instanceID": 568105584918835000
+                "instanceID": 568105584918835002
             },
             "Columns": 11,
             "Rows": 28,
@@ -179,13 +179,13 @@
                     "Name": "Orbit 0°",
                     "FrameIndex": 0,
                     "LocalPosition": {
-                        "x": 62.0,
-                        "y": 0.0
+                        "x": 77.0,
+                        "y": 7.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -193,13 +193,13 @@
                     "Name": "Orbit 0°",
                     "FrameIndex": 1,
                     "LocalPosition": {
-                        "x": 44.0,
-                        "y": 25.0
+                        "x": 67.0,
+                        "y": 21.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -207,13 +207,13 @@
                     "Name": "Orbit 0°",
                     "FrameIndex": 2,
                     "LocalPosition": {
-                        "x": 0.0,
-                        "y": 36.0
+                        "x": 42.0,
+                        "y": 27.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -221,13 +221,13 @@
                     "Name": "Orbit 0°",
                     "FrameIndex": 3,
                     "LocalPosition": {
-                        "x": -44.0,
-                        "y": 25.0
+                        "x": 17.0,
+                        "y": 21.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -235,13 +235,13 @@
                     "Name": "Orbit 0°",
                     "FrameIndex": 4,
                     "LocalPosition": {
-                        "x": -62.0,
-                        "y": 0.0
+                        "x": 7.0,
+                        "y": 7.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -249,13 +249,13 @@
                     "Name": "Orbit 0°",
                     "FrameIndex": 5,
                     "LocalPosition": {
-                        "x": -44.0,
-                        "y": -25.0
+                        "x": 17.0,
+                        "y": -7.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -263,13 +263,13 @@
                     "Name": "Orbit 0°",
                     "FrameIndex": 6,
                     "LocalPosition": {
-                        "x": 0.0,
-                        "y": -36.0
+                        "x": 42.0,
+                        "y": -13.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -277,13 +277,13 @@
                     "Name": "Orbit 0°",
                     "FrameIndex": 7,
                     "LocalPosition": {
-                        "x": 44.0,
-                        "y": -25.0
+                        "x": 67.0,
+                        "y": -7.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -291,13 +291,13 @@
                     "Name": "Orbit 60°",
                     "FrameIndex": 0,
                     "LocalPosition": {
-                        "x": -42.0,
-                        "y": -11.0
+                        "x": 18.0,
+                        "y": 1.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -305,13 +305,13 @@
                     "Name": "Orbit 60°",
                     "FrameIndex": 1,
                     "LocalPosition": {
-                        "x": -38.0,
-                        "y": -47.0
+                        "x": 20.0,
+                        "y": -20.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -319,13 +319,13 @@
                     "Name": "Orbit 60°",
                     "FrameIndex": 2,
                     "LocalPosition": {
-                        "x": -11.0,
-                        "y": -55.0
+                        "x": 36.0,
+                        "y": -24.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -333,13 +333,13 @@
                     "Name": "Orbit 60°",
                     "FrameIndex": 3,
                     "LocalPosition": {
-                        "x": 22.0,
-                        "y": -31.0
+                        "x": 54.0,
+                        "y": -11.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -347,13 +347,13 @@
                     "Name": "Orbit 60°",
                     "FrameIndex": 4,
                     "LocalPosition": {
-                        "x": 42.0,
-                        "y": 11.0
+                        "x": 66.0,
+                        "y": 13.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -361,13 +361,13 @@
                     "Name": "Orbit 60°",
                     "FrameIndex": 5,
                     "LocalPosition": {
-                        "x": 38.0,
-                        "y": 47.0
+                        "x": 63.0,
+                        "y": 34.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -375,13 +375,13 @@
                     "Name": "Orbit 60°",
                     "FrameIndex": 6,
                     "LocalPosition": {
-                        "x": 11.0,
-                        "y": 55.0
+                        "x": 48.0,
+                        "y": 38.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -389,13 +389,13 @@
                     "Name": "Orbit 60°",
                     "FrameIndex": 7,
                     "LocalPosition": {
-                        "x": -22.0,
-                        "y": 31.0
+                        "x": 29.0,
+                        "y": 24.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -403,13 +403,13 @@
                     "Name": "Orbit 120°",
                     "FrameIndex": 0,
                     "LocalPosition": {
-                        "x": 42.0,
-                        "y": -11.0
+                        "x": 66.0,
+                        "y": 1.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -417,13 +417,13 @@
                     "Name": "Orbit 120°",
                     "FrameIndex": 1,
                     "LocalPosition": {
-                        "x": 22.0,
-                        "y": 31.0
+                        "x": 54.0,
+                        "y": 24.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -431,13 +431,13 @@
                     "Name": "Orbit 120°",
                     "FrameIndex": 2,
                     "LocalPosition": {
-                        "x": -11.0,
-                        "y": 55.0
+                        "x": 36.0,
+                        "y": 38.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -445,13 +445,13 @@
                     "Name": "Orbit 120°",
                     "FrameIndex": 3,
                     "LocalPosition": {
-                        "x": -38.0,
-                        "y": 47.0
+                        "x": 20.0,
+                        "y": 34.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -459,13 +459,13 @@
                     "Name": "Orbit 120°",
                     "FrameIndex": 4,
                     "LocalPosition": {
-                        "x": -42.0,
-                        "y": 11.0
+                        "x": 18.0,
+                        "y": 13.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1
                 },
@@ -473,13 +473,13 @@
                     "Name": "Orbit 120°",
                     "FrameIndex": 5,
                     "LocalPosition": {
-                        "x": -22.0,
-                        "y": -31.0
+                        "x": 29.0,
+                        "y": -11.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -487,13 +487,13 @@
                     "Name": "Orbit 120°",
                     "FrameIndex": 6,
                     "LocalPosition": {
-                        "x": 11.0,
-                        "y": -55.0
+                        "x": 48.0,
+                        "y": -24.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 },
@@ -501,13 +501,13 @@
                     "Name": "Orbit 120°",
                     "FrameIndex": 7,
                     "LocalPosition": {
-                        "x": 38.0,
-                        "y": -47.0
+                        "x": 63.0,
+                        "y": -20.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2
                 }
@@ -4294,17 +4294,18 @@
             "DefaultEaseMode": 1,
             "DefaultPathMode": 0,
             "DefaultRotationMode": 0,
+            "AnchorSpace": 0,
             "Keys": [
                 {
                     "NormalizedTime": 0.0,
                     "LocalPosition": {
-                        "x": 62.0,
+                        "x": 35.0,
                         "y": 0.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4347,13 +4348,13 @@
                 {
                     "NormalizedTime": 0.125,
                     "LocalPosition": {
-                        "x": 44.0,
-                        "y": 25.0
+                        "x": 25.0,
+                        "y": 14.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -4397,12 +4398,12 @@
                     "NormalizedTime": 0.25,
                     "LocalPosition": {
                         "x": 0.0,
-                        "y": 36.0
+                        "y": 20.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -4445,13 +4446,13 @@
                 {
                     "NormalizedTime": 0.375,
                     "LocalPosition": {
-                        "x": -44.0,
-                        "y": 25.0
+                        "x": -25.0,
+                        "y": 14.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -4494,13 +4495,13 @@
                 {
                     "NormalizedTime": 0.5,
                     "LocalPosition": {
-                        "x": -62.0,
+                        "x": -35.0,
                         "y": 0.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4543,13 +4544,13 @@
                 {
                     "NormalizedTime": 0.625,
                     "LocalPosition": {
-                        "x": -44.0,
-                        "y": -25.0
+                        "x": -25.0,
+                        "y": -14.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4593,12 +4594,12 @@
                     "NormalizedTime": 0.75,
                     "LocalPosition": {
                         "x": 0.0,
-                        "y": -36.0
+                        "y": -20.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4641,13 +4642,13 @@
                 {
                     "NormalizedTime": 0.875,
                     "LocalPosition": {
-                        "x": 44.0,
-                        "y": -25.0
+                        "x": 25.0,
+                        "y": -14.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4698,17 +4699,18 @@
             "DefaultEaseMode": 1,
             "DefaultPathMode": 0,
             "DefaultRotationMode": 0,
+            "AnchorSpace": 0,
             "Keys": [
                 {
                     "NormalizedTime": 0.0,
                     "LocalPosition": {
-                        "x": -42.0,
-                        "y": -11.0
+                        "x": -24.0,
+                        "y": -6.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4751,13 +4753,13 @@
                 {
                     "NormalizedTime": 0.125,
                     "LocalPosition": {
-                        "x": -38.0,
-                        "y": -47.0
+                        "x": -22.0,
+                        "y": -27.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4800,13 +4802,13 @@
                 {
                     "NormalizedTime": 0.25,
                     "LocalPosition": {
-                        "x": -11.0,
-                        "y": -55.0
+                        "x": -6.0,
+                        "y": -31.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4849,13 +4851,13 @@
                 {
                     "NormalizedTime": 0.375,
                     "LocalPosition": {
-                        "x": 22.0,
-                        "y": -31.0
+                        "x": 13.0,
+                        "y": -18.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -4898,13 +4900,13 @@
                 {
                     "NormalizedTime": 0.5,
                     "LocalPosition": {
-                        "x": 42.0,
-                        "y": 11.0
+                        "x": 24.0,
+                        "y": 6.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -4947,13 +4949,13 @@
                 {
                     "NormalizedTime": 0.625,
                     "LocalPosition": {
-                        "x": 38.0,
-                        "y": 47.0
+                        "x": 22.0,
+                        "y": 27.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -4996,13 +4998,13 @@
                 {
                     "NormalizedTime": 0.75,
                     "LocalPosition": {
-                        "x": 11.0,
-                        "y": 55.0
+                        "x": 6.0,
+                        "y": 31.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -5045,13 +5047,13 @@
                 {
                     "NormalizedTime": 0.875,
                     "LocalPosition": {
-                        "x": -22.0,
-                        "y": 31.0
+                        "x": -13.0,
+                        "y": 18.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -5102,17 +5104,18 @@
             "DefaultEaseMode": 1,
             "DefaultPathMode": 0,
             "DefaultRotationMode": 0,
+            "AnchorSpace": 0,
             "Keys": [
                 {
                     "NormalizedTime": 0.0,
                     "LocalPosition": {
-                        "x": 42.0,
-                        "y": -11.0
+                        "x": 24.0,
+                        "y": -6.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -5155,13 +5158,13 @@
                 {
                     "NormalizedTime": 0.125,
                     "LocalPosition": {
-                        "x": 22.0,
-                        "y": 31.0
+                        "x": 13.0,
+                        "y": 18.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -5204,13 +5207,13 @@
                 {
                     "NormalizedTime": 0.25,
                     "LocalPosition": {
-                        "x": -11.0,
-                        "y": 55.0
+                        "x": -6.0,
+                        "y": 31.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -5253,13 +5256,13 @@
                 {
                     "NormalizedTime": 0.375,
                     "LocalPosition": {
-                        "x": -38.0,
-                        "y": 47.0
+                        "x": -22.0,
+                        "y": 27.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -5302,13 +5305,13 @@
                 {
                     "NormalizedTime": 0.5,
                     "LocalPosition": {
-                        "x": -42.0,
-                        "y": 11.0
+                        "x": -24.0,
+                        "y": 6.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 1,
                     "EaseMode": 1,
@@ -5351,13 +5354,13 @@
                 {
                     "NormalizedTime": 0.625,
                     "LocalPosition": {
-                        "x": -22.0,
-                        "y": -31.0
+                        "x": -13.0,
+                        "y": -18.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -5400,13 +5403,13 @@
                 {
                     "NormalizedTime": 0.75,
                     "LocalPosition": {
-                        "x": 11.0,
-                        "y": -55.0
+                        "x": 6.0,
+                        "y": -31.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -5449,13 +5452,13 @@
                 {
                     "NormalizedTime": 0.875,
                     "LocalPosition": {
-                        "x": 38.0,
-                        "y": -47.0
+                        "x": 22.0,
+                        "y": -27.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
-                        "x": 1.0,
-                        "y": 1.0
+                        "x": 0.5687879323959351,
+                        "y": 0.5650209784507752
                     },
                     "DrawLayer": 2,
                     "EaseMode": 1,
@@ -5497,6 +5500,18 @@
                 }
             ],
             "Triggers": []
+        }
+    ],
+    "SocketInventories": [
+        {
+            "Name": "orbit",
+            "Folded": false,
+            "AnchorSpace": 0,
+            "SocketNames": [
+                "Orbit 0°",
+                "Orbit 60°",
+                "Orbit 120°"
+            ]
         }
     ],
     "IndependentTimelineInitialized": true,
