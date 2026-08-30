@@ -31,7 +31,8 @@ namespace InvertLab.Sprites.DOTS
                     continue;
                 float previousTime = player.ValueRO.Time;
                 if (player.ValueRO.Playing != 0)
-                    player.ValueRW.Time += dt;
+                    player.ValueRW.Time += dt * math.select(
+                        1f, player.ValueRO.Speed, player.ValueRO.Speed > 0.0001f);
                 float currentTime = player.ValueRO.Time;
 
                 ref var set = ref setRef.ValueRO.Set.Value;
@@ -46,7 +47,7 @@ namespace InvertLab.Sprites.DOTS
                             ref eventBuffers, ref eventPending);
 
                     float duration = math.max(0.01f, motion.Duration);
-                    float normalized = player.ValueRO.Time * math.max(0.01f, motion.Speed) / duration;
+                    float normalized = player.ValueRO.Time / duration;
                     normalized = motion.Loop != 0
                         ? normalized - math.floor(normalized)
                         : math.saturate(normalized);
@@ -90,36 +91,16 @@ namespace InvertLab.Sprites.DOTS
                 !pending.HasComponent(entity) || currentClock <= previousClock)
                 return;
 
-            float rate = math.max(0.01f, motion.Speed) / math.max(0.01f, motion.Duration);
-            float from = previousClock * rate;
-            float to = currentClock * rate;
             var output = eventBuffers[entity];
-            if (motion.Loop == 0)
+            for (int i = 0; i < motion.Triggers.Length; i++)
             {
-                from = math.saturate(from);
-                to = math.saturate(to);
-                for (int i = 0; i < motion.Triggers.Length; i++)
-                {
-                    float marker = motion.Triggers[i].NormalizedTime;
-                    if (marker > from + 1e-6f && marker <= to + 1e-6f)
-                        AddTrigger(ref output, ref motion, i, 0);
-                }
-            }
-            else
-            {
-                int firstCycle = (int)math.floor(from);
-                int lastCycle = (int)math.floor(to);
-                int emittedCycles = 0;
-                for (int cycle = firstCycle; cycle <= lastCycle && emittedCycles < 4096;
-                     cycle++, emittedCycles++)
-                {
-                    for (int i = 0; i < motion.Triggers.Length; i++)
-                    {
-                        float absolute = cycle + motion.Triggers[i].NormalizedTime;
-                        if (absolute > from + 1e-6f && absolute <= to + 1e-6f)
-                            AddTrigger(ref output, ref motion, i, cycle);
-                    }
-                }
+                int count = SpriteSocketTriggerUtility.CountCrossings(
+                    previousClock, currentClock, motion.Duration,
+                    motion.Triggers[i].NormalizedTime, motion.Loop != 0,
+                    out int firstSequence);
+                count = math.min(count, 4096);
+                for (int crossing = 0; crossing < count; crossing++)
+                    AddTrigger(ref output, ref motion, i, firstSequence + crossing);
             }
             if (output.Length > 0)
                 pending.SetComponentEnabled(entity, true);
@@ -207,6 +188,16 @@ namespace InvertLab.Sprites.DOTS
 
             var a = motion.Keys[from];
             var b = motion.Keys[to];
+            localT = a.UseCustomEase != 0
+                ? SpriteEase.EvaluateSamples(
+                    a.CustomEaseSamplesA, a.CustomEaseSamplesB, localT,
+                    a.AllowOvershoot != 0)
+                : SpriteEase.Evaluate(
+                    SpriteEase.IsValidMode(a.EaseMode)
+                        ? (SpriteEaseMode)a.EaseMode
+                        : SpriteEaseMode.SmoothStep,
+                    localT, a.AllowOvershoot != 0);
+            float2 derivative = b.LocalPosition - a.LocalPosition;
             if (from == to)
             {
                 position = a.LocalPosition;
@@ -215,17 +206,32 @@ namespace InvertLab.Sprites.DOTS
             {
                 int before = MotionKeyIndex(from - 1, count, motion.Loop != 0);
                 int after = MotionKeyIndex(to + 1, count, motion.Loop != 0);
-                position = CatmullRom(
+                position = SpriteSocketMotionInterpolation.Position(
+                    a.PathMode,
                     motion.Keys[before].LocalPosition,
                     a.LocalPosition,
                     b.LocalPosition,
                     motion.Keys[after].LocalPosition,
+                    a.OutTangent,
+                    b.InTangent,
+                    a.ArcBulge,
+                    a.ArcClockwise,
+                    localT);
+                derivative = SpriteSocketMotionInterpolation.Derivative(
+                    a.PathMode,
+                    motion.Keys[before].LocalPosition,
+                    a.LocalPosition,
+                    b.LocalPosition,
+                    motion.Keys[after].LocalPosition,
+                    a.OutTangent,
+                    b.InTangent,
+                    a.ArcBulge,
+                    a.ArcClockwise,
                     localT);
             }
-            float delta = math.fmod(b.LocalAngle - a.LocalAngle + 180f, 360f);
-            if (delta < 0f)
-                delta += 360f;
-            angle = a.LocalAngle + (delta - 180f) * localT;
+            angle = SpriteSocketMotionInterpolation.Rotation(
+                a.RotationMode, a.LocalAngle, b.LocalAngle,
+                a.RotationTurns, a.FacingAngleOffset, derivative, localT);
             scale = math.lerp(a.LocalScale, b.LocalScale, localT);
         }
 
@@ -237,16 +243,6 @@ namespace InvertLab.Sprites.DOTS
             return wrapped < 0 ? wrapped + count : wrapped;
         }
 
-        static float2 CatmullRom(float2 p0, float2 p1, float2 p2, float2 p3, float t)
-        {
-            t = math.saturate(t);
-            float t2 = t * t;
-            float t3 = t2 * t;
-            return 0.5f * ((2f * p1) +
-                           (-p0 + p2) * t +
-                           (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
-                           (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
-        }
     }
 
     /// <summary>Applies current-frame socket poses to baked child attachments.</summary>

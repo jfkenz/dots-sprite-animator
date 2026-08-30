@@ -1,0 +1,110 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e4c91a2d8f4e6ab3c1d9e0f5a8b246, type: 3}
+  m_Name: examplebot_profile
+  m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.ScriptableSpriteSheetProfile
+  Data:
+    Sheet: {fileID: 2800000, guid: 31f94212fc870a54f873fbe73724930b, type: 3}
+    Columns: 7
+    Rows: 1
+    PixelsPerUnit: 99.99999
+    Pivot: {x: 0.5, y: 0.5}
+    Sheets:
+    - Name: examplebot
+      Texture: {fileID: 2800000, guid: 31f94212fc870a54f873fbe73724930b, type: 3}
+      Columns: 7
+      Rows: 1
+      PixelsPerUnit: 99.99999
+      Pivot: {x: 0.5, y: 0.5}
+    - Name: Sheet 2
+      Texture: {fileID: 0}
+      Columns: 4
+      Rows: 4
+      PixelsPerUnit: 100
+      Pivot: {x: 0.5, y: 0.5}
+    Clips:
+    - Name: Clip 1
+      SheetIndex: 0
+      Row: 0
+      Frames: 00000000010000000200000003000000040000000500000006000000
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 00000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 00000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+    Events:
+    - Id: 1
+      Name: Footstep
+      Color: {r: 0.35, g: 0.85, b: 1, a: 1}
+    - Id: 2
+      Name: Attack
+      Color: {r: 1, g: 0.35, b: 0.3, a: 1}
+    Hitboxes: []
+    SocketCatalog:
+      Items: []
+    OnionSettingsInitialized: 1
+    OnionSkinEnabled: 0
+    OnionPastFrames: 3
+    OnionFutureFrames: 3
+    ShowOnionLayerNumbers: 1
+    TimelineHitShape: 0
+    TimelineHitPolygon:
+    - {x: 0.5, y: 0.04}
+    - {x: 0.82, y: 0.16}
+    - {x: 0.96, y: 0.5}
+    - {x: 0.82, y: 0.84}
+    - {x: 0.5, y: 0.96}
+    - {x: 0.18, y: 0.84}
+    - {x: 0.04, y: 0.5}
+    - {x: 0.18, y: 0.16}

@@ -1,0 +1,37 @@
+---
+description: Completion checklist and editor conventions for every Sprite Animator feature
+alwaysApply: true
+---
+
+# Sprite Animator Feature Completion
+
+- Every user action that mutates profile, asset, scene, or editor-authored data must create a clearly named Unity Undo operation.
+- Record undo before the first mutation. Continuous drags record once at drag start, then seal the group at completion.
+- Destructive and multi-object actions must use a complete/discrete snapshot so nested serializable data restores correctly.
+- Mark affected assets dirty after mutation.
+- Add the operation to the tool's visible Undo/Redo history list.
+- Verify both Undo and Redo restore data, selection, and preview state without stale references.
+- During pointer drags, preview and transform handles must read the same live data being modified; never read stale frame keys or legacy copies.
+- Keep repaint and mouse-drag paths allocation-light. Do not normalize, sort, migrate, scan all tracks repeatedly, or save assets every repaint.
+- Check behavior for both Frame-Attached and Independent Motion data whenever shared socket selection, transforms, deletion, or preview code changes.
+- Recheck selection modifiers, click-without-drag, Escape cancellation, Delete/Backspace, empty data, mixed PPU sheets, and timeline scrubbing.
+- Build affected editor/runtime/test projects and check lints before reporting completion.
+- A new editor feature is incomplete until this checklist passes.
+
+# Preview overlays and debug
+
+- Any button, toggle, or panel drawn on the preview canvas must use the inherit-overlay input block: while the pointer is over that control, set `Event.current.type` to `Ignore` so pan/socket/marquee cannot consume the click, restore the original type, then draw and handle the control (`SocketInheritBlocksEditorInput`, `PreviewDebugToggleBlocksEditorInput`).
+- Create preview debug toggles pinned to the canvas (not the header) when the user asks to show/hide paths or gizmos.
+- `Debug: On` is the only master gate for socket pins, labels, group gizmos, and motion paths. Do not hide paths because multiple sockets are selected.
+- `Paths: On` only filters Independent Motion lines and only while Debug is on.
+
+# Independent Motion and group transform
+
+- Moving an Own-Clock / Independent Motion socket in the preview translates every key on that track (and matching clip keys). Never write only the current traveler/sample — that stretches the path and leaves the ellipse behind.
+- Path debug must sample the same live track keys being dragged. Gizmos and path shape stay attached.
+- Group pivot sits at the visual middle of the selection box (center of selected Independent Motion / frame path bounds), not the average of live traveler pins. The box wraps those same path points so the crosshair stays in the middle. Pivot stays draggable and follows group moves.
+- Group-pivot drag targets `ScreenToSocketLocal(mouse)` so the crosshair sits on the cursor from click through release. Pin-drag of a socket keeps relative grab offset.
+- Frame-Attached single-socket pin drag still edits the current frame only. Independent sockets always move the whole path.
+- Independent Motion scale and rotate must write the live track keys (and matching clip keys). Never write only a leftover frame key — the preview samples the track, so that looks locked.
+- Space playback: `Space: Both` (default on) starts or pauses Frames and Independent Motion together. Off keeps Space on the selected tab only. Per-timeline Play buttons stay single-clock.
+- Draw keys follow the socket clock. Frames DRAW lane shows Frame-Attached only. Independent Motion DRAW lane shows Own-Clock `DrawLayer` keys. Do not mix leftover Independent clip keys onto Frames.

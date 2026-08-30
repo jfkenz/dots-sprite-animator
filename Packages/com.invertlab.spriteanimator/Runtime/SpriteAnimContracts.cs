@@ -87,6 +87,7 @@ namespace InvertLab.Sprites.DOTS
     public struct SpriteSocketMotionPlayer : IComponentData
     {
         public float Time;
+        public float Speed;
         public byte Playing;
     }
 
@@ -119,6 +120,27 @@ namespace InvertLab.Sprites.DOTS
         public float3 Position;
         public quaternion Rotation;
         public float2 Scale;
+    }
+
+    public static class SpriteSocketTriggerUtility
+    {
+        public static int CountCrossings(float previousClock, float currentClock,
+            float duration, float normalizedTime, bool loop, out int firstSequence)
+        {
+            firstSequence = 0;
+            if (currentClock <= previousClock)
+                return 0;
+            float from = previousClock / math.max(0.01f, duration);
+            float to = currentClock / math.max(0.01f, duration);
+            float marker = math.saturate(normalizedTime);
+            if (!loop)
+                return marker > math.saturate(from) + 1e-6f &&
+                       marker <= math.saturate(to) + 1e-6f ? 1 : 0;
+            int first = (int)math.floor(from - marker + 1e-6f) + 1;
+            int last = (int)math.floor(to - marker + 1e-6f);
+            firstSequence = first;
+            return math.max(0, last - first + 1);
+        }
     }
 
     /// <summary>Burst-friendly socket lookup for gameplay and custom systems.</summary>

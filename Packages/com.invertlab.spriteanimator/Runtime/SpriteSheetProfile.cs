@@ -11,6 +11,60 @@ namespace InvertLab.Sprites.DOTS
         EaseIn = 2,
         EaseOut = 3,
         Step = 4,
+        EaseInOut = 5,
+        SineIn = 6,
+        SineOut = 7,
+        SineInOut = 8,
+        QuadIn = 9,
+        QuadOut = 10,
+        QuadInOut = 11,
+        CubicIn = 12,
+        CubicOut = 13,
+        CubicInOut = 14,
+        QuartIn = 15,
+        QuartOut = 16,
+        QuartInOut = 17,
+        QuintIn = 18,
+        QuintOut = 19,
+        QuintInOut = 20,
+        ExpoIn = 21,
+        ExpoOut = 22,
+        ExpoInOut = 23,
+        CircIn = 24,
+        CircOut = 25,
+        CircInOut = 26,
+        BackIn = 27,
+        BackOut = 28,
+        BackInOut = 29,
+        ElasticIn = 30,
+        ElasticOut = 31,
+        ElasticInOut = 32,
+        BounceIn = 33,
+        BounceOut = 34,
+        BounceInOut = 35,
+        None = 36,
+    }
+
+    public enum SpriteSocketPathMode : byte
+    {
+        SmoothPath = 0,
+        Linear = 1,
+        Hold = 2,
+        CubicBezier = 3,
+        Hermite = 4,
+        Arc = 5,
+        None = 6,
+    }
+
+    public enum SpriteSocketRotationMode : byte
+    {
+        Shortest = 0,
+        Clockwise = 1,
+        CounterClockwise = 2,
+        ContinuousTurns = 3,
+        FacePath = 4,
+        Hold = 5,
+        None = 6,
     }
 
     public enum SpriteFacingDirection : byte
@@ -93,7 +147,7 @@ namespace InvertLab.Sprites.DOTS
             FrameTweenModes = Resize(FrameTweenModes, count, DefaultTweenMode);
             for (int i = 0; i < FrameTweenModes.Length; i++)
             {
-                if (FrameTweenModes[i] > (byte)SpriteEaseMode.Step)
+                if (!SpriteEase.IsValidMode(FrameTweenModes[i]))
                     FrameTweenModes[i] = DefaultTweenMode;
             }
             Sockets ??= new List<FrameSocketDef>();
@@ -236,6 +290,77 @@ namespace InvertLab.Sprites.DOTS
         public float LocalAngle;
         public Vector2 LocalScale = Vector2.one;
         public byte DrawLayer;
+        public byte EaseMode = (byte)SpriteEaseMode.SmoothStep;
+        public byte PathMode = (byte)SpriteSocketPathMode.SmoothPath;
+        public Vector2 InTangent;
+        public Vector2 OutTangent;
+        public float ArcBulge;
+        public bool ArcClockwise;
+        public byte RotationMode = (byte)SpriteSocketRotationMode.Shortest;
+        public int RotationTurns;
+        public float FacingAngleOffset;
+        public bool AllowOvershoot;
+        public bool UseCustomEase;
+        public AnimationCurve CustomEaseCurve;
+        public Vector4 CustomEaseSamplesA = new(0f, 1f / 7f, 2f / 7f, 3f / 7f);
+        public Vector4 CustomEaseSamplesB = new(4f / 7f, 5f / 7f, 6f / 7f, 1f);
+
+        public void EnsureCustomEaseCurve()
+        {
+            CustomEaseCurve ??= AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        }
+
+        public void RebuildCustomEaseSamples()
+        {
+            EnsureCustomEaseCurve();
+            const float s0 = 0f;
+            float s1 = CustomEaseSampleAt(1f / 7f, s0);
+            float s2 = CustomEaseSampleAt(2f / 7f, s1);
+            float s3 = CustomEaseSampleAt(3f / 7f, s2);
+            float s4 = CustomEaseSampleAt(4f / 7f, s3);
+            float s5 = CustomEaseSampleAt(5f / 7f, s4);
+            float s6 = CustomEaseSampleAt(6f / 7f, s5);
+            const float s7 = 1f;
+            CustomEaseSamplesA = new Vector4(s0, s1, s2, s3);
+            CustomEaseSamplesB = new Vector4(s4, s5, s6, s7);
+        }
+
+        public float EvaluateCustomEase(float t)
+        {
+            t = Mathf.Clamp01(t);
+            float scaled = t * 7f;
+            int from = Mathf.Min(6, Mathf.FloorToInt(scaled));
+            int to = from + 1;
+            float blend = scaled - from;
+            float value = Mathf.LerpUnclamped(
+                CustomEaseSample(from), CustomEaseSample(to), blend);
+            return AllowOvershoot ? value : Mathf.Clamp01(value);
+        }
+
+        float CustomEaseSampleAt(float time, float previous)
+        {
+            float value = CustomEaseCurve.Evaluate(time);
+            if (float.IsNaN(value) || float.IsInfinity(value))
+                value = previous;
+            return AllowOvershoot
+                ? value
+                : Mathf.Max(previous, Mathf.Clamp01(value));
+        }
+
+        float CustomEaseSample(int index)
+        {
+            return index switch
+            {
+                0 => CustomEaseSamplesA.x,
+                1 => CustomEaseSamplesA.y,
+                2 => CustomEaseSamplesA.z,
+                3 => CustomEaseSamplesA.w,
+                4 => CustomEaseSamplesB.x,
+                5 => CustomEaseSamplesB.y,
+                6 => CustomEaseSamplesB.z,
+                _ => CustomEaseSamplesB.w,
+            };
+        }
     }
 
     [Serializable]
@@ -257,6 +382,9 @@ namespace InvertLab.Sprites.DOTS
         public int ReferenceSheetIndex;
         [Min(0.01f)] public float Duration = 1f;
         public bool Loop = true;
+        public byte DefaultEaseMode = (byte)SpriteEaseMode.SmoothStep;
+        public byte DefaultPathMode = (byte)SpriteSocketPathMode.SmoothPath;
+        public byte DefaultRotationMode = (byte)SpriteSocketRotationMode.Shortest;
         public List<SpriteSocketMotionKey> Keys = new();
         public List<SpriteSocketTriggerDef> Triggers = new();
 
@@ -265,11 +393,29 @@ namespace InvertLab.Sprites.DOTS
             SocketName = string.IsNullOrWhiteSpace(SocketName) ? "Socket" : SocketName.Trim();
             ReferenceSheetIndex = Mathf.Clamp(ReferenceSheetIndex, 0, Mathf.Max(0, sheetCount - 1));
             Duration = Mathf.Max(0.01f, Duration);
+            if (!SpriteEase.IsValidMode(DefaultEaseMode))
+                DefaultEaseMode = (byte)SpriteEaseMode.SmoothStep;
+            if (DefaultPathMode > (byte)SpriteSocketPathMode.None)
+                DefaultPathMode = (byte)SpriteSocketPathMode.SmoothPath;
+            if (DefaultRotationMode > (byte)SpriteSocketRotationMode.None)
+                DefaultRotationMode = (byte)SpriteSocketRotationMode.Shortest;
             Keys ??= new List<SpriteSocketMotionKey>();
             Keys.RemoveAll(key => key == null);
             for (int i = 0; i < Keys.Count; i++)
             {
                 Keys[i].NormalizedTime = Mathf.Clamp01(Keys[i].NormalizedTime);
+                if (!SpriteEase.IsValidMode(Keys[i].EaseMode))
+                    Keys[i].EaseMode = (byte)SpriteEaseMode.SmoothStep;
+                if (Keys[i].PathMode > (byte)SpriteSocketPathMode.None)
+                    Keys[i].PathMode = (byte)SpriteSocketPathMode.SmoothPath;
+                if (Keys[i].RotationMode > (byte)SpriteSocketRotationMode.None)
+                    Keys[i].RotationMode = (byte)SpriteSocketRotationMode.Shortest;
+                Keys[i].RotationTurns = Mathf.Clamp(Keys[i].RotationTurns, -100, 100);
+                if (Keys[i].UseCustomEase && Keys[i].CustomEaseCurve == null)
+                {
+                    Keys[i].EnsureCustomEaseCurve();
+                    Keys[i].RebuildCustomEaseSamples();
+                }
                 if (Mathf.Approximately(Keys[i].LocalScale.x, 0f) &&
                     Mathf.Approximately(Keys[i].LocalScale.y, 0f))
                     Keys[i].LocalScale = Vector2.one;
@@ -539,6 +685,15 @@ namespace InvertLab.Sprites.DOTS
         public List<FrameBoxDef> Hitboxes = new();
         public SpriteSocketCatalog SocketCatalog = new();
         public List<SpriteSocketMotionTrack> SocketMotions = new();
+        public bool IndependentTimelineInitialized;
+        public bool IndependentTimelineUsesSeconds;
+        [Min(0.01f)] public float IndependentMotionDurationSeconds = 1f;
+        [HideInInspector]
+        [Min(1f)] public float IndependentMotionFrameRate = 12f;
+        [HideInInspector]
+        [Min(2)] public int IndependentMotionFrameCount = 12;
+        [Min(0.01f)] public float IndependentMotionSpeed = 1f;
+        public bool IndependentMotionLoop = true;
         public bool OnionSettingsInitialized = true;
         public bool OnionSkinEnabled;
         public int OnionPastFrames = DefaultOnionFrameCount;
@@ -588,8 +743,10 @@ namespace InvertLab.Sprites.DOTS
                     var motion = SocketMotions[i];
                     if (motion == null)
                         continue;
+                    bool missingCatalogIdentity = SocketCatalog.Find(motion.SocketName) == null;
                     var item = SocketCatalog.Ensure(motion.SocketName);
-                    item.MotionMode = (byte)SpriteSocketClockMode.OwnClock;
+                    if (missingCatalogIdentity)
+                        item.MotionMode = (byte)SpriteSocketClockMode.OwnClock;
                 }
             }
             var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -612,14 +769,68 @@ namespace InvertLab.Sprites.DOTS
         {
             SocketMotions ??= new List<SpriteSocketMotionTrack>();
             SocketMotions.RemoveAll(track => track == null);
+            IndependentMotionFrameRate = Mathf.Max(1f, IndependentMotionFrameRate);
+            IndependentMotionSpeed = Mathf.Max(0.01f, IndependentMotionSpeed);
+            if (!IndependentTimelineInitialized)
+            {
+                float legacyDuration = 1f;
+                bool legacyLoop = SocketMotions.Count == 0;
+                for (int i = 0; i < SocketMotions.Count; i++)
+                {
+                    legacyDuration = Mathf.Max(legacyDuration, SocketMotions[i].Duration);
+                    legacyLoop |= SocketMotions[i].Loop;
+                }
+                IndependentMotionFrameCount = Mathf.Max(2,
+                    Mathf.RoundToInt(legacyDuration * IndependentMotionFrameRate) + 1);
+                IndependentMotionLoop = legacyLoop;
+                IndependentTimelineInitialized = true;
+            }
+            IndependentMotionFrameCount = Mathf.Max(2, IndependentMotionFrameCount);
+            if (!IndependentTimelineUsesSeconds)
+            {
+                IndependentMotionDurationSeconds = Mathf.Max(0.01f,
+                    (IndependentMotionFrameCount - 1) / IndependentMotionFrameRate);
+                IndependentTimelineUsesSeconds = true;
+            }
+            IndependentMotionDurationSeconds = Mathf.Max(0.01f, IndependentMotionDurationSeconds);
+            float duration = IndependentMotionDuration;
             int sheetCount = Mathf.Max(1, Sheets?.Count ?? 0);
             for (int i = 0; i < SocketMotions.Count; i++)
+            {
+                SocketMotions[i].Duration = duration;
+                SocketMotions[i].Loop = IndependentMotionLoop;
                 SocketMotions[i].Normalize(sheetCount);
+            }
+        }
+
+        public float IndependentMotionDuration
+            => Mathf.Max(0.01f, IndependentMotionDurationSeconds);
+
+        public bool ExtendIndependentMotionDurationPreserveTimes(float requiredDuration)
+        {
+            EnsureSocketMotions();
+            float oldDuration = IndependentMotionDuration;
+            float newDuration = Mathf.Max(oldDuration, requiredDuration);
+            if (newDuration <= oldDuration + 0.000001f)
+                return false;
+            float normalizedScale = oldDuration / newDuration;
+            for (int i = 0; i < SocketMotions.Count; i++)
+            {
+                var track = SocketMotions[i];
+                for (int k = 0; k < track.Keys.Count; k++)
+                    track.Keys[k].NormalizedTime *= normalizedScale;
+                for (int t = 0; t < track.Triggers.Count; t++)
+                    track.Triggers[t].NormalizedTime *= normalizedScale;
+                track.Duration = newDuration;
+            }
+            IndependentMotionDurationSeconds = newDuration;
+            IndependentTimelineUsesSeconds = true;
+            return true;
         }
 
         public SpriteSocketMotionTrack FindSocketMotion(string socketName)
         {
-            EnsureSocketMotions();
+            SocketMotions ??= new List<SpriteSocketMotionTrack>();
             if (string.IsNullOrWhiteSpace(socketName))
                 return null;
             for (int i = 0; i < SocketMotions.Count; i++)
@@ -634,12 +845,15 @@ namespace InvertLab.Sprites.DOTS
 
         public SpriteSocketMotionTrack EnsureSocketMotion(string socketName)
         {
+            EnsureSocketMotions();
             var found = FindSocketMotion(socketName);
             if (found != null)
                 return found;
             var track = new SpriteSocketMotionTrack
             {
                 SocketName = string.IsNullOrWhiteSpace(socketName) ? "Socket" : socketName.Trim(),
+                Duration = IndependentMotionDuration,
+                Loop = IndependentMotionLoop,
             };
             SocketMotions.Add(track);
             return track;
@@ -882,6 +1096,18 @@ namespace InvertLab.Sprites.DOTS
             }
 
             SyncLegacyFromSheet(src);
+        }
+    }
+
+    public static class SpriteSocketMotionTimeUtility
+    {
+        public static float ResolveStepSeconds(
+            bool frameMode, float secondsStep, float stepFps, int stepCount)
+        {
+            int count = Mathf.Max(1, stepCount);
+            return frameMode
+                ? count / Mathf.Max(1f, stepFps)
+                : count * Mathf.Max(0.001f, secondsStep);
         }
     }
 

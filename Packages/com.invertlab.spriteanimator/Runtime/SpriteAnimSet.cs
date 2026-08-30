@@ -50,6 +50,19 @@ namespace InvertLab.Sprites.DOTS
         public float2 LocalPosition;
         public float LocalAngle;
         public float2 LocalScale;
+        public byte EaseMode;
+        public byte PathMode;
+        public byte UseCustomEase;
+        public float4 CustomEaseSamplesA;
+        public float4 CustomEaseSamplesB;
+        public byte AllowOvershoot;
+        public float2 InTangent;
+        public float2 OutTangent;
+        public float ArcBulge;
+        public byte ArcClockwise;
+        public byte RotationMode;
+        public int RotationTurns;
+        public float FacingAngleOffset;
     }
 
     public struct SpriteSocketTriggerPoint
@@ -169,6 +182,19 @@ namespace InvertLab.Sprites.DOTS
                 public float2 LocalPosition;
                 public float LocalAngle;
                 public float2 LocalScale;
+                public byte EaseMode;
+                public byte PathMode;
+                public byte UseCustomEase;
+                public float4 CustomEaseSamplesA;
+                public float4 CustomEaseSamplesB;
+                public byte AllowOvershoot;
+                public float2 InTangent;
+                public float2 OutTangent;
+                public float ArcBulge;
+                public byte ArcClockwise;
+                public byte RotationMode;
+                public int RotationTurns;
+                public float FacingAngleOffset;
             }
 
             public struct SocketTriggerInput
@@ -300,6 +326,24 @@ namespace InvertLab.Sprites.DOTS
                         LocalScale = math.all(key.LocalScale == float2.zero)
                             ? new float2(1f, 1f)
                             : key.LocalScale,
+                        EaseMode = ClampEaseMode(key.EaseMode),
+                        PathMode = key.PathMode <= (byte)SpriteSocketPathMode.None
+                            ? key.PathMode
+                            : (byte)SpriteSocketPathMode.SmoothPath,
+                        UseCustomEase = key.UseCustomEase,
+                        CustomEaseSamplesA = key.CustomEaseSamplesA,
+                        CustomEaseSamplesB = key.CustomEaseSamplesB,
+                        AllowOvershoot = key.AllowOvershoot,
+                        InTangent = key.InTangent,
+                        OutTangent = key.OutTangent,
+                        ArcBulge = key.ArcBulge,
+                        ArcClockwise = key.ArcClockwise,
+                        RotationMode = key.RotationMode <=
+                                       (byte)SpriteSocketRotationMode.None
+                            ? key.RotationMode
+                            : (byte)SpriteSocketRotationMode.Shortest,
+                        RotationTurns = math.clamp(key.RotationTurns, -100, 100),
+                        FacingAngleOffset = key.FacingAngleOffset,
                     };
                 }
                 int triggerCount = input.Triggers?.Length ?? 0;
@@ -339,7 +383,7 @@ namespace InvertLab.Sprites.DOTS
 
         static byte ClampEaseMode(byte mode)
         {
-            return mode > (byte)SpriteEaseMode.Step
+            return !SpriteEase.IsValidMode(mode)
                 ? (byte)SpriteEaseMode.Linear
                 : mode;
         }

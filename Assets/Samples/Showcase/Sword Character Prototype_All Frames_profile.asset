@@ -88,483 +88,147 @@ MonoBehaviour:
       FacingGroup: 
       Facing: 255
       Sockets:
-      - Name: Orb 1
+      - Name: "Orbit 0\xB0"
         FrameIndex: 0
-        LocalPosition: {x: 27, y: 36}
+        LocalPosition: {x: 62, y: 0}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
-      - Name: Orb 1
+      - Name: "Orbit 0\xB0"
         FrameIndex: 1
-        LocalPosition: {x: 23, y: 46}
+        LocalPosition: {x: 44, y: 25}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
-      - Name: Orb 1
+      - Name: "Orbit 0\xB0"
         FrameIndex: 2
-        LocalPosition: {x: 14, y: 50}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 1
-        FrameIndex: 3
-        LocalPosition: {x: 4, y: 46}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 1
-        FrameIndex: 4
         LocalPosition: {x: 0, y: 36}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 1
-        FrameIndex: 5
-        LocalPosition: {x: 4, y: 26}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 1
-        FrameIndex: 6
-        LocalPosition: {x: 14, y: 22}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 1
-        FrameIndex: 7
-        LocalPosition: {x: 23, y: 26}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 2
-        FrameIndex: 0
-        LocalPosition: {x: -7, y: 60}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
         DrawLayer: 1
-      - Name: Orb 2
-        FrameIndex: 1
-        LocalPosition: {x: -15, y: 66}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 2
-        FrameIndex: 2
-        LocalPosition: {x: -26, y: 63}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 2
+      - Name: "Orbit 0\xB0"
         FrameIndex: 3
-        LocalPosition: {x: -31, y: 54}
+        LocalPosition: {x: -44, y: 25}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
-      - Name: Orb 2
+      - Name: "Orbit 0\xB0"
         FrameIndex: 4
-        LocalPosition: {x: -29, y: 44}
+        LocalPosition: {x: -62, y: 0}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
-      - Name: Orb 2
+      - Name: "Orbit 0\xB0"
         FrameIndex: 5
-        LocalPosition: {x: -20, y: 39}
+        LocalPosition: {x: -44, y: -25}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
-      - Name: Orb 2
+      - Name: "Orbit 0\xB0"
         FrameIndex: 6
-        LocalPosition: {x: -10, y: 41}
+        LocalPosition: {x: 0, y: -36}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
-      - Name: Orb 2
+      - Name: "Orbit 0\xB0"
         FrameIndex: 7
-        LocalPosition: {x: -4, y: 50}
+        LocalPosition: {x: 44, y: -25}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
-      - Name: Orb 3
+      - Name: "Orbit 60\xB0"
         FrameIndex: 0
-        LocalPosition: {x: 7, y: 18}
+        LocalPosition: {x: -42, y: -11}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 3
+        DrawLayer: 2
+      - Name: "Orbit 60\xB0"
         FrameIndex: 1
-        LocalPosition: {x: -3, y: 17}
+        LocalPosition: {x: -38, y: -47}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 3
+        DrawLayer: 2
+      - Name: "Orbit 60\xB0"
         FrameIndex: 2
-        LocalPosition: {x: -10, y: 10}
+        LocalPosition: {x: -11, y: -55}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 3
+        DrawLayer: 2
+      - Name: "Orbit 60\xB0"
         FrameIndex: 3
-        LocalPosition: {x: -9, y: -1}
+        LocalPosition: {x: 22, y: -31}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
-      - Name: Orb 3
+      - Name: "Orbit 60\xB0"
         FrameIndex: 4
-        LocalPosition: {x: -1, y: -8}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 3
-        FrameIndex: 5
-        LocalPosition: {x: 9, y: -7}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 3
-        FrameIndex: 6
-        LocalPosition: {x: 16, y: 1}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 3
-        FrameIndex: 7
-        LocalPosition: {x: 15, y: 11}
+        LocalPosition: {x: 42, y: 11}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
-      - Name: Orb 4
+      - Name: "Orbit 60\xB0"
+        FrameIndex: 5
+        LocalPosition: {x: 38, y: 47}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+      - Name: "Orbit 60\xB0"
+        FrameIndex: 6
+        LocalPosition: {x: 11, y: 55}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+      - Name: "Orbit 60\xB0"
+        FrameIndex: 7
+        LocalPosition: {x: -22, y: 31}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+      - Name: "Orbit 120\xB0"
         FrameIndex: 0
-        LocalPosition: {x: 18, y: 78}
+        LocalPosition: {x: 42, y: -11}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 4
+        DrawLayer: 2
+      - Name: "Orbit 120\xB0"
         FrameIndex: 1
-        LocalPosition: {x: 10, y: 71}
+        LocalPosition: {x: 22, y: 31}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 1
-      - Name: Orb 4
+      - Name: "Orbit 120\xB0"
         FrameIndex: 2
-        LocalPosition: {x: 9, y: 61}
+        LocalPosition: {x: -11, y: 55}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 4
+        DrawLayer: 1
+      - Name: "Orbit 120\xB0"
         FrameIndex: 3
-        LocalPosition: {x: 16, y: 53}
+        LocalPosition: {x: -38, y: 47}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 4
+        DrawLayer: 1
+      - Name: "Orbit 120\xB0"
         FrameIndex: 4
-        LocalPosition: {x: 26, y: 52}
+        LocalPosition: {x: -42, y: 11}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 4
+        DrawLayer: 1
+      - Name: "Orbit 120\xB0"
         FrameIndex: 5
-        LocalPosition: {x: 34, y: 59}
+        LocalPosition: {x: -22, y: -31}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
-      - Name: Orb 4
+      - Name: "Orbit 120\xB0"
         FrameIndex: 6
-        LocalPosition: {x: 35, y: 69}
+        LocalPosition: {x: 11, y: -55}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 4
+        DrawLayer: 2
+      - Name: "Orbit 120\xB0"
         FrameIndex: 7
-        LocalPosition: {x: 28, y: 77}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 5
-        FrameIndex: 0
-        LocalPosition: {x: -52, y: 37}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 5
-        FrameIndex: 1
-        LocalPosition: {x: -54, y: 27}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 5
-        FrameIndex: 2
-        LocalPosition: {x: -49, y: 18}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 5
-        FrameIndex: 3
-        LocalPosition: {x: -39, y: 15}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 5
-        FrameIndex: 4
-        LocalPosition: {x: -30, y: 21}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 5
-        FrameIndex: 5
-        LocalPosition: {x: -27, y: 31}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 5
-        FrameIndex: 6
-        LocalPosition: {x: -33, y: 40}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 5
-        FrameIndex: 7
-        LocalPosition: {x: -43, y: 42}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 6
-        FrameIndex: 0
-        LocalPosition: {x: 25, y: 11}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 6
-        FrameIndex: 1
-        LocalPosition: {x: 29, y: 2}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 6
-        FrameIndex: 2
-        LocalPosition: {x: 39, y: -2}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 6
-        FrameIndex: 3
-        LocalPosition: {x: 48, y: 2}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 6
-        FrameIndex: 4
-        LocalPosition: {x: 52, y: 11}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 6
-        FrameIndex: 5
-        LocalPosition: {x: 48, y: 21}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 6
-        FrameIndex: 6
-        LocalPosition: {x: 39, y: 25}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 6
-        FrameIndex: 7
-        LocalPosition: {x: 29, y: 21}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 7
-        FrameIndex: 0
-        LocalPosition: {x: -24, y: 76}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 7
-        FrameIndex: 1
-        LocalPosition: {x: -15, y: 71}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 7
-        FrameIndex: 2
-        LocalPosition: {x: -5, y: 73}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 7
-        FrameIndex: 3
-        LocalPosition: {x: 0, y: 82}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 7
-        FrameIndex: 4
-        LocalPosition: {x: -2, y: 92}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 7
-        FrameIndex: 5
-        LocalPosition: {x: -11, y: 97}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 7
-        FrameIndex: 6
-        LocalPosition: {x: -21, y: 95}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 7
-        FrameIndex: 7
-        LocalPosition: {x: -26, y: 86}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 8
-        FrameIndex: 0
-        LocalPosition: {x: -29, y: -24}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 8
-        FrameIndex: 1
-        LocalPosition: {x: -18, y: -23}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 8
-        FrameIndex: 2
-        LocalPosition: {x: -12, y: -16}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 8
-        FrameIndex: 3
-        LocalPosition: {x: -13, y: -5}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 8
-        FrameIndex: 4
-        LocalPosition: {x: -20, y: 2}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 8
-        FrameIndex: 5
-        LocalPosition: {x: -31, y: 1}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 8
-        FrameIndex: 6
-        LocalPosition: {x: -37, y: -7}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 8
-        FrameIndex: 7
-        LocalPosition: {x: -37, y: -17}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 9
-        FrameIndex: 0
-        LocalPosition: {x: 58, y: 43}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 9
-        FrameIndex: 1
-        LocalPosition: {x: 65, y: 49}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 9
-        FrameIndex: 2
-        LocalPosition: {x: 66, y: 60}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 9
-        FrameIndex: 3
-        LocalPosition: {x: 59, y: 68}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 9
-        FrameIndex: 4
-        LocalPosition: {x: 49, y: 68}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 9
-        FrameIndex: 5
-        LocalPosition: {x: 41, y: 62}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 9
-        FrameIndex: 6
-        LocalPosition: {x: 40, y: 51}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 9
-        FrameIndex: 7
-        LocalPosition: {x: 47, y: 43}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 10
-        FrameIndex: 0
-        LocalPosition: {x: -45, y: 51}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 10
-        FrameIndex: 1
-        LocalPosition: {x: -42, y: 61}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 10
-        FrameIndex: 2
-        LocalPosition: {x: -48, y: 70}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 10
-        FrameIndex: 3
-        LocalPosition: {x: -58, y: 72}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 10
-        FrameIndex: 4
-        LocalPosition: {x: -66, y: 67}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 1
-      - Name: Orb 10
-        FrameIndex: 5
-        LocalPosition: {x: -69, y: 57}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 10
-        FrameIndex: 6
-        LocalPosition: {x: -63, y: 48}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 2
-      - Name: Orb 10
-        FrameIndex: 7
-        LocalPosition: {x: -53, y: 46}
+        LocalPosition: {x: 38, y: -47}
         LocalAngle: 0
         LocalScale: {x: 1, y: 1}
         DrawLayer: 2
@@ -990,13 +654,7 @@ MonoBehaviour:
       FrameTweenModes: 0000000000
       FacingGroup: 
       Facing: 255
-      Sockets:
-      - Name: Socket 1
-        FrameIndex: 0
-        LocalPosition: {x: -0, y: 7}
-        LocalAngle: 0
-        LocalScale: {x: 1, y: 1}
-        DrawLayer: 0
+      Sockets: []
     - Name: Clip 10
       SheetIndex: 1
       Row: 1
@@ -2124,28 +1782,12 @@ MonoBehaviour:
     Hitboxes: []
     SocketCatalog:
       Items:
-      - SocketName: Socket 1
-        Texture: {fileID: 2800000, guid: 31f94212fc870a54f873fbe73724930b, type: 3}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
-        Columns: 1
-        Rows: 1
-        Pivot: {x: 0.5, y: 0.5}
-        CellIndex: 0
-        GripPixels: {x: 0, y: 0}
-        Scale: 1
-        FlipX: 0
-        SortingOffset: 0
-        PreviewEnabled: 1
-        PathWrap: 0
-        MotionMode: 1
-        Speed: 1
-      - SocketName: Orb 1
+      - SocketName: "Orbit 0\xB0"
+        SocketId: orbit.0
         Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
+        Profile: {fileID: 0}
+        ClipName: 
+        PlayMode: 0
         Columns: 1
         Rows: 1
         Pivot: {x: 0.5, y: 0.5}
@@ -2158,11 +1800,12 @@ MonoBehaviour:
         PathWrap: 0
         MotionMode: 1
         Speed: 1
-      - SocketName: Orb 2
+      - SocketName: "Orbit 60\xB0"
+        SocketId: orbit.60
         Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
+        Profile: {fileID: 0}
+        ClipName: 
+        PlayMode: 0
         Columns: 1
         Rows: 1
         Pivot: {x: 0.5, y: 0.5}
@@ -2175,11 +1818,12 @@ MonoBehaviour:
         PathWrap: 0
         MotionMode: 1
         Speed: 1
-      - SocketName: Orb 3
+      - SocketName: "Orbit 120\xB0"
+        SocketId: orbit.120
         Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
+        Profile: {fileID: 0}
+        ClipName: 
+        PlayMode: 0
         Columns: 1
         Rows: 1
         Pivot: {x: 0.5, y: 0.5}
@@ -2192,125 +1836,617 @@ MonoBehaviour:
         PathWrap: 0
         MotionMode: 1
         Speed: 1
-      - SocketName: Orb 5
-        Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
-        Columns: 1
-        Rows: 1
-        Pivot: {x: 0.5, y: 0.5}
-        CellIndex: 0
-        GripPixels: {x: 0, y: 0}
-        Scale: 1
-        FlipX: 0
-        SortingOffset: 0
-        PreviewEnabled: 1
-        PathWrap: 0
-        MotionMode: 1
-        Speed: 1
-      - SocketName: Orb 6
-        Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
-        Columns: 1
-        Rows: 1
-        Pivot: {x: 0.5, y: 0.5}
-        CellIndex: 0
-        GripPixels: {x: 0, y: 0}
-        Scale: 1
-        FlipX: 0
-        SortingOffset: 0
-        PreviewEnabled: 1
-        PathWrap: 0
-        MotionMode: 1
-        Speed: 1
-      - SocketName: Orb 7
-        Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
-        Columns: 1
-        Rows: 1
-        Pivot: {x: 0.5, y: 0.5}
-        CellIndex: 0
-        GripPixels: {x: 0, y: 0}
-        Scale: 1
-        FlipX: 0
-        SortingOffset: 0
-        PreviewEnabled: 1
-        PathWrap: 0
-        MotionMode: 1
-        Speed: 1
-      - SocketName: Orb 8
-        Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
-        Columns: 1
-        Rows: 1
-        Pivot: {x: 0.5, y: 0.5}
-        CellIndex: 0
-        GripPixels: {x: 0, y: 0}
-        Scale: 1
-        FlipX: 0
-        SortingOffset: 0
-        PreviewEnabled: 1
-        PathWrap: 0
-        MotionMode: 1
-        Speed: 1
-      - SocketName: Orb 9
-        Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
-        Columns: 1
-        Rows: 1
-        Pivot: {x: 0.5, y: 0.5}
-        CellIndex: 0
-        GripPixels: {x: 0, y: 0}
-        Scale: 1
-        FlipX: 0
-        SortingOffset: 0
-        PreviewEnabled: 1
-        PathWrap: 0
-        MotionMode: 1
-        Speed: 1
-      - SocketName: Orb 10
-        Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
-        Columns: 1
-        Rows: 1
-        Pivot: {x: 0.5, y: 0.5}
-        CellIndex: 0
-        GripPixels: {x: 0, y: 0}
-        Scale: 1
-        FlipX: 0
-        SortingOffset: 0
-        PreviewEnabled: 1
-        PathWrap: 0
-        MotionMode: 1
-        Speed: 1
-      - SocketName: Orb 4
-        Texture: {fileID: 0}
-        Profile: {fileID: 11400000, guid: c85e47726f37a0147b65b72c34f3dfc4, type: 2}
-        ClipName: Clip 1
-        PlayMode: 1
-        Columns: 1
-        Rows: 1
-        Pivot: {x: 0.5, y: 0.5}
-        CellIndex: 0
-        GripPixels: {x: 0, y: 0}
-        Scale: 1
-        FlipX: 0
-        SortingOffset: 0
-        PreviewEnabled: 1
-        PathWrap: 0
-        MotionMode: 1
-        Speed: 1
+    SocketMotions:
+    - SocketName: "Orbit 0\xB0"
+      ReferenceSheetIndex: 0
+      Duration: 1.25
+      Loop: 1
+      DefaultEaseMode: 1
+      DefaultPathMode: 0
+      DefaultRotationMode: 0
+      Keys:
+      - NormalizedTime: 0
+        LocalPosition: {x: 62, y: 0}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.125
+        LocalPosition: {x: 44, y: 25}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.25
+        LocalPosition: {x: 0, y: 36}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.375
+        LocalPosition: {x: -44, y: 25}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.5
+        LocalPosition: {x: -62, y: 0}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.625
+        LocalPosition: {x: -44, y: -25}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.75
+        LocalPosition: {x: 0, y: -36}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.875
+        LocalPosition: {x: 44, y: -25}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      Triggers: []
+    - SocketName: "Orbit 60\xB0"
+      ReferenceSheetIndex: 0
+      Duration: 1.25
+      Loop: 1
+      DefaultEaseMode: 1
+      DefaultPathMode: 0
+      DefaultRotationMode: 0
+      Keys:
+      - NormalizedTime: 0
+        LocalPosition: {x: -42, y: -11}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.125
+        LocalPosition: {x: -38, y: -47}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.25
+        LocalPosition: {x: -11, y: -55}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.375
+        LocalPosition: {x: 22, y: -31}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.5
+        LocalPosition: {x: 42, y: 11}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.625
+        LocalPosition: {x: 38, y: 47}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.75
+        LocalPosition: {x: 11, y: 55}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.875
+        LocalPosition: {x: -22, y: 31}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      Triggers: []
+    - SocketName: "Orbit 120\xB0"
+      ReferenceSheetIndex: 0
+      Duration: 1.25
+      Loop: 1
+      DefaultEaseMode: 1
+      DefaultPathMode: 0
+      DefaultRotationMode: 0
+      Keys:
+      - NormalizedTime: 0
+        LocalPosition: {x: 42, y: -11}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.125
+        LocalPosition: {x: 22, y: 31}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.25
+        LocalPosition: {x: -11, y: 55}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.375
+        LocalPosition: {x: -38, y: 47}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.5
+        LocalPosition: {x: -42, y: 11}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 1
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.625
+        LocalPosition: {x: -22, y: -31}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.75
+        LocalPosition: {x: 11, y: -55}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      - NormalizedTime: 0.875
+        LocalPosition: {x: 38, y: -47}
+        LocalAngle: 0
+        LocalScale: {x: 1, y: 1}
+        DrawLayer: 2
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      Triggers: []
+    IndependentTimelineInitialized: 1
+    IndependentTimelineUsesSeconds: 1
+    IndependentMotionDurationSeconds: 1.25
+    IndependentMotionFrameRate: 12
+    IndependentMotionFrameCount: 16
+    IndependentMotionSpeed: 1
+    IndependentMotionLoop: 1
     OnionSettingsInitialized: 1
     OnionSkinEnabled: 0
     OnionPastFrames: 0

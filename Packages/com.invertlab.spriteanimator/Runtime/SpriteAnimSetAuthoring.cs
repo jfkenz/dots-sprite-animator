@@ -527,6 +527,27 @@ namespace InvertLab.Sprites.DOTS
                                     key.LocalPosition.y / motionPpu),
                                 LocalAngle = key.LocalAngle,
                                 LocalScale = new float2(resolvedScale.x, resolvedScale.y),
+                                EaseMode = key.EaseMode,
+                                PathMode = key.PathMode,
+                                UseCustomEase = key.UseCustomEase ? (byte)1 : (byte)0,
+                                CustomEaseSamplesA = new float4(
+                                    key.CustomEaseSamplesA.x, key.CustomEaseSamplesA.y,
+                                    key.CustomEaseSamplesA.z, key.CustomEaseSamplesA.w),
+                                CustomEaseSamplesB = new float4(
+                                    key.CustomEaseSamplesB.x, key.CustomEaseSamplesB.y,
+                                    key.CustomEaseSamplesB.z, key.CustomEaseSamplesB.w),
+                                AllowOvershoot = key.AllowOvershoot ? (byte)1 : (byte)0,
+                                InTangent = new float2(
+                                    key.InTangent.x / motionPpu,
+                                    key.InTangent.y / motionPpu),
+                                OutTangent = new float2(
+                                    key.OutTangent.x / motionPpu,
+                                    key.OutTangent.y / motionPpu),
+                                ArcBulge = key.ArcBulge / motionPpu,
+                                ArcClockwise = key.ArcClockwise ? (byte)1 : (byte)0,
+                                RotationMode = key.RotationMode,
+                                RotationTurns = key.RotationTurns,
+                                FacingAngleOffset = key.FacingAngleOffset,
                             };
                     }
                     int triggerCount = motion.Triggers?.Count ?? 0;
@@ -544,9 +565,9 @@ namespace InvertLab.Sprites.DOTS
                     {
                         Name = motion.SocketName,
                         SocketId = catalogItem?.SocketId,
-                        Duration = motion.Duration,
-                        Speed = catalogItem?.ResolvedSpeed ?? 1f,
-                        Loop = motion.Loop,
+                        Duration = profile.IndependentMotionDuration,
+                        Speed = 1f,
+                        Loop = profile.IndependentMotionLoop,
                         Keys = keys,
                         Triggers = triggers,
                     };
@@ -598,6 +619,7 @@ namespace InvertLab.Sprites.DOTS
                     AddComponent(entity, new SpriteSocketMotionPlayer
                     {
                         Time = 0f,
+                        Speed = profile.IndependentMotionSpeed,
                         Playing = 1,
                     });
                     AddBuffer<SpriteSocketEventBuffer>(entity);

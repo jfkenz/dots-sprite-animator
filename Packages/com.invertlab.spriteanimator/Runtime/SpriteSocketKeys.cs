@@ -574,6 +574,43 @@ namespace InvertLab.Sprites.DOTS
             return IsDrawnBehind(sockets, name, frame, catalogBehind, closedPath);
         }
 
+        public static byte ResolveIndependentDrawLayer(SpriteSocketMotionTrack track,
+            float normalizedTime)
+        {
+            SpriteSocketMotionKey lastBefore = null;
+            SpriteSocketMotionKey lastAny = null;
+            if (track?.Keys == null)
+                return DrawUnset;
+            float now = Mathf.Clamp01(normalizedTime);
+            for (int i = 0; i < track.Keys.Count; i++)
+            {
+                var key = track.Keys[i];
+                if (key == null || key.DrawLayer == DrawUnset)
+                    continue;
+                if (lastAny == null || key.NormalizedTime > lastAny.NormalizedTime)
+                    lastAny = key;
+                if (key.NormalizedTime <= now + 0.0001f &&
+                    (lastBefore == null || key.NormalizedTime > lastBefore.NormalizedTime))
+                    lastBefore = key;
+            }
+
+            var chosen = lastBefore;
+            if (chosen == null && track.Loop)
+                chosen = lastAny;
+            return chosen != null ? chosen.DrawLayer : DrawUnset;
+        }
+
+        public static bool IsIndependentDrawnBehind(SpriteSocketMotionTrack track,
+            float normalizedTime, bool catalogBehind)
+        {
+            byte layer = ResolveIndependentDrawLayer(track, normalizedTime);
+            if (layer == DrawBehind)
+                return true;
+            if (layer == DrawFront)
+                return false;
+            return catalogBehind;
+        }
+
         public static void RenameIdentity(IList<FrameSocketDef> sockets, string fromName, string toName)
         {
             if (sockets == null)

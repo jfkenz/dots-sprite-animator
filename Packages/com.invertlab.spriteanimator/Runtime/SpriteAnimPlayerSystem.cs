@@ -249,7 +249,9 @@ namespace InvertLab.Sprites.DOTS
             if (frameIndex < 0 || frameIndex >= def.FrameTweenModes.Length)
                 return SpriteEaseMode.Linear;
             byte mode = def.FrameTweenModes[frameIndex];
-            return mode > (byte)SpriteEaseMode.Step ? SpriteEaseMode.Linear : (SpriteEaseMode)mode;
+            return SpriteEase.IsValidMode(mode)
+                ? (SpriteEaseMode)mode
+                : SpriteEaseMode.Linear;
         }
 
         internal static int DisplayFrame(int phaseStep, int frameCount, byte wrapMode)
