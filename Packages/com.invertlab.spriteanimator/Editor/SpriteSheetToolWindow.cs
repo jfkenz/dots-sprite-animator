@@ -195,6 +195,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         readonly HashSet<int> _selectedFrames = new();
         int _frameListAnchor = -1;
         int _selectedEventFrame = -1;
+        int _selectedEventIndex = -1;
+        string _selectedEventClipName;
+        [SerializeField] bool _eventThisClipExpanded = true;
+        [SerializeField] bool _eventOtherClipsExpanded = true;
+        [SerializeField] bool _eventRowDetailsExpanded = true;
         int _selectedSocketDrawFrame = -1;
         string _selectedSocketDrawName;
         int _dragDrawSourceFrame = -1;
@@ -203,7 +208,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _drawDragMoved;
         int _newHitboxId = 1;
         ColliderCreationMode _colliderCreationMode = ColliderCreationMode.None;
-        bool _continuousColliderPlacement;
+        [SerializeField] bool _continuousColliderPlacement = true;
         bool _socketPlacementArmed;
         bool _socketPlacementIndependent;
         string _selectedSocketName;
@@ -297,7 +302,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         bool _playing = false;
         bool _previewLoop = true;
-        bool _showHitboxes = true;
+        [SerializeField] bool _showHitboxes = true;
         byte _newColliderLifetime;
         byte _newColliderPhysics;
         bool _newColliderIsTrigger = true;
@@ -390,6 +395,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         SelectionOp _timelineMarqueeOp = SelectionOp.Replace;
         readonly HashSet<int> _timelineMarqueeBaseline = new();
         int _dragEventSourceFrame = -1;
+        int _dragEventMarkerIndex = -1;
         byte _dragEventId;
         float _dragEventAuthoredTime;
         bool _eventDragMoved;
@@ -921,6 +927,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedClip = -1;
             SelectOnlyFrame(0);
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedSocketDrawFrame = -1;
             _selectedOnionFrame = -1;
             _previewTime = 0f;
@@ -1105,6 +1112,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _playing = false;
             ClearColliderSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _status = forward ? "Jumped to last frame" : "Jumped to first frame";
             Repaint();
         }
@@ -1132,6 +1140,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _playing = false;
             ClearColliderSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _status = $"Stepped to frame {next + 1}";
             Repaint();
         }
@@ -1537,6 +1546,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedFrame = 0;
             ClearColliderSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             _previewTime = 0f;
         }
@@ -1808,6 +1818,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _selectedOnionFrame = -1;
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             }
             _selectedClip = index;
             var clip = _profile.Clips[index];
@@ -2162,7 +2173,23 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUI.EndGroup();
             FinishPreviewDebugToggle(canvas, previewEvent, debugBlocksPreview);
             // ContextClick is often delivered in window space after the group clip.
-            if (_showPreviewDebug && !debugBlocksPreview && clip != null &&
+            if (!debugBlocksPreview &&
+                _colliderCreationMode != ColliderCreationMode.None &&
+                IsPreviewToolCancelClick(Event.current) &&
+                canvas.Contains(Event.current.mousePosition))
+            {
+                if (_colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
+                    RemoveLastPolygonVertex();
+                else
+                    CancelColliderCreation(_colliderCreationMode == ColliderCreationMode.Polygon
+                        ? "Polygon creation cancelled"
+                        : "Collider creation cancelled");
+                Event.current.Use();
+                Repaint();
+            }
+            else if (Event.current.type != EventType.Used &&
+                _colliderCreationMode == ColliderCreationMode.None &&
+                _showPreviewDebug && clip != null &&
                 canvas.Contains(Event.current.mousePosition))
             {
                 Vector2 contentMouse = Event.current.mousePosition - canvas.position + _previewScroll;
@@ -2176,9 +2203,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         static Rect PreviewSizeToggleRect(Rect canvas)
             => new(canvas.xMax - 176f, canvas.yMax - 30f, 80f, 22f);
 
+        static Rect PreviewCollidersToggleRect(Rect canvas)
+            => new(canvas.xMax - 280f, canvas.yMax - 30f, 96f, 22f);
+
         static bool PreviewOverlayToggleContains(Rect canvas, Vector2 mouse)
             => PreviewDebugToggleRect(canvas).Contains(mouse) ||
-               PreviewSizeToggleRect(canvas).Contains(mouse);
+               PreviewSizeToggleRect(canvas).Contains(mouse) ||
+               PreviewCollidersToggleRect(canvas).Contains(mouse);
 
         static bool PreviewDebugToggleBlocksEditorInput(Rect canvas)
         {
@@ -2193,8 +2224,24 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (debugBlocksPreview)
                 Event.current.type = previewEvent;
+            DrawPreviewCollidersToggle(canvas);
             DrawPreviewSizeToggle(canvas);
             DrawPreviewDebugToggle(canvas);
+        }
+
+        void DrawPreviewCollidersToggle(Rect canvas)
+        {
+            if (!GUI.Button(PreviewCollidersToggleRect(canvas),
+                    new GUIContent(_showHitboxes ? "Colliders: On" : "Colliders: Off",
+                        "Master show/hide for all collider debug in preview, including socket-loaded profiles. Independent of Debug and Size."),
+                    EditorStyles.miniButton))
+                return;
+            RecordWindowUndo("Toggle Preview Colliders");
+            _showHitboxes = !_showHitboxes;
+            _status = _showHitboxes
+                ? "Collider debug visible"
+                : "Collider debug hidden";
+            Repaint();
         }
 
         void DrawPreviewSizeToggle(Rect canvas)
@@ -2681,7 +2728,10 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 GUILayout.Space(9f);
                 SectionLabel("COLLIDER CREATION");
-                _showHitboxes = EditorGUILayout.Toggle("Show Colliders", _showHitboxes);
+                _showHitboxes = EditorGUILayout.Toggle(
+                    new GUIContent("Show Colliders",
+                        "Same as the preview Colliders: On/Off overlay. Off hides every collider debug, including socket profiles."),
+                    _showHitboxes);
                 if (!_showHitboxes)
                 {
                     _colliderCreationMode = ColliderCreationMode.None;
@@ -2699,7 +2749,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                         DrawColliderModeButton(ColliderCreationMode.Polygon, "Polygon", EditorStyles.miniButtonRight);
                     }
                     _continuousColliderPlacement = EditorGUILayout.Toggle(
-                        "Continuous Placement", _continuousColliderPlacement);
+                        new GUIContent("Continuous Placement",
+                            "Keep the shape tool armed after each place. Right-click or Escape returns to select. Default is on."),
+                        _continuousColliderPlacement);
                     _newHitboxId = Mathf.Clamp(EditorGUILayout.IntField(
                         "New Collider ID", _newHitboxId), 1, 255);
                     _newColliderLifetime = ColliderLifetimeFromPopup(EditorGUILayout.Popup(
@@ -2717,7 +2769,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                     using (new EditorGUI.DisabledScope(_colliderCreationMode == ColliderCreationMode.None))
                     {
-                        if (GUILayout.Button("Cancel Creation Tool"))
+                        if (GUILayout.Button(new GUIContent("Cancel Creation Tool",
+                                "Drop the armed shape tool. Same as right-click on the preview or Escape.")))
                             CancelColliderCreation("Collider creation cancelled");
                     }
                 }
@@ -2727,9 +2780,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                         ColliderCreationMode.None =>
                             "Choose a shape to create, or click existing colliders to select them. Drag empty preview space for marquee. Shift adds, Ctrl/Cmd toggles, Alt subtracts, Shift+Alt intersects.",
                         ColliderCreationMode.Polygon =>
-                            "Click to draw polygon vertices. Click the first point, double-click, or press Enter to close. Right-click/Backspace removes the last point; Escape cancels.",
+                            "Click to place vertices. Click the first point, double-click, or press Enter to close. Right-click/Backspace removes the last point; right-click on empty or Escape cancels the tool.",
                         _ =>
-                            "Click for a default-size collider or drag from its center to size it. Right-click cancels the active creation tool.",
+                            "Click to place or drag to size. The tool stays armed (Continuous Placement). Right-click or Escape returns to select. Click the same shape button to disarm.",
                     },
                     MessageType.None);
 
@@ -2827,8 +2880,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 out float[] durations, out float[] eventXs);
             int frameCount = cards.Length;
             PruneEventSelection(clip);
-            string markerSelection = _selectedEventFrame >= 0
-                ? $"   •   marker {EventAuthoredTime(clip, _selectedEventFrame):F3}s selected"
+            string markerSelection = SelectedEventMarker(clip) is { } selectedMarker
+                ? $"   •   marker {EventAuthoredTime(clip, selectedMarker):F3}s selected"
                 : string.Empty;
             const float addFrameWidth = 82f;
             const float deleteEmptyWidth = 148f;
@@ -2903,20 +2956,25 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUIUtility.AddCursorRect(FrameResizeHandle(cards[i]), MouseCursor.ResizeHorizontal);
             }
 
-            for (int i = 0; i < frameCount; i++)
+            clip.EnsureEventMarkers();
+            for (int i = 0; i < clip.EventMarkers.Count; i++)
             {
-                if (clip.EventIds[i] == 0)
+                var marker = clip.EventMarkers[i];
+                if (marker == null || marker.EventId == 0)
+                    continue;
+                int frame = marker.FrameIndex;
+                if (frame < 0 || frame >= frameCount)
                     continue;
                 float markerTime = _timelineDragMode == TimelineDragMode.Event &&
-                                   _dragEventSourceFrame == i
+                                   _dragEventMarkerIndex == i
                     ? _dragEventAuthoredTime
-                    : frameTimes[i] + Mathf.Clamp01(clip.EventNormalizedTimes[i]) * durations[i];
+                    : frameTimes[frame] + Mathf.Clamp01(marker.NormalizedTime) * durations[frame];
                 float markerX = 48f + markerTime * pixelsPerSecond;
-                Color markerColor = EventMarkerColor(clip.EventIds[i]);
+                Color markerColor = EventMarkerColor(marker.EventId);
                 Color guideColor = markerColor;
                 guideColor.a = 0.38f;
                 EditorGUI.DrawRect(new Rect(markerX - 0.5f, TimelineEventLaneY, 1f, 145f), guideColor);
-                if (i == _selectedEventFrame)
+                if (EventMarkerIsSelected(clip, i))
                     DrawDiamond(new Vector2(markerX, TimelineEventLaneY + 13f), 9f, Color.white);
                 DrawDiamond(new Vector2(markerX, TimelineEventLaneY + 13f), 6f, markerColor);
                 GUI.Label(new Rect(markerX + 8f, TimelineEventLaneY + 2f, 76f, 16f), $"{markerTime:F3}s", _mutedStyle);
@@ -2950,8 +3008,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawThumbnailHitShape(thumb, selected, hovered);
                 EditorGUIUtility.AddCursorRect(thumb,
                     Event.current.alt ? MouseCursor.MoveArrow : MouseCursor.Arrow);
+                int frameEventCount = clip.MarkerCountOnFrame(i);
+                string frameEventLabel = frameEventCount == 0
+                    ? $"column {clip.Frames[i]}"
+                    : frameEventCount == 1
+                        ? EventName(clip.FirstMarkerOnFrame(i).EventId)
+                        : $"{frameEventCount} events";
                 GUI.Label(new Rect(card.x + 6f, card.y + 85f, card.width - 12f, 14f),
-                    clip.EventIds[i] == 0 ? $"column {clip.Frames[i]}" : EventName(clip.EventIds[i]),
+                    frameEventLabel,
                     _mutedStyle);
                 if (draggedSource)
                     EditorGUI.DrawRect(card, new Color(0.05f, 0.06f, 0.075f, 0.55f));
@@ -4923,8 +4987,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SealUndoGroup();
                 }
                 else if (_timelineDragMode == TimelineDragMode.Event && _eventDragMoved)
-                    CommitEventMove(clip, _dragEventSourceFrame, _dragEventId,
-                        _dragEventAuthoredTime);
+                    CommitEventMove(clip, _dragEventMarkerIndex, _dragEventAuthoredTime);
                 else if (_timelineDragMode == TimelineDragMode.SocketDraw && _drawDragMoved)
                     CommitSocketDrawMove(clip, _dragDrawSourceFrame, _dragDrawSocketName, _dragDrawLayer,
                         _timelineDragContentMouse.x);
@@ -4958,8 +5021,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             Vector2 mouse = evt.mousePosition;
             float maxScroll = Mathf.Max(0f, contentWidth - viewportWidth);
             _ = viewportScreen;
+            _ = eventXs;
 
-            int markerFrame = EventMarkerAt(clip, eventXs, mouse);
+            int markerIndex = EventMarkerAt(clip, frameTimes, durations, pixelsPerSecond, mouse);
             bool hitDraw = TryHitSocketDrawKey(clip, frameTimes, pixelsPerSecond, mouse,
                 out int drawFrame, out string drawName);
 
@@ -4992,15 +5056,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            if (evt.type == EventType.MouseDown && evt.button == 0 && markerFrame >= 0)
+            if (evt.type == EventType.MouseDown && evt.button == 0 && markerIndex >= 0)
             {
                 if (_timelineDragMode != TimelineDragMode.None)
                     CommitTimelineDrag(clip, mouse);
-                float markerTime = EventAuthoredTime(clip, markerFrame);
-                SelectEventMarker(clip, markerFrame, markerTime);
+                var marker = clip.EventMarkers[markerIndex];
+                float markerTime = EventAuthoredTime(clip, marker);
+                SelectEventMarker(clip, markerIndex, markerTime);
                 BeginTimelineDrag(controlId, TimelineDragMode.Event, mouse);
-                _dragEventSourceFrame = markerFrame;
-                _dragEventId = clip.EventIds[markerFrame];
+                _dragEventMarkerIndex = markerIndex;
+                _dragEventSourceFrame = marker.FrameIndex;
+                _dragEventId = marker.EventId;
                 _dragEventAuthoredTime = markerTime;
                 _eventDragMoved = false;
                 evt.Use();
@@ -5011,10 +5077,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (evt.type == EventType.MouseDown && evt.button == 1 &&
                 mouse.y >= TimelineEventLaneY && mouse.y < TimelineDrawLaneY && mouse.x >= 48f)
             {
-                if (markerFrame >= 0)
-                    SelectEventMarker(clip, markerFrame, EventAuthoredTime(clip, markerFrame));
-                ShowTimelineEventMenu(clip, markerFrame >= 0 ? eventXs[markerFrame] : mouse.x,
-                    total, pixelsPerSecond);
+                if (markerIndex >= 0)
+                    SelectEventMarker(clip, markerIndex, EventAuthoredTime(clip, clip.EventMarkers[markerIndex]));
+                ShowTimelineEventMenu(clip, mouse.x, total, pixelsPerSecond, markerIndex);
                 evt.Use();
                 Repaint();
                 return;
@@ -5046,6 +5111,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (evt.button == 0 && mouse.y >= TimelineEventLaneY && mouse.y < TimelineCardsY)
                 {
                     _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                     if (mouse.y >= TimelineDrawLaneY)
                     {
                         _selectedSocketDrawFrame = -1;
@@ -5089,6 +5155,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
                             ClearColliderSelection();
                             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                             _selectedSocketDrawFrame = -1;
                             evt.Use();
                             Repaint();
@@ -5106,6 +5173,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         _previewTime = PreviewTimeForAuthoredTime(clip, frameTimes[card]);
                         ClearColliderSelection();
                         _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                         _selectedSocketDrawFrame = -1;
                         if (op == SelectionOp.Replace)
                         {
@@ -5122,6 +5190,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     BeginTimelineMarquee(controlId, mouse, ReadSelectionOp(evt));
                     ClearColliderSelection();
                     _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                     _selectedSocketDrawFrame = -1;
                     evt.Use();
                     Repaint();
@@ -5157,15 +5226,21 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         void ShowTimelineEventMenu(SpriteClipDef clip, float contentX, float total,
-                                   float pixelsPerSecond)
+                                   float pixelsPerSecond, int markerIndex = -1)
         {
+            clip.EnsureEventMarkers();
             float authoredTime = Mathf.Clamp(
                 (contentX - 48f) / pixelsPerSecond,
                 0f,
                 Mathf.Max(0f, total - 0.0001f));
             int frame = AuthoredFrameAtTime(clip, authoredTime, out float normalizedTime);
             SelectOnlyFrame(frame);
-            _selectedEventFrame = clip.EventIds[frame] == 0 ? -1 : frame;
+            if (markerIndex < 0)
+            {
+                _selectedEventFrame = -1;
+                _selectedEventIndex = -1;
+                _selectedEventClipName = null;
+            }
             ClearColliderSelection();
             _selectedOnionFrame = -1;
             _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
@@ -5179,9 +5254,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 string eventName = string.IsNullOrWhiteSpace(definition.Name)
                     ? $"Event {eventId}"
                     : definition.Name;
-                menu.AddItem(new GUIContent($"Add Event Marker/{eventName}"),
-                    clip.EventIds[frame] == eventId,
-                    () => SetFrameEvent(clip, frame, eventId, normalizedTime));
+                menu.AddItem(new GUIContent($"Add Event Marker/{eventName}"), false,
+                    () => PlaceEventMarker(clip, frame, eventId, normalizedTime));
             }
             menu.AddItem(new GUIContent("Add Event Marker/New Event..."), false, () =>
             {
@@ -5198,9 +5272,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Name = $"Event {eventId}",
                     Color = Color.HSVToRGB(Mathf.Repeat(eventId * 0.137f, 1f), 0.72f, 1f),
                 });
-                SetFrameEvent(clip, frame, eventId, normalizedTime, false);
+                PlaceEventMarker(clip, frame, eventId, normalizedTime, recordUndo: false);
             });
-            if (clip.EventIds[frame] != 0)
+            if (markerIndex >= 0 && markerIndex < clip.EventMarkers.Count)
+            {
+                menu.AddSeparator(string.Empty);
+                menu.AddItem(new GUIContent("Delete Event Marker"), false,
+                    () => RemoveEventMarkerAt(clip, markerIndex));
+            }
+            else if (clip.IndexOfFirstMarkerOnFrame(frame) >= 0)
             {
                 menu.AddSeparator(string.Empty);
                 menu.AddItem(new GUIContent("Clear Event Marker"), false,
@@ -5209,24 +5289,100 @@ namespace InvertLab.Sprites.DOTS.Editor
             menu.ShowAsContext();
         }
 
-        void SetFrameEvent(SpriteClipDef clip, int frame, byte eventId,
-                           float normalizedTime = 0f, bool recordUndo = true)
+        void PlaceEventMarker(SpriteClipDef clip, int frame, byte eventId,
+                              float normalizedTime = 0f, bool recordUndo = true, bool focusPreview = true)
         {
-            if (frame < 0 || frame >= clip.EventIds.Length)
+            if (clip == null || eventId == 0)
                 return;
+            clip.EnsureFrameData();
+            frame = Mathf.Clamp(frame, 0, clip.Frames.Length - 1);
             if (recordUndo)
-                RecordProfileUndo(eventId == 0 ? "Clear Sprite Animation Event" : "Add Sprite Animation Event");
-            clip.EventIds[frame] = eventId;
-            clip.EventNormalizedTimes[frame] = eventId == 0 ? 0f : Mathf.Clamp01(normalizedTime);
-            _selectedFrame = frame;
-            _selectedEventFrame = eventId == 0 ? -1 : frame;
+                RecordProfileUndo("Add Sprite Animation Event");
+            var marker = clip.AddEventMarker(frame, eventId, normalizedTime);
+            int index = clip.EventMarkers.IndexOf(marker);
+            _selectedEventFrame = frame;
+            _selectedEventIndex = index;
+            _selectedEventClipName = clip.Name;
             ClearColliderSelection();
             _selectedOnionFrame = -1;
-            float authoredTime = EventAuthoredTime(clip, frame);
-            _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
-            _status = eventId == 0
-                ? $"Cleared event marker on frame {frame + 1}"
-                : $"Added {EventName(eventId)} at {authoredTime:F3}s";
+            float authoredTime = EventAuthoredTime(clip, marker);
+            if (focusPreview && clip == CurrentClip)
+            {
+                _selectedFrame = frame;
+                _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
+            }
+            _status = $"Added {EventName(eventId)} at {authoredTime:F3}s";
+            SaveDirty();
+            Repaint();
+        }
+
+        void SetFrameEvent(SpriteClipDef clip, int frame, byte eventId,
+                           float normalizedTime = 0f, bool recordUndo = true, bool focusPreview = true)
+        {
+            if (clip == null)
+                return;
+            clip.EnsureFrameData();
+            if (frame < 0 || frame >= clip.Frames.Length)
+                return;
+            if (eventId == 0)
+            {
+                int first = clip.IndexOfFirstMarkerOnFrame(frame);
+                if (first >= 0)
+                    RemoveEventMarkerAt(clip, first, recordUndo, focusPreview);
+                return;
+            }
+
+            int existing = clip.IndexOfFirstMarkerOnFrame(frame);
+            if (existing < 0)
+            {
+                PlaceEventMarker(clip, frame, eventId, normalizedTime, recordUndo, focusPreview);
+                return;
+            }
+
+            if (recordUndo)
+                RecordProfileUndo("Set Sprite Animation Event");
+            var marker = clip.EventMarkers[existing];
+            marker.EventId = eventId;
+            marker.NormalizedTime = Mathf.Clamp01(normalizedTime);
+            clip.SyncLegacyEventsFromMarkers();
+            _selectedEventFrame = frame;
+            _selectedEventIndex = existing;
+            _selectedEventClipName = clip.Name;
+            ClearColliderSelection();
+            _selectedOnionFrame = -1;
+            float authoredTime = EventAuthoredTime(clip, marker);
+            if (focusPreview && clip == CurrentClip)
+            {
+                _selectedFrame = frame;
+                _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
+            }
+            _status = $"Set {EventName(eventId)} at {authoredTime:F3}s";
+            SaveDirty();
+            Repaint();
+        }
+
+        void RemoveEventMarkerAt(SpriteClipDef clip, int markerIndex,
+                                 bool recordUndo = true, bool focusPreview = true)
+        {
+            if (clip == null)
+                return;
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var marker = clip.EventMarkers[markerIndex];
+            if (marker == null)
+                return;
+            if (recordUndo)
+                RecordProfileUndo("Clear Sprite Animation Event");
+            int frame = marker.FrameIndex;
+            byte eventId = marker.EventId;
+            clip.RemoveEventMarker(marker);
+            _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
+            _selectedEventClipName = null;
+            if (focusPreview && clip == CurrentClip && frame >= 0 && frame < clip.Frames.Length)
+                _selectedFrame = frame;
+            _status = $"Cleared {EventName(eventId)} on frame {frame + 1}";
             SaveDirty();
             Repaint();
         }
@@ -5252,6 +5408,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _resizePixelsPerSecond = 0f;
             _timelineResizeCommitted = false;
             _dragEventSourceFrame = -1;
+            _dragEventMarkerIndex = -1;
             _dragEventId = 0;
             _dragEventAuthoredTime = 0f;
             _eventDragMoved = false;
@@ -5403,6 +5560,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             SelectOnlyFrame(AuthoredFrameAtTime(clip, authoredTime, out _));
             ClearColliderSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
         }
 
         float PreviewTimeForAuthoredTime(SpriteClipDef clip, float authoredTime)
@@ -5519,6 +5677,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         clip.Sockets[i].FrameIndex = oldToNew[socketFrame];
                 }
             }
+            clip.RemapEventMarkerFrames(oldToNew);
             for (int i = 0; i < _profile.Hitboxes.Count; i++)
             {
                 var box = _profile.Hitboxes[i];
@@ -5549,31 +5708,29 @@ namespace InvertLab.Sprites.DOTS.Editor
             return result;
         }
 
-        void CommitEventMove(SpriteClipDef clip, int sourceFrame, byte eventId,
-                             float authoredTime)
+        void CommitEventMove(SpriteClipDef clip, int markerIndex, float authoredTime)
         {
-            if (sourceFrame < 0 || sourceFrame >= clip.EventIds.Length || eventId == 0)
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var marker = clip.EventMarkers[markerIndex];
+            if (marker == null || marker.EventId == 0)
                 return;
 
             int destinationFrame = AuthoredFrameAtTime(clip, authoredTime, out float destinationNormalizedTime);
             RecordProfileUndo("Move Sprite Animation Event");
-
-            if (destinationFrame != sourceFrame)
-            {
-                byte displacedId = clip.EventIds[destinationFrame];
-                float displacedTime = clip.EventNormalizedTimes[destinationFrame];
-                clip.EventIds[sourceFrame] = displacedId;
-                clip.EventNormalizedTimes[sourceFrame] = displacedId == 0 ? 0f : displacedTime;
-            }
-
-            clip.EventIds[destinationFrame] = eventId;
-            clip.EventNormalizedTimes[destinationFrame] = Mathf.Clamp01(destinationNormalizedTime);
+            int sourceFrame = marker.FrameIndex;
+            marker.FrameIndex = destinationFrame;
+            marker.NormalizedTime = Mathf.Clamp01(destinationNormalizedTime);
+            clip.SyncLegacyEventsFromMarkers();
             _selectedEventFrame = destinationFrame;
+            _selectedEventIndex = markerIndex;
+            _selectedEventClipName = clip.Name;
             _selectedFrame = destinationFrame;
             _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
             _status = destinationFrame == sourceFrame
-                ? $"Moved {EventName(eventId)} to {authoredTime:F3}s"
-                : $"Moved {EventName(eventId)} to frame {destinationFrame + 1} at {authoredTime:F3}s";
+                ? $"Moved {EventName(marker.EventId)} to {authoredTime:F3}s"
+                : $"Moved {EventName(marker.EventId)} to frame {destinationFrame + 1} at {authoredTime:F3}s";
             SaveDirty();
         }
 
@@ -5686,6 +5843,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedSocketDrawFrame = frame;
             _selectedSocketDrawName = socketName;
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedFrame = Mathf.Max(0, frame);
             _selectedFrames.Clear();
             _selectedFrames.Add(_selectedFrame);
@@ -5920,8 +6078,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            if (evt.type == EventType.MouseDown && evt.button == 1 && cell.Contains(evt.mousePosition))
+            if (IsPreviewToolCancelClick(evt))
             {
+                if (_draggingBox && GUIUtility.hotControl == controlId)
+                    GUIUtility.hotControl = 0;
                 CancelColliderCreation("Collider creation cancelled");
                 evt.Use();
                 Repaint();
@@ -6023,7 +6183,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Repaint();
             }
 
-            if (evt.type == EventType.MouseDown && evt.button == 1 && cell.Contains(evt.mousePosition))
+            if (IsPreviewToolCancelClick(evt))
             {
                 if (_polygonDraftUV.Count > 0)
                     RemoveLastPolygonVertex();
@@ -6040,6 +6200,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _playing = false;
             _selectedFrame = frame;
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             GUIUtility.keyboardControl = controlId;
 
@@ -6162,6 +6323,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedColliders.Add(definition);
             OpenColliderRowDetails(definition);
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _status = definition.IsCharacter
                 ? $"Created {definition.Shape} Character collider"
                 : definition.IsClip
@@ -6184,6 +6346,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             _polygonDraftUV.Clear();
             _polygonHasHover = false;
+        }
+
+        static bool IsPreviewToolCancelClick(Event evt)
+        {
+            return evt != null &&
+                ((evt.type == EventType.MouseDown && evt.button == 1) ||
+                 evt.type == EventType.ContextClick);
         }
 
         void CancelColliderCreation(string status)
@@ -6269,6 +6438,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _playing = false;
                 _selectedFrame = frame;
                 _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                 _selectedOnionFrame = -1;
                 GUIUtility.keyboardControl = controlId;
 
@@ -6619,6 +6789,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _selectionScratchNames, op);
 
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             SyncSocketPrimaryFromSelection();
         }
@@ -6671,6 +6842,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedOnionFrame = ghost.Frame;
             _selectedOnionDelta = ghost.Delta;
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _status = $"Selected onion {SignedFrameDelta(ghost.Delta)} (frame {ghost.Frame + 1}); drag again to move";
         }
 
@@ -6906,56 +7078,456 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             GUILayout.Space(9f);
             SectionLabel("EVENT MARKER");
+            clip.EnsureFrameData();
 
-            int frame = Mathf.Clamp(_selectedEventFrame >= 0 ? _selectedEventFrame : _selectedFrame,
-                0, clip.Frames.Length - 1);
-            EditorGUILayout.LabelField("Frame", $"{frame + 1} of {clip.Frames.Length}");
+            int viewFrame = Mathf.Clamp(_selectedFrame, 0, clip.Frames.Length - 1);
+            var firstOnFrame = clip.FirstMarkerOnFrame(viewFrame);
+            int firstIndex = clip.IndexOfFirstMarkerOnFrame(viewFrame);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("This Frame", $"{viewFrame + 1} of {clip.Frames.Length}");
+                using (new EditorGUI.DisabledScope(firstIndex < 0 ||
+                    EventMarkerIsSelected(clip, firstIndex)))
+                {
+                    if (GUILayout.Button(EventGoToContent(),
+                        EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(18f)))
+                        JumpToEventHome(clip, firstIndex >= 0 ? firstIndex : -1, viewFrame);
+                }
+            }
 
-            byte currentId = clip.EventIds[frame];
-            int nextId = Mathf.Clamp(EditorGUILayout.IntField("Event ID", currentId), 0, byte.MaxValue);
+            byte currentId = firstOnFrame != null ? firstOnFrame.EventId : (byte)0;
+            int nextId = Mathf.Clamp(EditorGUILayout.IntField(
+                new GUIContent("Event ID",
+                    "0 = none. Stamps the first marker on this frame. Extra markers stay unless you delete them."),
+                currentId), 0, byte.MaxValue);
             if (nextId != currentId)
             {
-                SetFrameEvent(clip, frame, (byte)nextId, clip.EventNormalizedTimes[frame]);
+                SetFrameEvent(clip, viewFrame, (byte)nextId,
+                    firstOnFrame != null ? firstOnFrame.NormalizedTime : 0f);
                 currentId = (byte)nextId;
             }
 
-            if (currentId == 0)
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(_profile.Events == null || _profile.Events.Count == 0))
+                {
+                    if (GUILayout.Button(new GUIContent("Add Marker",
+                        "Place another event on this frame. Footstep + land can share a cell."),
+                        EditorStyles.miniButton))
+                    {
+                        byte addId = currentId != 0
+                            ? currentId
+                            : NextPlacedOrCatalogEventId();
+                        if (addId != 0)
+                            PlaceEventMarker(clip, viewFrame, addId);
+                    }
+                }
+            }
+
+            if (currentId == 0 && clip.MarkerCountOnFrame(viewFrame) == 0)
             {
                 EditorGUILayout.HelpBox(
-                    "No marker on this frame. Enter an Event ID, or right-click the timeline event lane at an exact time.",
+                    "No marker on this frame. Enter an Event ID, Add Marker, or right-click the timeline event lane.",
                     MessageType.None);
+            }
+
+            var thisClipMarkers = new List<(SpriteClipDef clip, int markerIndex)>();
+            var otherClipMarkers = new List<(SpriteClipDef clip, int markerIndex)>();
+            CollectEventMarkers(clip, thisClipMarkers, otherClipMarkers);
+            GUILayout.Label(
+                $"{thisClipMarkers.Count} on this clip  •  {otherClipMarkers.Count} on other clips",
+                _mutedStyle);
+
+            if (DrawEventMarkerScope(thisClipMarkers, ref _eventThisClipExpanded,
+                    "THIS CLIP",
+                    "Every event marker on this clip, including extras on the same frame. Search jumps the preview."))
                 return;
+            if (otherClipMarkers.Count > 0 &&
+                DrawEventMarkerScope(otherClipMarkers, ref _eventOtherClipsExpanded,
+                    "OTHER CLIPS",
+                    "Event markers on other clips. Search jumps to that clip and frame."))
+                return;
+
+            DrawEventTypeCatalog();
+        }
+
+        byte NextPlacedOrCatalogEventId()
+        {
+            if (_profile.Events != null)
+            {
+                for (int i = 0; i < _profile.Events.Count; i++)
+                {
+                    if (_profile.Events[i] != null && _profile.Events[i].Id != 0)
+                        return _profile.Events[i].Id;
+                }
+            }
+            return 1;
+        }
+
+        void CollectEventMarkers(SpriteClipDef current,
+            List<(SpriteClipDef clip, int markerIndex)> thisClip,
+            List<(SpriteClipDef clip, int markerIndex)> otherClips)
+        {
+            if (_profile?.Clips == null)
+                return;
+            for (int c = 0; c < _profile.Clips.Count; c++)
+            {
+                var source = _profile.Clips[c];
+                if (source == null)
+                    continue;
+                source.EnsureEventMarkers();
+                bool same = source == current ||
+                    (current != null && string.Equals(source.Name, current.Name));
+                for (int i = 0; i < source.EventMarkers.Count; i++)
+                {
+                    var marker = source.EventMarkers[i];
+                    if (marker == null || marker.EventId == 0)
+                        continue;
+                    if (same)
+                        thisClip.Add((source, i));
+                    else
+                        otherClips.Add((source, i));
+                }
+            }
+        }
+
+        bool DrawEventMarkerScope(List<(SpriteClipDef clip, int markerIndex)> group,
+            ref bool expanded, string title, string description)
+        {
+            int selectedCount = 0;
+            for (int i = 0; i < group.Count; i++)
+            {
+                if (EventMarkerIsSelected(group[i].clip, group[i].markerIndex))
+                    selectedCount++;
+            }
+
+            string summary = $"{title}  ({group.Count})";
+            if (selectedCount > 0)
+                summary += $"  •  {selectedCount} selected";
+            expanded = EditorGUILayout.Foldout(expanded, new GUIContent(summary, description), true);
+            if (!expanded)
+                return false;
+
+            GUILayout.Label(description, _mutedWrapStyle);
+            if (group.Count == 0)
+            {
+                GUILayout.Label("No event markers in this scope.", _mutedStyle);
+                GUILayout.Space(3f);
+                return false;
+            }
+
+            for (int i = 0; i < group.Count; i++)
+            {
+                var owner = group[i].clip;
+                int markerIndex = group[i].markerIndex;
+                if (owner == null)
+                    continue;
+                owner.EnsureEventMarkers();
+                if (markerIndex < 0 || markerIndex >= owner.EventMarkers.Count)
+                    continue;
+                var marker = owner.EventMarkers[markerIndex];
+                if (marker == null || marker.EventId == 0)
+                    continue;
+                int frame = marker.FrameIndex;
+                bool selected = EventMarkerIsSelected(owner, markerIndex);
+                bool detailsOpen = selected && _eventRowDetailsExpanded;
+                bool here = owner == CurrentClip && frame == _selectedFrame;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    using (new EditorGUI.DisabledScope(here && selected))
+                    {
+                        if (GUILayout.Button(EventGoToContent(),
+                            EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
+                        {
+                            JumpToEventHome(owner, markerIndex, frame);
+                            Repaint();
+                        }
+                    }
+
+                    Color previous = GUI.backgroundColor;
+                    if (selected)
+                        GUI.backgroundColor = AccentColor;
+                    string fire = marker.FiresOnce ? "Once" : "Loop";
+                    string label = here
+                        ? $"{i + 1}. {EventName(marker.EventId)}  •  Frame {frame + 1}  •  {EventAuthoredTime(owner, marker):0.000}s  •  {fire}"
+                        : $"{i + 1}. {EventName(marker.EventId)}  •  {EventMarkerHomeLabel(owner, frame)}  •  {fire}";
+                    bool rowClicked = GUILayout.Button(new GUIContent(label,
+                            "Click to select and edit. Search jumps to this marker."),
+                        EditorStyles.miniButton, GUILayout.Height(22f));
+                    GUI.backgroundColor = previous;
+                    if (rowClicked)
+                    {
+                        bool wasSole = selected && _eventRowDetailsExpanded;
+                        SelectEventMarker(owner, markerIndex, EventAuthoredTime(owner, marker), jump: false);
+                        _eventRowDetailsExpanded = !wasSole;
+                        Repaint();
+                    }
+
+                    if (GUILayout.Button(new GUIContent("×", "Delete this event marker."),
+                        EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
+                    {
+                        RemoveEventMarkerAt(owner, markerIndex, focusPreview: owner == CurrentClip);
+                        return true;
+                    }
+                }
+
+                if (!detailsOpen)
+                    continue;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Space(16f);
+                    using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                        DrawEventMarkerDetails(owner, markerIndex);
+                }
+            }
+            GUILayout.Space(4f);
+            return false;
+        }
+
+        void DrawEventMarkerDetails(SpriteClipDef clip, int markerIndex)
+        {
+            if (clip == null)
+                return;
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var marker = clip.EventMarkers[markerIndex];
+            if (marker == null || marker.EventId == 0)
+                return;
+            int frame = Mathf.Clamp(marker.FrameIndex, 0, Mathf.Max(0, clip.Frames.Length - 1));
+
+            int nextId = Mathf.Clamp(EditorGUILayout.IntField("Event ID", marker.EventId), 1, byte.MaxValue);
+            if (nextId != marker.EventId)
+            {
+                RecordProfileUndo("Set Sprite Animation Event");
+                marker.EventId = (byte)nextId;
+                clip.SyncLegacyEventsFromMarkers();
+                SaveDirty();
+            }
+
+            int fire = Mathf.Clamp(marker.FireMode, 0, 1);
+            int nextFire = EditorGUILayout.Popup(
+                new GUIContent("Fire", "Loop = every wrap. Once = until clip changes or Play()."),
+                fire, new[] { "Loop", "Once" });
+            if (nextFire != fire)
+            {
+                RecordProfileUndo("Set Sprite Animation Event Fire Mode");
+                marker.FireMode = (byte)nextFire;
+                clip.SyncLegacyEventsFromMarkers();
+                SaveDirty();
             }
 
             float frameStart = AuthoredStartTime(clip, frame);
             float duration = FrameDuration(clip, frame);
-            float exactTime = frameStart + Mathf.Clamp01(clip.EventNormalizedTimes[frame]) * duration;
+            float exactTime = frameStart + Mathf.Clamp01(marker.NormalizedTime) * duration;
             float nextTime = EditorGUILayout.FloatField("Time (sec)", exactTime);
             if (!Mathf.Approximately(nextTime, exactTime))
             {
                 float clampedTime = Mathf.Clamp(nextTime, frameStart,
                     Mathf.Max(frameStart, frameStart + duration - 0.0001f));
                 RecordProfileUndo("Set Sprite Animation Event Time");
-                clip.EventNormalizedTimes[frame] = Mathf.Clamp01((clampedTime - frameStart) /
+                marker.NormalizedTime = Mathf.Clamp01((clampedTime - frameStart) /
                     Mathf.Max(0.001f, duration));
+                marker.FrameIndex = frame;
+                clip.SyncLegacyEventsFromMarkers();
                 _selectedEventFrame = frame;
-                _selectedFrame = frame;
-                _previewTime = PreviewTimeForAuthoredTime(clip, clampedTime);
-                _status = $"Set {EventName(currentId)} to {clampedTime:F3}s";
+                _selectedEventIndex = markerIndex;
+                _selectedEventClipName = clip.Name;
+                if (clip == CurrentClip)
+                {
+                    _selectedFrame = frame;
+                    _previewTime = PreviewTimeForAuthoredTime(clip, clampedTime);
+                }
+                _status = $"Set {EventName(marker.EventId)} to {clampedTime:F3}s";
                 SaveDirty();
             }
 
-            DrawEventDefinition(currentId);
-            using (new EditorGUILayout.HorizontalScope())
+            int nextInt = EditorGUILayout.IntField(
+                new GUIContent("Int", "Gameplay payload copied onto SpriteAnimEventBuffer."),
+                marker.IntPayload);
+            if (nextInt != marker.IntPayload)
             {
-                GUILayout.Label($"Selected: {EventName(currentId)}", _mutedStyle);
-                if (GUILayout.Button("Delete Marker", GUILayout.Width(104f)))
-                {
-                    _selectedEventFrame = frame;
-                    DeleteSelectedEventMarker();
-                }
+                RecordProfileUndo("Set Sprite Animation Event Payload");
+                marker.IntPayload = nextInt;
+                SaveDirty();
+            }
+
+            float nextFloat = EditorGUILayout.FloatField(
+                new GUIContent("Float", "Gameplay payload copied onto SpriteAnimEventBuffer."),
+                marker.FloatPayload);
+            if (!Mathf.Approximately(nextFloat, marker.FloatPayload))
+            {
+                RecordProfileUndo("Set Sprite Animation Event Payload");
+                marker.FloatPayload = nextFloat;
+                SaveDirty();
+            }
+
+            string nextText = EditorGUILayout.TextField(
+                new GUIContent("Text", "Hashed into TextHash at bake (SFX key, cue name)."),
+                marker.TextPayload ?? string.Empty);
+            if (nextText != (marker.TextPayload ?? string.Empty))
+            {
+                RecordProfileUndo("Set Sprite Animation Event Payload");
+                marker.TextPayload = nextText;
+                SaveDirty();
+            }
+
+            DrawEventDefinition(marker.EventId);
+            EditorGUILayout.LabelField("Binding", EventMarkerHomeLabel(clip, frame));
+        }
+
+        void DrawEventTypeCatalog()
+        {
+            GUILayout.Space(6f);
+            _profile.Events ??= new List<SpriteEventDef>();
+            int unused = 0;
+            for (int i = 0; i < _profile.Events.Count; i++)
+            {
+                var definition = _profile.Events[i];
+                if (definition == null || definition.Id == 0)
+                    continue;
+                if (CountEventPlacements(definition.Id) == 0)
+                    unused++;
+            }
+
+            EditorGUILayout.LabelField("EVENT TYPES",
+                unused > 0 ? $"{_profile.Events.Count}  •  {unused} unused" : $"{_profile.Events.Count}",
+                EditorStyles.miniBoldLabel);
+            for (int i = 0; i < _profile.Events.Count; i++)
+            {
+                var definition = _profile.Events[i];
+                if (definition == null || definition.Id == 0)
+                    continue;
+                int placed = CountEventPlacements(definition.Id);
+                GUI.Label(
+                    placed == 0
+                        ? $"{definition.Name}  •  ID {definition.Id}  •  not placed"
+                        : $"{definition.Name}  •  ID {definition.Id}  •  {placed} placed",
+                    _mutedStyle);
+            }
+            if (GUILayout.Button(new GUIContent("Add Event Type",
+                "Create a new named Event ID for the timeline right-click menu.")))
+            {
+                byte id = NextEventId();
+                if (id == 0)
+                    return;
+                RecordProfileUndo("Add Sprite Event Type");
+                _profile.Events.Add(new SpriteEventDef { Id = id, Name = $"Event {id}" });
+                SaveDirty();
             }
         }
+
+        int CountEventPlacements(byte eventId)
+        {
+            if (eventId == 0 || _profile?.Clips == null)
+                return 0;
+            int count = 0;
+            for (int c = 0; c < _profile.Clips.Count; c++)
+            {
+                var source = _profile.Clips[c];
+                if (source == null)
+                    continue;
+                source.EnsureEventMarkers();
+                for (int i = 0; i < source.EventMarkers.Count; i++)
+                {
+                    var marker = source.EventMarkers[i];
+                    if (marker != null && marker.EventId == eventId)
+                        count++;
+                }
+            }
+            return count;
+        }
+
+        static string EventMarkerHomeLabel(SpriteClipDef clip, int frame)
+        {
+            string clipName = clip == null || string.IsNullOrEmpty(clip.Name) ? "Clip" : clip.Name;
+            return $"{clipName}  •  Frame {frame + 1}";
+        }
+
+        bool EventMarkerIsSelected(SpriteClipDef clip, int markerIndex)
+        {
+            return clip != null &&
+                markerIndex >= 0 &&
+                _selectedEventIndex == markerIndex &&
+                !string.IsNullOrEmpty(_selectedEventClipName) &&
+                string.Equals(_selectedEventClipName, clip.Name);
+        }
+
+        SpriteClipEventMarker SelectedEventMarker(SpriteClipDef clip)
+        {
+            if (clip == null)
+                return null;
+            clip.EnsureEventMarkers();
+            if (_selectedEventIndex < 0 || _selectedEventIndex >= clip.EventMarkers.Count)
+                return null;
+            return clip.EventMarkers[_selectedEventIndex];
+        }
+
+        void JumpToEventHome(SpriteClipDef clip, int markerIndex, int fallbackFrame)
+        {
+            if (clip == null || _profile?.Clips == null || _profile.Clips.Count == 0)
+                return;
+            clip.EnsureFrameData();
+            clip.EnsureEventMarkers();
+            SpriteClipEventMarker marker = null;
+            if (markerIndex >= 0 && markerIndex < clip.EventMarkers.Count)
+                marker = clip.EventMarkers[markerIndex];
+            int frame = marker != null ? marker.FrameIndex : fallbackFrame;
+            if (frame < 0 || frame >= clip.Frames.Length)
+                return;
+
+            int clipIndex = FindClipIndexByName(clip.Name);
+            if (clipIndex < 0)
+            {
+                for (int i = 0; i < _profile.Clips.Count; i++)
+                {
+                    if (_profile.Clips[i] == clip)
+                    {
+                        clipIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (clipIndex < 0)
+                return;
+
+            if (_renamingClip >= 0 && _renamingClip != clipIndex)
+                CancelClipRename();
+            if (_renamingSheet >= 0)
+                CommitSheetRename();
+
+            if (_selectedClip != clipIndex)
+            {
+                _selectedOnionFrame = -1;
+                ClearColliderSelection();
+                ClearSocketSelection();
+                _selectedClip = clipIndex;
+                var destClip = _profile.Clips[clipIndex];
+                if (destClip != null && _profile.Sheets != null && _profile.Sheets.Count > 0)
+                {
+                    _selectedSheet = Mathf.Clamp(destClip.SheetIndex, 0, _profile.Sheets.Count - 1);
+                    _collapsedSheets.Remove(_selectedSheet);
+                    _profile.SyncLegacyFromSheet(_selectedSheet);
+                    InvalidateSheetPixelCache();
+                }
+            }
+
+            SelectOnlyFrame(frame);
+            _selectedEventFrame = marker != null ? frame : -1;
+            _selectedEventIndex = marker != null ? markerIndex : -1;
+            _selectedEventClipName = marker != null ? clip.Name : null;
+            float authored = marker != null ? EventAuthoredTime(clip, marker) : AuthoredStartTime(clip, frame);
+            _previewTime = PreviewTimeForAuthoredTime(clip, authored);
+            _playing = false;
+            _eventThisClipExpanded = true;
+            _eventRowDetailsExpanded = true;
+            _status = marker == null
+                ? $"Jumped to {EventMarkerHomeLabel(clip, frame)}"
+                : $"Jumped to {EventName(marker.EventId)}  •  {EventMarkerHomeLabel(clip, frame)}";
+            ReleaseShortcutKeyboardFocus();
+            Repaint();
+        }
+
 
         void DrawSocketDrawKeyInspector(SpriteClipDef clip)
         {
@@ -9137,6 +9709,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _selectedSocketName = name;
                 SyncSocketPrimaryFromSelection();
                 _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                 _selectedOnionFrame = -1;
                 if (_socketListAnchor < 0)
                     _socketListAnchor = index;
@@ -9717,6 +10290,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedSocketName = _selectedSockets.Contains(name) ? name : null;
             SyncSocketPrimaryFromSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             _selectedSocketDrawFrame = -1;
             _selectedSocketDrawName = null;
@@ -12094,7 +12668,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUIUtility.ScaleAroundPivot(new Vector2(signX, signY), attachScreen);
             DrawCellTinted(texture, cellIndex, spriteRect, new Color(1f, 1f, 1f, alpha),
                 columns, rows);
-            if (_showHitboxes || _showPreviewDebug)
+            if (_showHitboxes)
                 DrawSocketProfileColliders(item, spriteRect, playFrame);
             GUI.matrix = previous;
         }
@@ -13359,6 +13933,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             ClearSocketToolState();
             _previewTime = 0f;
@@ -13382,6 +13957,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 FrameDurationScales = (float[])source.FrameDurationScales.Clone(),
                 EventIds = (byte[])source.EventIds.Clone(),
                 EventNormalizedTimes = (float[])source.EventNormalizedTimes.Clone(),
+                EventMarkers = source.CloneEventMarkers(),
                 OnionOffsets = (Vector2[])source.OnionOffsets.Clone(),
                 FrameScales = (Vector2[])source.FrameScales.Clone(),
                 FrameRotations = (float[])source.FrameRotations.Clone(),
@@ -13421,6 +13997,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             ClearSocketToolState();
             _previewTime = 0f;
@@ -13465,6 +14042,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 SelectOnlyFrame(0);
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                 _selectedOnionFrame = -1;
                 ClearSocketToolState();
                 _previewTime = 0f;
@@ -13551,6 +14129,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             clip.FrameScales = frameScales.ToArray();
             clip.FrameRotations = frameRotations.ToArray();
             clip.FrameTweenModes = frameTweens.ToArray();
+            clip.ShiftEventMarkersAfterInsert(insert);
             if (clip.Sockets != null)
             {
                 for (int i = 0; i < clip.Sockets.Count; i++)
@@ -13630,6 +14209,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             clip.FrameScales = CompactArray(clip.FrameScales, remap, newCount);
             clip.FrameRotations = CompactArray(clip.FrameRotations, remap, newCount);
             clip.FrameTweenModes = CompactArray(clip.FrameTweenModes, remap, newCount);
+            SpriteClipEventMarker keepEvent = null;
+            if (_selectedEventIndex >= 0 && clip.EventMarkers != null &&
+                _selectedEventIndex < clip.EventMarkers.Count)
+                keepEvent = clip.EventMarkers[_selectedEventIndex];
+            clip.CompactEventMarkers(remap);
+            _selectedEventIndex = keepEvent != null ? clip.EventMarkers.IndexOf(keepEvent) : -1;
 
             if (clip.Sockets != null)
             {
@@ -13651,7 +14236,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_selectedEventFrame >= 0 && _selectedEventFrame < oldCount)
                 _selectedEventFrame = remap[_selectedEventFrame];
             else
+            {
                 _selectedEventFrame = -1;
+                _selectedEventIndex = -1;
+            }
 
             _profile.Hitboxes ??= new List<FrameBoxDef>();
             _profile.Hitboxes.RemoveAll(box =>
@@ -13944,8 +14532,20 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (clip == null || frame < 0 || frame >= clip.Frames.Length)
                 return 0f;
+            var marker = clip.FirstMarkerOnFrame(frame);
+            if (marker != null)
+                return EventAuthoredTime(clip, marker);
             return AuthoredStartTime(clip, frame) +
                 Mathf.Clamp01(clip.EventNormalizedTimes[frame]) * FrameDuration(clip, frame);
+        }
+
+        float EventAuthoredTime(SpriteClipDef clip, SpriteClipEventMarker marker)
+        {
+            if (clip == null || marker == null || clip.Frames == null || clip.Frames.Length == 0)
+                return 0f;
+            int frame = Mathf.Clamp(marker.FrameIndex, 0, clip.Frames.Length - 1);
+            return AuthoredStartTime(clip, frame) +
+                Mathf.Clamp01(marker.NormalizedTime) * FrameDuration(clip, frame);
         }
 
         float TotalAuthoredDuration(SpriteClipDef clip)
@@ -14145,6 +14745,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             SelectOnlyFrame(0);
             ClearColliderSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             _previewTime = 0f;
             _createSeparateProfileOnSave = false;
@@ -14558,6 +15159,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 _selectedOnionFrame = -1;
                 _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                 ClearSocketSelection();
                 _selectedClip = clipIndex;
                 var destClip = _profile.Clips[clipIndex];
@@ -14589,6 +15191,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _selectedColliders.Add(box);
             OpenColliderRowDetails(box);
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _status = box.IsCharacter
                 ? "Character collider is shared by every clip"
                 : $"Jumped to {ColliderHomeLabel(box)}";
@@ -14701,6 +15304,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             _playing = false;
                             _previewTime = PreviewTimeAtFrame(clip, _selectedFrame);
                             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                             _selectedOnionFrame = -1;
                             Repaint();
                         }
@@ -14727,6 +15331,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             _previewTime = PreviewTimeAtFrame(clip, _selectedFrame);
                             SelectColliderFromList(group, i, op);
                             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                             _selectedOnionFrame = -1;
                             if (_selectedColliders.Count == 1 && _selectedColliders.Contains(box))
                             {
@@ -14801,6 +15406,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             ClearSocketSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             _status = $"Selected all {_selectedColliders.Count} collider{(_selectedColliders.Count == 1 ? string.Empty : "s")} on frame {frame + 1}";
             Repaint();
@@ -14835,6 +15441,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             SyncSocketPrimaryFromSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
             _status = PreviewSelectionStatus("Selected all");
             Repaint();
@@ -14854,6 +15461,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _socketListAnchor = names.Count > 0 ? 0 : -1;
             SyncSocketPrimaryFromSelection();
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
             _selectedSocketDrawFrame = -1;
             _selectedSocketDrawName = null;
             _selectedOnionFrame = -1;
@@ -15045,51 +15653,120 @@ namespace InvertLab.Sprites.DOTS.Editor
                         : box.ClipName != clip.Name || box.FrameIndex != frame));
         }
 
-        void SelectEventMarker(SpriteClipDef clip, int frame, float authoredTime)
+        void SelectEventMarker(SpriteClipDef clip, int markerIndex, float authoredTime, bool jump = true)
         {
-            if (clip == null || frame < 0 || frame >= clip.EventIds.Length || clip.EventIds[frame] == 0)
+            if (clip == null)
                 return;
-            _selectedEventFrame = frame;
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var marker = clip.EventMarkers[markerIndex];
+            if (marker == null || marker.EventId == 0)
+                return;
+            _selectedEventFrame = marker.FrameIndex;
+            _selectedEventIndex = markerIndex;
+            _selectedEventClipName = clip.Name;
             _selectedSocketDrawFrame = -1;
             _selectedSocketDrawName = null;
-            _selectedFrame = frame;
-            _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
             _playing = false;
             ClearColliderSelection();
             _selectedOnionFrame = -1;
-            _status = $"Selected {EventName(clip.EventIds[frame])} at {authoredTime:F3}s";
+            _eventRowDetailsExpanded = true;
+            if (jump)
+            {
+                if (clip == CurrentClip)
+                {
+                    _selectedFrame = Mathf.Clamp(marker.FrameIndex, 0, clip.Frames.Length - 1);
+                    _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
+                }
+                else
+                    JumpToEventHome(clip, markerIndex, marker.FrameIndex);
+            }
+            _status = $"Selected {EventName(marker.EventId)} at {authoredTime:F3}s";
         }
 
         void DeleteSelectedEventMarker()
         {
-            var clip = CurrentClip;
-            if (clip == null || _selectedEventFrame < 0 ||
-                _selectedEventFrame >= clip.EventIds.Length || clip.EventIds[_selectedEventFrame] == 0)
+            var clip = FindClipByEventSelection() ?? CurrentClip;
+            if (clip == null)
                 return;
-            SetFrameEvent(clip, _selectedEventFrame, 0);
+            clip.EnsureEventMarkers();
+            if (_selectedEventIndex >= 0 && _selectedEventIndex < clip.EventMarkers.Count)
+            {
+                RemoveEventMarkerAt(clip, _selectedEventIndex, focusPreview: clip == CurrentClip);
+                return;
+            }
+            if (_selectedEventFrame >= 0)
+                SetFrameEvent(clip, _selectedEventFrame, 0, focusPreview: clip == CurrentClip);
         }
 
         void PruneEventSelection(SpriteClipDef clip)
         {
-            if (clip == null || _selectedEventFrame < 0 ||
-                _selectedEventFrame >= clip.EventIds.Length || clip.EventIds[_selectedEventFrame] == 0)
+            var owner = FindClipByEventSelection() ?? clip;
+            if (owner == null)
+            {
                 _selectedEventFrame = -1;
+                _selectedEventIndex = -1;
+                _selectedEventClipName = null;
+                return;
+            }
+            owner.EnsureEventMarkers();
+            if (_selectedEventIndex >= 0 && _selectedEventIndex < owner.EventMarkers.Count)
+            {
+                var marker = owner.EventMarkers[_selectedEventIndex];
+                if (marker != null && marker.EventId != 0)
+                {
+                    _selectedEventFrame = marker.FrameIndex;
+                    return;
+                }
+            }
+            int first = owner.IndexOfFirstMarkerOnFrame(_selectedEventFrame);
+            if (first >= 0)
+            {
+                _selectedEventIndex = first;
+                return;
+            }
+            _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
+            _selectedEventClipName = null;
         }
 
-        static int EventMarkerAt(SpriteClipDef clip, float[] eventXs, Vector2 point)
+        SpriteClipDef FindClipByEventSelection()
         {
+            int index = FindClipIndexByName(_selectedEventClipName);
+            if (index < 0 || _profile?.Clips == null)
+                return null;
+            return _profile.Clips[index];
+        }
+
+        int EventMarkerAt(SpriteClipDef clip, float[] frameTimes, float[] durations,
+                          float pixelsPerSecond, Vector2 point)
+        {
+            if (clip == null || frameTimes == null || durations == null)
+                return -1;
             if (point.y < TimelineEventLaneY || point.y >= TimelineDrawLaneY)
                 return -1;
+            clip.EnsureEventMarkers();
             float laneY = TimelineEventLaneY + 13f;
-            for (int i = eventXs.Length - 1; i >= 0; i--)
+            int hit = -1;
+            for (int i = 0; i < clip.EventMarkers.Count; i++)
             {
-                if (clip.EventIds[i] == 0)
+                var marker = clip.EventMarkers[i];
+                if (marker == null || marker.EventId == 0)
                     continue;
-                Vector2 center = new(eventXs[i], laneY);
+                int frame = marker.FrameIndex;
+                if (frame < 0 || frame >= frameTimes.Length)
+                    continue;
+                float markerTime = _timelineDragMode == TimelineDragMode.Event &&
+                                   _dragEventMarkerIndex == i
+                    ? _dragEventAuthoredTime
+                    : frameTimes[frame] + Mathf.Clamp01(marker.NormalizedTime) * durations[frame];
+                float markerX = 48f + markerTime * pixelsPerSecond;
+                Vector2 center = new(markerX, laneY);
                 if ((point - center).sqrMagnitude <= 100f)
-                    return i;
+                    hit = i;
             }
-            return -1;
+            return hit;
         }
 
         static int RemapIndexAfterMove(int index, int fromIndex, int toIndex)
@@ -15383,6 +16060,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _selectedOnionFrame = -1;
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                 GUIUtility.hotControl = controlId;
                 GUIUtility.keyboardControl = controlId;
                 _status = $"Pivot {_profile.Pivot.x:F2}, {_profile.Pivot.y:F2}";
@@ -15685,6 +16363,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 hidden ? "Show this collider in the preview" : "Hide this collider in the preview");
         }
 
+        static GUIContent EventGoToContent()
+        {
+            const string tooltip = "Go to the clip and frame this event marker lives on";
+            var icon = EditorGUIUtility.IconContent("Search Icon");
+            if (icon == null || icon.image == null)
+                icon = EditorGUIUtility.IconContent("ViewToolZoom");
+            if (icon != null && icon.image != null)
+            {
+                icon.tooltip = tooltip;
+                return icon;
+            }
+            return new GUIContent("?", tooltip);
+        }
+
         static GUIContent ColliderGoToContent(FrameBoxDef box)
         {
             string tooltip = box != null && box.IsClip
@@ -15939,6 +16631,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _playing = false;
             _selectedOnionFrame = -1;
             _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
         }
 
         void ApplyColliderTransform(Rect cell, Vector2 mouse, bool snap)
@@ -16270,6 +16963,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     ClearPolygonDraft();
                     ClearColliderSelection();
                     _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                     _selectedOnionFrame = -1;
                     CancelSocketPlacement(null);
                     _status = $"{label} collider tool armed";
@@ -16561,6 +17255,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                                     _draggingSocket;
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
                 _selectedSocketDrawFrame = -1;
                 _selectedSocketDrawName = null;
                 _selectedOnionFrame = -1;

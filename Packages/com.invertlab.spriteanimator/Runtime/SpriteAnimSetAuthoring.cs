@@ -510,6 +510,8 @@ namespace InvertLab.Sprites.DOTS
                 {
                     var profileClip = useProfile ? profile.Clips[i] : null;
                     var authorClip = useProfile ? default : authoring.Clips[i];
+                    if (useProfile)
+                        profileClip.EnsureFrameData();
                     var clipSheet = useProfile ? profile.SheetForClip(profileClip) : null;
                     int cols = Mathf.Max(1, clipSheet != null ? clipSheet.Columns : authoring.Columns);
                     int rows = Mathf.Max(1, clipSheet != null ? clipSheet.Rows : authoring.Rows);
@@ -596,6 +598,7 @@ namespace InvertLab.Sprites.DOTS
                         EventNormalizedTimes = useProfile
                             ? profileClip.EventNormalizedTimes
                             : authorClip.EventNormalizedTimes,
+                        EventKeys = useProfile ? EventKeysFromProfile(profileClip) : null,
                         FrameOffsets = frameOffsets,
                         FrameScales = clipScales,
                         FrameRotations = clipRotations,
@@ -779,6 +782,42 @@ namespace InvertLab.Sprites.DOTS
                     AddComponent(entity, new SpriteHitboxSetRef { Set = hitboxBlob });
                     AddBuffer<SpriteHitboxLive>(entity);
                 }
+            }
+
+            static SpriteAnimSetBuilder.ClipInput.EventKeyInput[] EventKeysFromProfile(SpriteClipDef clip)
+            {
+                if (clip == null)
+                    return null;
+                clip.EnsureEventMarkers();
+                if (clip.EventMarkers == null || clip.EventMarkers.Count == 0)
+                    return null;
+                int count = 0;
+                for (int i = 0; i < clip.EventMarkers.Count; i++)
+                {
+                    if (clip.EventMarkers[i] != null && clip.EventMarkers[i].EventId != 0)
+                        count++;
+                }
+                if (count == 0)
+                    return null;
+                var keys = new SpriteAnimSetBuilder.ClipInput.EventKeyInput[count];
+                int write = 0;
+                for (int i = 0; i < clip.EventMarkers.Count; i++)
+                {
+                    var marker = clip.EventMarkers[i];
+                    if (marker == null || marker.EventId == 0)
+                        continue;
+                    keys[write++] = new SpriteAnimSetBuilder.ClipInput.EventKeyInput
+                    {
+                        FrameIndex = marker.FrameIndex,
+                        NormalizedTime = marker.NormalizedTime,
+                        EventId = marker.EventId,
+                        FireMode = marker.FireMode,
+                        IntPayload = marker.IntPayload,
+                        FloatPayload = marker.FloatPayload,
+                        TextPayload = marker.TextPayload,
+                    };
+                }
+                return keys;
             }
         }
     }

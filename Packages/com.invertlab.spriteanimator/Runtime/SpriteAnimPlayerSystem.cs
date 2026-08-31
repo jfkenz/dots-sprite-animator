@@ -88,6 +88,14 @@ namespace InvertLab.Sprites.DOTS
             int phaseStep = (int)math.floor(phase);
             float fraction = math.saturate(phase - phaseStep);
             int lastEventStep = player.ValueRO.LastEventStep;
+            ulong firedMask = player.ValueRO.EventFiredMask;
+            int onceClip = player.ValueRO.OnceEventClip;
+            var onceFired = player.ValueRO.OnceFiredKeys;
+            if (onceClip != clipIndex)
+            {
+                onceFired.Clear();
+                onceClip = clipIndex;
+            }
             float remaining = math.max(0f, dt) * def.FrameRate * math.max(0.01f, player.ValueRO.Speed);
             bool finished = false;
             int transitions = 0;
@@ -102,7 +110,8 @@ namespace InvertLab.Sprites.DOTS
                 float consumed = math.min(remaining, toBoundary);
                 float nextFraction = math.min(1f, fraction + consumed / dwell);
                 EmitIfCrossed(entity, clipIndex, phaseStep, displayed, fraction, nextFraction,
-                    ref def, ref eventBuffers, ref pending, ref lastEventStep);
+                    ref def, ref eventBuffers, ref pending, ref lastEventStep, ref firedMask,
+                    ref onceFired);
 
                 if (remaining + 1e-6f < toBoundary)
                 {
@@ -125,7 +134,8 @@ namespace InvertLab.Sprites.DOTS
                 phaseStep++;
                 int entered = DisplayFrame(phaseStep, frameCount, def.WrapMode);
                 EmitIfCrossed(entity, clipIndex, phaseStep, entered, 0f, 0f,
-                    ref def, ref eventBuffers, ref pending, ref lastEventStep);
+                    ref def, ref eventBuffers, ref pending, ref lastEventStep, ref firedMask,
+                    ref onceFired);
             }
 
             phase = phaseStep + fraction;
@@ -139,6 +149,9 @@ namespace InvertLab.Sprites.DOTS
             int drawFrame = DisplayFrame((int)math.floor(phase), frameCount, def.WrapMode);
             player.ValueRW.Time = phase;
             player.ValueRW.LastEventStep = lastEventStep;
+            player.ValueRW.EventFiredMask = firedMask;
+            player.ValueRW.OnceEventClip = onceClip;
+            player.ValueRW.OnceFiredKeys = onceFired;
             float4 frameData = set.Frames[def.FirstFrame + drawFrame];
             frame.ValueRW.Slot = (int)frameData.x;
             frame.ValueRW.Offset = frameData.yz;
@@ -170,39 +183,107 @@ namespace InvertLab.Sprites.DOTS
                                   ref SpriteAnimDef def,
                                   ref BufferLookup<SpriteAnimEventBuffer> eventBuffers,
                                   ref ComponentLookup<SpriteAnimEventsPending> pending,
-                                  ref int lastEventStep)
+                                  ref int lastEventStep, ref ulong firedMask,
+                                  ref FixedList128Bytes<ushort> onceFired)
         {
-            if (lastEventStep == phaseStep || frameIndex < 0 || frameIndex >= def.EventIds.Length ||
-                def.EventIds[frameIndex] == 0)
+            if (frameIndex < 0)
+                return;
+            if (lastEventStep != phaseStep)
+            {
+                firedMask = 0;
+                lastEventStep = phaseStep;
+            }
+
+            bool atPoint = math.abs(toFraction - fromFraction) <= 1e-6f;
+            int keyCount = def.EventKeys.Length;
+            if (keyCount == 0)
+            {
+                EmitLegacy(entity, clipIndex, frameIndex, fromFraction, toFraction,
+                    atPoint, ref def, ref eventBuffers, ref pending, ref firedMask);
+                return;
+            }
+
+            for (int k = 0; k < keyCount; k++)
+            {
+                var key = def.EventKeys[k];
+                if (key.EventId == 0 || key.FrameIndex != frameIndex)
+                    continue;
+                float marker = math.saturate(key.NormalizedTime);
+                bool hit = atPoint
+                    ? math.abs(marker - fromFraction) <= 1e-6f
+                    : fromFraction < marker - 1e-6f && toFraction + 1e-6f >= marker;
+                if (!hit)
+                    continue;
+                ulong bit = k < 64 ? 1UL << k : 0UL;
+                if (bit != 0 && (firedMask & bit) != 0)
+                    continue;
+                if (key.FireMode == (byte)SpriteEventFireMode.Once && ContainsKey(onceFired, (ushort)k))
+                    continue;
+                if (!Emit(entity, clipIndex, key, ref eventBuffers, ref pending))
+                    continue;
+                if (bit != 0)
+                    firedMask |= bit;
+                if (key.FireMode == (byte)SpriteEventFireMode.Once &&
+                    onceFired.Length < onceFired.Capacity)
+                    onceFired.Add((ushort)k);
+            }
+        }
+
+        static void EmitLegacy(Entity entity, int clipIndex, int frameIndex,
+                               float fromFraction, float toFraction, bool atPoint,
+                               ref SpriteAnimDef def,
+                               ref BufferLookup<SpriteAnimEventBuffer> eventBuffers,
+                               ref ComponentLookup<SpriteAnimEventsPending> pending,
+                               ref ulong firedMask)
+        {
+            if (frameIndex >= def.EventIds.Length || def.EventIds[frameIndex] == 0)
                 return;
             float marker = frameIndex < def.EventNormalizedTimes.Length
                 ? math.saturate(def.EventNormalizedTimes[frameIndex])
                 : 0f;
-            if (marker + 1e-6f < fromFraction || marker - 1e-6f > toFraction)
+            bool hit = atPoint
+                ? math.abs(marker - fromFraction) <= 1e-6f
+                : fromFraction < marker - 1e-6f && toFraction + 1e-6f >= marker;
+            if (!hit || (firedMask & 1UL) != 0)
                 return;
-            Emit(entity, clipIndex, frameIndex, ref def, ref eventBuffers, ref pending);
-            lastEventStep = phaseStep;
+            if (!Emit(entity, clipIndex, new SpriteAnimEventKey
+                {
+                    FrameIndex = frameIndex,
+                    NormalizedTime = marker,
+                    EventId = def.EventIds[frameIndex],
+                }, ref eventBuffers, ref pending))
+                return;
+            firedMask |= 1UL;
         }
 
-        static void Emit(Entity entity, int clipIndex, int frameIndex,
-                         ref SpriteAnimDef def,
+        static bool ContainsKey(in FixedList128Bytes<ushort> list, ushort key)
+        {
+            for (int i = 0; i < list.Length; i++)
+            {
+                if (list[i] == key)
+                    return true;
+            }
+            return false;
+        }
+
+        static bool Emit(Entity entity, int clipIndex, in SpriteAnimEventKey key,
                          ref BufferLookup<SpriteAnimEventBuffer> eventBuffers,
                          ref ComponentLookup<SpriteAnimEventsPending> pending)
         {
-            if (frameIndex < 0 || frameIndex >= def.EventIds.Length)
-                return;
-
-            byte id = def.EventIds[frameIndex];
-            if (id == 0 || !eventBuffers.HasBuffer(entity) || !pending.HasComponent(entity))
-                return;
-
+            if (key.EventId == 0 || !eventBuffers.HasBuffer(entity) || !pending.HasComponent(entity))
+                return false;
             eventBuffers[entity].Add(new SpriteAnimEventBuffer
             {
-                Id = id,
+                Id = key.EventId,
                 ClipIndex = clipIndex,
-                FrameIndex = frameIndex,
+                FrameIndex = key.FrameIndex,
+                FireMode = key.FireMode,
+                IntPayload = key.IntPayload,
+                FloatPayload = key.FloatPayload,
+                TextHash = key.TextHash,
             });
             pending.SetComponentEnabled(entity, true);
+            return true;
         }
 
         static void UpdateSockets(Entity entity, int drawFrame,

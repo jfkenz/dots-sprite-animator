@@ -152,6 +152,7 @@ namespace InvertLab.Sprites.DOTS
         public string FacingGroup = string.Empty;
         public SpriteFacingDirection Facing = SpriteFacingDirection.None;
         public List<FrameSocketDef> Sockets = new();
+        public List<SpriteClipEventMarker> EventMarkers = new();
 
         /// <summary>Keep frame metadata aligned with the play-order frame list.</summary>
         public void EnsureFrameData()
@@ -174,6 +175,171 @@ namespace InvertLab.Sprites.DOTS
                     FrameTweenModes[i] = DefaultTweenMode;
             }
             Sockets ??= new List<FrameSocketDef>();
+            EnsureEventMarkers();
+            SyncLegacyEventsFromMarkers();
+        }
+
+        /// <summary>
+        /// EventMarkers is the source of truth. EventIds[] keeps the first marker
+        /// on each frame so older profiles and GPU eligibility keep working.
+        /// </summary>
+        public void EnsureEventMarkers()
+        {
+            EventMarkers ??= new List<SpriteClipEventMarker>();
+            if (EventMarkers.Count == 0 && EventIds != null)
+            {
+                for (int i = 0; i < EventIds.Length; i++)
+                {
+                    if (EventIds[i] == 0)
+                        continue;
+                    float time = EventNormalizedTimes != null && i < EventNormalizedTimes.Length
+                        ? Mathf.Clamp01(EventNormalizedTimes[i])
+                        : 0f;
+                    EventMarkers.Add(new SpriteClipEventMarker
+                    {
+                        FrameIndex = i,
+                        NormalizedTime = time,
+                        EventId = EventIds[i],
+                    });
+                }
+            }
+        }
+
+        public void SyncLegacyEventsFromMarkers()
+        {
+            if (Frames == null || Frames.Length == 0)
+                return;
+            int count = Frames.Length;
+            EventIds = Resize(EventIds, count, (byte)0);
+            EventNormalizedTimes = Resize(EventNormalizedTimes, count, 0f);
+            for (int i = 0; i < count; i++)
+            {
+                EventIds[i] = 0;
+                EventNormalizedTimes[i] = 0f;
+            }
+            if (EventMarkers == null)
+                return;
+            for (int i = 0; i < EventMarkers.Count; i++)
+            {
+                var marker = EventMarkers[i];
+                if (marker == null || marker.EventId == 0)
+                    continue;
+                marker.NormalizedTime = Mathf.Clamp01(marker.NormalizedTime);
+                if (marker.FrameIndex < 0 || marker.FrameIndex >= count)
+                    continue;
+                if (EventIds[marker.FrameIndex] != 0)
+                    continue;
+                EventIds[marker.FrameIndex] = marker.EventId;
+                EventNormalizedTimes[marker.FrameIndex] = marker.NormalizedTime;
+            }
+        }
+
+        public SpriteClipEventMarker AddEventMarker(int frame, byte eventId, float normalizedTime = 0f)
+        {
+            EnsureEventMarkers();
+            if (eventId == 0)
+                return null;
+            frame = Mathf.Clamp(frame, 0, Mathf.Max(0, Frames.Length - 1));
+            var marker = new SpriteClipEventMarker
+            {
+                FrameIndex = frame,
+                NormalizedTime = Mathf.Clamp01(normalizedTime),
+                EventId = eventId,
+            };
+            EventMarkers.Add(marker);
+            SyncLegacyEventsFromMarkers();
+            return marker;
+        }
+
+        public SpriteClipEventMarker FirstMarkerOnFrame(int frame)
+        {
+            int index = IndexOfFirstMarkerOnFrame(frame);
+            return index < 0 ? null : EventMarkers[index];
+        }
+
+        public int IndexOfFirstMarkerOnFrame(int frame)
+        {
+            EnsureEventMarkers();
+            for (int i = 0; i < EventMarkers.Count; i++)
+            {
+                var marker = EventMarkers[i];
+                if (marker != null && marker.EventId != 0 && marker.FrameIndex == frame)
+                    return i;
+            }
+            return -1;
+        }
+
+        public int MarkerCountOnFrame(int frame)
+        {
+            EnsureEventMarkers();
+            int count = 0;
+            for (int i = 0; i < EventMarkers.Count; i++)
+            {
+                var marker = EventMarkers[i];
+                if (marker != null && marker.EventId != 0 && marker.FrameIndex == frame)
+                    count++;
+            }
+            return count;
+        }
+
+        public void ShiftEventMarkersAfterInsert(int insert)
+        {
+            EnsureEventMarkers();
+            for (int i = 0; i < EventMarkers.Count; i++)
+            {
+                if (EventMarkers[i] != null && EventMarkers[i].FrameIndex >= insert)
+                    EventMarkers[i].FrameIndex++;
+            }
+            SyncLegacyEventsFromMarkers();
+        }
+
+        public void CompactEventMarkers(int[] remap)
+        {
+            EnsureEventMarkers();
+            if (remap == null)
+                return;
+            EventMarkers.RemoveAll(marker =>
+                marker == null || marker.FrameIndex < 0 || marker.FrameIndex >= remap.Length ||
+                remap[marker.FrameIndex] < 0);
+            for (int i = 0; i < EventMarkers.Count; i++)
+                EventMarkers[i].FrameIndex = remap[EventMarkers[i].FrameIndex];
+            SyncLegacyEventsFromMarkers();
+        }
+
+        public void RemapEventMarkerFrames(int[] oldToNew)
+        {
+            EnsureEventMarkers();
+            if (oldToNew == null)
+                return;
+            for (int i = 0; i < EventMarkers.Count; i++)
+            {
+                var marker = EventMarkers[i];
+                if (marker == null || marker.FrameIndex < 0 || marker.FrameIndex >= oldToNew.Length)
+                    continue;
+                marker.FrameIndex = oldToNew[marker.FrameIndex];
+            }
+            SyncLegacyEventsFromMarkers();
+        }
+
+        public List<SpriteClipEventMarker> CloneEventMarkers()
+        {
+            EnsureEventMarkers();
+            var clone = new List<SpriteClipEventMarker>(EventMarkers.Count);
+            for (int i = 0; i < EventMarkers.Count; i++)
+            {
+                if (EventMarkers[i] != null)
+                    clone.Add(EventMarkers[i].Clone());
+            }
+            return clone;
+        }
+
+        public bool RemoveEventMarker(SpriteClipEventMarker marker)
+        {
+            EnsureEventMarkers();
+            if (marker == null || !EventMarkers.Remove(marker))
+                return false;
+            SyncLegacyEventsFromMarkers();
+            return true;
         }
 
         /// <summary>Move one play-order frame and all metadata attached to it.</summary>
@@ -196,6 +362,14 @@ namespace InvertLab.Sprites.DOTS
 
             for (int i = 0; i < Sockets.Count; i++)
                 Sockets[i].FrameIndex = RemapIndexAfterMove(Sockets[i].FrameIndex, fromIndex, toIndex);
+            EnsureEventMarkers();
+            for (int i = 0; i < EventMarkers.Count; i++)
+            {
+                if (EventMarkers[i] != null)
+                    EventMarkers[i].FrameIndex = RemapIndexAfterMove(
+                        EventMarkers[i].FrameIndex, fromIndex, toIndex);
+            }
+            SyncLegacyEventsFromMarkers();
         }
 
         static int RemapIndexAfterMove(int value, int fromIndex, int toIndex)
@@ -233,6 +407,13 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 
+    /// <summary>Loop = fire every time playback crosses the marker. Once = fire until clip changes or Play() restarts.</summary>
+    public enum SpriteEventFireMode : byte
+    {
+        Loop = 0,
+        Once = 1,
+    }
+
     /// <summary>Human-readable label for the compact byte id stored at runtime.</summary>
     [Serializable]
     public class SpriteEventDef
@@ -240,6 +421,38 @@ namespace InvertLab.Sprites.DOTS
         public byte Id = 1;
         public string Name = "Footstep";
         public Color Color = new Color(0.35f, 0.85f, 1f, 1f);
+    }
+
+    /// <summary>
+    /// One animation event on a clip. Multiple markers may share a frame
+    /// (footstep + land). EventIds[] stays a first-marker projection for older profiles.
+    /// </summary>
+    [Serializable]
+    public class SpriteClipEventMarker
+    {
+        public int FrameIndex;
+        public float NormalizedTime;
+        public byte EventId = 1;
+        public byte FireMode;
+        public int IntPayload;
+        public float FloatPayload;
+        public string TextPayload = string.Empty;
+
+        public bool FiresOnce => FireMode == (byte)SpriteEventFireMode.Once;
+
+        public SpriteClipEventMarker Clone()
+        {
+            return new SpriteClipEventMarker
+            {
+                FrameIndex = FrameIndex,
+                NormalizedTime = Mathf.Clamp01(NormalizedTime),
+                EventId = EventId,
+                FireMode = FireMode,
+                IntPayload = IntPayload,
+                FloatPayload = FloatPayload,
+                TextPayload = TextPayload ?? string.Empty,
+            };
+        }
     }
 
     /// <summary>One hitbox authored on one frame of one clip (uv within cell, origin top-left).</summary>

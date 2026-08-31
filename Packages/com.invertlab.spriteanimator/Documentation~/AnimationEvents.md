@@ -1,9 +1,32 @@
 # Animation events
 
-Frame events are authored as byte IDs with an exact in-frame timestamp in
-**Window > DOTS Sprite Animator**. The player emits an event when playback
-crosses that marker, including every marker crossed during a long update. Existing
-profiles migrate to frame-start timing (`0.0`).
+Frame events are authored in **Window > DOTS Sprite Animator**. Each marker has a
+byte ID, an exact in-frame timestamp, optional payload, and a fire mode.
+
+**EventMarkers** on the clip is the source of truth. Multiple markers may share
+one frame (footstep + land). `EventIds[]` still stores the first marker on each
+frame so older profiles and GPU eligibility keep working.
+
+Existing profiles migrate to one marker per non-zero `EventIds` entry, at the
+stored in-frame time (default `0.0`).
+
+## Fire mode
+
+| Mode | When it fires |
+| --- | --- |
+| **Loop** (default) | Every time playback crosses the marker, including clip wraps. |
+| **Once** | Until the clip changes or `SpriteAnims.Play()` restarts it. |
+
+## Payload
+
+Each `SpriteAnimEventBuffer` entry includes:
+
+- `Id`, `ClipIndex`, `FrameIndex`
+- `FireMode`
+- `IntPayload`, `FloatPayload`
+- `TextHash` — FNV-1a 64 of the authored text (SFX key, cue name). Empty text is `0`.
+
+Clips cap at 64 baked keys.
 
 ## Pure ECS receiver
 
@@ -23,7 +46,11 @@ public partial struct FootstepSystem : ISystem
                           .WithEntityAccess())
         {
             for (int i = 0; i < events.Length; i++)
-                Handle(entity, events[i].Id, events[i].ClipIndex, events[i].FrameIndex);
+            {
+                var evt = events[i];
+                Handle(entity, evt.Id, evt.ClipIndex, evt.FrameIndex,
+                    evt.IntPayload, evt.FloatPayload, evt.TextHash);
+            }
         }
     }
 }
@@ -50,3 +77,6 @@ void OnAnimationEvent(Entity entity, SpriteAnimEventBuffer evt)
 Programmatically-created animator entities can call
 `SpriteAnimEvents.Ensure(entityManager, entity)`. Authoring and factory paths
 install the required components automatically.
+
+Clips with any event markers stay on the CPU player. The GPU clock cannot emit
+them.

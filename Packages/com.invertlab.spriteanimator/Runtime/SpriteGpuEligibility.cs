@@ -28,6 +28,12 @@ namespace InvertLab.Sprites.DOTS
                 return false;
             }
 
+            if (def.EventKeys.Length > 0)
+            {
+                reason = "Animation events require CPU playback.";
+                return false;
+            }
+
             int firstSlot = (int)set.Frames[def.FirstFrame].x;
             for (int frame = 0; frame < def.FrameCount; frame++)
             {
@@ -93,6 +99,11 @@ namespace InvertLab.Sprites.DOTS
             if (clip.Sockets != null && clip.Sockets.Count > 0)
             {
                 reason = "Sockets require CPU playback.";
+                return false;
+            }
+            if (clip.EventMarkers != null && clip.EventMarkers.Count > 0)
+            {
+                reason = "Animation events require CPU playback.";
                 return false;
             }
 

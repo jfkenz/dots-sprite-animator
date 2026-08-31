@@ -23,8 +23,9 @@ namespace InvertLab.Sprites.DOTS
         public float FrameRate;    // frames per second
         public byte  WrapMode;     // SpriteAnimWrap.*
         public BlobArray<float> DurationScales; // per clip-frame multiplier
-        public BlobArray<byte>  EventIds;       // per clip-frame; 0 = no event
-        public BlobArray<float> EventNormalizedTimes; // 0=start, 1=end of frame
+        public BlobArray<byte>  EventIds;       // first marker per frame; 0 = none (legacy / GPU)
+        public BlobArray<float> EventNormalizedTimes; // first marker time per frame
+        public BlobArray<SpriteAnimEventKey> EventKeys; // every authored marker on this clip
         public BlobArray<float2> FrameScales;   // per clip-frame local scale multiplier
         public BlobArray<float> FrameRotations; // per clip-frame local Z rotation in degrees
         public BlobArray<byte> FrameTweenModes; // SpriteEaseMode from frame f -> f+1
@@ -124,6 +125,21 @@ namespace InvertLab.Sprites.DOTS
         public float Speed;
         public byte  Playing;
         public int   LastEventStep;
+        public int   OnceEventClip;
+        public ulong EventFiredMask;
+        public FixedList128Bytes<ushort> OnceFiredKeys;
+    }
+
+    /// <summary>One clip event after bake. Multiple keys may share a frame.</summary>
+    public struct SpriteAnimEventKey
+    {
+        public int FrameIndex;
+        public float NormalizedTime;
+        public byte EventId;
+        public byte FireMode;
+        public int IntPayload;
+        public float FloatPayload;
+        public ulong TextHash;
     }
 
     /// <summary>
@@ -146,6 +162,7 @@ namespace InvertLab.Sprites.DOTS
             public float[] FrameDurationScales; // per-frame duration multiplier (default 1)
             public byte[]  EventIds;            // per-frame event id (default 0)
             public float[] EventNormalizedTimes;// event position inside frame (default 0)
+            public EventKeyInput[] EventKeys;   // optional; when set, replaces per-frame arrays at bake
             public float2[] FrameOffsets;       // per-frame render offset in world units
             public float2[] FrameScales;        // per-frame local scale multiplier
             public float[] FrameRotations;      // per-frame local z rotation in degrees
@@ -153,6 +170,17 @@ namespace InvertLab.Sprites.DOTS
             public string FacingGroup;          // optional 4/8-way group label
             public SpriteFacingDirection FacingDirection;
             public FrameSocketInput[] FrameSockets;
+
+            public struct EventKeyInput
+            {
+                public int FrameIndex;
+                public float NormalizedTime;
+                public byte EventId;
+                public byte FireMode;
+                public int IntPayload;
+                public float FloatPayload;
+                public string TextPayload;
+            }
 
             public struct FrameSocketInput
             {
@@ -286,6 +314,26 @@ namespace InvertLab.Sprites.DOTS
                         : (byte)SpriteEaseMode.Linear;
                 }
 
+                var eventKeys = input.EventKeys;
+                if (eventKeys == null || eventKeys.Length == 0)
+                    eventKeys = EventKeysFromLegacy(input, n);
+                int keyCount = math.min(eventKeys.Length, 64);
+                var bakedKeys = builder.Allocate(ref def.EventKeys, keyCount);
+                for (int k = 0; k < keyCount; k++)
+                {
+                    var key = eventKeys[k];
+                    bakedKeys[k] = new SpriteAnimEventKey
+                    {
+                        FrameIndex = math.clamp(key.FrameIndex, 0, math.max(0, n - 1)),
+                        NormalizedTime = math.saturate(key.NormalizedTime),
+                        EventId = key.EventId,
+                        FireMode = key.FireMode,
+                        IntPayload = key.IntPayload,
+                        FloatPayload = key.FloatPayload,
+                        TextHash = string.IsNullOrEmpty(key.TextPayload) ? 0UL : Fnv(key.TextPayload),
+                    };
+                }
+
                 def.FacingGroupHash = string.IsNullOrWhiteSpace(input.FacingGroup)
                     ? 0UL
                     : Fnv(input.FacingGroup.Trim());
@@ -411,6 +459,9 @@ namespace InvertLab.Sprites.DOTS
             player.Speed = 1f;
             player.Playing = 1;
             player.LastEventStep = int.MinValue;
+            player.OnceEventClip = -1;
+            player.EventFiredMask = 0;
+            player.OnceFiredKeys = default;
             return (new SpriteAnimSetRef { Set = result }, player);
         }
 
@@ -423,6 +474,37 @@ namespace InvertLab.Sprites.DOTS
                 hash *= 1099511628211UL;
             }
             return hash;
+        }
+
+        static ClipInput.EventKeyInput[] EventKeysFromLegacy(in ClipInput input, int frameCount)
+        {
+            if (input.EventIds == null)
+                return new ClipInput.EventKeyInput[0];
+            int count = 0;
+            int n = math.min(frameCount, input.EventIds.Length);
+            for (int f = 0; f < n; f++)
+            {
+                if (input.EventIds[f] != 0)
+                    count++;
+            }
+            if (count == 0)
+                return new ClipInput.EventKeyInput[0];
+            var keys = new ClipInput.EventKeyInput[count];
+            int write = 0;
+            for (int f = 0; f < n; f++)
+            {
+                if (input.EventIds[f] == 0)
+                    continue;
+                keys[write++] = new ClipInput.EventKeyInput
+                {
+                    FrameIndex = f,
+                    NormalizedTime = input.EventNormalizedTimes != null && f < input.EventNormalizedTimes.Length
+                        ? input.EventNormalizedTimes[f]
+                        : 0f,
+                    EventId = input.EventIds[f],
+                };
+            }
+            return keys;
         }
 
         static byte ClampEaseMode(byte mode)
@@ -493,6 +575,9 @@ namespace InvertLab.Sprites.DOTS
             player.Time = 0f;
             player.Playing = 1;
             player.LastEventStep = int.MinValue;
+            player.OnceEventClip = clipIndex;
+            player.EventFiredMask = 0;
+            player.OnceFiredKeys.Clear();
             em.SetComponentData(e, player);
             if (em.HasComponent<SpriteAnimCompleted>(e))
                 em.RemoveComponent<SpriteAnimCompleted>(e);
@@ -537,9 +622,27 @@ namespace InvertLab.Sprites.DOTS
             var events = em.GetBuffer<SpriteAnimEventBuffer>(e);
             events.Clear();
             em.SetComponentEnabled<SpriteAnimEventsPending>(e, false);
-            if (firstFrame < clip.EventIds.Length && clip.EventIds[firstFrame] != 0 &&
-                (firstFrame >= clip.EventNormalizedTimes.Length ||
-                 clip.EventNormalizedTimes[firstFrame] <= 0f))
+            bool emitted = false;
+            ulong firedMask = 0;
+            if (clip.EventKeys.Length > 0)
+            {
+                for (int k = 0; k < clip.EventKeys.Length; k++)
+                {
+                    var key = clip.EventKeys[k];
+                    if (key.EventId == 0 || key.FrameIndex != firstFrame || key.NormalizedTime > 1e-6f)
+                        continue;
+                    events.Add(ToEventBuffer(clipIndex, key));
+                    emitted = true;
+                    if (k < 64)
+                        firedMask |= 1UL << k;
+                    if (key.FireMode == (byte)SpriteEventFireMode.Once &&
+                        player.OnceFiredKeys.Length < player.OnceFiredKeys.Capacity)
+                        player.OnceFiredKeys.Add((ushort)k);
+                }
+            }
+            else if (firstFrame < clip.EventIds.Length && clip.EventIds[firstFrame] != 0 &&
+                     (firstFrame >= clip.EventNormalizedTimes.Length ||
+                      clip.EventNormalizedTimes[firstFrame] <= 0f))
             {
                 events.Add(new SpriteAnimEventBuffer
                 {
@@ -547,12 +650,31 @@ namespace InvertLab.Sprites.DOTS
                     ClipIndex = clipIndex,
                     FrameIndex = firstFrame,
                 });
+                emitted = true;
+                firedMask = 1UL;
+            }
+            if (emitted)
+            {
                 em.SetComponentEnabled<SpriteAnimEventsPending>(e, true);
-                player = em.GetComponentData<SpriteAnimPlayer>(e);
                 player.LastEventStep = 0;
+                player.EventFiredMask = firedMask;
                 em.SetComponentData(e, player);
             }
             return true;
+        }
+
+        static SpriteAnimEventBuffer ToEventBuffer(int clipIndex, in SpriteAnimEventKey key)
+        {
+            return new SpriteAnimEventBuffer
+            {
+                Id = key.EventId,
+                ClipIndex = clipIndex,
+                FrameIndex = key.FrameIndex,
+                FireMode = key.FireMode,
+                IntPayload = key.IntPayload,
+                FloatPayload = key.FloatPayload,
+                TextHash = key.TextHash,
+            };
         }
     }
 }

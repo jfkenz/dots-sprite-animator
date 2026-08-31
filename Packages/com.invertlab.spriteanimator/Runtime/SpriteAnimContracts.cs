@@ -33,12 +33,16 @@ namespace InvertLab.Sprites.DOTS
     public struct SpriteAnimCompleted : IComponentData { }
 
     /// <summary>Animation event raised this tick. Read while SpriteAnimEventsPending is enabled.</summary>
-    [InternalBufferCapacity(2)]
+    [InternalBufferCapacity(4)]
     public struct SpriteAnimEventBuffer : IBufferElementData
     {
         public byte Id;
         public int ClipIndex;
         public int FrameIndex;
+        public byte FireMode;
+        public int IntPayload;
+        public float FloatPayload;
+        public ulong TextHash;
     }
 
     /// <summary>Enableable tag: this entity emitted one or more events this tick.</summary>
