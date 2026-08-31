@@ -140,6 +140,7 @@ namespace InvertLab.Sprites.DOTS
         public int IntPayload;
         public float FloatPayload;
         public ulong TextHash;
+        public FixedList512Bytes<SpriteAnimEventPayload> Payloads;
     }
 
     /// <summary>
@@ -180,6 +181,22 @@ namespace InvertLab.Sprites.DOTS
                 public int IntPayload;
                 public float FloatPayload;
                 public string TextPayload;
+                public EventPayloadInput[] Payloads;
+            }
+
+            public struct EventPayloadInput
+            {
+                public string Name;
+                public byte Kind;
+                public int IntValue;
+                public int IntY;
+                public int IntZ;
+                public int IntW;
+                public float FloatValue;
+                public float FloatY;
+                public float FloatZ;
+                public float FloatW;
+                public string TextValue;
             }
 
             public struct FrameSocketInput
@@ -322,16 +339,7 @@ namespace InvertLab.Sprites.DOTS
                 for (int k = 0; k < keyCount; k++)
                 {
                     var key = eventKeys[k];
-                    bakedKeys[k] = new SpriteAnimEventKey
-                    {
-                        FrameIndex = math.clamp(key.FrameIndex, 0, math.max(0, n - 1)),
-                        NormalizedTime = math.saturate(key.NormalizedTime),
-                        EventId = key.EventId,
-                        FireMode = key.FireMode,
-                        IntPayload = key.IntPayload,
-                        FloatPayload = key.FloatPayload,
-                        TextHash = string.IsNullOrEmpty(key.TextPayload) ? 0UL : Fnv(key.TextPayload),
-                    };
+                    bakedKeys[k] = BakeEventKey(key, n);
                 }
 
                 def.FacingGroupHash = string.IsNullOrWhiteSpace(input.FacingGroup)
@@ -474,6 +482,64 @@ namespace InvertLab.Sprites.DOTS
                 hash *= 1099511628211UL;
             }
             return hash;
+        }
+
+        static SpriteAnimEventKey BakeEventKey(in ClipInput.EventKeyInput key, int frameCount)
+        {
+            var baked = new SpriteAnimEventKey
+            {
+                FrameIndex = math.clamp(key.FrameIndex, 0, math.max(0, frameCount - 1)),
+                NormalizedTime = math.saturate(key.NormalizedTime),
+                EventId = key.EventId,
+                FireMode = key.FireMode,
+                IntPayload = key.IntPayload,
+                FloatPayload = key.FloatPayload,
+                TextHash = string.IsNullOrEmpty(key.TextPayload) ? 0UL : Fnv(key.TextPayload),
+            };
+            var src = key.Payloads;
+            if (src == null || src.Length == 0)
+                return baked;
+
+            bool haveInt = false;
+            bool haveFloat = false;
+            bool haveText = false;
+            int n = math.min(src.Length, SpriteEventPayloads.Max);
+            for (int i = 0; i < n; i++)
+            {
+                var entry = src[i];
+                byte kind = SpriteEventPayloads.ClampKind(entry.Kind);
+                int ix = entry.IntValue;
+                if (kind == (byte)SpriteEventPayloadKind.Bool)
+                    ix = entry.IntValue != 0 ? 1 : 0;
+                else if (kind == (byte)SpriteEventPayloadKind.Byte)
+                    ix = math.clamp(entry.IntValue, 0, 255);
+                var payload = new SpriteAnimEventPayload
+                {
+                    Kind = kind,
+                    Ints = new int4(ix, entry.IntY, entry.IntZ, entry.IntW),
+                    Floats = new float4(entry.FloatValue, entry.FloatY, entry.FloatZ, entry.FloatW),
+                    TextHash = string.IsNullOrEmpty(entry.TextValue) ? 0UL : Fnv(entry.TextValue),
+                    NameHash = string.IsNullOrWhiteSpace(entry.Name) ? 0UL : Fnv(entry.Name.Trim()),
+                };
+                baked.Payloads.Add(payload);
+                if (!haveInt && kind == (byte)SpriteEventPayloadKind.Int)
+                {
+                    baked.IntPayload = payload.Ints.x;
+                    haveInt = true;
+                }
+                else if (!haveFloat && kind == (byte)SpriteEventPayloadKind.Float)
+                {
+                    baked.FloatPayload = payload.Floats.x;
+                    haveFloat = true;
+                }
+                else if (!haveText && (kind == (byte)SpriteEventPayloadKind.Text ||
+                    kind == (byte)SpriteEventPayloadKind.Asset))
+                {
+                    baked.TextHash = payload.TextHash;
+                    haveText = true;
+                }
+            }
+            return baked;
         }
 
         static ClipInput.EventKeyInput[] EventKeysFromLegacy(in ClipInput input, int frameCount)
@@ -674,6 +740,7 @@ namespace InvertLab.Sprites.DOTS
                 IntPayload = key.IntPayload,
                 FloatPayload = key.FloatPayload,
                 TextHash = key.TextHash,
+                Payloads = key.Payloads,
             };
         }
     }

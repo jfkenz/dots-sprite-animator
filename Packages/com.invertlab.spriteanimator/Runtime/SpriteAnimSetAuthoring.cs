@@ -806,6 +806,7 @@ namespace InvertLab.Sprites.DOTS
                     var marker = clip.EventMarkers[i];
                     if (marker == null || marker.EventId == 0)
                         continue;
+                    marker.EnsurePayloads();
                     keys[write++] = new SpriteAnimSetBuilder.ClipInput.EventKeyInput
                     {
                         FrameIndex = marker.FrameIndex,
@@ -815,9 +816,51 @@ namespace InvertLab.Sprites.DOTS
                         IntPayload = marker.IntPayload,
                         FloatPayload = marker.FloatPayload,
                         TextPayload = marker.TextPayload,
+                        Payloads = PayloadsFromMarker(marker),
                     };
                 }
                 return keys;
+            }
+
+            static SpriteAnimSetBuilder.ClipInput.EventPayloadInput[] PayloadsFromMarker(
+                SpriteClipEventMarker marker)
+            {
+                if (marker?.Payloads == null || marker.Payloads.Count == 0)
+                    return null;
+                int count = math.min(marker.Payloads.Count, SpriteEventPayloads.Max);
+                var payloads = new SpriteAnimSetBuilder.ClipInput.EventPayloadInput[count];
+                int write = 0;
+                for (int i = 0; i < marker.Payloads.Count && write < count; i++)
+                {
+                    var entry = marker.Payloads[i];
+                    if (entry == null)
+                        continue;
+                    payloads[write++] = new SpriteAnimSetBuilder.ClipInput.EventPayloadInput
+                    {
+                        Name = entry.Name,
+                        Kind = entry.Kind,
+                        IntValue = entry.IntValue,
+                        IntY = entry.IntY,
+                        IntZ = entry.IntZ,
+                        IntW = entry.IntW,
+                        FloatValue = entry.FloatValue,
+                        FloatY = entry.FloatY,
+                        FloatZ = entry.FloatZ,
+                        FloatW = entry.FloatW,
+                        TextValue = entry.Kind == (byte)SpriteEventPayloadKind.Asset &&
+                            !string.IsNullOrEmpty(entry.AssetGuid)
+                            ? entry.AssetGuid
+                            : entry.TextValue,
+                    };
+                }
+                if (write == count)
+                    return payloads;
+                if (write == 0)
+                    return null;
+                var trimmed = new SpriteAnimSetBuilder.ClipInput.EventPayloadInput[write];
+                for (int i = 0; i < write; i++)
+                    trimmed[i] = payloads[i];
+                return trimmed;
             }
         }
     }

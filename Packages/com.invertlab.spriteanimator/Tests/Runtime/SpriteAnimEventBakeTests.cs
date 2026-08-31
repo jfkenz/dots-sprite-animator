@@ -91,6 +91,127 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void LegacyIntFloatTextMigrateIntoPayloadList()
+        {
+            var marker = new SpriteClipEventMarker
+            {
+                EventId = 1,
+                IntPayload = 4,
+                FloatPayload = 1.5f,
+                TextPayload = "slash",
+            };
+
+            marker.EnsurePayloads();
+
+            Assert.AreEqual(3, marker.Payloads.Count);
+            Assert.AreEqual((byte)SpriteEventPayloadKind.Int, marker.Payloads[0].Kind);
+            Assert.AreEqual(4, marker.Payloads[0].IntValue);
+            Assert.AreEqual((byte)SpriteEventPayloadKind.Float, marker.Payloads[1].Kind);
+            Assert.AreEqual(1.5f, marker.Payloads[1].FloatValue, 0.0001f);
+            Assert.AreEqual("slash", marker.Payloads[2].TextValue);
+        }
+
+        [Test]
+        public void NamedPayloadsBakeIntoEventKeyList()
+        {
+            var (setRef, _) = SpriteAnimSetBuilder.Build(Allocator.Temp, new[]
+            {
+                new SpriteAnimSetBuilder.ClipInput
+                {
+                    Name = "Attack",
+                    FrameRate = 8f,
+                    GlobalFrameIndices = new[] { 0, 1 },
+                    EventKeys = new[]
+                    {
+                        new SpriteAnimSetBuilder.ClipInput.EventKeyInput
+                        {
+                            FrameIndex = 0,
+                            EventId = 1,
+                            Payloads = new[]
+                            {
+                                new SpriteAnimSetBuilder.ClipInput.EventPayloadInput
+                                {
+                                    Name = "damage",
+                                    Kind = (byte)SpriteEventPayloadKind.Int,
+                                    IntValue = 12,
+                                },
+                                new SpriteAnimSetBuilder.ClipInput.EventPayloadInput
+                                {
+                                    Name = "sfx",
+                                    Kind = (byte)SpriteEventPayloadKind.Text,
+                                    TextValue = "slash",
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+            try
+            {
+                ref var def = ref setRef.Set.Value.Clips[0];
+                Assert.AreEqual(2, def.EventKeys[0].Payloads.Length);
+                Assert.AreEqual(12, def.EventKeys[0].IntPayload);
+                Assert.AreEqual(SpriteAnimSetBuilder.Fnv("damage"), def.EventKeys[0].Payloads[0].NameHash);
+                Assert.AreEqual(12, def.EventKeys[0].Payloads[0].IntValue);
+                Assert.AreEqual(SpriteAnimSetBuilder.Fnv("sfx"), def.EventKeys[0].Payloads[1].NameHash);
+                Assert.AreEqual(SpriteAnimSetBuilder.Fnv("slash"), def.EventKeys[0].Payloads[1].TextHash);
+                Assert.AreEqual(SpriteAnimSetBuilder.Fnv("slash"), def.EventKeys[0].TextHash);
+            }
+            finally
+            {
+                if (setRef.Set.IsCreated)
+                    setRef.Set.Dispose();
+            }
+        }
+
+        [Test]
+        public void Float2PayloadBakesXy()
+        {
+            var (setRef, _) = SpriteAnimSetBuilder.Build(Allocator.Temp, new[]
+            {
+                new SpriteAnimSetBuilder.ClipInput
+                {
+                    Name = "Hit",
+                    FrameRate = 8f,
+                    GlobalFrameIndices = new[] { 0 },
+                    EventKeys = new[]
+                    {
+                        new SpriteAnimSetBuilder.ClipInput.EventKeyInput
+                        {
+                            FrameIndex = 0,
+                            EventId = 1,
+                            Payloads = new[]
+                            {
+                                new SpriteAnimSetBuilder.ClipInput.EventPayloadInput
+                                {
+                                    Name = "knockback",
+                                    Kind = (byte)SpriteEventPayloadKind.Float2,
+                                    FloatValue = 1.25f,
+                                    FloatY = -0.5f,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+            try
+            {
+                var payload = setRef.Set.Value.Clips[0].EventKeys[0].Payloads[0];
+                Assert.AreEqual((byte)SpriteEventPayloadKind.Float2, payload.Kind);
+                Assert.AreEqual(1.25f, payload.Floats.x, 0.0001f);
+                Assert.AreEqual(-0.5f, payload.Floats.y, 0.0001f);
+                Assert.AreEqual(1.25f, payload.Float2.x, 0.0001f);
+            }
+            finally
+            {
+                if (setRef.Set.IsCreated)
+                    setRef.Set.Dispose();
+            }
+        }
+
+        [Test]
         public void EventMarkersMakeClipCpuOnly()
         {
             var clip = new SpriteClipDef

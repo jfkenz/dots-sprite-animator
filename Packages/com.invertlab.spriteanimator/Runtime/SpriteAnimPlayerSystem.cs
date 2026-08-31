@@ -281,6 +281,7 @@ namespace InvertLab.Sprites.DOTS
                 IntPayload = key.IntPayload,
                 FloatPayload = key.FloatPayload,
                 TextHash = key.TextHash,
+                Payloads = key.Payloads,
             });
             pending.SetComponentEnabled(entity, true);
             return true;

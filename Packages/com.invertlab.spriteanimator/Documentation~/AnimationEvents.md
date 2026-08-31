@@ -19,14 +19,35 @@ stored in-frame time (default `0.0`).
 
 ## Payload
 
-Each `SpriteAnimEventBuffer` entry includes:
+Each marker has a list of up to 8 values. A row is optional **name**, **type**,
+value, and ×. Types are Unity.Mathematics gameplay values: Int / Int2 / Int3 /
+Int4, Float / Float2 / Float3 / Float4, Byte, Bool, Color (`float4`), Text, and
+Half (stored as `float`; cast with `new half(payload.Floats.x)`). There is no
+float8 in Unity.Mathematics, so that is not a payload type.
 
-- `Id`, `ClipIndex`, `FrameIndex`
-- `FireMode`
-- `IntPayload`, `FloatPayload`
-- `TextHash` — FNV-1a 64 of the authored text (SFX key, cue name). Empty text is `0`.
+`SpriteAnimEventBuffer.Payloads` holds every row. Vectors live on `Ints` /
+`Floats`. For simple receivers, the first Int / Float / Text still copy onto
+`IntPayload`, `FloatPayload`, and `TextHash`.
 
-Clips cap at 64 baked keys.
+```csharp
+evt.TryNamed(SpriteAnims.Fnv("knockback"), out var knock);
+float2 dir = knock.Float2;
+```
+
+A C# struct cannot live in the blob. Name the rows (`damage`, `knockback`) and build the
+struct in the receiver from `TryNamed`.
+
+**Asset** stores a project object (ScriptableObject, AudioClip, TextAsset). Runtime gets
+`TextHash` of the GUID and `NameHash` of the row name. Keep a catalog keyed by those
+hashes — the blob cannot hold a UnityEngine.Object.
+
+```csharp
+evt.TryNamed(SpriteAnims.Fnv("sfx"), out var sfx);
+if (_clips.TryGetValue(sfx.TextHash, out var clip))
+    Play(clip);
+```
+
+Clips cap at 64 baked event keys.
 
 ## Pure ECS receiver
 
@@ -48,8 +69,7 @@ public partial struct FootstepSystem : ISystem
             for (int i = 0; i < events.Length; i++)
             {
                 var evt = events[i];
-                Handle(entity, evt.Id, evt.ClipIndex, evt.FrameIndex,
-                    evt.IntPayload, evt.FloatPayload, evt.TextHash);
+                Handle(entity, evt.Id, evt.ClipIndex, evt.FrameIndex, evt.Payloads);
             }
         }
     }

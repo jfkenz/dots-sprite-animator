@@ -308,6 +308,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _newColliderIsTrigger = true;
         static readonly string[] ColliderLifetimeLabels = { "This Frame", "This Clip", "Character" };
         static readonly string[] ColliderPhysicsLabels = { "Query AABB", "Unity 2D", "Both" };
+        static readonly string[] EventPayloadKindLabels =
+        {
+            "Int", "Float", "Text", "Bool",
+            "Int2", "Int3", "Int4",
+            "Float2", "Float3", "Float4",
+            "Byte", "Color", "Half", "Asset",
+        };
         float _speed = 1f;
         [SerializeField] float _previewZoom = 1f;
         [SerializeField] Vector2 _previewPan = Vector2.zero;
@@ -7248,9 +7255,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (selected)
                         GUI.backgroundColor = AccentColor;
                     string fire = marker.FiresOnce ? "Once" : "Loop";
+                    marker.EnsurePayloads();
+                    string payloadBit = marker.Payloads.Count == 0
+                        ? string.Empty
+                        : marker.Payloads.Count == 1
+                            ? "  •  1 payload"
+                            : $"  •  {marker.Payloads.Count} payloads";
                     string label = here
-                        ? $"{i + 1}. {EventName(marker.EventId)}  •  Frame {frame + 1}  •  {EventAuthoredTime(owner, marker):0.000}s  •  {fire}"
-                        : $"{i + 1}. {EventName(marker.EventId)}  •  {EventMarkerHomeLabel(owner, frame)}  •  {fire}";
+                        ? $"{i + 1}. {EventName(marker.EventId)}  •  Frame {frame + 1}  •  {EventAuthoredTime(owner, marker):0.000}s  •  {fire}{payloadBit}"
+                        : $"{i + 1}. {EventName(marker.EventId)}  •  {EventMarkerHomeLabel(owner, frame)}  •  {fire}{payloadBit}";
                     bool rowClicked = GUILayout.Button(new GUIContent(label,
                             "Click to select and edit. Search jumps to this marker."),
                         EditorStyles.miniButton, GUILayout.Height(22f));
@@ -7342,38 +7355,254 @@ namespace InvertLab.Sprites.DOTS.Editor
                 SaveDirty();
             }
 
-            int nextInt = EditorGUILayout.IntField(
-                new GUIContent("Int", "Gameplay payload copied onto SpriteAnimEventBuffer."),
-                marker.IntPayload);
-            if (nextInt != marker.IntPayload)
-            {
-                RecordProfileUndo("Set Sprite Animation Event Payload");
-                marker.IntPayload = nextInt;
-                SaveDirty();
-            }
-
-            float nextFloat = EditorGUILayout.FloatField(
-                new GUIContent("Float", "Gameplay payload copied onto SpriteAnimEventBuffer."),
-                marker.FloatPayload);
-            if (!Mathf.Approximately(nextFloat, marker.FloatPayload))
-            {
-                RecordProfileUndo("Set Sprite Animation Event Payload");
-                marker.FloatPayload = nextFloat;
-                SaveDirty();
-            }
-
-            string nextText = EditorGUILayout.TextField(
-                new GUIContent("Text", "Hashed into TextHash at bake (SFX key, cue name)."),
-                marker.TextPayload ?? string.Empty);
-            if (nextText != (marker.TextPayload ?? string.Empty))
-            {
-                RecordProfileUndo("Set Sprite Animation Event Payload");
-                marker.TextPayload = nextText;
-                SaveDirty();
-            }
+            DrawEventPayloadList(marker);
 
             DrawEventDefinition(marker.EventId);
             EditorGUILayout.LabelField("Binding", EventMarkerHomeLabel(clip, frame));
+        }
+
+        void DrawEventPayloadList(SpriteClipEventMarker marker)
+        {
+            marker.EnsurePayloads();
+            GUILayout.Space(4f);
+            EditorGUILayout.LabelField("PAYLOAD",
+                $"{marker.Payloads.Count} / {SpriteEventPayloads.Max}",
+                EditorStyles.miniBoldLabel);
+            if (marker.Payloads.Count == 0)
+            {
+                GUILayout.Label(
+                    "No payload. Named rows are struct fields. Type Asset to load a ScriptableObject, clip, or TextAsset.",
+                    _mutedWrapStyle);
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Label("Name", _mutedStyle, GUILayout.Width(72f));
+                    GUILayout.Label("Type", _mutedStyle, GUILayout.Width(78f));
+                    GUILayout.Label("Value", _mutedStyle);
+                    GUILayout.Space(31f);
+                }
+            }
+
+            for (int i = 0; i < marker.Payloads.Count; i++)
+            {
+                var entry = marker.Payloads[i];
+                if (entry == null)
+                    continue;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    string nextName = EditorGUILayout.TextField(entry.Name ?? string.Empty,
+                        GUILayout.Width(72f), GUILayout.Height(18f));
+                    if (nextName != (entry.Name ?? string.Empty))
+                    {
+                        RecordProfileUndo("Set Event Payload Name");
+                        entry.Name = nextName;
+                        SaveDirty();
+                    }
+
+                    int kind = Mathf.Clamp(entry.Kind, 0, EventPayloadKindLabels.Length - 1);
+                    int nextKind = EditorGUILayout.Popup(kind, EventPayloadKindLabels,
+                        GUILayout.Width(78f));
+                    if (nextKind != kind)
+                    {
+                        RecordProfileUndo("Set Event Payload Type");
+                        entry.Kind = (byte)nextKind;
+                        marker.SyncConveniencePayloads();
+                        SaveDirty();
+                    }
+
+                    DrawEventPayloadValue(marker, entry);
+
+                    if (GUILayout.Button(new GUIContent("×", "Remove this payload."),
+                        EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(18f)))
+                    {
+                        RecordProfileUndo("Remove Event Payload");
+                        marker.RemovePayload(entry);
+                        SaveDirty();
+                        GUIUtility.ExitGUI();
+                    }
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(marker.Payloads.Count >= SpriteEventPayloads.Max))
+            {
+                if (GUILayout.Button(new GUIContent("Add Payload",
+                    marker.Payloads.Count >= SpriteEventPayloads.Max
+                        ? $"Max {SpriteEventPayloads.Max} payloads per marker."
+                        : "Add an Int, then change Type (Float2, Color, Byte, …)."),
+                    EditorStyles.miniButton))
+                {
+                    RecordProfileUndo("Add Event Payload");
+                    marker.AddPayload(SpriteEventPayloadKind.Int);
+                    SaveDirty();
+                }
+            }
+        }
+
+        void DrawEventPayloadValue(SpriteClipEventMarker marker, SpriteEventPayloadEntry entry)
+        {
+            var kind = (SpriteEventPayloadKind)SpriteEventPayloads.ClampKind(entry.Kind);
+            switch (kind)
+            {
+                case SpriteEventPayloadKind.Float:
+                case SpriteEventPayloadKind.Half:
+                    DrawPayloadFloats(marker, entry, 1);
+                    break;
+                case SpriteEventPayloadKind.Float2:
+                    DrawPayloadFloats(marker, entry, 2);
+                    break;
+                case SpriteEventPayloadKind.Float3:
+                    DrawPayloadFloats(marker, entry, 3);
+                    break;
+                case SpriteEventPayloadKind.Float4:
+                    DrawPayloadFloats(marker, entry, 4);
+                    break;
+                case SpriteEventPayloadKind.Asset:
+                    DrawPayloadAsset(marker, entry);
+                    break;
+                case SpriteEventPayloadKind.Color:
+                {
+                    var current = new Color(entry.FloatValue, entry.FloatY, entry.FloatZ, entry.FloatW);
+                    if (entry.FloatW == 0f && entry.FloatValue == 0f && entry.FloatY == 0f &&
+                        entry.FloatZ == 0f)
+                        current.a = 1f;
+                    Color next = EditorGUILayout.ColorField(GUIContent.none, current);
+                    if (next != current)
+                    {
+                        RecordProfileUndo("Set Event Payload");
+                        entry.FloatValue = next.r;
+                        entry.FloatY = next.g;
+                        entry.FloatZ = next.b;
+                        entry.FloatW = next.a;
+                        marker.SyncConveniencePayloads();
+                        SaveDirty();
+                    }
+                    break;
+                }
+                case SpriteEventPayloadKind.Text:
+                {
+                    string next = EditorGUILayout.TextField(entry.TextValue ?? string.Empty);
+                    if (next != (entry.TextValue ?? string.Empty))
+                    {
+                        RecordProfileUndo("Set Event Payload");
+                        entry.TextValue = next;
+                        marker.SyncConveniencePayloads();
+                        SaveDirty();
+                    }
+                    break;
+                }
+                case SpriteEventPayloadKind.Bool:
+                {
+                    bool next = EditorGUILayout.Toggle(entry.IntValue != 0, GUILayout.Width(18f));
+                    GUILayout.FlexibleSpace();
+                    if (next != (entry.IntValue != 0))
+                    {
+                        RecordProfileUndo("Set Event Payload");
+                        entry.IntValue = next ? 1 : 0;
+                        marker.SyncConveniencePayloads();
+                        SaveDirty();
+                    }
+                    break;
+                }
+                case SpriteEventPayloadKind.Byte:
+                {
+                    int next = Mathf.Clamp(EditorGUILayout.IntField(entry.IntValue), 0, 255);
+                    if (next != entry.IntValue)
+                    {
+                        RecordProfileUndo("Set Event Payload");
+                        entry.IntValue = next;
+                        marker.SyncConveniencePayloads();
+                        SaveDirty();
+                    }
+                    break;
+                }
+                case SpriteEventPayloadKind.Int2:
+                    DrawPayloadInts(marker, entry, 2);
+                    break;
+                case SpriteEventPayloadKind.Int3:
+                    DrawPayloadInts(marker, entry, 3);
+                    break;
+                case SpriteEventPayloadKind.Int4:
+                    DrawPayloadInts(marker, entry, 4);
+                    break;
+                default:
+                    DrawPayloadInts(marker, entry, 1);
+                    break;
+            }
+        }
+
+        void DrawPayloadInts(SpriteClipEventMarker marker, SpriteEventPayloadEntry entry, int count)
+        {
+            int x = entry.IntValue;
+            int y = entry.IntY;
+            int z = entry.IntZ;
+            int w = entry.IntW;
+            if (count >= 1) x = EditorGUILayout.IntField(x, GUILayout.MinWidth(28f));
+            if (count >= 2) y = EditorGUILayout.IntField(y, GUILayout.MinWidth(28f));
+            if (count >= 3) z = EditorGUILayout.IntField(z, GUILayout.MinWidth(28f));
+            if (count >= 4) w = EditorGUILayout.IntField(w, GUILayout.MinWidth(28f));
+            if (x == entry.IntValue && y == entry.IntY && z == entry.IntZ && w == entry.IntW)
+                return;
+            RecordProfileUndo("Set Event Payload");
+            entry.IntValue = x;
+            entry.IntY = y;
+            entry.IntZ = z;
+            entry.IntW = w;
+            marker.SyncConveniencePayloads();
+            SaveDirty();
+        }
+
+        void DrawPayloadFloats(SpriteClipEventMarker marker, SpriteEventPayloadEntry entry, int count)
+        {
+            float x = entry.FloatValue;
+            float y = entry.FloatY;
+            float z = entry.FloatZ;
+            float w = entry.FloatW;
+            if (count >= 1) x = EditorGUILayout.FloatField(x, GUILayout.MinWidth(28f));
+            if (count >= 2) y = EditorGUILayout.FloatField(y, GUILayout.MinWidth(28f));
+            if (count >= 3) z = EditorGUILayout.FloatField(z, GUILayout.MinWidth(28f));
+            if (count >= 4) w = EditorGUILayout.FloatField(w, GUILayout.MinWidth(28f));
+            if (Mathf.Approximately(x, entry.FloatValue) && Mathf.Approximately(y, entry.FloatY) &&
+                Mathf.Approximately(z, entry.FloatZ) && Mathf.Approximately(w, entry.FloatW))
+                return;
+            RecordProfileUndo("Set Event Payload");
+            entry.FloatValue = x;
+            entry.FloatY = y;
+            entry.FloatZ = z;
+            entry.FloatW = w;
+            marker.SyncConveniencePayloads();
+            SaveDirty();
+        }
+
+        void DrawPayloadAsset(SpriteClipEventMarker marker, SpriteEventPayloadEntry entry)
+        {
+            UnityEngine.Object current = null;
+            if (!string.IsNullOrEmpty(entry.AssetGuid))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(entry.AssetGuid);
+                if (!string.IsNullOrEmpty(path))
+                    current = AssetDatabase.LoadMainAssetAtPath(path);
+            }
+            UnityEngine.Object next = EditorGUILayout.ObjectField(current, typeof(UnityEngine.Object), false);
+            if (next == current)
+                return;
+            RecordProfileUndo("Set Event Payload Asset");
+            if (next == null)
+            {
+                entry.AssetGuid = string.Empty;
+                entry.TextValue = string.Empty;
+            }
+            else
+            {
+                string path = AssetDatabase.GetAssetPath(next);
+                entry.AssetGuid = AssetDatabase.AssetPathToGUID(path);
+                entry.TextValue = entry.AssetGuid;
+                if (string.IsNullOrWhiteSpace(entry.Name))
+                    entry.Name = next.name;
+            }
+            marker.SyncConveniencePayloads();
+            SaveDirty();
         }
 
         void DrawEventTypeCatalog()
@@ -7399,7 +7628,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (definition == null || definition.Id == 0)
                     continue;
                 int placed = CountEventPlacements(definition.Id);
-                GUI.Label(
+                GUILayout.Label(
                     placed == 0
                         ? $"{definition.Name}  •  ID {definition.Id}  •  not placed"
                         : $"{definition.Name}  •  ID {definition.Id}  •  {placed} placed",

@@ -32,6 +32,26 @@ namespace InvertLab.Sprites.DOTS
     /// <summary>Added when a non-looping clip reaches its final frame; removed by Play().</summary>
     public struct SpriteAnimCompleted : IComponentData { }
 
+    /// <summary>
+    /// One authored payload. Scalars live in Ints.x / Floats.x. Vectors use .xy/.xyz/.xyzw.
+    /// Half is still a float at runtime; cast with <c>new half(payload.Floats.x)</c>.
+    /// </summary>
+    public struct SpriteAnimEventPayload
+    {
+        public byte Kind;
+        public int4 Ints;
+        public float4 Floats;
+        public ulong TextHash;
+        public ulong NameHash;
+
+        public int IntValue => Ints.x;
+        public float FloatValue => Floats.x;
+        public int2 Int2 => Ints.xy;
+        public int3 Int3 => Ints.xyz;
+        public float2 Float2 => Floats.xy;
+        public float3 Float3 => Floats.xyz;
+    }
+
     /// <summary>Animation event raised this tick. Read while SpriteAnimEventsPending is enabled.</summary>
     [InternalBufferCapacity(4)]
     public struct SpriteAnimEventBuffer : IBufferElementData
@@ -43,6 +63,37 @@ namespace InvertLab.Sprites.DOTS
         public int IntPayload;
         public float FloatPayload;
         public ulong TextHash;
+        public FixedList512Bytes<SpriteAnimEventPayload> Payloads;
+
+        public bool TryPayload(int index, out SpriteAnimEventPayload payload)
+        {
+            if (index < 0 || index >= Payloads.Length)
+            {
+                payload = default;
+                return false;
+            }
+            payload = Payloads[index];
+            return true;
+        }
+
+        public bool TryNamed(ulong nameHash, out SpriteAnimEventPayload payload)
+        {
+            if (nameHash == 0)
+            {
+                payload = default;
+                return false;
+            }
+            for (int i = 0; i < Payloads.Length; i++)
+            {
+                if (Payloads[i].NameHash == nameHash)
+                {
+                    payload = Payloads[i];
+                    return true;
+                }
+            }
+            payload = default;
+            return false;
+        }
     }
 
     /// <summary>Enableable tag: this entity emitted one or more events this tick.</summary>

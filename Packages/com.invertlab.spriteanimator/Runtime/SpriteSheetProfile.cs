@@ -203,6 +203,8 @@ namespace InvertLab.Sprites.DOTS
                     });
                 }
             }
+            for (int i = 0; i < EventMarkers.Count; i++)
+                EventMarkers[i]?.EnsurePayloads();
         }
 
         public void SyncLegacyEventsFromMarkers()
@@ -414,6 +416,73 @@ namespace InvertLab.Sprites.DOTS
         Once = 1,
     }
 
+    /// <summary>One authored value on an event marker. Cap is SpriteEventPayloads.Max.</summary>
+    public enum SpriteEventPayloadKind : byte
+    {
+        Int = 0,
+        Float = 1,
+        Text = 2,
+        Bool = 3,
+        Int2 = 4,
+        Int3 = 5,
+        Int4 = 6,
+        Float2 = 7,
+        Float3 = 8,
+        Float4 = 9,
+        Byte = 10,
+        Color = 11,
+        Half = 12,
+        Asset = 13,
+    }
+
+    public static class SpriteEventPayloads
+    {
+        public const int Max = 8;
+        public const byte LastKind = (byte)SpriteEventPayloadKind.Asset;
+
+        public static byte ClampKind(byte kind)
+        {
+            return kind > LastKind ? (byte)SpriteEventPayloadKind.Int : kind;
+        }
+    }
+
+    /// <summary>Name is optional; hashed at bake so gameplay can look up "damage" vs "sfx".</summary>
+    [Serializable]
+    public class SpriteEventPayloadEntry
+    {
+        public string Name = string.Empty;
+        public byte Kind;
+        public int IntValue;
+        public int IntY;
+        public int IntZ;
+        public int IntW;
+        public float FloatValue;
+        public float FloatY;
+        public float FloatZ;
+        public float FloatW;
+        public string TextValue = string.Empty;
+        public string AssetGuid = string.Empty;
+
+        public SpriteEventPayloadEntry Clone()
+        {
+            return new SpriteEventPayloadEntry
+            {
+                Name = Name ?? string.Empty,
+                Kind = Kind,
+                IntValue = IntValue,
+                IntY = IntY,
+                IntZ = IntZ,
+                IntW = IntW,
+                FloatValue = FloatValue,
+                FloatY = FloatY,
+                FloatZ = FloatZ,
+                FloatW = FloatW,
+                TextValue = TextValue ?? string.Empty,
+                AssetGuid = AssetGuid ?? string.Empty,
+            };
+        }
+    }
+
     /// <summary>Human-readable label for the compact byte id stored at runtime.</summary>
     [Serializable]
     public class SpriteEventDef
@@ -437,12 +506,96 @@ namespace InvertLab.Sprites.DOTS
         public int IntPayload;
         public float FloatPayload;
         public string TextPayload = string.Empty;
+        public List<SpriteEventPayloadEntry> Payloads = new();
 
         public bool FiresOnce => FireMode == (byte)SpriteEventFireMode.Once;
 
+        public void EnsurePayloads()
+        {
+            Payloads ??= new List<SpriteEventPayloadEntry>();
+            if (Payloads.Count == 0)
+            {
+                if (IntPayload != 0)
+                    Payloads.Add(new SpriteEventPayloadEntry
+                    {
+                        Kind = (byte)SpriteEventPayloadKind.Int,
+                        IntValue = IntPayload,
+                    });
+                if (Mathf.Abs(FloatPayload) > 0f)
+                    Payloads.Add(new SpriteEventPayloadEntry
+                    {
+                        Kind = (byte)SpriteEventPayloadKind.Float,
+                        FloatValue = FloatPayload,
+                    });
+                if (!string.IsNullOrEmpty(TextPayload))
+                    Payloads.Add(new SpriteEventPayloadEntry
+                    {
+                        Kind = (byte)SpriteEventPayloadKind.Text,
+                        TextValue = TextPayload,
+                    });
+            }
+            if (Payloads.Count > SpriteEventPayloads.Max)
+                Payloads.RemoveRange(SpriteEventPayloads.Max,
+                    Payloads.Count - SpriteEventPayloads.Max);
+            SyncConveniencePayloads();
+        }
+
+        public void SyncConveniencePayloads()
+        {
+            IntPayload = 0;
+            FloatPayload = 0f;
+            TextPayload = string.Empty;
+            bool haveInt = false;
+            bool haveFloat = false;
+            bool haveText = false;
+            if (Payloads == null)
+                return;
+            for (int i = 0; i < Payloads.Count; i++)
+            {
+                var entry = Payloads[i];
+                if (entry == null)
+                    continue;
+                if (!haveInt && entry.Kind == (byte)SpriteEventPayloadKind.Int)
+                {
+                    IntPayload = entry.IntValue;
+                    haveInt = true;
+                }
+                else if (!haveFloat && entry.Kind == (byte)SpriteEventPayloadKind.Float)
+                {
+                    FloatPayload = entry.FloatValue;
+                    haveFloat = true;
+                }
+                else if (!haveText && entry.Kind == (byte)SpriteEventPayloadKind.Text)
+                {
+                    TextPayload = entry.TextValue ?? string.Empty;
+                    haveText = true;
+                }
+            }
+        }
+
+        public SpriteEventPayloadEntry AddPayload(SpriteEventPayloadKind kind)
+        {
+            EnsurePayloads();
+            if (Payloads.Count >= SpriteEventPayloads.Max)
+                return null;
+            var entry = new SpriteEventPayloadEntry { Kind = (byte)kind };
+            Payloads.Add(entry);
+            SyncConveniencePayloads();
+            return entry;
+        }
+
+        public bool RemovePayload(SpriteEventPayloadEntry entry)
+        {
+            EnsurePayloads();
+            if (entry == null || !Payloads.Remove(entry))
+                return false;
+            SyncConveniencePayloads();
+            return true;
+        }
+
         public SpriteClipEventMarker Clone()
         {
-            return new SpriteClipEventMarker
+            var clone = new SpriteClipEventMarker
             {
                 FrameIndex = FrameIndex,
                 NormalizedTime = Mathf.Clamp01(NormalizedTime),
@@ -451,7 +604,15 @@ namespace InvertLab.Sprites.DOTS
                 IntPayload = IntPayload,
                 FloatPayload = FloatPayload,
                 TextPayload = TextPayload ?? string.Empty,
+                Payloads = new List<SpriteEventPayloadEntry>(),
             };
+            EnsurePayloads();
+            for (int i = 0; i < Payloads.Count; i++)
+            {
+                if (Payloads[i] != null)
+                    clone.Payloads.Add(Payloads[i].Clone());
+            }
+            return clone;
         }
     }
 
