@@ -60,6 +60,58 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void CharacterExcludeDropsAttackClip()
+        {
+            var body = new FrameBoxDef
+            {
+                Lifetime = (byte)SpriteColliderLifetime.Character,
+                CharacterExcludeClips = new List<string> { "Attack" },
+            };
+            var boxes = new List<FrameBoxDef> { body };
+
+            var idle = new List<FrameBoxDef>(
+                SpriteColliderWorld.VisibleOn(boxes, "Idle", 0));
+            var attack = new List<FrameBoxDef>(
+                SpriteColliderWorld.VisibleOn(boxes, "Attack", 0));
+
+            Assert.AreEqual(1, idle.Count);
+            Assert.AreEqual(0, attack.Count);
+            Assert.IsFalse(body.AppliesToClip("Attack"));
+            Assert.IsTrue(body.AppliesToClip("Idle"));
+        }
+
+        [Test]
+        public void CharacterIncludeOnlyListedClips()
+        {
+            var body = new FrameBoxDef
+            {
+                Lifetime = (byte)SpriteColliderLifetime.Character,
+                CharacterIncludeClips = new List<string> { "Idle", "Walk" },
+            };
+            var boxes = new List<FrameBoxDef> { body };
+
+            Assert.AreEqual(1, new List<FrameBoxDef>(
+                SpriteColliderWorld.VisibleOn(boxes, "Idle", 0)).Count);
+            Assert.AreEqual(1, new List<FrameBoxDef>(
+                SpriteColliderWorld.VisibleOn(boxes, "Walk", 0)).Count);
+            Assert.AreEqual(0, new List<FrameBoxDef>(
+                SpriteColliderWorld.VisibleOn(boxes, "Attack", 0)).Count);
+        }
+
+        [Test]
+        public void CharacterExcludeWinsOverInclude()
+        {
+            var body = new FrameBoxDef
+            {
+                Lifetime = (byte)SpriteColliderLifetime.Character,
+                CharacterIncludeClips = new List<string> { "Idle", "Attack" },
+                CharacterExcludeClips = new List<string> { "Attack" },
+            };
+            Assert.IsTrue(body.AppliesToClip("Idle"));
+            Assert.IsFalse(body.AppliesToClip("Attack"));
+        }
+
+        [Test]
         public void ClipBoxesShowOnEveryFrameOfThatClipOnly()
         {
             var boxes = new List<FrameBoxDef>

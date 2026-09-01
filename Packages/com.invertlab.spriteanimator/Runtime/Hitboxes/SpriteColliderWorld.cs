@@ -41,7 +41,10 @@ namespace InvertLab.Sprites.DOTS
                 if (box == null)
                     continue;
                 if (box.IsCharacter)
-                    yield return box;
+                {
+                    if (box.AppliesToClip(clipName))
+                        yield return box;
+                }
                 else if (box.IsClip)
                 {
                     if (string.Equals(box.ClipName, clipName))
@@ -71,7 +74,10 @@ namespace InvertLab.Sprites.DOTS
                 if (box == null || !box.UsesUnity2D || box.Hidden)
                     continue;
                 if (box.IsCharacter)
-                    spawn.Add(box);
+                {
+                    if (box.AppliesToClip(clipName))
+                        spawn.Add(box);
+                }
                 else if (box.IsClip)
                 {
                     if (string.Equals(box.ClipName, clipName))

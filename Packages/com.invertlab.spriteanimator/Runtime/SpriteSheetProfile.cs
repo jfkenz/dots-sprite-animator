@@ -95,7 +95,8 @@ namespace InvertLab.Sprites.DOTS
 
     /// <summary>
     /// Frame = this cell only (slash). Clip = whole time that clip plays
-    /// (crouch vs stand hurt). Character = every clip (body).
+    /// (crouch vs stand hurt). Character = body across clips, optionally
+    /// filtered by Include / Exclude clip lists.
     /// Character stays 1 so existing profiles keep their body boxes.
     /// </summary>
     public enum SpriteColliderLifetime : byte
@@ -691,6 +692,15 @@ namespace InvertLab.Sprites.DOTS
         public byte Physics;
         /// <summary>Unity 2D colliders only. Query hitboxes ignore this.</summary>
         public bool IsTrigger = true;
+        /// <summary>
+        /// Character only. Empty = all clips (minus Exclude). Non-empty = only these clips.
+        /// </summary>
+        public List<string> CharacterIncludeClips = new();
+        /// <summary>
+        /// Character only. Always wins over Include. Use to drop Attack / projectile clips
+        /// from a mixed spritesheet body collider.
+        /// </summary>
+        public List<string> CharacterExcludeClips = new();
 
         public bool IsCharacter => Lifetime == (byte)SpriteColliderLifetime.Character;
         public bool IsClip => Lifetime == (byte)SpriteColliderLifetime.Clip;
@@ -698,11 +708,70 @@ namespace InvertLab.Sprites.DOTS
         public bool UsesQuery => Physics != (byte)SpriteColliderPhysics.Unity2D;
         public bool UsesUnity2D => Physics != (byte)SpriteColliderPhysics.Query;
 
+        public void EnsureCharacterClipFilters()
+        {
+            CharacterIncludeClips ??= new List<string>();
+            CharacterExcludeClips ??= new List<string>();
+        }
+
+        /// <summary>
+        /// Whether this box is live on <paramref name="clipName"/>. Character uses
+        /// Include (empty = all) then Exclude (always wins).
+        /// </summary>
+        public bool AppliesToClip(string clipName)
+        {
+            if (!IsCharacter)
+                return string.Equals(ClipName, clipName);
+            EnsureCharacterClipFilters();
+            if (ListContainsClipName(CharacterExcludeClips, clipName))
+                return false;
+            if (CharacterIncludeClips.Count == 0)
+                return true;
+            return ListContainsClipName(CharacterIncludeClips, clipName);
+        }
+
+        public bool HasCharacterClipFilter()
+        {
+            EnsureCharacterClipFilters();
+            return CharacterIncludeClips.Count > 0 || CharacterExcludeClips.Count > 0;
+        }
+
+        static bool ListContainsClipName(List<string> names, string clipName)
+        {
+            if (names == null || string.IsNullOrEmpty(clipName))
+                return false;
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (string.Equals(names[i], clipName))
+                    return true;
+            }
+            return false;
+        }
+
+        public void RenameCharacterClipFilter(string oldName, string newName)
+        {
+            EnsureCharacterClipFilters();
+            RenameInList(CharacterIncludeClips, oldName, newName);
+            RenameInList(CharacterExcludeClips, oldName, newName);
+        }
+
+        static void RenameInList(List<string> names, string oldName, string newName)
+        {
+            if (names == null || string.IsNullOrEmpty(oldName))
+                return;
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (string.Equals(names[i], oldName))
+                    names[i] = newName;
+            }
+        }
+
         public void BindLifetime(string clipName, int frame)
         {
             if (IsCharacter)
             {
                 FrameIndex = -1;
+                EnsureCharacterClipFilters();
                 return;
             }
 
@@ -713,6 +782,7 @@ namespace InvertLab.Sprites.DOTS
 
         public FrameBoxDef Clone(string clipName = null, int? frameIndex = null)
         {
+            EnsureCharacterClipFilters();
             return new FrameBoxDef
             {
                 ClipName = clipName ?? ClipName,
@@ -727,6 +797,8 @@ namespace InvertLab.Sprites.DOTS
                 Lifetime = Lifetime,
                 Physics = Physics,
                 IsTrigger = IsTrigger,
+                CharacterIncludeClips = new List<string>(CharacterIncludeClips),
+                CharacterExcludeClips = new List<string>(CharacterExcludeClips),
             };
         }
 

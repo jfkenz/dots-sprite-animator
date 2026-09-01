@@ -155,11 +155,35 @@ namespace InvertLab.Sprites.DOTS
                 var hb = profile.Hitboxes[i];
                 if (hb == null || !hb.UsesQuery)
                     continue;
-                var input = ToInput(hb);
                 if (hb.IsCharacter)
-                    sharedInputs.Add(input);
-                else
-                    frameInputs.Add(input);
+                {
+                    hb.EnsureCharacterClipFilters();
+                    if (!hb.HasCharacterClipFilter())
+                    {
+                        sharedInputs.Add(ToInput(hb));
+                        continue;
+                    }
+
+                    // Filtered body boxes expand into per-included clip entries
+                    // (FrameIndex < 0) so activation stays clip-scoped.
+                    if (profile.Clips == null)
+                        continue;
+                    for (int c = 0; c < profile.Clips.Count; c++)
+                    {
+                        var clip = profile.Clips[c];
+                        if (clip == null || string.IsNullOrEmpty(clip.Name))
+                            continue;
+                        if (!hb.AppliesToClip(clip.Name))
+                            continue;
+                        var input = ToInput(hb);
+                        input.ClipName = clip.Name;
+                        input.FrameIndex = -1;
+                        frameInputs.Add(input);
+                    }
+                    continue;
+                }
+
+                frameInputs.Add(ToInput(hb));
             }
             return Build(allocator, frameInputs.ToArray(), sharedInputs.ToArray());
         }
