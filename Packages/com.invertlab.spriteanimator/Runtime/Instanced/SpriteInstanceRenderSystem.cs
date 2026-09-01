@@ -14,6 +14,8 @@ namespace InvertLab.Sprites.DOTS
     {
         public int Cols;
         public int Rows;
+        /// <summary>Pixel width / height of one sheet cell. 0 or 1 = square.</summary>
+        public float CellAspect;
     }
 
     /// <summary>Per-entity tint. Required by the instanced path; white for untinted.</summary>
@@ -139,7 +141,7 @@ namespace InvertLab.Sprites.DOTS
             if (!SystemAPI.TryGetSingleton(out SpriteAnimGrid grid))
             {
                 var ge = em.CreateEntity();
-                em.AddComponentData(ge, new SpriteAnimGrid { Cols = 4, Rows = 4 });
+                em.AddComponentData(ge, new SpriteAnimGrid { Cols = 4, Rows = 4, CellAspect = 1f });
                 return; // draw next frame
             }
 
@@ -158,6 +160,8 @@ namespace InvertLab.Sprites.DOTS
 
             byte layoutXy = SpriteBatchSpawner.LayoutXy ? (byte)1 : (byte)0;
             SpriteRenderResources.Material.SetFloat("_LayoutXy", layoutXy);
+            float cellAspect = grid.CellAspect > 0.01f ? grid.CellAspect : 1f;
+            SpriteRenderResources.Material.SetFloat("_CellAspect", cellAspect);
             var job = new PackJob
             {
                 Cols = grid.Cols,
@@ -199,20 +203,22 @@ namespace InvertLab.Sprites.DOTS
                 int slot = frame.Slot;
                 int col = slot % Cols;
                 int row = slot / Cols;
+                float2 offset = SpriteFlipUtility.LocalPosition(frame.Offset, flip);
+                float rotation = SpriteFlipUtility.Angle(frame.Rotation, flip);
 
                 Data[i] = new SpriteInstanceData
                 {
                     PosScale = LayoutXy != 0
-                        ? new float4(lt.Position.x + frame.Offset.x,
-                                     lt.Position.y + frame.Offset.y,
+                        ? new float4(lt.Position.x + offset.x,
+                                     lt.Position.y + offset.y,
                                      lt.Scale, lt.Position.z)
-                        : new float4(lt.Position.x + frame.Offset.x,
-                                     lt.Position.z + frame.Offset.y,
+                        : new float4(lt.Position.x + offset.x,
+                                     lt.Position.z + offset.y,
                                      lt.Scale, lt.Position.y),
                     CropST = new float4(1f / Cols, 1f / Rows,
                                         col * (1f / Cols),
                                         (Rows - 1 - row) * (1f / Rows)),
-                    FrameTRS = new float4(frame.Scale.x, frame.Scale.y, math.radians(frame.Rotation), 0f),
+                    FrameTRS = new float4(frame.Scale.x, frame.Scale.y, math.radians(rotation), 0f),
                     Flip = new float4(flip.X, flip.Y, 0f, 0f),
                     Color = tint.Value,
                 };
@@ -225,15 +231,20 @@ namespace InvertLab.Sprites.DOTS
             var q = em.CreateEntityQuery(typeof(SpriteAnimGrid));
             if (q.CalculateEntityCount() > 0) return;
             var e = em.CreateEntity();
-            em.AddComponentData(e, new SpriteAnimGrid { Cols = 4, Rows = 4 });
+            em.AddComponentData(e, new SpriteAnimGrid { Cols = 4, Rows = 4, CellAspect = 1f });
         }
 
         /// <summary>Update the grid singleton (call when switching sheets).</summary>
-        public static void SetGrid(EntityManager em, int cols, int rows)
+        public static void SetGrid(EntityManager em, int cols, int rows, float cellAspect = 1f)
         {
             Install(em);
             var q = em.CreateEntityQuery(typeof(SpriteAnimGrid));
-            em.SetComponentData(q.GetSingletonEntity(), new SpriteAnimGrid { Cols = cols, Rows = rows });
+            em.SetComponentData(q.GetSingletonEntity(), new SpriteAnimGrid
+            {
+                Cols = Mathf.Max(1, cols),
+                Rows = Mathf.Max(1, rows),
+                CellAspect = cellAspect > 0.01f ? cellAspect : 1f,
+            });
         }
     }
 }

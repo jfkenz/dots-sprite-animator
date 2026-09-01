@@ -98,14 +98,8 @@ namespace InvertLab.Sprites.DOTS
             SpriteBatchSpawner.LayoutXy = false;
             SpriteInstanceRenderSystem.Install(em);
             SpriteInstanceRenderSystem.SetSheet(tex);
-            SpriteAnimGrid grid;
-            var gq = em.CreateEntityQuery(typeof(SpriteAnimGrid));
-            grid = gq.CalculateEntityCount() > 0
-                ? em.GetComponentData<SpriteAnimGrid>(gq.GetSingletonEntity())
-                : new SpriteAnimGrid { Cols = cols, Rows = rows };
-            if (grid.Cols != cols || grid.Rows != rows)
-                em.SetComponentData(gq.GetSingletonEntity(),
-                    new SpriteAnimGrid { Cols = cols, Rows = rows });
+            SpriteInstanceRenderSystem.SetGrid(em, cols, rows,
+                SpriteSheetProfile.GetCellAspect(tex, cols, rows));
 
             // bulk spawner clones this prototype
             SpriteBatchSpawner.SetPrototype(em, _proto);

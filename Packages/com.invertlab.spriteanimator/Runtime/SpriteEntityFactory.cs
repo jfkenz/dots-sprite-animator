@@ -62,7 +62,8 @@ namespace InvertLab.Sprites.DOTS
 
             // ---- register sheet + grid with the instanced renderer ----
             SpriteInstanceRenderSystem.SetSheet(atlas);
-            SpriteInstanceRenderSystem.SetGrid(em, cols, rows);
+            SpriteInstanceRenderSystem.SetGrid(em, cols, rows,
+                SpriteSheetProfile.GetCellAspect(atlas, cols, rows));
 
             // ---- clip blob ----
             var (setRef, player) = SpriteAnimSetBuilder.Build(Allocator.Persistent,

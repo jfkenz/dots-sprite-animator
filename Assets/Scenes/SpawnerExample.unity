@@ -207,9 +207,9 @@ MonoBehaviour:
   PlayOnEnable: 1
   Speed: 1
   Playing: 1
-  ClipIndex: 25
-  _time: 363.6273
-  _frame: 5
+  ClipIndex: 0
+  _time: 48.102657
+  _frame: 0
 --- !u!114 &1524384338
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -222,444 +222,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 05c735e3dc0c05f4daa6afa013433b71, type: 3}
   m_Name: 
   m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.SpriteAnimSetAuthoring
-  Profile: {fileID: 11400000, guid: d84ac85886f19fa469b15b91270effee, type: 2}
-  Sheet: {fileID: 2800000, guid: 6f3892696a2cdc346a3b303d0cb685fd, type: 3}
-  Columns: 8
-  Rows: 8
+  Profile: {fileID: 11400000, guid: bb1cc06af6403c64195fbf25d3a5f3a8, type: 2}
+  Sheet: {fileID: 2800000, guid: ae72133dacba6ec4eb33ecde48f50e56, type: 3}
+  Columns: 6
+  Rows: 17
   Clips:
-  - Name: idlle
+  - Name: Bringer-of-Death-SpritSheet row 1
     SheetIndex: 0
     Row: 0
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets:
-    - Name: "Orbit 0\xB0"
-      FrameIndex: 0
-      LocalPosition: {x: 77, y: 7}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 0\xB0"
-      FrameIndex: 1
-      LocalPosition: {x: 67, y: 21}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 0\xB0"
-      FrameIndex: 2
-      LocalPosition: {x: 42, y: 27}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 0\xB0"
-      FrameIndex: 3
-      LocalPosition: {x: 17, y: 21}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 0\xB0"
-      FrameIndex: 4
-      LocalPosition: {x: 7, y: 7}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 0\xB0"
-      FrameIndex: 5
-      LocalPosition: {x: 17, y: -7}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 0\xB0"
-      FrameIndex: 6
-      LocalPosition: {x: 42, y: -13}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 0\xB0"
-      FrameIndex: 7
-      LocalPosition: {x: 67, y: -7}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 60\xB0"
-      FrameIndex: 0
-      LocalPosition: {x: 18, y: 1}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 60\xB0"
-      FrameIndex: 1
-      LocalPosition: {x: 20, y: -20}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 60\xB0"
-      FrameIndex: 2
-      LocalPosition: {x: 36, y: -24}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 60\xB0"
-      FrameIndex: 3
-      LocalPosition: {x: 54, y: -11}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 60\xB0"
-      FrameIndex: 4
-      LocalPosition: {x: 66, y: 13}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 60\xB0"
-      FrameIndex: 5
-      LocalPosition: {x: 63, y: 34}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 60\xB0"
-      FrameIndex: 6
-      LocalPosition: {x: 48, y: 38}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 60\xB0"
-      FrameIndex: 7
-      LocalPosition: {x: 29, y: 24}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 120\xB0"
-      FrameIndex: 0
-      LocalPosition: {x: 78, y: -5}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 120\xB0"
-      FrameIndex: 1
-      LocalPosition: {x: 66, y: 18}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 120\xB0"
-      FrameIndex: 2
-      LocalPosition: {x: 48, y: 32}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 120\xB0"
-      FrameIndex: 3
-      LocalPosition: {x: 32, y: 28}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 120\xB0"
-      FrameIndex: 4
-      LocalPosition: {x: 30, y: 7}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 1
-    - Name: "Orbit 120\xB0"
-      FrameIndex: 5
-      LocalPosition: {x: 41, y: -17}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 120\xB0"
-      FrameIndex: 6
-      LocalPosition: {x: 60, y: -30}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-    - Name: "Orbit 120\xB0"
-      FrameIndex: 7
-      LocalPosition: {x: 75, y: -26}
-      LocalAngle: 0
-      LocalScale: {x: 0.56878793, y: 0.565021}
-      DrawLayer: 2
-  - Name: attack1
-    SheetIndex: 0
-    Row: 1
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: attack2
-    SheetIndex: 0
-    Row: 2
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: attack3
-    SheetIndex: 0
-    Row: 3
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: attack4
-    SheetIndex: 0
-    Row: 4
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: attack5
-    SheetIndex: 0
-    Row: 5
     Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -703,193 +275,59 @@ MonoBehaviour:
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: attack6
+  - Name: Bringer-of-Death-SpritSheet row 2
     SheetIndex: 0
-    Row: 6
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: attack7
-    SheetIndex: 0
-    Row: 7
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 9
-    SheetIndex: 1
-    Row: 0
-    Frames: 0500000000000000010000000200000003000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 10
-    SheetIndex: 1
     Row: 1
-    Frames: 0000000001000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
     FrameDurationScales:
     - 1
     - 1
-    EventIds: 0000
+    - 1
+    - 1
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
+    - 0
+    - 0
     - 0
     - 0
     FrameOffsets:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     FrameRotations:
     - 0
     - 0
-    FrameTweenModes: 0000
+    - 0
+    - 0
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 11
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 3
+    SheetIndex: 0
     Row: 2
-    Frames: 00000000010000000200000003000000040000000500000006000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -900,10 +338,8 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    - 1
-    EventIds: 00000000000000
+    EventIds: 000000000000
     EventNormalizedTimes:
-    - 0
     - 0
     - 0
     - 0
@@ -917,9 +353,7 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
-    - {x: 0, y: 0}
     FrameScales:
-    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -933,15 +367,15 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    - 0
-    FrameTweenModes: 00000000000000
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 12
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 4
+    SheetIndex: 0
     Row: 3
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -952,12 +386,8 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
+    EventIds: 000000000000
     EventNormalizedTimes:
-    - 0
-    - 0
     - 0
     - 0
     - 0
@@ -971,11 +401,7 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
     FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -989,16 +415,15 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 13
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 5
+    SheetIndex: 0
     Row: 4
-    Frames: 000000000100000002000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1006,8 +431,14 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 000000
+    - 1
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1015,7 +446,13 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1023,14 +460,18 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 000000
+    - 0
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 14
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 6
+    SheetIndex: 0
     Row: 5
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1041,12 +482,8 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
+    EventIds: 000000000000
     EventNormalizedTimes:
-    - 0
-    - 0
     - 0
     - 0
     - 0
@@ -1060,11 +497,7 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
     FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1078,16 +511,15 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 15
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 7
+    SheetIndex: 0
     Row: 6
-    Frames: 00000000010000000200000003000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1096,8 +528,12 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 00000000
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1107,7 +543,11 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1117,14 +557,17 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 00000000
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 16
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 8
+    SheetIndex: 0
     Row: 7
-    Frames: 000000000100000002000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1132,8 +575,14 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 000000
+    - 1
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1141,7 +590,13 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1149,14 +604,18 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 000000
+    - 0
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 17
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 9
+    SheetIndex: 0
     Row: 8
-    Frames: 000000000100000002000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1164,8 +623,14 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 000000
+    - 1
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1173,7 +638,13 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1181,14 +652,18 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 000000
+    - 0
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 18
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 10
+    SheetIndex: 0
     Row: 9
-    Frames: 0000000001000000020000000300000004000000050000000600000007000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1199,12 +674,8 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000
+    EventIds: 000000000000
     EventNormalizedTimes:
-    - 0
-    - 0
     - 0
     - 0
     - 0
@@ -1218,11 +689,7 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
     FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1236,16 +703,15 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 19
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 11
+    SheetIndex: 0
     Row: 10
-    Frames: 0000000001000000020000000300000004000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1255,8 +721,10 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 0000000000
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
     - 0
     - 0
     - 0
@@ -1268,7 +736,9 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1280,14 +750,16 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 0000000000
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 20
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 12
+    SheetIndex: 0
     Row: 11
-    Frames: 000000000100000002000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1295,8 +767,14 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 000000
+    - 1
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1304,7 +782,13 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1312,14 +796,18 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 000000
+    - 0
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 21
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 13
+    SheetIndex: 0
     Row: 12
-    Frames: 000000000100000002000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1327,8 +815,14 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 000000
+    - 1
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1336,7 +830,13 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1344,14 +844,18 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 000000
+    - 0
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 22
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 14
+    SheetIndex: 0
     Row: 13
-    Frames: 00000000010000000200000003000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1360,8 +864,12 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 00000000
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1371,7 +879,11 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1381,14 +893,17 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 00000000
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 23
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 15
+    SheetIndex: 0
     Row: 14
-    Frames: 00000000010000000200000003000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1397,8 +912,12 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 00000000
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1408,7 +927,11 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1418,14 +941,17 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 00000000
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 24
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 16
+    SheetIndex: 0
     Row: 15
-    Frames: 000000000100000002000000
+    Frames: 000000000100000002000000030000000400000005000000
+    FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1433,8 +959,14 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    EventIds: 000000
+    - 1
+    - 1
+    - 1
+    EventIds: 000000000000
     EventNormalizedTimes:
+    - 0
+    - 0
+    - 0
     - 0
     - 0
     - 0
@@ -1442,7 +974,13 @@ MonoBehaviour:
     - {x: 0, y: 0}
     - {x: 0, y: 0}
     - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
+    - {x: 0, y: 0}
     FrameScales:
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
+    - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
     - {x: 1, y: 1}
@@ -1450,123 +988,18 @@ MonoBehaviour:
     - 0
     - 0
     - 0
-    FrameTweenModes: 000000
+    - 0
+    - 0
+    - 0
+    FrameTweenModes: 000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
-  - Name: Clip 25
-    SheetIndex: 1
+  - Name: Bringer-of-Death-SpritSheet row 17
+    SheetIndex: 0
     Row: 16
-    Frames: 00000000010000000200000003000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 00000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 00000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 26
-    SheetIndex: 1
-    Row: 17
-    Frames: 000000000100000002000000030000000400000005000000060000000700000008000000090000000a000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 27
-    SheetIndex: 1
-    Row: 18
     Frames: 000000000100000002000000
+    FrameRows: ffffffffffffffffffffffff
     FrameRate: 8
     Loop: 1
     WrapMode: 0
@@ -1592,414 +1025,6 @@ MonoBehaviour:
     - 0
     - 0
     FrameTweenModes: 000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 28
-    SheetIndex: 1
-    Row: 19
-    Frames: 0000000001000000020000000300000004000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 29
-    SheetIndex: 1
-    Row: 20
-    Frames: 00000000010000000200000003000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 00000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 00000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 30
-    SheetIndex: 1
-    Row: 21
-    Frames: 000000000100000002000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    EventIds: 000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 31
-    SheetIndex: 1
-    Row: 22
-    Frames: 00000000010000000200000003000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 00000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 00000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 32
-    SheetIndex: 1
-    Row: 23
-    Frames: 000000000100000002000000030000000400000005000000060000000700000008000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 000000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 000000000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 33
-    SheetIndex: 1
-    Row: 24
-    Frames: 00000000010000000200000003000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 00000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 00000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 34
-    SheetIndex: 1
-    Row: 25
-    Frames: 00000000010000000200000003000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 00000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 00000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 35
-    SheetIndex: 1
-    Row: 26
-    Frames: 00000000010000000200000003000000040000000500000006000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 00000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 00000000000000
-    FacingGroup: 
-    FacingDirection: 255
-    Sockets: []
-  - Name: Clip 36
-    SheetIndex: 1
-    Row: 27
-    Frames: 000000000100000002000000030000000400000005000000060000000700000008000000090000000a000000
-    FrameRate: 8
-    Loop: 1
-    WrapMode: 0
-    FrameDurationScales:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    EventIds: 0000000000000000000000
-    EventNormalizedTimes:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameOffsets:
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    - {x: 0, y: 0}
-    FrameScales:
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    - {x: 1, y: 1}
-    FrameRotations:
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    - 0
-    FrameTweenModes: 0000000000000000000000
     FacingGroup: 
     FacingDirection: 255
     Sockets: []
@@ -2076,8 +1101,8 @@ Transform:
   m_GameObject: {fileID: 1524384336}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.699, y: 0.158, z: 0}
-  m_LocalScale: {x: 1.1205965, y: 1.12, z: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1.38, y: 0.88, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -2144,7 +1169,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 5
+  orthographic size: 1.61
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2

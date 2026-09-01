@@ -24,17 +24,21 @@ namespace InvertLab.Sprites.DOTS
     {
         public void OnUpdate(ref SystemState state)
         {
-            foreach (var (hbSetRef, animSetRef, player, buffer) in
+            foreach (var (hbSetRef, animSetRef, player, flip, buffer) in
                      SystemAPI.Query<RefRO<SpriteHitboxSetRef>,
                                      RefRO<SpriteAnimSetRef>,
                                      RefRO<SpriteAnimPlayer>,
+                                     RefRO<SpriteFlip>,
                                      DynamicBuffer<SpriteHitboxLive>>())
             {
                 buffer.Clear();
 
                 ref var hbSet = ref hbSetRef.ValueRO.Set.Value;
                 for (int s = 0; s < hbSet.Shared.Length; s++)
-                    buffer.Add(new SpriteHitboxLive { Box = hbSet.Shared[s].Box });
+                    buffer.Add(new SpriteHitboxLive
+                    {
+                        Box = SpriteFlipUtility.Box(hbSet.Shared[s].Box, flip.ValueRO)
+                    });
 
                 ref var anim = ref animSetRef.ValueRO.Set.Value;
                 if (anim.Clips.Length == 0)
@@ -57,7 +61,10 @@ namespace InvertLab.Sprites.DOTS
                 for (int b = 0; b < nBoxes; b++)
                 {
                     if (boxes.Boxes[b].FrameIndex >= 0) continue;
-                    buffer.Add(new SpriteHitboxLive { Box = boxes.Boxes[b].Box });
+                    buffer.Add(new SpriteHitboxLive
+                    {
+                        Box = SpriteFlipUtility.Box(boxes.Boxes[b].Box, flip.ValueRO)
+                    });
                 }
 
                 if (player.ValueRO.Playing == 0)
@@ -75,7 +82,10 @@ namespace InvertLab.Sprites.DOTS
                     if (boxes.Boxes[b].FrameIndex != drawIdx) continue;
                     // Box.Angle is copied through for OBB-aware gameplay. This system
                     // does not rotate the live AABB itself.
-                    buffer.Add(new SpriteHitboxLive { Box = boxes.Boxes[b].Box });
+                    buffer.Add(new SpriteHitboxLive
+                    {
+                        Box = SpriteFlipUtility.Box(boxes.Boxes[b].Box, flip.ValueRO)
+                    });
                 }
             }
         }

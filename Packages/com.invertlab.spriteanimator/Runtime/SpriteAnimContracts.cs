@@ -116,11 +116,59 @@ namespace InvertLab.Sprites.DOTS
         public FixedList128Bytes<float2> Polygon;     // absolute cell UV points for polygons
     }
 
-    /// <summary>Optional per-entity UV flip flags for non-EG render paths.</summary>
+    /// <summary>Optional per-entity UV flip. Author from SpriteAnimPlayerAuthoring or SpriteAnims.SetFlip.</summary>
     public struct SpriteFlip : IComponentData
     {
         public byte X;
         public byte Y;
+    }
+
+    /// <summary>Mirrors sprite-local gameplay geometry with the rendered instance.</summary>
+    public static class SpriteFlipUtility
+    {
+        public static float2 LocalPosition(float2 value, in SpriteFlip flip)
+        {
+            if (flip.X != 0) value.x = -value.x;
+            if (flip.Y != 0) value.y = -value.y;
+            return value;
+        }
+
+        public static float Angle(float value, in SpriteFlip flip)
+        {
+            if ((flip.X != 0) != (flip.Y != 0))
+                value = -value;
+            return value;
+        }
+
+        public static float2 Scale(float2 value, in SpriteFlip flip)
+        {
+            if (flip.X != 0) value.x = -value.x;
+            if (flip.Y != 0) value.y = -value.y;
+            return value;
+        }
+
+        public static FrameBox Box(FrameBox value, in SpriteFlip flip)
+        {
+            if (flip.X != 0) value.Center.x = 1f - value.Center.x;
+            if (flip.Y != 0) value.Center.y = 1f - value.Center.y;
+            value.Angle = Angle(value.Angle, flip);
+            for (int i = 0; i < value.Polygon.Length; i++)
+            {
+                float2 point = value.Polygon[i];
+                if (flip.X != 0) point.x = 1f - point.x;
+                if (flip.Y != 0) point.y = 1f - point.y;
+                value.Polygon[i] = point;
+            }
+            return value;
+        }
+
+        public static SpriteSocketBuffer Socket(SpriteSocketBuffer value, in SpriteFlip flip)
+        {
+            value.LocalPosition = LocalPosition(value.LocalPosition, flip);
+            value.LocalAngle = Angle(value.LocalAngle, flip);
+            value.LocalScale = Scale(value.LocalScale, flip);
+            return value;
+        }
     }
 
     /// <summary>Runtime-facing sockets on the currently displayed frame.</summary>

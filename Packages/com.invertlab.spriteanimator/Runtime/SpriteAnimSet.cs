@@ -667,12 +667,15 @@ namespace InvertLab.Sprites.DOTS
             {
                 var sockets = em.GetBuffer<SpriteSocketBuffer>(e);
                 sockets.Clear();
+                var flip = em.HasComponent<SpriteFlip>(e)
+                    ? em.GetComponentData<SpriteFlip>(e)
+                    : default;
                 for (int i = 0; i < clip.FrameSockets.Length; i++)
                 {
                     var socket = clip.FrameSockets[i];
                     if (socket.FrameIndex != firstFrame)
                         continue;
-                    sockets.Add(new SpriteSocketBuffer
+                    sockets.Add(SpriteFlipUtility.Socket(new SpriteSocketBuffer
                     {
                         Name = socket.Name,
                         SocketId = socket.SocketId,
@@ -680,7 +683,7 @@ namespace InvertLab.Sprites.DOTS
                         LocalPosition = socket.LocalPosition,
                         LocalAngle = socket.LocalAngle,
                         LocalScale = socket.LocalScale,
-                    });
+                    }, flip));
                 }
             }
 
@@ -726,6 +729,50 @@ namespace InvertLab.Sprites.DOTS
                 player.EventFiredMask = firedMask;
                 em.SetComponentData(e, player);
             }
+            return true;
+        }
+
+        /// <summary>Per-entity UV mirror. Does not change clips or the sheet texture.</summary>
+        public static void SetFlip(EntityManager em, Entity e, bool flipX, bool flipY)
+        {
+            var previous = em.HasComponent<SpriteFlip>(e)
+                ? em.GetComponentData<SpriteFlip>(e)
+                : default;
+            var flip = new SpriteFlip
+            {
+                X = (byte)(flipX ? 1 : 0),
+                Y = (byte)(flipY ? 1 : 0),
+            };
+            if (em.HasComponent<SpriteFlip>(e))
+                em.SetComponentData(e, flip);
+            else
+                em.AddComponentData(e, flip);
+
+            if (em.HasBuffer<SpriteSocketBuffer>(e))
+            {
+                var delta = new SpriteFlip
+                {
+                    X = (byte)(previous.X != flip.X ? 1 : 0),
+                    Y = (byte)(previous.Y != flip.Y ? 1 : 0),
+                };
+                if (delta.X != 0 || delta.Y != 0)
+                {
+                    var sockets = em.GetBuffer<SpriteSocketBuffer>(e);
+                    for (int i = 0; i < sockets.Length; i++)
+                        sockets[i] = SpriteFlipUtility.Socket(sockets[i], delta);
+                }
+            }
+        }
+
+        public static bool TryGetFlip(EntityManager em, Entity e, out bool flipX, out bool flipY)
+        {
+            flipX = false;
+            flipY = false;
+            if (!em.HasComponent<SpriteFlip>(e))
+                return false;
+            var flip = em.GetComponentData<SpriteFlip>(e);
+            flipX = flip.X != 0;
+            flipY = flip.Y != 0;
             return true;
         }
 

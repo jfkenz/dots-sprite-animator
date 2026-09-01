@@ -59,6 +59,8 @@ namespace InvertLab.Sprites.DOTS
 
             byte layoutXy = SpriteBatchSpawner.LayoutXy ? (byte)1 : (byte)0;
             SpriteGpuAnimResources.Material.SetFloat("_LayoutXy", layoutXy);
+            float cellAspect = grid.CellAspect > 0.01f ? grid.CellAspect : 1f;
+            SpriteGpuAnimResources.Material.SetFloat("_CellAspect", cellAspect);
 
             if (dirty)
             {

@@ -116,7 +116,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             bool colliderSettingsChanged = EditorGUI.EndChangeCheck();
             serializedObject.ApplyModifiedProperties();
             EditorGUILayout.HelpBox(
-                "Query AABB stays on the profile for custom physics. Unity 2D spawns BoxCollider2D / CircleCollider2D / PolygonCollider2D children you can see in the Scene view. Character and This Clip boxes spawn with Bake Unity Colliders; Bake Frame Colliders adds slash windows. Socket profiles keep their own collider data and draw in the Sprite Animator debug overlay.",
+                "Query boxes stay on the profile for custom physics. Unity 2D spawns BoxCollider2D / CircleCollider2D / PolygonCollider2D children you can see in the Scene view. Scene gizmos follow the authored shape (box, circle, or polygon). Character and This Clip boxes spawn with Bake Unity Colliders; Bake Frame Colliders adds slash windows. Socket profiles keep their own collider data and draw in the Sprite Animator debug overlay.",
                 MessageType.None);
             using (new EditorGUILayout.HorizontalScope())
             {

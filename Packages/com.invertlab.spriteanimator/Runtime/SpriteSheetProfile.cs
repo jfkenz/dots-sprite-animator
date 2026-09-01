@@ -126,11 +126,18 @@ namespace InvertLab.Sprites.DOTS
         public static readonly Vector2 DefaultFrameScale = Vector2.one;
         public const float DefaultFrameRotation = 0f;
         public const byte DefaultTweenMode = (byte)SpriteEaseMode.Linear;
+        /// <summary>Sentinel in <see cref="FrameRows"/> meaning this frame uses <see cref="Row"/>.</summary>
+        public const int InheritClipRow = -1;
 
         public string Name = "Idle";
         public int SheetIndex;
         public int Row;
         public int[] Frames = { 0, 1, 2, 3 };
+        /// <summary>
+        /// Per-frame sheet row. <see cref="InheritClipRow"/> uses <see cref="Row"/>.
+        /// Lets one clip sample cells from more than one row (1×1 picker, column strips).
+        /// </summary>
+        public int[] FrameRows;
         public float FrameRate = DefaultFrameRate;
         public byte WrapMode = DefaultWrapMode; // 0 loop / 1 once / 2 pingpong / 3 reverse
         public float[] FrameDurationScales = { 1f, 1f, 1f, 1f };
@@ -169,6 +176,7 @@ namespace InvertLab.Sprites.DOTS
             FrameScales = Resize(FrameScales, count, DefaultFrameScale);
             FrameRotations = Resize(FrameRotations, count, DefaultFrameRotation);
             FrameTweenModes = Resize(FrameTweenModes, count, DefaultTweenMode);
+            FrameRows = Resize(FrameRows, count, InheritClipRow);
             for (int i = 0; i < FrameTweenModes.Length; i++)
             {
                 if (!SpriteEase.IsValidMode(FrameTweenModes[i]))
@@ -284,15 +292,54 @@ namespace InvertLab.Sprites.DOTS
             return count;
         }
 
-        public void ShiftEventMarkersAfterInsert(int insert)
+        public void ShiftEventMarkersAfterInsert(int insert, int count = 1)
         {
             EnsureEventMarkers();
+            if (count <= 0)
+                return;
             for (int i = 0; i < EventMarkers.Count; i++)
             {
                 if (EventMarkers[i] != null && EventMarkers[i].FrameIndex >= insert)
-                    EventMarkers[i].FrameIndex++;
+                    EventMarkers[i].FrameIndex += count;
             }
             SyncLegacyEventsFromMarkers();
+        }
+
+        public void ResolveSheetCell(int frame, int columns, int rows, out int row, out int column)
+            => ResolveSheetCell(Row, Frames, FrameRows, frame, columns, rows, out row, out column);
+
+        public int SheetCellIndex(int frame, int columns, int rows)
+        {
+            ResolveSheetCell(frame, columns, rows, out int row, out int column);
+            return row * Mathf.Max(1, columns) + column;
+        }
+
+        public bool UsesMixedSheetRows()
+        {
+            if (FrameRows == null || Frames == null)
+                return false;
+            int limit = Mathf.Min(FrameRows.Length, Frames.Length);
+            for (int i = 0; i < limit; i++)
+            {
+                if (FrameRows[i] >= 0 && FrameRows[i] != Row)
+                    return true;
+            }
+            return false;
+        }
+
+        public static void ResolveSheetCell(int clipRow, int[] frames, int[] frameRows,
+            int frame, int columns, int rows, out int row, out int column)
+        {
+            columns = Mathf.Max(1, columns);
+            rows = Mathf.Max(1, rows);
+            int count = frames != null && frames.Length > 0 ? frames.Length : 1;
+            frame = Mathf.Clamp(frame, 0, count - 1);
+            column = frames != null && frame < frames.Length
+                ? Mathf.Clamp(frames[frame], 0, columns - 1)
+                : 0;
+            row = Mathf.Clamp(clipRow, 0, rows - 1);
+            if (frameRows != null && frame < frameRows.Length && frameRows[frame] >= 0)
+                row = Mathf.Clamp(frameRows[frame], 0, rows - 1);
         }
 
         public void CompactEventMarkers(int[] remap)
@@ -354,6 +401,7 @@ namespace InvertLab.Sprites.DOTS
                 return;
 
             Frames = Move(Frames, fromIndex, toIndex);
+            FrameRows = Move(FrameRows, fromIndex, toIndex);
             FrameDurationScales = Move(FrameDurationScales, fromIndex, toIndex);
             EventIds = Move(EventIds, fromIndex, toIndex);
             EventNormalizedTimes = Move(EventNormalizedTimes, fromIndex, toIndex);
@@ -1538,9 +1586,7 @@ namespace InvertLab.Sprites.DOTS
                 return true;
             clip.EnsureFrameData();
             frame = Mathf.Clamp(frame, 0, clip.Frames.Length - 1);
-            int row = Mathf.Clamp(clip.Row, 0, Mathf.Max(0, rows - 1));
-            int column = Mathf.Clamp(clip.Frames[frame], 0, Mathf.Max(0, columns - 1));
-            cellIndex = row * columns + column;
+            cellIndex = clip.SheetCellIndex(frame, columns, rows);
             return true;
         }
 
@@ -1602,6 +1648,26 @@ namespace InvertLab.Sprites.DOTS
             if (!TryGetCellPixels(sheet, out _, out float cellH))
                 return fallback;
             return cellH / GetPixelsPerUnit(sheet);
+        }
+
+        /// <summary>Pixel width / height of one cell. 1 if the sheet has no texture.</summary>
+        public static float GetCellAspect(SpriteSheetDef sheet)
+        {
+            if (!TryGetCellPixels(sheet, out float cellW, out float cellH) || cellH < 0.01f)
+                return 1f;
+            return cellW / cellH;
+        }
+
+        public static float GetCellAspect(Texture2D texture, int columns, int rows)
+        {
+            if (texture == null)
+                return 1f;
+            columns = Mathf.Max(1, columns);
+            rows = Mathf.Max(1, rows);
+            float cellH = texture.height / (float)rows;
+            if (cellH < 0.01f)
+                return 1f;
+            return (texture.width / (float)columns) / cellH;
         }
 
         public bool SheetsWorldHeightsDiffer(float epsilon = 0.0005f)

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using Unity.Collections;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace InvertLab.Sprites.DOTS.Tests
@@ -179,6 +180,130 @@ namespace InvertLab.Sprites.DOTS.Tests
 
             Assert.IsTrue(clone.Locked);
             Assert.AreEqual(1, visible.Count);
+        }
+
+        [Test]
+        public void PolygonLocalPointsMatchPreviewSpaceInsideRectUv()
+        {
+            var box = new FrameBoxDef
+            {
+                RectUV = new Rect(0.1f, 0.2f, 0.4f, 0.5f),
+                Shape = SpriteColliderShape.Polygon,
+                PolygonUV = new[]
+                {
+                    new Vector2(0f, 0f),
+                    new Vector2(1f, 0f),
+                    new Vector2(0.5f, 1f),
+                },
+            };
+
+            var points = SpriteColliderWorld.PolygonLocalPoints(box);
+            Assert.AreEqual(3, points.Length);
+            Assert.AreEqual(new Vector2(-0.2f, 0.25f), points[0]);
+            Assert.AreEqual(new Vector2(0.2f, 0.25f), points[1]);
+            Assert.AreEqual(new Vector2(0f, -0.25f), points[2]);
+        }
+
+        [Test]
+        public void QueryPolygonBakePreservesShapeAndVertices()
+        {
+            var profile = new SpriteSheetProfile
+            {
+                Hitboxes = new List<FrameBoxDef>
+                {
+                    new()
+                    {
+                        ClipName = "Attack",
+                        FrameIndex = 2,
+                        RectUV = new Rect(0.1f, 0.2f, 0.4f, 0.5f),
+                        Shape = SpriteColliderShape.Polygon,
+                        Physics = (byte)SpriteColliderPhysics.Query,
+                        PolygonUV = new[]
+                        {
+                            new Vector2(0f, 0f),
+                            new Vector2(1f, 0f),
+                            new Vector2(0.5f, 1f),
+                        },
+                    },
+                },
+            };
+
+            var blob = SpriteHitboxSetBuilder.FromProfile(profile, Allocator.Temp);
+            FrameBox baked = blob.Value.Clips[0].Boxes[0].Box;
+
+            Assert.AreEqual(SpriteColliderShape.Polygon, baked.Shape);
+            Assert.AreEqual(3, baked.Polygon.Length);
+            Assert.AreEqual(0.1f, baked.Polygon[0].x, 0.0001f);
+            Assert.AreEqual(0.8f, baked.Polygon[0].y, 0.0001f);
+            Assert.AreEqual(0.5f, baked.Polygon[1].x, 0.0001f);
+            Assert.AreEqual(0.8f, baked.Polygon[1].y, 0.0001f);
+            Assert.AreEqual(0.3f, baked.Polygon[2].x, 0.0001f);
+            Assert.AreEqual(0.3f, baked.Polygon[2].y, 0.0001f);
+            blob.Dispose();
+        }
+
+        [Test]
+        public void FacingFlipMirrorsRuntimeBoxAndSocketGeometry()
+        {
+            var polygon = new FixedList128Bytes<float2>();
+            polygon.Add(new float2(0.2f, 0.3f));
+            var box = new FrameBox
+            {
+                Center = new float2(0.25f, 0.75f),
+                Extents = new float2(0.1f, 0.2f),
+                Angle = 30f,
+                Polygon = polygon,
+            };
+            var socket = new SpriteSocketBuffer
+            {
+                LocalPosition = new float2(2f, 3f),
+                LocalAngle = 30f,
+                LocalScale = new float2(1f, 2f),
+            };
+            var flip = new SpriteFlip { X = 1 };
+
+            FrameBox mirroredBox = SpriteFlipUtility.Box(box, flip);
+            SpriteSocketBuffer mirroredSocket = SpriteFlipUtility.Socket(socket, flip);
+
+            Assert.AreEqual(0.75f, mirroredBox.Center.x, 0.0001f);
+            Assert.AreEqual(0.75f, mirroredBox.Center.y, 0.0001f);
+            Assert.AreEqual(-30f, mirroredBox.Angle, 0.0001f);
+            Assert.AreEqual(0.8f, mirroredBox.Polygon[0].x, 0.0001f);
+            Assert.AreEqual(-2f, mirroredSocket.LocalPosition.x, 0.0001f);
+            Assert.AreEqual(3f, mirroredSocket.LocalPosition.y, 0.0001f);
+            Assert.AreEqual(-30f, mirroredSocket.LocalAngle, 0.0001f);
+            Assert.AreEqual(-1f, mirroredSocket.LocalScale.x, 0.0001f);
+        }
+
+        [Test]
+        public void UnityColliderRootUsesFacingScale()
+        {
+            var host = new GameObject("FacingColliderHost");
+            try
+            {
+                var boxes = new List<FrameBoxDef>
+                {
+                    new()
+                    {
+                        ClipName = "Idle",
+                        FrameIndex = 0,
+                        RectUV = new Rect(0.1f, 0.2f, 0.3f, 0.4f),
+                        Physics = (byte)SpriteColliderPhysics.Unity2D,
+                    },
+                };
+
+                SpriteColliderWorld.SyncUnityColliders(
+                    host.transform, boxes, "Idle", 0, true, flipX: true, flipY: false);
+
+                Transform root = host.transform.Find(SpriteColliderWorld.RootName);
+                Assert.NotNull(root);
+                Assert.AreEqual(new Vector3(-1f, 1f, 1f), root.localScale);
+                Assert.AreEqual(1, root.childCount);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
         }
     }
 }

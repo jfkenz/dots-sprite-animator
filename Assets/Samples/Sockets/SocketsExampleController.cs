@@ -106,7 +106,8 @@ namespace InvertLab.Sprites.DOTS
             SpriteInstanceRenderSystem.SetGrid(
                 _entityManager,
                 Mathf.Max(1, sheet.Columns),
-                Mathf.Max(1, sheet.Rows));
+                Mathf.Max(1, sheet.Rows),
+                SpriteSheetProfile.GetCellAspect(sheet));
 
             if (_entityManager.HasComponent<LocalTransform>(_playerEntity))
             {

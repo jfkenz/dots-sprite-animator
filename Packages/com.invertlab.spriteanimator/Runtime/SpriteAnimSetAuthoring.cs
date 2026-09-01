@@ -39,6 +39,7 @@ namespace InvertLab.Sprites.DOTS
             public int    SheetIndex; // 0-based into SpriteSheetProfile.Sheets
             public int    Row;       // which sheet row (0 = top row)
             public int[]  Frames;    // column indices, in play order (e.g. 0 1 2 3)
+            public int[]  FrameRows; // per-frame row override; -1 = use Row
             public float  FrameRate; // frames per second
             public bool   Loop;
             public byte   WrapMode;
@@ -247,37 +248,31 @@ namespace InvertLab.Sprites.DOTS
             int row = 0;
             if (Clips != null && Clips.Length > 0)
             {
-                if (clipIndex >= 0 && clipIndex < Clips.Length)
-                {
-                    var clip = Clips[clipIndex];
-                    row = clip.Row;
-                    if (clip.Frames != null && clip.Frames.Length > 0)
-                    {
-                        int fi = Mathf.Clamp(frameIndex, 0, clip.Frames.Length - 1);
-                        col = clip.Frames[fi];
-                    }
-                }
-                else
-                {
-                    var clip = Clips[0];
-                    if (clip.Frames != null && clip.Frames.Length > 0)
-                        col = clip.Frames[0];
-                    row = clip.Row;
-                }
+                var clip = clipIndex >= 0 && clipIndex < Clips.Length
+                    ? Clips[clipIndex]
+                    : Clips[0];
+                int fi = 0;
+                if (clip.Frames != null && clip.Frames.Length > 0)
+                    fi = Mathf.Clamp(frameIndex, 0, clip.Frames.Length - 1);
+                SpriteClipDef.ResolveSheetCell(clip.Row, clip.Frames, clip.FrameRows, fi,
+                    cols, rows, out row, out col);
             }
 
             float w = 1f / cols;
             float h = 1f / rows;
             var cropST = new Vector4(w, h, col * w, 1f - (row + 1) * h);
+            var flip = PreviewFlipVector();
 
             mat.SetTexture("_MainTex", previewSheet);
             mat.SetColor("_Color", Tint);
             mat.SetVector("_CropST", cropST);
+            mat.SetVector("_Flip", flip);
 
             var block = new MaterialPropertyBlock();
             block.SetTexture("_MainTex", previewSheet);
             block.SetColor("_Color", Tint);
             block.SetVector("_CropST", cropST);
+            block.SetVector("_Flip", flip);
             renderer.SetPropertyBlock(block);
 
             renderer.enabled = true;
@@ -297,6 +292,14 @@ namespace InvertLab.Sprites.DOTS
                     transform.localScale = scale;
                 }
             }
+        }
+
+        Vector4 PreviewFlipVector()
+        {
+            var player = GetComponent<SpriteAnimPlayerAuthoring>();
+            if (player == null)
+                return Vector4.zero;
+            return new Vector4(player.FlipX ? 1f : 0f, player.FlipY ? 1f : 0f, 0f, 0f);
         }
 
         public void SyncUnityColliders()
@@ -322,7 +325,8 @@ namespace InvertLab.Sprites.DOTS
             else if (data.Clips != null && clipIndex >= 0 && clipIndex < data.Clips.Count)
                 clipName = data.Clips[clipIndex].Name;
             SpriteColliderWorld.SyncUnityColliders(
-                transform, data.Hitboxes, clipName, frame, BakeFrameColliders);
+                transform, data.Hitboxes, clipName, frame, BakeFrameColliders,
+                player != null && player.FlipX, player != null && player.FlipY);
         }
 
         void OnDrawGizmos()
@@ -346,6 +350,9 @@ namespace InvertLab.Sprites.DOTS
                     ? data.Clips[clipIndex].Name
                     : "clip";
             Gizmos.matrix = transform.localToWorldMatrix;
+            Vector3 facingScale = player == null
+                ? Vector3.one
+                : new Vector3(player.FlipX ? -1f : 1f, player.FlipY ? -1f : 1f, 1f);
             foreach (var box in SpriteColliderWorld.VisibleOn(data.Hitboxes, clipName, frame))
             {
                 if (box.Hidden || !box.UsesQuery)
@@ -358,10 +365,22 @@ namespace InvertLab.Sprites.DOTS
                         ? new Color(0.95f, 0.72f, 0.22f, 0.9f)
                         : new Color(1f, 0.35f, 0.28f, 0.9f);
                 var rotation = Quaternion.Euler(0f, 0f, angle);
-                Gizmos.matrix = transform.localToWorldMatrix *
+                Gizmos.matrix = transform.localToWorldMatrix * Matrix4x4.Scale(facingScale) *
                                 Matrix4x4.TRS(offset, rotation, Vector3.one);
                 if (box.Shape == SpriteColliderShape.Circle)
                     Gizmos.DrawWireSphere(Vector3.zero, Mathf.Max(size.x, size.y) * 0.5f);
+                else if (box.Shape == SpriteColliderShape.Polygon)
+                {
+                    Vector2[] points = SpriteColliderWorld.PolygonLocalPoints(box, size);
+                    for (int i = 0; i < points.Length; i++)
+                    {
+                        Vector2 from = points[i];
+                        Vector2 to = points[(i + 1) % points.Length];
+                        Gizmos.DrawLine(
+                            new Vector3(from.x, from.y, 0f),
+                            new Vector3(to.x, to.y, 0f));
+                    }
+                }
                 else
                     Gizmos.DrawWireCube(Vector3.zero, new Vector3(size.x, size.y, 0.02f));
             }
@@ -384,6 +403,7 @@ namespace InvertLab.Sprites.DOTS
                     SheetIndex = src.SheetIndex,
                     Row = src.Row,
                     Frames = CopyArray(src.Frames),
+                    FrameRows = CopyArray(src.FrameRows),
                     FrameRate = src.FrameRate,
                     WrapMode = src.WrapMode,
                     Loop = src.WrapMode == SpriteAnimWrap.Loop
@@ -528,6 +548,7 @@ namespace InvertLab.Sprites.DOTS
                     var frameRotations = useProfile ? profileClip.FrameRotations : authorClip.FrameRotations;
                     var frameTweens = useProfile ? profileClip.FrameTweenModes : authorClip.FrameTweenModes;
                     int row = useProfile ? profileClip.Row : authorClip.Row;
+                    int[] frameRows = useProfile ? profileClip.FrameRows : authorClip.FrameRows;
                     var slots = new int[frameCols.Length];
                     var frameOffsets = new float2[frameCols.Length];
                     var clipScales = new float2[frameCols.Length];
@@ -535,7 +556,9 @@ namespace InvertLab.Sprites.DOTS
                     var clipTweens = new byte[frameCols.Length];
                     for (int f = 0; f < frameCols.Length; f++)
                     {
-                        slots[f] = Mathf.Clamp(row, 0, rows - 1) * cols + Mathf.Clamp(frameCols[f], 0, cols - 1);
+                        SpriteClipDef.ResolveSheetCell(row, frameCols, frameRows, f,
+                            cols, rows, out int cellRow, out int cellCol);
+                        slots[f] = cellRow * cols + cellCol;
                         Vector2 offset = useProfile && profileClip.OnionOffsets != null && f < profileClip.OnionOffsets.Length
                             ? profileClip.OnionOffsets[f] / bakePpu
                             : !useProfile && authorClip.FrameOffsets != null && f < authorClip.FrameOffsets.Length
@@ -700,12 +723,17 @@ namespace InvertLab.Sprites.DOTS
                 AddComponent(entity, setRef);
                 var playerAuthoring = GetComponent<SpriteAnimPlayerAuthoring>();
                 int initialClip;
+                byte flipX = 0;
+                byte flipY = 0;
                 if (playerAuthoring != null)
                 {
+                    DependsOn(playerAuthoring);
                     initialClip = Mathf.Clamp(playerAuthoring.ClipIndex, 0, clipCount - 1);
                     player.ClipIndex = initialClip;
                     player.Speed = Mathf.Max(0.01f, playerAuthoring.Speed);
                     player.Playing = playerAuthoring.Playing ? (byte)1 : (byte)0;
+                    flipX = playerAuthoring.FlipX ? (byte)1 : (byte)0;
+                    flipY = playerAuthoring.FlipY ? (byte)1 : (byte)0;
                 }
                 else
                 {
@@ -732,7 +760,7 @@ namespace InvertLab.Sprites.DOTS
                 AddComponent(entity, new SpriteTint { Value = new float4(
                     authoring.Tint.r, authoring.Tint.g, authoring.Tint.b, authoring.Tint.a) });
                 AddComponent(entity, new SpriteAnimEnabled());
-                AddComponent(entity, new SpriteFlip());
+                AddComponent(entity, new SpriteFlip { X = flipX, Y = flipY });
                 AddBuffer<SpriteAnimEventBuffer>(entity);
                 AddComponent(entity, new SpriteAnimEventsPending());
                 AddBuffer<SpriteSocketBuffer>(entity);

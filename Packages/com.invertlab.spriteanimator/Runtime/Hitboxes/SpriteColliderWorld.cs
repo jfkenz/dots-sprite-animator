@@ -53,7 +53,7 @@ namespace InvertLab.Sprites.DOTS
         }
 
         public static void SyncUnityColliders(Transform host, IList<FrameBoxDef> boxes,
-            string clipName, int frame, bool includeFrameBoxes)
+            string clipName, int frame, bool includeFrameBoxes, bool flipX = false, bool flipY = false)
         {
             if (host == null)
                 return;
@@ -97,6 +97,9 @@ namespace InvertLab.Sprites.DOTS
                 go.transform.localScale = Vector3.one;
                 root = go.transform;
             }
+            root.localPosition = Vector3.zero;
+            root.localRotation = Quaternion.identity;
+            root.localScale = new Vector3(flipX ? -1f : 1f, flipY ? -1f : 1f, 1f);
 
             for (int i = root.childCount - 1; i >= 0; i--)
                 DestroyGo(root.GetChild(i).gameObject);
@@ -164,7 +167,19 @@ namespace InvertLab.Sprites.DOTS
             collider.offset = Vector2.zero;
         }
 
-        static Vector2[] PolygonLocalPoints(FrameBoxDef box, Vector2 size)
+        /// <summary>
+        /// Polygon vertices in sprite-quad local space, origin at
+        /// <see cref="TryLocalFromUv"/> offset (RectUV center), +y up.
+        /// Matches the Sprite Animator preview (PolygonUV is 0-1 inside RectUV, y-down).
+        /// </summary>
+        public static Vector2[] PolygonLocalPoints(FrameBoxDef box)
+        {
+            if (!TryLocalFromUv(box, out _, out var size, out _))
+                return System.Array.Empty<Vector2>();
+            return PolygonLocalPoints(box, size);
+        }
+
+        public static Vector2[] PolygonLocalPoints(FrameBoxDef box, Vector2 size)
         {
             Vector2[] uv = box.PolygonUV != null && box.PolygonUV.Length >= 3
                 ? box.PolygonUV

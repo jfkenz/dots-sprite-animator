@@ -26,6 +26,13 @@ namespace InvertLab.Sprites.DOTS
         [Tooltip("Index into SpriteAnimSetAuthoring.Clips")]
         public int ClipIndex;
 
+        [Header("Facing")]
+        [Tooltip("Mirror this instance left-right. Does not change the sheet or clips.")]
+        public bool FlipX;
+
+        [Tooltip("Mirror this instance top-bottom. Does not change the sheet or clips.")]
+        public bool FlipY;
+
         [HideInInspector] [SerializeField] float _time;
         [HideInInspector] [SerializeField] int _frame;
 
@@ -105,7 +112,32 @@ namespace InvertLab.Sprites.DOTS
             _frame = 0;
             var set = GetComponent<SpriteAnimSetAuthoring>();
             if (set != null)
+            {
                 set.ApplyQuadPreview(ClipIndex, _frame);
+                set.SyncUnityColliders();
+            }
+        }
+
+        public void SetFlip(bool flipX, bool flipY)
+        {
+            FlipX = flipX;
+            FlipY = flipY;
+            var set = GetComponent<SpriteAnimSetAuthoring>();
+            if (set != null)
+            {
+                set.ApplyQuadPreview(ClipIndex, _frame);
+                set.SyncUnityColliders();
+            }
+        }
+
+        void OnValidate()
+        {
+            var set = GetComponent<SpriteAnimSetAuthoring>();
+            if (set != null && set.isActiveAndEnabled)
+            {
+                set.ApplyQuadPreview(ClipIndex, _frame);
+                set.SyncUnityColliders();
+            }
         }
 
         void OnEnable()
@@ -193,6 +225,7 @@ namespace InvertLab.Sprites.DOTS
                 Playing = false;
             _frame = sample.Frame;
             set.ApplyQuadPreview(ClipIndex, _frame);
+            set.SyncUnityColliders();
         }
 
         static SpriteClipDef ToPreviewDef(SpriteAnimSetAuthoring.ClipAuthoring clip)
@@ -204,6 +237,9 @@ namespace InvertLab.Sprites.DOTS
                 Frames = clip.Frames != null && clip.Frames.Length > 0
                     ? (int[])clip.Frames.Clone()
                     : new[] { 0 },
+                FrameRows = clip.FrameRows != null && clip.FrameRows.Length > 0
+                    ? (int[])clip.FrameRows.Clone()
+                    : null,
                 FrameRate = Mathf.Max(0.1f, clip.FrameRate),
                 WrapMode = ResolveWrapMode(clip),
                 FrameDurationScales = clip.FrameDurationScales != null

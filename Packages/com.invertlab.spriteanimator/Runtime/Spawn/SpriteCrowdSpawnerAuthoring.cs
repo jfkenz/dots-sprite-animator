@@ -180,19 +180,8 @@ namespace InvertLab.Sprites.DOTS
 
             SpriteInstanceRenderSystem.Install(em);
             SpriteInstanceRenderSystem.SetSheet(sheet);
-            var gq = em.CreateEntityQuery(typeof(SpriteAnimGrid));
-            if (gq.CalculateEntityCount() > 0)
-            {
-                var ge = gq.GetSingletonEntity();
-                var grid = em.GetComponentData<SpriteAnimGrid>(ge);
-                if (grid.Cols != cols || grid.Rows != rows)
-                    em.SetComponentData(ge, new SpriteAnimGrid { Cols = cols, Rows = rows });
-            }
-            else
-            {
-                var ge = em.CreateEntity();
-                em.AddComponentData(ge, new SpriteAnimGrid { Cols = cols, Rows = rows });
-            }
+            SpriteInstanceRenderSystem.SetGrid(em, cols, rows,
+                SpriteSheetProfile.GetCellAspect(sheet, cols, rows));
 
             SpriteBatchSpawner.SetPrototype(em, s_proto);
             s_ready = true;
@@ -281,14 +270,8 @@ namespace InvertLab.Sprites.DOTS
             authoring.TryGetClipSheet(clipIndex, out var clipTex, out int clipCols, out int clipRows, out _);
             if (clipTex != null)
                 SpriteInstanceRenderSystem.SetSheet(clipTex);
-            var gq = em.CreateEntityQuery(typeof(SpriteAnimGrid));
-            if (gq.CalculateEntityCount() > 0)
-            {
-                var ge = gq.GetSingletonEntity();
-                var grid = em.GetComponentData<SpriteAnimGrid>(ge);
-                if (grid.Cols != clipCols || grid.Rows != clipRows)
-                    em.SetComponentData(ge, new SpriteAnimGrid { Cols = clipCols, Rows = clipRows });
-            }
+            SpriteInstanceRenderSystem.SetGrid(em, clipCols, clipRows,
+                SpriteSheetProfile.GetCellAspect(clipTex, clipCols, clipRows));
 
             float scale = SizeUnits * ClipWorldHeight(authoring, clipIndex);
             ApplyCrowdScaleIfChanged(em, scale);

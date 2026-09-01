@@ -1,0 +1,927 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e4c91a2d8f4e6ab3c1d9e0f5a8b246, type: 3}
+  m_Name: Warrior_Sheet-Effect_profile
+  m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.ScriptableSpriteSheetProfile
+  Data:
+    Sheet: {fileID: 2800000, guid: ae72133dacba6ec4eb33ecde48f50e56, type: 3}
+    Columns: 6
+    Rows: 17
+    PixelsPerUnit: 50
+    Pivot: {x: 0.42, y: 0.38}
+    Sheets:
+    - Name: Bringer-of-Death-SpritSheet
+      Texture: {fileID: 2800000, guid: ae72133dacba6ec4eb33ecde48f50e56, type: 3}
+      Columns: 6
+      Rows: 17
+      PixelsPerUnit: 50
+      Pivot: {x: 0.42, y: 0.38}
+    - Name: Sheet 2
+      Texture: {fileID: 0}
+      Columns: 4
+      Rows: 4
+      PixelsPerUnit: 100
+      Pivot: {x: 0.5, y: 0.5}
+    Clips:
+    - Name: Bringer-of-Death-SpritSheet row 1
+      SheetIndex: 0
+      Row: 0
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 2
+      SheetIndex: 0
+      Row: 1
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 3
+      SheetIndex: 0
+      Row: 2
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 4
+      SheetIndex: 0
+      Row: 3
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 5
+      SheetIndex: 0
+      Row: 4
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 6
+      SheetIndex: 0
+      Row: 5
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 7
+      SheetIndex: 0
+      Row: 6
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 8
+      SheetIndex: 0
+      Row: 7
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 9
+      SheetIndex: 0
+      Row: 8
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 10
+      SheetIndex: 0
+      Row: 9
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 11
+      SheetIndex: 0
+      Row: 10
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 12
+      SheetIndex: 0
+      Row: 11
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 13
+      SheetIndex: 0
+      Row: 12
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 14
+      SheetIndex: 0
+      Row: 13
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 15
+      SheetIndex: 0
+      Row: 14
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 16
+      SheetIndex: 0
+      Row: 15
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      EventIds: 000000000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    - Name: Bringer-of-Death-SpritSheet row 17
+      SheetIndex: 0
+      Row: 16
+      Frames: 000000000100000002000000
+      FrameRows: ffffffffffffffffffffffff
+      FrameRate: 8
+      WrapMode: 0
+      FrameDurationScales:
+      - 1
+      - 1
+      - 1
+      EventIds: 000000
+      EventNormalizedTimes:
+      - 0
+      - 0
+      - 0
+      OnionOffsets:
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      - {x: 0, y: 0}
+      FrameScales:
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      - {x: 1, y: 1}
+      FrameRotations:
+      - 0
+      - 0
+      - 0
+      FrameTweenModes: 000000
+      FacingGroup: 
+      Facing: 255
+      Sockets: []
+      EventMarkers: []
+    Events:
+    - Id: 1
+      Name: Footstep
+      Color: {r: 0.35, g: 0.85, b: 1, a: 1}
+    - Id: 2
+      Name: Attack
+      Color: {r: 1, g: 0.35, b: 0.3, a: 1}
+    Hitboxes:
+    - ClipName: Bringer-of-Death-SpritSheet row 14
+      FrameIndex: 1
+      RectUV:
+        serializedVersion: 2
+        x: 0.14224799
+        y: 0.12477231
+        width: 0.85335165
+        height: 0.781897
+      Id: 1
+      Shape: 2
+      PolygonUV:
+      - {x: 0.52267826, y: 0.78273976}
+      - {x: 0.6751261, y: 0.54046315}
+      - {x: 0.6097913, y: 0.23295824}
+      - {x: 0.17422608, y: 0.16772993}
+      - {x: 0, y: 0.23295824}
+      - {x: 0.22322717, y: 0.027955001}
+      - {x: 0.5771239, y: 0}
+      - {x: 0.7840174, y: 0.13977495}
+      - {x: 0.9636881, y: 0.48455316}
+      - {x: 1, y: 0.6169378}
+      - {x: 0.99807054, y: 0.68628526}
+      - {x: 0.8321367, y: 0.9966978}
+      - {x: 0.7047922, y: 1}
+      - {x: 0.5214932, y: 0.8910255}
+      Angle: 0
+      Hidden: 0
+      Locked: 0
+      Lifetime: 0
+      Physics: 0
+      IsTrigger: 1
+    - ClipName: Bringer-of-Death-SpritSheet row 14
+      FrameIndex: 2
+      RectUV:
+        serializedVersion: 2
+        x: 0.5905581
+        y: 0.16820946
+        width: 0.40504152
+        height: 0.7462059
+      Id: 1
+      Shape: 2
+      PolygonUV:
+      - {x: 0.024390223, y: 0.7231834}
+      - {x: 0.34146342, y: 0.82698965}
+      - {x: 0.72764236, y: 0.57785463}
+      - {x: 0.21544708, y: 0}
+      - {x: 0.504065, y: 0.055363324}
+      - {x: 1, y: 0.52595156}
+      - {x: 1, y: 0.6608997}
+      - {x: 0.66260165, y: 1}
+      - {x: 0.37398374, y: 0.9896194}
+      - {x: 0, y: 0.86851215}
+      Angle: 0
+      Hidden: 0
+      Locked: 0
+      Lifetime: 0
+      Physics: 0
+      IsTrigger: 1
+    SocketCatalog:
+      Items: []
+    SocketMotions: []
+    SocketInventories: []
+    IndependentTimelineInitialized: 1
+    IndependentTimelineUsesSeconds: 1
+    IndependentMotionDurationSeconds: 1
+    IndependentMotionFrameRate: 12
+    IndependentMotionFrameCount: 13
+    IndependentMotionSpeed: 1
+    IndependentMotionLoop: 1
+    OnionSettingsInitialized: 1
+    OnionSkinEnabled: 0
+    OnionPastFrames: 2
+    OnionFutureFrames: 2
+    ShowOnionLayerNumbers: 1
+    TimelineHitShape: 0
+    TimelineHitPolygon:
+    - {x: 0.5, y: 0.04}
+    - {x: 0.82, y: 0.16}
+    - {x: 0.96, y: 0.5}
+    - {x: 0.82, y: 0.84}
+    - {x: 0.5, y: 0.96}
+    - {x: 0.18, y: 0.84}
+    - {x: 0.04, y: 0.5}
+    - {x: 0.18, y: 0.16}

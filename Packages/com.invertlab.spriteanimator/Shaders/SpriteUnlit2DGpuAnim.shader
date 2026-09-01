@@ -50,6 +50,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
             float _Now;
             float _LayoutXy;
             float _UseSharedClip;
+            float _CellAspect;
             float4 _SharedCell;
             float4 _SharedAnim;
 
@@ -93,17 +94,18 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                 float4 cell = _UseSharedClip > 0.5 ? _SharedCell : d.Cell;
                 float4 anim = _UseSharedClip > 0.5 ? _SharedAnim : d.Anim;
                 float2 c = QUAD[vid];
+                float aspect = _CellAspect > 0.001 ? _CellAspect : 1.0;
 
                 float3 wpos;
                 if (_LayoutXy > 0.5)
                 {
-                    wpos.x = d.PosScale.x + c.x * d.PosScale.z;
+                    wpos.x = d.PosScale.x + c.x * d.PosScale.z * aspect;
                     wpos.y = d.PosScale.y + c.y * d.PosScale.z;
                     wpos.z = d.PosScale.w;
                 }
                 else
                 {
-                    wpos.x = d.PosScale.x + c.x * d.PosScale.z;
+                    wpos.x = d.PosScale.x + c.x * d.PosScale.z * aspect;
                     wpos.y = d.PosScale.w;
                     wpos.z = d.PosScale.y - c.y * d.PosScale.z;
                 }

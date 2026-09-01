@@ -23,6 +23,7 @@ namespace InvertLab.Sprites.DOTS
             var eventBuffers = SystemAPI.GetBufferLookup<SpriteAnimEventBuffer>();
             var pending = SystemAPI.GetComponentLookup<SpriteAnimEventsPending>();
             var socketBuffers = SystemAPI.GetBufferLookup<SpriteSocketBuffer>();
+            var flips = SystemAPI.GetComponentLookup<SpriteFlip>(true);
             float dt = SystemAPI.Time.DeltaTime;
 
             // Entities without the optional culling flag always tick.
@@ -37,7 +38,7 @@ namespace InvertLab.Sprites.DOTS
                               .WithEntityAccess())
             {
                 if (player.ValueRO.Playing != 0)
-                    Advance(ref ecb, ref eventBuffers, ref pending, ref socketBuffers,
+                    Advance(ref ecb, ref eventBuffers, ref pending, ref socketBuffers, ref flips,
                         player, setRef, frame, entity, dt);
             }
 
@@ -51,7 +52,7 @@ namespace InvertLab.Sprites.DOTS
                               .WithEntityAccess())
             {
                 if (player.ValueRO.Playing != 0)
-                    Advance(ref ecb, ref eventBuffers, ref pending, ref socketBuffers,
+                    Advance(ref ecb, ref eventBuffers, ref pending, ref socketBuffers, ref flips,
                         player, setRef, frame, entity, dt);
             }
 
@@ -63,6 +64,7 @@ namespace InvertLab.Sprites.DOTS
                             ref BufferLookup<SpriteAnimEventBuffer> eventBuffers,
                             ref ComponentLookup<SpriteAnimEventsPending> pending,
                             ref BufferLookup<SpriteSocketBuffer> socketBuffers,
+                            ref ComponentLookup<SpriteFlip> flips,
                             RefRW<SpriteAnimPlayer> player,
                             RefRO<SpriteAnimSetRef> setRef,
                             RefRW<SpriteAnimFrame> frame,
@@ -169,7 +171,7 @@ namespace InvertLab.Sprites.DOTS
             float eased = SpriteEase.Evaluate(tweenMode, tweenFraction);
             frame.ValueRW.Scale = math.lerp(startScale, nextScale, eased);
             frame.ValueRW.Rotation = math.lerp(startRotation, nextRotation, eased);
-            UpdateSockets(entity, drawFrame, ref def, ref socketBuffers);
+            UpdateSockets(entity, drawFrame, ref def, ref socketBuffers, ref flips);
 
             if (finished)
             {
@@ -289,18 +291,20 @@ namespace InvertLab.Sprites.DOTS
 
         static void UpdateSockets(Entity entity, int drawFrame,
                                   ref SpriteAnimDef def,
-                                  ref BufferLookup<SpriteSocketBuffer> socketBuffers)
+                                  ref BufferLookup<SpriteSocketBuffer> socketBuffers,
+                                  ref ComponentLookup<SpriteFlip> flips)
         {
             if (!socketBuffers.HasBuffer(entity))
                 return;
             var buffer = socketBuffers[entity];
             buffer.Clear();
+            var flip = flips.HasComponent(entity) ? flips[entity] : default;
             for (int i = 0; i < def.FrameSockets.Length; i++)
             {
                 var socket = def.FrameSockets[i];
                 if (socket.FrameIndex != drawFrame)
                     continue;
-                buffer.Add(new SpriteSocketBuffer
+                buffer.Add(SpriteFlipUtility.Socket(new SpriteSocketBuffer
                 {
                     Name = socket.Name,
                     SocketId = socket.SocketId,
@@ -308,7 +312,7 @@ namespace InvertLab.Sprites.DOTS
                     LocalPosition = socket.LocalPosition,
                     LocalAngle = socket.LocalAngle,
                     LocalScale = socket.LocalScale,
-                });
+                }, flip));
             }
         }
 

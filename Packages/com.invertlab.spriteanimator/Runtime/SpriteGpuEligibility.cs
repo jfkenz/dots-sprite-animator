@@ -91,6 +91,11 @@ namespace InvertLab.Sprites.DOTS
             }
 
             clip.EnsureFrameData();
+            if (clip.UsesMixedSheetRows())
+            {
+                reason = "Frames from more than one sheet row require CPU playback.";
+                return false;
+            }
             if (clip.WrapMode != SpriteAnimWrap.Loop && clip.WrapMode != SpriteAnimWrap.Once)
             {
                 reason = "Ping-pong and reverse playback require CPU timing.";

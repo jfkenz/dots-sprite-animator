@@ -22,6 +22,7 @@ namespace InvertLab.Sprites.DOTS
             var buffers = SystemAPI.GetBufferLookup<SpriteSocketBuffer>();
             var eventBuffers = SystemAPI.GetBufferLookup<SpriteSocketEventBuffer>();
             var eventPending = SystemAPI.GetComponentLookup<SpriteSocketEventsPending>();
+            var flips = SystemAPI.GetComponentLookup<SpriteFlip>(true);
 
             foreach (var (player, setRef, sourceWorld, entity) in
                      SystemAPI.Query<RefRW<SpriteSocketMotionPlayer>, RefRO<SpriteAnimSetRef>,
@@ -46,6 +47,7 @@ namespace InvertLab.Sprites.DOTS
 
                 ref var set = ref setRef.ValueRO.Set.Value;
                 var buffer = buffers[entity];
+                var flip = flips.HasComponent(entity) ? flips[entity] : default;
                 for (int i = 0; i < set.SocketMotions.Length; i++)
                 {
                     ref var motion = ref set.SocketMotions[i];
@@ -89,6 +91,8 @@ namespace InvertLab.Sprites.DOTS
                         LocalAngle = angle,
                         LocalScale = scale,
                     };
+                    if (motion.AnchorSpace != (byte)SpriteSocketAnchorSpace.World)
+                        pose = SpriteFlipUtility.Socket(pose, flip);
                     if (existing >= 0)
                         buffer[existing] = pose;
                     else

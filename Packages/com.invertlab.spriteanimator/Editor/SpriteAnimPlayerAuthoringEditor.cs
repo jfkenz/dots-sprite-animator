@@ -115,8 +115,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             EditorGUILayout.HelpBox(
-                "Buttons match the clip count. [ and ] step clips. Type a 1-based number. " +
-                "Play switches this Quad and every spawned crowd sprite.",
+                "Flip X / Flip Y mirror this instance only. Buttons match the clip count. " +
+                "[ and ] step clips. Type a 1-based number. Play switches this Quad and every spawned crowd sprite.",
                 MessageType.Info);
         }
 

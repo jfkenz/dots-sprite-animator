@@ -48,6 +48,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
             sampler2D _MainTex;
             float _Cutoff;
             float _LayoutXy;
+            float _CellAspect;
 
             struct v2f
             {
@@ -67,7 +68,8 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
 
                 SpriteInstanceData d = _InstanceData[iid];
                 float2 quad = QUAD[vid];
-                float2 local = float2(quad.x * d.FrameTRS.x, quad.y * d.FrameTRS.y);
+                float aspect = _CellAspect > 0.001 ? _CellAspect : 1.0;
+                float2 local = float2(quad.x * d.FrameTRS.x * aspect, quad.y * d.FrameTRS.y);
                 float cs = cos(d.FrameTRS.z);
                 float sn = sin(d.FrameTRS.z);
                 float2 rotated = float2(
