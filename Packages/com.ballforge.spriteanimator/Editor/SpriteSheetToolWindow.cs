@@ -1040,7 +1040,8 @@ namespace BallForge.Sprites.DOTS.Editor
                 else
                 {
                     bool selectionConsumed = HandlePreviewObjectSelectionInput(
-                        previewControlId, cell, clip, state.Frame, onionGhosts);
+                        previewControlId, cell, new Rect(0f, 0f, contentW, contentH),
+                        clip, state.Frame, onionGhosts);
                     if (!selectionConsumed)
                     {
                         bool pivotConsumed = _showPivot &&
@@ -2711,7 +2712,7 @@ namespace BallForge.Sprites.DOTS.Editor
                 cell.y + pointUV.y * cell.height);
         }
 
-        bool HandlePreviewObjectSelectionInput(int controlId, Rect cell, SpriteClipDef clip, int frame,
+        bool HandlePreviewObjectSelectionInput(int controlId, Rect cell, Rect content, SpriteClipDef clip, int frame,
                                           List<OnionGhostLayout> ghosts)
         {
             var evt = Event.current;
@@ -2753,7 +2754,9 @@ namespace BallForge.Sprites.DOTS.Editor
                 return true;
             }
 
-            if (evt.type != EventType.MouseDown || !cell.Contains(evt.mousePosition))
+            // Marquee may start anywhere on the preview canvas, including empty
+            // checkerboard left/right of the fitted sprite cell.
+            if (evt.type != EventType.MouseDown || !content.Contains(evt.mousePosition))
                 return false;
 
             FrameBoxDef found = _showHitboxes ? FindColliderAt(clip, frame, cell, evt.mousePosition) : null;
