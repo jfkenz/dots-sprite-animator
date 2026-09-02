@@ -39,6 +39,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -87,6 +94,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -135,6 +149,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -183,6 +204,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -231,6 +259,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -279,6 +314,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -327,6 +369,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -375,6 +424,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -423,6 +479,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -471,6 +534,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -519,6 +589,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -567,6 +644,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -615,6 +699,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -661,8 +752,15 @@ MonoBehaviour:
       Row: 13
       Frames: 000000000100000002000000030000000400000005000000
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
-      FrameRate: 8
+      FrameRate: 60
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -711,6 +809,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -759,6 +864,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -807,6 +919,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -872,6 +991,8 @@ MonoBehaviour:
       Lifetime: 0
       Physics: 2
       IsTrigger: 1
+      CharacterIncludeClips: []
+      CharacterExcludeClips: []
     - ClipName: Bringer-of-Death-SpritSheet row 14
       FrameIndex: 2
       RectUV:
@@ -899,6 +1020,8 @@ MonoBehaviour:
       Lifetime: 0
       Physics: 2
       IsTrigger: 1
+      CharacterIncludeClips: []
+      CharacterExcludeClips: []
     SocketCatalog:
       Items: []
     SocketMotions: []

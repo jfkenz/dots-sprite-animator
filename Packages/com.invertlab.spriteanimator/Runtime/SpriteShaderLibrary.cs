@@ -8,7 +8,7 @@ namespace InvertLab.Sprites.DOTS
         public const string UnlitShader = "DOTS Sprite Animator/Sprite Unlit 2D";
         public const string InstancedShader = "DOTS Sprite Animator/Sprite Unlit 2D Instanced";
         public const string GpuAnimShader = "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim";
-        /// <summary>MeshRenderer Scene Quad only - no DOTS_INSTANCING_ON (crop must work via material/MPB).</summary>
+        /// <summary>MeshRenderer Scene Quad only - no DOTS_INSTANCING_ON; material props in UnityPerMaterial (SRP Batcher / BRG).</summary>
         public const string PreviewShader = "DOTS Sprite Animator/Sprite Unlit 2D Preview";
 
         public static bool TryFindAll(out string message)

@@ -15,7 +15,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         const string SwordMaterialPath = Root + "/SocketsSword.mat";
         const string ScenePath = Root + "/SocketsExample.unity";
         const string SubScenePath = Root + "/SocketsExample_SubScene.unity";
-        const string CharacterPath = "Assets/Samples/Showcase/Sword Character Prototype_All Frames.png";
+        const string CharacterPath =
+            "Assets/Samples/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect.png";
 
         [MenuItem("Tools/DOTS Sprite Animator/Build Sockets Sample")]
         public static void Build()
@@ -50,11 +51,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             var sheet = new SpriteSheetDef
             {
-                Name = "Sword Character Prototype",
+                Name = "Warrior_Sheet-Effect",
                 Texture = character,
-                Columns = 8,
-                Rows = 8,
-                PixelsPerUnit = 100f,
+                Columns = 6,
+                Rows = 17,
+                PixelsPerUnit = 50f,
                 Pivot = new Vector2(0.5f, 0.5f),
             };
 
@@ -111,7 +112,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Name = name,
                 SheetIndex = 0,
                 Row = row,
-                Frames = Enumerable.Range(0, 8).ToArray(),
+                Frames = Enumerable.Range(0, 6).ToArray(),
                 FrameRate = frameRate,
                 WrapMode = SpriteAnimWrap.Loop,
                 Sockets = new List<FrameSocketDef>(),
@@ -142,7 +143,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             var set = quad.AddComponent<SpriteAnimSetAuthoring>();
             set.Profile = profile;
             set.InitialClipIndex = 0;
-            set.ShowSpriteInScene = true;
+            // Play mode uses SpriteInstanceRenderSystem for the character.
+            // Show Sprite is MeshRenderer edit preview only — DontSave mesh/mat
+            // cannot serialize into SubScenes and can feed EG/BRG wrongly.
+            set.ShowSpriteInScene = false;
             set.ApplyFromProfile();
 
             var player = quad.AddComponent<SpriteAnimPlayerAuthoring>();
@@ -204,24 +208,24 @@ namespace InvertLab.Sprites.DOTS.Editor
         // Source pixels from cell pivot (+x right, +y up), authored per frame.
         static readonly Vector2[] IdlePositions =
         {
-            new(-5f, -4f), new(-5f, -4f), new(-5f, -5f), new(-5f, -5f),
-            new(-5f, -5f), new(-5f, -5f), new(-5f, -4f), new(-5f, -4f),
+            new(-5f, -4f), new(-5f, -4f), new(-5f, -5f),
+            new(-5f, -5f), new(-5f, -5f), new(-5f, -5f),
         };
 
         static readonly float[] IdleAngles =
         {
-            -82f, -80f, -78f, -76f, -78f, -80f, -82f, -84f,
+            -82f, -80f, -78f, -76f, -78f, -80f,
         };
 
         static readonly Vector2[] AttackPositions =
         {
-            new(-9f, 1f), new(14f, -2f), new(12f, -4f), new(8f, -4f),
-            new(7f, -5f), new(6f, -5f), new(6f, -5f), new(7f, -5f),
+            new(-9f, 1f), new(14f, -2f), new(12f, -4f),
+            new(8f, -4f), new(7f, -5f), new(6f, -5f),
         };
 
         static readonly float[] AttackAngles =
         {
-            -100f, -45f, -5f, 30f, 62f, 92f, 118f, 145f,
+            -100f, -45f, -5f, 30f, 62f, 92f,
         };
     }
 }

@@ -6,30 +6,22 @@ using UnityEngine;
 namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
-    /// In-game sprite stats overlay — the authoritative way to find the spawn
-    /// ceiling. Measures FPS / frame-ms INSIDE the player loop (CLI timestamp
-    /// sampling is unreliable: editor gameview pacing pollutes it), shows the
-    /// live sprite count, and spawns/despawns via on-screen buttons.
-    ///
-    /// Deliberately mouse-only (no Input System reference needed) so it stays
-    /// self-contained inside the runtime asmdef's existing dependencies.
-    /// Self-bootstraps every play session; H-free, toggle via right-click on
-    /// the panel header.
+    /// In-game sprite stats overlay for the Crowd GPU sample — FPS / frame-ms
+    /// inside the player loop, live sprite count, and spawn/despawn buttons.
+    /// Self-bootstraps on CrowdGpu / Spawner / Soldier / authoring scenes only.
+    /// Right-click the panel header to hide.
     /// </summary>
     public sealed class SpriteStatsHud : MonoBehaviour
     {
         public static SpriteStatsHud Instance;
 
-        // ---- measured inside the game loop (authoritative) ----
-        public float Fps;      // smoothed over the sample window
-        public float FrameMs;  // average frame ms over the window
-        public float WorstMs;  // worst single frame in the last 5 s
-
-        // ---- live world stats ----
-        public int Sprites;   // total animated sprite entities
+        public float Fps;
+        public float FrameMs;
+        public float WorstMs;
+        public int Sprites;
         public bool Show = true;
 
-        const float Window = 0.5f; // fps averaging window (seconds)
+        const float Window = 0.5f;
 
         EntityManager em;
         World cachedWorld;
@@ -42,14 +34,9 @@ namespace InvertLab.Sprites.DOTS
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
-            // Skip ColliderEventExample / collider sample scenes - FPS/+10k UI clutters the demo.
-            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
-            if (!string.IsNullOrEmpty(scene.name) &&
-                scene.name.IndexOf("collider", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            if (!IsCrowdSampleScene())
                 return;
 
-            // domain reload may be off: an Instance from the LAST play session
-            // survives as a destroyed husk — replace it unconditionally.
             if (Instance != null)
                 Destroy(Instance.gameObject);
             var go = new GameObject("SpriteStatsHud");
@@ -57,11 +44,23 @@ namespace InvertLab.Sprites.DOTS
             go.AddComponent<SpriteStatsHud>();
         }
 
+        static bool IsCrowdSampleScene()
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            if (string.IsNullOrEmpty(scene.name))
+                return false;
+            // Positive allow-list so Events / Playback / Collider / Showcase stay clean.
+            return scene.name.IndexOf("Crowd", System.StringComparison.OrdinalIgnoreCase) >= 0
+                   || scene.name.IndexOf("Spawner", System.StringComparison.OrdinalIgnoreCase) >= 0
+                   || scene.name.IndexOf("Soldier", System.StringComparison.OrdinalIgnoreCase) >= 0
+                   || scene.name.IndexOf("authoring", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         void Awake()
         {
             Instance = this;
-            Application.targetFrameRate = 0; // uncapped; judge by frame ms
-            QualitySettings.vSyncCount = 0;  // else editor caps at monitor Hz
+            Application.targetFrameRate = 0;
+            QualitySettings.vSyncCount = 0;
         }
 
         void Update()
@@ -117,7 +116,7 @@ namespace InvertLab.Sprites.DOTS
                 EnsureQuery();
                 Sprites = qSprites.CalculateEntityCount();
             }
-            catch { Sprites = 0; } // world tearing down mid-frame
+            catch { Sprites = 0; }
         }
 
         void Change(int n)
@@ -129,18 +128,12 @@ namespace InvertLab.Sprites.DOTS
 
                 if (n > 0)
                 {
-                    // square grid formation around origin — dense block fully
-                    // visible at normal zoom (random scatter spread sprites
-                    // over an 8km field where you'd only ever see a few).
                     var center = SpriteBatchSpawner.LayoutXy
                         ? float3.zero
                         : new float3(0, 1.55f, 0);
                     SpriteBatchSpawner.SpawnNow(em, center,
                         4000f, 2f, n, true, true);
 
-                    // keep the session's mode consistent: if anything is
-                    // already GPU-driven, convert the fresh spawns too so a
-                    // big +press doesn't silently reintroduce the CPU tax.
                     var qg = em.CreateEntityQuery(
                         ComponentType.ReadOnly<SpriteGpuDriven>());
                     if (!qg.IsEmpty)
@@ -174,9 +167,8 @@ namespace InvertLab.Sprites.DOTS
         void OnGUI()
         {
             if (!Show) return;
-            var box = new Rect(8, 8, 250, 220);
+            var box = new Rect(8, 8, 268, 268);
 
-            // right-click header toggles visibility
             var hdr = new Rect(box.x, box.y, box.width, 22);
             if (Event.current.type == EventType.MouseDown &&
                 Event.current.button == 1 && hdr.Contains(Event.current.mousePosition))
@@ -186,13 +178,17 @@ namespace InvertLab.Sprites.DOTS
                 return;
             }
 
-            GUI.Box(box, "Sprite Stats (in-game)");
+            GUI.Box(box, "Crowd GPU Stats");
             GUILayout.BeginArea(new Rect(box.x + 8, box.y + 24, box.width - 16, box.height - 30));
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label(string.Format(
                 "FPS {0:F0}   frame {1:F2} ms", Fps, FrameMs));
             GUILayout.Label(string.Format("worst {0:F1} ms", WorstMs));
             GUILayout.Label(string.Format("sprites {0:N0}", Sprites));
+            GUILayout.Space(2);
+            GUILayout.Label("Spawn count buttons below.");
+            GUILayout.Label("GPU: Crowd Spawner UseGpuAnim.");
+            GUILayout.Label("Clips: 1-9 / 0 / [ ]");
             GUILayout.Space(4);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("+10k")) Change(10_000);

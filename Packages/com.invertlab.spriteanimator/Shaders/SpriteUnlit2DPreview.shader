@@ -1,8 +1,12 @@
 // Invert Lab - Scene-view Quad preview only.
 // No DOTS_INSTANCING_ON: Entities Graphics can force that keyword globally, which
-// makes MeshRenderer ignore material/MPB _CropST and show the full sheet (default 1,1,0,0).
-// _CropST / _Flip live OUTSIDE UnityPerMaterial so MaterialPropertyBlock + SetVector
-// always reach the vertex stage under URP SRP Batcher.
+// makes MeshRenderer ignore material/MPB crop and show the full sheet.
+// ApplyQuadPreview UV-bakes the cell into mesh UVs and sets _CropST/_Flip to
+// identity, so crop no longer depends on MaterialPropertyBlock overrides.
+// All material props MUST live in UnityPerMaterial for SRP Batcher +
+// Entities Graphics / BatchRendererGroup compatibility (props outside that
+// cbuffer trigger: "Material property is found in another cbuffer than
+// UnityPerMaterial").
 Shader "DOTS Sprite Animator/Sprite Unlit 2D Preview"
 {
     Properties
@@ -41,16 +45,15 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Preview"
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
 
+            // Match runtime Sprite Unlit 2D UnityPerMaterial layout (minus _ZOrder):
+            // SRP Batcher / BRG require every material property in this cbuffer.
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 float4 _Color;
+                float4 _CropST;
+                float4 _Flip;
                 float  _AlphaCutoff;
             CBUFFER_END
-
-            // Outside UnityPerMaterial: SRP Batcher will not pack these; MPB/SetVector
-            // overrides reliably reach Vert (batcher-safe crop was ignoring MPB).
-            float4 _CropST;
-            float4 _Flip;
 
             struct Attributes
             {

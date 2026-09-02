@@ -2,11 +2,14 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
+using Unity.Rendering;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.Rendering;
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine.SceneManagement;
 #endif
 
 
@@ -272,6 +275,75 @@ namespace InvertLab.Sprites.DOTS
             }
         }
 
+        [InitializeOnLoadMethod]
+        static void RegisterPreviewSceneSaveHooks()
+        {
+            EditorSceneManager.sceneSaving -= OnEditorSceneSaving;
+            EditorSceneManager.sceneSaving += OnEditorSceneSaving;
+            EditorSceneManager.sceneSaved -= OnEditorSceneSaved;
+            EditorSceneManager.sceneSaved += OnEditorSceneSaved;
+        }
+
+        static void OnEditorSceneSaving(Scene scene, string path)
+        {
+            // DontSave preview mesh/material do not serialize; leaving them assigned
+            // writes null MeshFilter/MeshRenderer refs into SubScenes and can NRE
+            // Entities Graphics on section load. Swap to builtin Quad for the save.
+            var sets = Object.FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < sets.Length; i++)
+            {
+                var set = sets[i];
+                if (set == null || set.gameObject.scene != scene)
+                    continue;
+                set.PreparePreviewForSceneSave();
+            }
+        }
+
+        static void OnEditorSceneSaved(Scene scene)
+        {
+            var sets = Object.FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < sets.Length; i++)
+            {
+                var set = sets[i];
+                if (set == null || set.gameObject.scene != scene)
+                    continue;
+                if (!Application.isPlaying)
+                    set.RefreshQuadPreview();
+            }
+        }
+
+        void PreparePreviewForSceneSave()
+        {
+            var filter = GetComponent<MeshFilter>();
+            var renderer = GetComponent<MeshRenderer>();
+            if (filter == null || renderer == null)
+                return;
+            SanitizePreviewForSerialization(filter, renderer);
+            renderer.SetPropertyBlock(null);
+            // Leave renderer.enabled as-is for edit UX; bake uses DisableRendering.
+        }
+
+        static void SanitizePreviewForSerialization(MeshFilter filter, MeshRenderer renderer)
+        {
+            var current = filter.sharedMesh;
+            // Unity fake-null: destroyed DontSave mesh compares equal to null.
+            if (current == null || current.name == PreviewMeshName)
+            {
+                var builtin = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+                if (builtin != null)
+                    filter.sharedMesh = builtin;
+            }
+
+            var mat = renderer.sharedMaterial;
+            if (mat != null && (mat.name == PreviewMaterialName
+                || (mat.hideFlags & HideFlags.DontSaveInEditor) != 0
+                || (mat.hideFlags & HideFlags.DontSaveInBuild) != 0
+                || (mat.hideFlags & HideFlags.HideAndDontSave) != 0))
+            {
+                renderer.sharedMaterial = null;
+            }
+        }
+
 
 
         void RefreshQuadPreview()
@@ -305,9 +377,11 @@ namespace InvertLab.Sprites.DOTS
 
             if (!ShowSpriteInScene)
             {
-                // Keep mesh reference so turning Show Sprite back on works.
+                // Keep a serializable builtin Quad (not DontSave preview mesh) so
+                // SubScene bake never sees a null mesh / missing DontSave material.
                 renderer.SetPropertyBlock(null);
                 renderer.enabled = false;
+                SanitizePreviewForSerialization(filter, renderer);
                 return;
             }
 
@@ -346,7 +420,9 @@ namespace InvertLab.Sprites.DOTS
 
             // Preview must NOT use the DOTS Unlit shader: Entities Graphics can
             // force DOTS_INSTANCING_ON globally, so MeshRenderer ignores material
-            // / MPB _CropST and draws the full sheet (property default 1,1,0,0).
+            // / MPB crop and draws the full sheet (property default 1,1,0,0).
+            // Preview shader keeps props in UnityPerMaterial (SRP Batcher / BRG)
+            // and ApplyQuadPreview UV-bakes the cell so crop does not need MPB.
             var shader = Shader.Find(SpriteShaderLibrary.PreviewShader);
             if (shader == null)
             {
@@ -1157,7 +1233,13 @@ namespace InvertLab.Sprites.DOTS
 
                 var entity = GetEntity(authoring, TransformUsageFlags.Renderable);
 
-
+                // Scene Quad MeshRenderer is editor preview only (often a DontSave
+                // mesh/material). Sprite drawing uses SpriteInstanceRenderSystem /
+                // GPU paths — not Entities Graphics MeshRenderer conversion.
+                // DisableRendering stops BRG from drawing the preview/null mesh;
+                // PostBaking strip removes MaterialMeshInfo so corrupt mesh refs
+                // cannot NRE AsyncLoadSceneOperation.ScheduleSceneRead.
+                AddComponent(entity, new DisableRendering());
 
                 // data-only bake: the GPU-instanced renderer consumes these directly
                 // (no GameObjects graphics components involved)

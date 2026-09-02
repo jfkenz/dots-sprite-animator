@@ -52,6 +52,7 @@ namespace InvertLab.Sprites.DOTS
             s_ready = false;
             s_proto = Entity.Null;
             s_appliedScale = -1f;
+            s_hasAppliedScale = false;
         }
 
         void Start()
@@ -205,6 +206,10 @@ namespace InvertLab.Sprites.DOTS
                 count,
                 grid,
                 randomizeClocks: true);
+            // Avoid first SetAllClips hitch: entities already have spawnScale, so
+            // prime the static without walking LocalTransform / MarkDirty.
+            if (spawned > 0)
+                PrimeAppliedScale(spawnScale);
             Debug.Log("[Crowd Spawner] +" + spawned + (grid ? " (grid)" : " (random)") +
                       " | total " + CountAll(), this);
             return spawned;
@@ -327,12 +332,21 @@ namespace InvertLab.Sprites.DOTS
         }
 
         static float s_appliedScale = -1f;
+        static bool s_hasAppliedScale;
+
+        /// <summary>Record current world scale without walking entities (call after spawn).</summary>
+        static void PrimeAppliedScale(float scale)
+        {
+            s_appliedScale = scale;
+            s_hasAppliedScale = true;
+        }
 
         static void ApplyCrowdScaleIfChanged(EntityManager em, float scale)
         {
-            if (s_appliedScale > 0f && Mathf.Abs(s_appliedScale - scale) < 0.0001f)
+            if (s_hasAppliedScale && Mathf.Abs(s_appliedScale - scale) < 0.0001f)
                 return;
             s_appliedScale = scale;
+            s_hasAppliedScale = true;
             var q = em.CreateEntityQuery(
                 ComponentType.ReadOnly<SpriteCrowdEntityTag>(),
                 ComponentType.ReadWrite<LocalTransform>());

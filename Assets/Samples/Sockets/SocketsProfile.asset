@@ -13,25 +13,33 @@ MonoBehaviour:
   m_Name: SocketsProfile
   m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.ScriptableSpriteSheetProfile
   Data:
-    Sheet: {fileID: 2800000, guid: 6f3892696a2cdc346a3b303d0cb685fd, type: 3}
-    Columns: 8
-    Rows: 8
-    PixelsPerUnit: 100
+    Sheet: {fileID: 2800000, guid: ae72133dacba6ec4eb33ecde48f50e56, type: 3}
+    Columns: 6
+    Rows: 17
+    PixelsPerUnit: 50
     Pivot: {x: 0.5, y: 0.5}
     Sheets:
-    - Name: Sword Character Prototype
-      Texture: {fileID: 2800000, guid: 6f3892696a2cdc346a3b303d0cb685fd, type: 3}
-      Columns: 8
-      Rows: 8
-      PixelsPerUnit: 100
+    - Name: Warrior_Sheet-Effect
+      Texture: {fileID: 2800000, guid: ae72133dacba6ec4eb33ecde48f50e56, type: 3}
+      Columns: 6
+      Rows: 17
+      PixelsPerUnit: 50
       Pivot: {x: 0.5, y: 0.5}
     Clips:
     - Name: Idle
       SheetIndex: 0
       Row: 0
-      Frames: 0000000001000000020000000300000004000000050000000600000007000000
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 6
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -39,12 +47,8 @@ MonoBehaviour:
       - 1
       - 1
       - 1
-      - 1
-      - 1
-      EventIds: 0000000000000000
+      EventIds: 000000000000
       EventNormalizedTimes:
-      - 0
-      - 0
       - 0
       - 0
       - 0
@@ -58,11 +62,7 @@ MonoBehaviour:
       - {x: 0, y: 0}
       - {x: 0, y: 0}
       - {x: 0, y: 0}
-      - {x: 0, y: 0}
-      - {x: 0, y: 0}
       FrameScales:
-      - {x: 1, y: 1}
-      - {x: 1, y: 1}
       - {x: 1, y: 1}
       - {x: 1, y: 1}
       - {x: 1, y: 1}
@@ -76,9 +76,7 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      - 0
-      - 0
-      FrameTweenModes: 0000000000000000
+      FrameTweenModes: 000000000000
       FacingGroup: 
       Facing: 255
       Sockets:
@@ -87,47 +85,52 @@ MonoBehaviour:
         LocalPosition: {x: -5, y: -4}
         LocalAngle: -82
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 1
         LocalPosition: {x: -5, y: -4}
         LocalAngle: -80
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 2
         LocalPosition: {x: -5, y: -5}
         LocalAngle: -78
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 3
         LocalPosition: {x: -5, y: -5}
         LocalAngle: -76
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 4
         LocalPosition: {x: -5, y: -5}
         LocalAngle: -78
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 5
         LocalPosition: {x: -5, y: -5}
         LocalAngle: -80
         LocalScale: {x: 1, y: 1}
-      - Name: Weapon
-        FrameIndex: 6
-        LocalPosition: {x: -5, y: -4}
-        LocalAngle: -82
-        LocalScale: {x: 1, y: 1}
-      - Name: Weapon
-        FrameIndex: 7
-        LocalPosition: {x: -5, y: -4}
-        LocalAngle: -84
-        LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
+      EventMarkers: []
     - Name: Attack
       SheetIndex: 0
       Row: 1
-      Frames: 0000000001000000020000000300000004000000050000000600000007000000
+      Frames: 000000000100000002000000030000000400000005000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 10
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -135,12 +138,8 @@ MonoBehaviour:
       - 1
       - 1
       - 1
-      - 1
-      - 1
-      EventIds: 0000000000000000
+      EventIds: 000000000000
       EventNormalizedTimes:
-      - 0
-      - 0
       - 0
       - 0
       - 0
@@ -154,11 +153,7 @@ MonoBehaviour:
       - {x: 0, y: 0}
       - {x: 0, y: 0}
       - {x: 0, y: 0}
-      - {x: 0, y: 0}
-      - {x: 0, y: 0}
       FrameScales:
-      - {x: 1, y: 1}
-      - {x: 1, y: 1}
       - {x: 1, y: 1}
       - {x: 1, y: 1}
       - {x: 1, y: 1}
@@ -172,9 +167,7 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      - 0
-      - 0
-      FrameTweenModes: 0000000000000000
+      FrameTweenModes: 000000000000
       FacingGroup: 
       Facing: 255
       Sockets:
@@ -183,45 +176,51 @@ MonoBehaviour:
         LocalPosition: {x: -9, y: 1}
         LocalAngle: -100
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 1
         LocalPosition: {x: 14, y: -2}
         LocalAngle: -45
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 2
         LocalPosition: {x: 12, y: -4}
         LocalAngle: -5
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 3
         LocalPosition: {x: 8, y: -4}
         LocalAngle: 30
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 4
         LocalPosition: {x: 7, y: -5}
         LocalAngle: 62
         LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
       - Name: Weapon
         FrameIndex: 5
         LocalPosition: {x: 6, y: -5}
         LocalAngle: 92
         LocalScale: {x: 1, y: 1}
-      - Name: Weapon
-        FrameIndex: 6
-        LocalPosition: {x: 6, y: -5}
-        LocalAngle: 118
-        LocalScale: {x: 1, y: 1}
-      - Name: Weapon
-        FrameIndex: 7
-        LocalPosition: {x: 7, y: -5}
-        LocalAngle: 145
-        LocalScale: {x: 1, y: 1}
+        DrawLayer: 0
+      EventMarkers: []
     Events: []
     Hitboxes: []
     SocketCatalog:
       Items: []
+    SocketMotions: []
+    SocketInventories: []
+    IndependentTimelineInitialized: 1
+    IndependentTimelineUsesSeconds: 1
+    IndependentMotionDurationSeconds: 1
+    IndependentMotionFrameRate: 12
+    IndependentMotionFrameCount: 13
+    IndependentMotionSpeed: 1
+    IndependentMotionLoop: 1
     OnionSettingsInitialized: 1
     OnionSkinEnabled: 0
     OnionPastFrames: 3

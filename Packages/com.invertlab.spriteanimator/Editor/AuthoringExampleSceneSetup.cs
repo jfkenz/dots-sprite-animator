@@ -115,7 +115,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     Debug.LogWarning(
                         "[AuthoringExampleSceneSetup] AuthoringCrowdDemo type not found. " +
-                        "Add Assets/Samples/CrowdStress/AuthoringCrowdDemo.cs and re-run the menu.");
+                        "Add Assets/Samples/CrowdGpuExample/Components/AuthoringCrowdDemo.cs and re-run the menu.");
                 }
             }
 

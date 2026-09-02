@@ -9,8 +9,7 @@ Open `SocketsExample.unity`, then enter Play mode.
 - Clips: `Idle`, `Attack`
 - Keys: `[` / `]` cycle clips; `1` selects Idle; `2` selects Attack
 
-`SpriteAnimSetAuthoring` and `SpriteAnimPlayerAuthoring` live on the Quad in
-`SocketsExample_SubScene.unity`. The weapon is a baked child with
+KEEP The weapon is a baked child with
 `SpriteSocketAttachmentAuthoring`. Sockets force CPU animation playback; this
 sample does not use `SpriteCrowdSpawnerAuthoring` or `SpriteGpuDriven`.
 
@@ -25,5 +24,7 @@ the CPU renderer.
 `SpriteAnimPlayerAuthoring` is useful here for explicit initial clip, speed, and
 preview controls, but is not required by the attachment itself:
 `SpriteAnimSetAuthoring` already bakes the runtime `SpriteAnimPlayer`.
+
+Show Sprite is off here: play mode draws via `SpriteInstanceRenderSystem`, not the MeshRenderer edit preview.
 
 Rebuild generated profile/scenes with **Tools > DOTS Sprite Animator > Build Sockets Sample**.

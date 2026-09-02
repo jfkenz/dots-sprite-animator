@@ -5,10 +5,31 @@ using UnityEngine.InputSystem;
 namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
-    /// Sample-scene crowd driver. Same as <see cref="SpriteCrowdSpawnerAuthoring"/>
-    /// plus number-key clip switching and SoldierDemo suppression.
+    /// Crowd GPU sample driver. Same as <see cref="SpriteCrowdSpawnerAuthoring"/>
+    /// plus number-key clip switching, SoldierDemo suppression, and on-screen help.
     /// </summary>
-    public sealed class AuthoringCrowdDemo : SpriteCrowdSpawnerAuthoring { }
+    public sealed class AuthoringCrowdDemo : SpriteCrowdSpawnerAuthoring
+    {
+        void OnGUI()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            const float w = 320f;
+            var box = new Rect(Screen.width - w - 8f, 8f, w, 132f);
+            GUI.Box(box, "Crowd GPU Sample");
+            GUILayout.BeginArea(new Rect(box.x + 8f, box.y + 22f, box.width - 16f, box.height - 28f));
+            GUILayout.Label("Sprites: " + LiveCount.ToString("N0")
+                            + "   GPU: " + (UseGpuAnim ? "ON" : "OFF"));
+            GUILayout.Label("1-9 / 0 / [ ]  switch clips");
+            GUILayout.Label("Inspector: Spawn Batch, +10k, Despawn");
+            GUILayout.Label("SpawnOnStart=" + SpawnOnStartCount
+                            + "  Batch=" + BatchSize
+                            + (Grid ? " grid" : " random"));
+            GUILayout.Label("Toggle GPU + Burst on the Crowd Spawner.");
+            GUILayout.EndArea();
+        }
+    }
 
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateBefore(typeof(SoldierDemoInputSystem))]

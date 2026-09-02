@@ -4,7 +4,7 @@ namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
     /// Ensures BakeUnityColliders / BakeFrameColliders / BakeUnitySockets are on for collider demos.
-    /// Also strips CrowdStress SpriteStatsHud so the demo stays uncluttered.
+    /// Also strips CrowdGpuExample SpriteStatsHud so the demo stays uncluttered.
     /// </summary>
     public sealed class ColliderExampleBootstrap : MonoBehaviour
     {
