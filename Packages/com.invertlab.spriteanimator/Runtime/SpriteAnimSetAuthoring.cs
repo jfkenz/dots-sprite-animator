@@ -1412,6 +1412,7 @@ namespace InvertLab.Sprites.DOTS
                 AddComponent(entity, player);
                 ref var initialDef = ref setRef.Set.Value.Clips[initialClip];
                 int initialFrame = initialDef.WrapMode == SpriteAnimWrap.ReverseLoop
+                    || initialDef.WrapMode == SpriteAnimWrap.ReverseOnce
                     ? Mathf.Max(0, initialDef.FrameCount - 1)
                     : 0;
                 float4 firstFrame = setRef.Set.Value.Frames[initialDef.FirstFrame + initialFrame];

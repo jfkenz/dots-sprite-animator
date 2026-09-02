@@ -12,6 +12,8 @@ namespace InvertLab.Sprites.DOTS
         public const byte Once = 1;
         public const byte PingPong = 2;
         public const byte ReverseLoop = 3;
+        /// <summary>Play last→first once, then Complete (like Once, backward).</summary>
+        public const byte ReverseOnce = 4;
     }
 
     /// <summary>One playable animation inside a character's set.</summary>
@@ -186,7 +188,7 @@ namespace InvertLab.Sprites.DOTS
             // ---- optional extensions ----
             // NOTE: C#9 — no field initializers allowed in structs. Unset means
             // 0 (= Loop); legacy Loop=false callers rely on EffectiveWrapMode.
-            public byte   WrapMode;             // 0 loop / 1 once / 2 pingpong / 3 reverse / 255 auto
+            public byte   WrapMode;             // 0 loop / 1 once / 2 pingpong / 3 reverse / 4 reverse-once / 255 auto
             public byte   Interrupt;            // SpriteClipInterrupt.*; 0 = Always
             public float  CancelAfter;          // 0-1 when Interrupt == AfterTime
             public int    Priority;             // default 0
@@ -250,7 +252,9 @@ namespace InvertLab.Sprites.DOTS
             /// </summary>
             public byte EffectiveWrapMode => Loop
                 ? (WrapMode == SpriteAnimWrap.ReverseLoop ? SpriteAnimWrap.ReverseLoop : SpriteAnimWrap.Loop)
-                : (WrapMode == SpriteAnimWrap.Once || WrapMode == SpriteAnimWrap.PingPong
+                : (WrapMode == SpriteAnimWrap.Once
+                    || WrapMode == SpriteAnimWrap.PingPong
+                    || WrapMode == SpriteAnimWrap.ReverseOnce
                     ? WrapMode
                     : SpriteAnimWrap.Once);
         }
@@ -735,9 +739,17 @@ namespace InvertLab.Sprites.DOTS
                 em.RemoveComponent<SpriteAnimCompleted>(e);
 
             ref var clip = ref set.Clips[clipIndex];
-            int firstFrame = clip.WrapMode == SpriteAnimWrap.ReverseLoop
+            bool reverseStart = clip.WrapMode == SpriteAnimWrap.ReverseLoop
+                || clip.WrapMode == SpriteAnimWrap.ReverseOnce;
+            int firstFrame = reverseStart
                 ? math.max(0, clip.FrameCount - 1)
                 : 0;
+            // ReverseOnce seeks to last frame phase (Play resets Time to 0 above).
+            if (clip.WrapMode == SpriteAnimWrap.ReverseOnce)
+            {
+                player.Time = firstFrame;
+                em.SetComponentData(e, player);
+            }
             if (em.HasComponent<SpriteAnimFrame>(e) && clip.FrameCount > 0)
             {
                 float4 first = set.Frames[clip.FirstFrame + firstFrame];
@@ -1165,7 +1177,8 @@ namespace InvertLab.Sprites.DOTS
             int clipIndex = math.clamp(player.ClipIndex, 0, set.Clips.Length - 1);
             ref var clip = ref set.Clips[clipIndex];
             float phase = math.max(0f, phaseInFrames);
-            if (clip.WrapMode == SpriteAnimWrap.Once && clip.FrameCount > 0)
+            if ((clip.WrapMode == SpriteAnimWrap.Once || clip.WrapMode == SpriteAnimWrap.ReverseOnce)
+                && clip.FrameCount > 0)
                 phase = math.min(phase, math.max(0, clip.FrameCount - 1) + 0.999f);
             player.Time = phase;
             player.LastEventStep = int.MinValue;

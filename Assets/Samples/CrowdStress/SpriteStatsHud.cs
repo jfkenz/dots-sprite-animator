@@ -42,7 +42,7 @@ namespace InvertLab.Sprites.DOTS
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
-            // Skip collider sample scenes — FPS/+10k UI clutters the demo.
+            // Skip ColliderEventExample / collider sample scenes - FPS/+10k UI clutters the demo.
             var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
             if (!string.IsNullOrEmpty(scene.name) &&
                 scene.name.IndexOf("collider", System.StringComparison.OrdinalIgnoreCase) >= 0)

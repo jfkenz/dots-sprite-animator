@@ -19,7 +19,7 @@ namespace InvertLab.Sprites.DOTS
             ref var def = ref set.Clips[clipIndex];
             if (def.WrapMode != SpriteAnimWrap.Loop && def.WrapMode != SpriteAnimWrap.Once)
             {
-                reason = "Ping-pong and reverse playback require CPU timing.";
+                reason = "Ping-pong / reverse / reverse-once require CPU timing.";
                 return false;
             }
             if (def.FrameSockets.Length > 0)

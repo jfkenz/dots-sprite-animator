@@ -15,7 +15,7 @@ namespace InvertLab.Sprites.DOTS
     {
         [Min(0.1f)] public float MoveSpeed = 3f;
 
-        [Tooltip("Default KeyCode.J — mapped through the Input System keyboard.")]
+        [Tooltip("Default KeyCode.J â€” mapped through the Input System keyboard.")]
         public KeyCode AttackKey = KeyCode.J;
         public KeyCode LeftKey = KeyCode.A;
         public KeyCode RightKey = KeyCode.D;
@@ -192,11 +192,17 @@ namespace InvertLab.Sprites.DOTS
                 return;
             if (_lastHitAttackId == _attackId)
                 return;
+            // Unity fake-null: collider/transform may already be destroyed mid-overlap.
+            if (other.transform == null)
+                return;
             if (other.transform == transform || other.transform.IsChildOf(transform))
                 return;
 
             var enemy = other.GetComponentInParent<ColliderExampleEnemy>();
-            if (enemy == null || !enemy.IsHurtbox(other))
+            // Enemy may be pending-destroy / already Destroyed this frame.
+            if (enemy == null || enemy.IsDead || enemy.IsPendingDestroy)
+                return;
+            if (!enemy.IsHurtbox(other))
                 return;
 
             if (enemy.TakeDamage(1))
@@ -261,3 +267,4 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 }
+

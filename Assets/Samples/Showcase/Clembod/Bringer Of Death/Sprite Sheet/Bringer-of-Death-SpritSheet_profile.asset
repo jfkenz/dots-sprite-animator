@@ -92,7 +92,7 @@ MonoBehaviour:
       Sockets:
       - Name: HealthBarSocket
         FrameIndex: 0
-        LocalPosition: {x: -1, y: 71}
+        LocalPosition: {x: -1, y: 26}
         LocalAngle: 0
         LocalScale: {x: 1.0362911, y: 1}
         DrawLayer: 0
@@ -292,13 +292,13 @@ MonoBehaviour:
       Facing: 255
       Sockets: []
       EventMarkers: []
-    - Name: Bringer-of-Death-SpritSheet row 5
+    - Name: Death
       SheetIndex: 0
       Row: 4
-      Frames: 0000000001000000020000000300000004000000050000000600000007000000
-      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+      Frames: 00000000010000000200000003000000040000000500000006000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
-      WrapMode: 0
+      WrapMode: 1
       Interrupt: 0
       CancelAfter: 0
       Priority: 0
@@ -314,8 +314,7 @@ MonoBehaviour:
       - 1
       - 1
       - 1
-      - 1
-      EventIds: 0000000000000000
+      EventIds: 00000000000003
       EventNormalizedTimes:
       - 0
       - 0
@@ -323,10 +322,8 @@ MonoBehaviour:
       - 0
       - 0
       - 0
-      - 0
-      - 0
+      - 1
       OnionOffsets:
-      - {x: -0, y: 0}
       - {x: -0, y: 0}
       - {x: -0, y: 0}
       - {x: -0, y: 0}
@@ -342,7 +339,6 @@ MonoBehaviour:
       - {x: 1, y: 1}
       - {x: 1, y: 1}
       - {x: 1, y: 1}
-      - {x: 1, y: 1}
       FrameRotations:
       - -0
       - -0
@@ -351,12 +347,19 @@ MonoBehaviour:
       - -0
       - -0
       - -0
-      - -0
-      FrameTweenModes: 0000000000000000
+      FrameTweenModes: 00000000000000
       FacingGroup: 
       Facing: 255
       Sockets: []
-      EventMarkers: []
+      EventMarkers:
+      - FrameIndex: 6
+        NormalizedTime: 1
+        EventId: 3
+        FireMode: 1
+        IntPayload: 0
+        FloatPayload: 0
+        TextPayload: 
+        Payloads: []
     - Name: Bringer-of-Death-SpritSheet row 6
       SheetIndex: 0
       Row: 5
@@ -559,6 +562,9 @@ MonoBehaviour:
     - Id: 2
       Name: Attack
       Color: {r: 1, g: 0.35, b: 0.3, a: 1}
+    - Id: 3
+      Name: Death
+      Color: {r: 0.35, g: 0.85, b: 1, a: 1}
     Hitboxes:
     - ClipName: Bringer-of-Death-SpritSheet row 3
       FrameIndex: 4
@@ -676,7 +682,7 @@ MonoBehaviour:
       AnchorSpace: 0
       Keys:
       - NormalizedTime: 0
-        LocalPosition: {x: 1, y: 28}
+        LocalPosition: {x: -1, y: 26}
         LocalAngle: 0
         LocalScale: {x: 1.0362911, y: 1}
         DrawLayer: 0

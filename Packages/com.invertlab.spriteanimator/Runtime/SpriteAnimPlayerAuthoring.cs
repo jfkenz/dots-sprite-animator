@@ -132,6 +132,16 @@ namespace InvertLab.Sprites.DOTS
 #if UNITY_EDITOR
             _lastEditorTime = EditorApplication.timeSinceStartup;
 #endif
+            // ReverseOnce: start at last frame (Play would otherwise reset to 0).
+            var playDef = ToPreviewDef(set.Clips[clipIndex]);
+            if (playDef.WrapMode == SpriteAnimWrap.ReverseOnce
+                && playDef.Frames != null && playDef.Frames.Length > 0)
+            {
+                int last = playDef.Frames.Length - 1;
+                _frame = last;
+                _time = SpriteAnimPlayback.AuthoredStartTime(playDef, last)
+                    + SpriteAnimPlayback.FrameDuration(playDef, last) * 0.999f;
+            }
             SampleAndApply(set);
             ClipStarted?.Invoke(clipIndex);
             return true;
@@ -409,7 +419,7 @@ namespace InvertLab.Sprites.DOTS
             if (n <= 0)
                 return;
             float phase = Mathf.Max(0f, phaseInFrames);
-            if (def.WrapMode == SpriteAnimWrap.Once)
+            if (def.WrapMode == SpriteAnimWrap.Once || def.WrapMode == SpriteAnimWrap.ReverseOnce)
                 phase = Mathf.Min(phase, Mathf.Max(0, n - 1) + 0.999f);
             int step = Mathf.Clamp(Mathf.FloorToInt(phase), 0, n - 1);
             float frac = Mathf.Clamp01(phase - step);
@@ -707,17 +717,21 @@ namespace InvertLab.Sprites.DOTS
                 var def = ToPreviewDef(set.Clips[ClipIndex]);
                 float total = SpriteAnimPlayback.TotalAuthoredDuration(def);
                 byte wrap = def.WrapMode;
-                _time += dt * Speed;
+                float signedSpeed = Speed;
+                // ReverseOnce plays backward with positive Speed (no Speed=-1 hack).
+                if (wrap == SpriteAnimWrap.ReverseOnce)
+                    signedSpeed = -Mathf.Abs(Speed);
+                _time += dt * signedSpeed;
 
-                if (wrap == SpriteAnimWrap.Once)
+                if (wrap == SpriteAnimWrap.Once || wrap == SpriteAnimWrap.ReverseOnce)
                 {
-                    if (Speed > 0f && _time >= total)
+                    if (signedSpeed > 0f && _time >= total)
                     {
                         _time = total;
                         SampleAndApply(set);
                         return;
                     }
-                    if (Speed < 0f && _time <= 0f)
+                    if (signedSpeed < 0f && _time <= 0f)
                     {
                         _time = 0f;
                         _frame = 0;
@@ -834,7 +848,9 @@ namespace InvertLab.Sprites.DOTS
                 return clip.WrapMode == SpriteAnimWrap.ReverseLoop
                     ? SpriteAnimWrap.ReverseLoop
                     : SpriteAnimWrap.Loop;
-            if (clip.WrapMode == SpriteAnimWrap.Once || clip.WrapMode == SpriteAnimWrap.PingPong)
+            if (clip.WrapMode == SpriteAnimWrap.Once
+                || clip.WrapMode == SpriteAnimWrap.PingPong
+                || clip.WrapMode == SpriteAnimWrap.ReverseOnce)
                 return clip.WrapMode;
             return SpriteAnimWrap.Once;
         }

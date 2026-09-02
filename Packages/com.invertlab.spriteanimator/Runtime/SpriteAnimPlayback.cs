@@ -34,7 +34,8 @@ namespace InvertLab.Sprites.DOTS
             time = Mathf.Max(0f, time);
             float total = TotalAuthoredDuration(clip);
             byte wrap = clip.WrapMode;
-            bool loop = previewLoop || wrap != SpriteAnimWrap.Once;
+            bool onceStyle = wrap == SpriteAnimWrap.Once || wrap == SpriteAnimWrap.ReverseOnce;
+            bool loop = previewLoop || !onceStyle;
             bool ended = false;
             float timelineTime;
 

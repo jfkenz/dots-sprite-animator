@@ -1,6 +1,6 @@
 {
     "Sheet": {
-        "instanceID": 568105584918835074
+        "instanceID": 568105584918833776
     },
     "Columns": 8,
     "Rows": 8,
@@ -13,7 +13,7 @@
         {
             "Name": "Bringer-of-Death-SpritSheet",
             "Texture": {
-                "instanceID": 568105584918835074
+                "instanceID": 568105584918833776
             },
             "Columns": 8,
             "Rows": 8,
@@ -184,7 +184,7 @@
                     "FrameIndex": 0,
                     "LocalPosition": {
                         "x": -1.0,
-                        "y": 71.0
+                        "y": 26.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
@@ -665,7 +665,7 @@
             "EventMarkers": []
         },
         {
-            "Name": "Bringer-of-Death-SpritSheet row 5",
+            "Name": "Death",
             "SheetIndex": 0,
             "Row": 4,
             "Frames": [
@@ -675,11 +675,9 @@
                 3,
                 4,
                 5,
-                6,
-                7
+                6
             ],
             "FrameRows": [
-                -1,
                 -1,
                 -1,
                 -1,
@@ -689,7 +687,7 @@
                 -1
             ],
             "FrameRate": 8.0,
-            "WrapMode": 0,
+            "WrapMode": 1,
             "Interrupt": 0,
             "CancelAfter": 0.0,
             "Priority": 0,
@@ -698,7 +696,6 @@
             "ComboWindowEndFrame": -1,
             "ComboWindowPriorityBoost": 0,
             "FrameDurationScales": [
-                1.0,
                 1.0,
                 1.0,
                 1.0,
@@ -714,8 +711,7 @@
                 0,
                 0,
                 0,
-                0,
-                0
+                3
             ],
             "EventNormalizedTimes": [
                 0.0,
@@ -724,14 +720,9 @@
                 0.0,
                 0.0,
                 0.0,
-                0.0,
-                0.0
+                1.0
             ],
             "OnionOffsets": [
-                {
-                    "x": 0.0,
-                    "y": 0.0
-                },
                 {
                     "x": 0.0,
                     "y": 0.0
@@ -789,14 +780,9 @@
                 {
                     "x": 1.0,
                     "y": 1.0
-                },
-                {
-                    "x": 1.0,
-                    "y": 1.0
                 }
             ],
             "FrameRotations": [
-                0.0,
                 0.0,
                 0.0,
                 0.0,
@@ -812,13 +798,23 @@
                 0,
                 0,
                 0,
-                0,
                 0
             ],
             "FacingGroup": "",
             "Facing": 255,
             "Sockets": [],
-            "EventMarkers": []
+            "EventMarkers": [
+                {
+                    "FrameIndex": 6,
+                    "NormalizedTime": 1.0,
+                    "EventId": 3,
+                    "FireMode": 1,
+                    "IntPayload": 0,
+                    "FloatPayload": 0.0,
+                    "TextPayload": "",
+                    "Payloads": []
+                }
+            ]
         },
         {
             "Name": "Bringer-of-Death-SpritSheet row 6",
@@ -1309,6 +1305,16 @@
                 "b": 0.30000001192092898,
                 "a": 1.0
             }
+        },
+        {
+            "Id": 3,
+            "Name": "Death",
+            "Color": {
+                "r": 0.3499999940395355,
+                "g": 0.8500000238418579,
+                "b": 1.0,
+                "a": 1.0
+            }
         }
     ],
     "Hitboxes": [
@@ -1536,8 +1542,8 @@
                 {
                     "NormalizedTime": 0.0,
                     "LocalPosition": {
-                        "x": 1.0,
-                        "y": 28.0
+                        "x": -1.0,
+                        "y": 26.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {

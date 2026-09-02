@@ -151,7 +151,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public int[] FrameRows;
         public float FrameRate = DefaultFrameRate;
-        public byte WrapMode = DefaultWrapMode; // 0 loop / 1 once / 2 pingpong / 3 reverse
+        public byte WrapMode = DefaultWrapMode; // 0 loop / 1 once / 2 pingpong / 3 reverse / 4 reverse-once
         /// <summary>Cancel policy for Play(); see <see cref="SpriteClipInterrupt"/>.</summary>
         public byte Interrupt = (byte)SpriteClipInterrupt.Always;
         /// <summary>Normalized 0-1 threshold when Interrupt == AfterTime.</summary>

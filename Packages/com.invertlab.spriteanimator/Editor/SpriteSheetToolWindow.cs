@@ -415,6 +415,14 @@ namespace InvertLab.Sprites.DOTS.Editor
         string _renameEventValue = string.Empty;
         string _renameEventOriginal = string.Empty;
         bool _focusEventRename;
+        // GenericMenu Rename queues this; ProcessPendingEventRename begins
+        // inline rename on a later OnGUI so FocusTextInControl runs after the
+        // TextField is drawn (menu close otherwise steals focus same-frame).
+        bool _pendingEventRename;
+        int _pendingEventRenameIndex = -1;
+        int _selectedEventTypeIndex = -1;
+        readonly HashSet<int> _selectedEventTypeIndices = new();
+        int _eventTypeListAnchor = -1;
         TimelineDragMode _timelineDragMode;
         Vector2 _timelineDragStartScreen;
         Vector2 _timelineDragContentMouse;
@@ -558,10 +566,33 @@ namespace InvertLab.Sprites.DOTS.Editor
             bool changed = false;
             if (_playing && CurrentClip != null)
             {
-                _previewTime += delta * Mathf.Max(0.05f, _speed);
-                var state = EvaluatePreview(CurrentClip, _previewTime);
-                if (state.Ended && !_previewLoop)
-                    _playing = false;
+                var clip = CurrentClip;
+                float step = delta * Mathf.Max(0.05f, _speed);
+                if (clip.WrapMode == SpriteAnimWrap.ReverseOnce)
+                {
+                    float total = SpriteAnimPlayback.TotalAuthoredDuration(clip);
+                    // Auto-seek to end when starting from the beginning.
+                    if (_previewTime <= 1e-4f)
+                        _previewTime = total;
+                    _previewTime -= step;
+                    if (_previewTime <= 0f)
+                    {
+                        if (_previewLoop)
+                            _previewTime = total;
+                        else
+                        {
+                            _previewTime = 0f;
+                            _playing = false;
+                        }
+                    }
+                }
+                else
+                {
+                    _previewTime += step;
+                    var state = EvaluatePreview(clip, _previewTime);
+                    if (state.Ended && !_previewLoop)
+                        _playing = false;
+                }
                 changed = true;
             }
             if (_socketPlaying && _profile != null)
@@ -590,6 +621,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _guiPass++;
             EnsureProfile();
             EnsureStyles();
+            ProcessPendingEventRename();
             HandleGlobalShortcuts();
             PollSocketProfilePicker();
             // Focusing the window clears IMGUI text-field focus. While an inline rename is
@@ -960,7 +992,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                             ? "Play frame playback. Space starts both clocks when Space: Both is on."
                             : "Play frame playback (Space, this tab only)."),
                     _transportStyle))
+                {
+                    bool starting = !_playing;
                     _playing = !_playing;
+                    if (starting && _playing && CurrentClip != null
+                        && CurrentClip.WrapMode == SpriteAnimWrap.ReverseOnce)
+                    {
+                        _previewTime = SpriteAnimPlayback.TotalAuthoredDuration(CurrentClip);
+                    }
+                }
             }
             x += 76f;
             if (GUI.Button(new Rect(x, 10f, 58f, 28f),
@@ -1242,7 +1282,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             int current = EvaluatePreview(clip, _previewTime).Frame;
             int next = current + delta;
-            if (clip.WrapMode == SpriteAnimWrap.Once)
+            if (clip.WrapMode == SpriteAnimWrap.Once
+                || clip.WrapMode == SpriteAnimWrap.ReverseOnce)
             {
                 next = Mathf.Clamp(next, 0, clip.Frames.Length - 1);
             }
@@ -1476,12 +1517,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                                 string clipName = string.IsNullOrWhiteSpace(clip.Name)
                                     ? $"Clip {i + 1}"
                                     : clip.Name;
+                                string clipLabel = $"[{i}] {clipName}";
                                 string tip = showDetail
-                                    ? $"{clipName}\nPrimary selection (detail expanded). F2 / double-click name to rename. Ctrl/Cmd multi, Shift range."
+                                    ? $"{clipLabel}\nPrimary selection (detail expanded). F2 / double-click name to rename. Ctrl/Cmd multi, Shift range."
                                     : isPrimary
-                                        ? $"{clipName}\nPrimary selection (detail collapsed — use ▸ to expand). F2 / double-click name to rename."
-                                        : $"{clipName}\nClick to select. Ctrl/Cmd toggle, Shift range. F2 / double-click name to rename.";
-                                GUI.Label(clipNameRect, new GUIContent(clipName, tip),
+                                        ? $"{clipLabel}\nPrimary selection (detail collapsed — use ▸ to expand). F2 / double-click name to rename."
+                                        : $"{clipLabel}\nClick to select. Ctrl/Cmd toggle, Shift range. F2 / double-click name to rename.";
+                                GUI.Label(clipNameRect, new GUIContent(clipLabel, tip),
                                     EditorStyles.boldLabel);
                             }
 
@@ -1798,7 +1840,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                || !string.IsNullOrEmpty(_renamingSocketName)
                || !string.IsNullOrEmpty(_renamingSocketId)
                || _renamingInventoryIndex >= 0
-               || _renamingEventId != 0;
+               || _renamingEventId != 0
+               || _pendingEventRename;
 
         bool TryBeginPreferredRename()
         {
@@ -1813,6 +1856,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 BeginInventoryRename(_renameInventoryTargetIndex);
                 return true;
+            }
+            SyncEventTypeSelection();
+            if (_selectedEventTypeIndex >= 0 &&
+                _profile?.Events != null &&
+                _selectedEventTypeIndex < _profile.Events.Count)
+            {
+                var definition = _profile.Events[_selectedEventTypeIndex];
+                if (definition != null && definition.Id != 0)
+                {
+                    BeginEventRename(definition.Id);
+                    return true;
+                }
             }
             if (CurrentClip != null)
             {
@@ -2268,9 +2323,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 EditorGUI.BeginChangeCheck();
                 byte wrap = (byte)EditorGUILayout.Popup(
-                    new GUIContent("Wrap", "Loop / Once / Ping Pong / Reverse Loop"),
+                    new GUIContent("Wrap", "Loop / Once / Ping Pong / Reverse Loop / Reverse Once"),
                     clip.WrapMode,
-                    new[] { "Loop", "Once", "Ping Pong", "Reverse Loop" });
+                    new[] { "Loop", "Once", "Ping Pong", "Reverse Loop", "Reverse Once" });
                 if (EditorGUI.EndChangeCheck())
                 {
                     RecordProfileUndo("Set Sprite Clip Wrap Mode");
@@ -2805,6 +2860,52 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
+        void QueueEventTypeRename(int index)
+        {
+            if (_profile?.Events == null || index < 0 || index >= _profile.Events.Count)
+                return;
+            var definition = _profile.Events[index];
+            if (definition == null || definition.Id == 0)
+                return;
+            _pendingEventRename = true;
+            _pendingEventRenameIndex = index;
+            SelectEventTypeInCatalog(definition.Id);
+            _eventThisClipExpanded = true;
+            Repaint();
+        }
+
+        void ProcessPendingEventRename()
+        {
+            if (!_pendingEventRename)
+                return;
+            _pendingEventRename = false;
+            int index = _pendingEventRenameIndex;
+            _pendingEventRenameIndex = -1;
+            if (_profile?.Events == null || index < 0 || index >= _profile.Events.Count)
+                return;
+            var definition = _profile.Events[index];
+            if (definition == null || definition.Id == 0)
+                return;
+            SelectEventTypeInCatalog(definition.Id);
+            BeginEventRename(definition.Id);
+            // Keep focusing for a couple of frames after menu-close steal.
+            _focusEventRename = true;
+            _status = $"Renaming {EventName(definition.Id)} (F2)";
+        }
+
+        void RecordEventUndo(string name)
+        {
+            SyncWorkingProfileToAsset();
+            RecordDiscreteUndo(name);
+        }
+
+        void SealEventUndo()
+        {
+            SyncWorkingProfileToAsset();
+            SaveDirty();
+            SealUndoGroup();
+        }
+
         void BeginEventRename(byte eventId)
         {
             if (eventId == 0 || _profile?.Events == null)
@@ -2813,6 +2914,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (definition == null)
                 return;
             CommitAllRenames();
+            _pendingEventRename = false;
+            _pendingEventRenameIndex = -1;
             _renamingEventId = eventId;
             _renameEventOriginal = definition.Name ?? string.Empty;
             _renameEventValue = string.IsNullOrWhiteSpace(_renameEventOriginal)
@@ -2840,13 +2943,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 : _renameEventValue.Trim();
             if (!string.Equals(nextName, definition.Name, StringComparison.Ordinal))
             {
-                SyncWorkingProfileToAsset();
-                RecordDiscreteUndo("Rename Sprite Event");
+                RecordEventUndo("Rename Sprite Event");
                 definition.Name = nextName;
-                SyncWorkingProfileToAsset();
+                SealEventUndo();
                 _status = $"Renamed event to {nextName}";
-                SaveDirty();
-                SealUndoGroup();
             }
             ClearEventRename();
         }
@@ -2864,6 +2964,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _renameEventValue = string.Empty;
             _renameEventOriginal = string.Empty;
             _focusEventRename = false;
+            _pendingEventRename = false;
+            _pendingEventRenameIndex = -1;
             GUI.FocusControl(null);
             Repaint();
         }
@@ -3628,7 +3730,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     clip.WrapMode = (byte)EditorGUILayout.Popup("Wrap Mode", clip.WrapMode,
-                        new[] { "Loop", "Once", "Ping Pong", "Reverse Loop" });
+                        new[] { "Loop", "Once", "Ping Pong", "Reverse Loop", "Reverse Once" });
                     using (new EditorGUI.DisabledScope(clip.WrapMode == SpriteClipDef.DefaultWrapMode))
                     {
                         if (ResetValueButton("Reset playback wrapping to Loop."))
@@ -6452,22 +6554,31 @@ namespace InvertLab.Sprites.DOTS.Editor
                                    float pixelsPerSecond, int markerIndex = -1)
         {
             clip.EnsureEventMarkers();
+            ClearColliderSelection();
+            _selectedOnionFrame = -1;
+            _playing = false;
+
+            // Marker hit: keep the selection made by the RMB handler and show
+            // collider-style marker ops. Empty lane: place / clear at mouse time.
+            if (markerIndex >= 0 &&
+                markerIndex < clip.EventMarkers.Count &&
+                clip.EventMarkers[markerIndex] != null &&
+                clip.EventMarkers[markerIndex].EventId != 0)
+            {
+                ShowTimelineEventMarkerMenu(clip, markerIndex);
+                return;
+            }
+
             float authoredTime = Mathf.Clamp(
                 (contentX - 48f) / pixelsPerSecond,
                 0f,
                 Mathf.Max(0f, total - 0.0001f));
             int frame = AuthoredFrameAtTime(clip, authoredTime, out float normalizedTime);
             SelectOnlyFrame(frame);
-            if (markerIndex < 0)
-            {
-                _selectedEventFrame = -1;
-                _selectedEventIndex = -1;
-                _selectedEventClipName = null;
-            }
-            ClearColliderSelection();
-            _selectedOnionFrame = -1;
+            _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
+            _selectedEventClipName = null;
             _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
-            _playing = false;
 
             var menu = new GenericMenu();
             foreach (var definition in _profile.Events)
@@ -6488,7 +6599,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _status = "All event IDs are already in use";
                     return;
                 }
-                RecordProfileUndo("Create Sprite Animation Event");
+                RecordEventUndo("Create Sprite Animation Event");
                 _profile.Events.Add(new SpriteEventDef
                 {
                     Id = eventId,
@@ -6496,20 +6607,218 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Color = Color.HSVToRGB(Mathf.Repeat(eventId * 0.137f, 1f), 0.72f, 1f),
                 });
                 PlaceEventMarker(clip, frame, eventId, normalizedTime, recordUndo: false);
+                SealEventUndo();
             });
-            if (markerIndex >= 0 && markerIndex < clip.EventMarkers.Count)
-            {
-                menu.AddSeparator(string.Empty);
-                menu.AddItem(new GUIContent("Delete Event Marker"), false,
-                    () => RemoveEventMarkerAt(clip, markerIndex));
-            }
-            else if (clip.IndexOfFirstMarkerOnFrame(frame) >= 0)
+            if (clip.IndexOfFirstMarkerOnFrame(frame) >= 0)
             {
                 menu.AddSeparator(string.Empty);
                 menu.AddItem(new GUIContent("Clear Event Marker"), false,
                     () => SetFrameEvent(clip, frame, 0));
             }
             menu.ShowAsContext();
+        }
+
+        void ShowTimelineEventMarkerMenu(SpriteClipDef clip, int markerIndex)
+        {
+            if (clip == null)
+                return;
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var marker = clip.EventMarkers[markerIndex];
+            if (marker == null || marker.EventId == 0)
+                return;
+
+            int eventTypeIndex = FindEventTypeIndex(marker.EventId);
+
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent("Go to Marker Frame"), false,
+                () => SeekTimelineToEventMarker(clip, markerIndex));
+            menu.AddItem(new GUIContent("Go to Clip Start"), false,
+                () => SeekTimelineToClipBoundary(clip, toEnd: false));
+            menu.AddItem(new GUIContent("Go to Clip End"), false,
+                () => SeekTimelineToClipBoundary(clip, toEnd: true));
+            menu.AddSeparator(string.Empty);
+
+            menu.AddItem(new GUIContent("Snap to Frame Start"), false,
+                () => SnapEventMarkerNormalizedTime(clip, markerIndex, 0f));
+            menu.AddItem(new GUIContent("Snap to Frame End"), false,
+                () => SnapEventMarkerNormalizedTime(clip, markerIndex, 1f));
+            menu.AddSeparator(string.Empty);
+
+            menu.AddItem(new GUIContent("Rename"), false, () =>
+            {
+                // GenericMenu callbacks run outside layout — BeginEventRename +
+                // FocusTextInControl here loses to menu-close focus steal. Queue
+                // via delayCall so the EVENT TYPES inline field draws first.
+                byte renameId = marker.EventId;
+                int typeIndex = FindEventTypeIndex(renameId);
+                EditorApplication.delayCall += () =>
+                {
+                    if (this == null)
+                        return;
+                    if (typeIndex >= 0)
+                        QueueEventTypeRename(typeIndex);
+                    else
+                    {
+                        // Catalog row missing: still try by id on next OnGUI.
+                        SelectEventTypeInCatalog(renameId);
+                        BeginEventRename(renameId);
+                        _status = $"Renaming {EventName(renameId)} (F2)";
+                    }
+                    Repaint();
+                };
+            });
+            menu.AddItem(new GUIContent("Duplicate Marker"), false,
+                () => DuplicateEventMarkerAt(clip, markerIndex));
+            menu.AddSeparator(string.Empty);
+
+            if (eventTypeIndex >= 0)
+            {
+                menu.AddItem(new GUIContent("Select Event Type"), false,
+                    () =>
+                    {
+                        SelectEventTypeInCatalog(marker.EventId);
+                        _eventThisClipExpanded = true;
+                        _eventRowDetailsExpanded = true;
+                        _status = $"Selected event type {EventName(marker.EventId)}";
+                        Repaint();
+                    });
+            }
+            else
+                menu.AddDisabledItem(new GUIContent("Select Event Type"));
+
+            menu.AddItem(new GUIContent("Fire Mode/Loop"), !marker.FiresOnce,
+                () => SetEventMarkerFireMode(clip, markerIndex, (byte)SpriteEventFireMode.Loop));
+            menu.AddItem(new GUIContent("Fire Mode/Once"), marker.FiresOnce,
+                () => SetEventMarkerFireMode(clip, markerIndex, (byte)SpriteEventFireMode.Once));
+
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Delete Event Marker"), false,
+                () => RemoveEventMarkerAt(clip, markerIndex));
+            menu.ShowAsContext();
+        }
+
+        int FindEventTypeIndex(byte eventId)
+        {
+            if (eventId == 0 || _profile?.Events == null)
+                return -1;
+            for (int i = 0; i < _profile.Events.Count; i++)
+            {
+                var definition = _profile.Events[i];
+                if (definition != null && definition.Id == eventId)
+                    return i;
+            }
+            return -1;
+        }
+
+        void SelectEventTypeInCatalog(byte eventId)
+        {
+            int index = FindEventTypeIndex(eventId);
+            if (index < 0)
+                return;
+            // Clear first so SelectEventTypeCard does not toggle-deselect
+            // when the type is already the sole selection.
+            ClearEventTypeSelection();
+            SelectEventTypeCard(index, null, false, false);
+        }
+
+        void SeekTimelineToEventMarker(SpriteClipDef clip, int markerIndex)
+        {
+            if (clip == null)
+                return;
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var marker = clip.EventMarkers[markerIndex];
+            if (marker == null || marker.EventId == 0)
+                return;
+            SelectEventMarker(clip, markerIndex, EventAuthoredTime(clip, marker));
+            _status = $"Jumped to marker frame {marker.FrameIndex + 1}";
+            Repaint();
+        }
+
+        void SeekTimelineToClipBoundary(SpriteClipDef clip, bool toEnd)
+        {
+            if (clip == null || clip.Frames == null || clip.Frames.Length == 0)
+                return;
+            int frame = toEnd ? clip.Frames.Length - 1 : 0;
+            SelectOnlyFrame(frame);
+            _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, frame));
+            _playing = false;
+            _status = toEnd ? "Jumped to clip end" : "Jumped to clip start";
+            Repaint();
+        }
+
+        void SnapEventMarkerNormalizedTime(SpriteClipDef clip, int markerIndex, float normalizedTime)
+        {
+            if (clip == null)
+                return;
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var marker = clip.EventMarkers[markerIndex];
+            if (marker == null || marker.EventId == 0)
+                return;
+            float next = Mathf.Clamp01(normalizedTime);
+            if (Mathf.Approximately(marker.NormalizedTime, next))
+            {
+                SelectEventMarker(clip, markerIndex, EventAuthoredTime(clip, marker));
+                return;
+            }
+            RecordEventUndo("Snap Sprite Animation Event");
+            marker.NormalizedTime = next;
+            clip.SyncLegacyEventsFromMarkers();
+            SelectEventMarker(clip, markerIndex, EventAuthoredTime(clip, marker));
+            _status = next <= 0f
+                ? $"Snapped {EventName(marker.EventId)} to frame start"
+                : $"Snapped {EventName(marker.EventId)} to frame end";
+            SealEventUndo();
+            Repaint();
+        }
+
+        void DuplicateEventMarkerAt(SpriteClipDef clip, int markerIndex)
+        {
+            if (clip == null)
+                return;
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var source = clip.EventMarkers[markerIndex];
+            if (source == null || source.EventId == 0)
+                return;
+            RecordEventUndo("Duplicate Sprite Animation Event");
+            var clone = source.Clone();
+            clip.EventMarkers.Add(clone);
+            clip.SyncLegacyEventsFromMarkers();
+            int newIndex = clip.EventMarkers.Count - 1;
+            SelectEventMarker(clip, newIndex, EventAuthoredTime(clip, clone));
+            _status = $"Duplicated {EventName(clone.EventId)} on frame {clone.FrameIndex + 1}";
+            SealEventUndo();
+            Repaint();
+        }
+
+        void SetEventMarkerFireMode(SpriteClipDef clip, int markerIndex, byte fireMode)
+        {
+            if (clip == null)
+                return;
+            clip.EnsureEventMarkers();
+            if (markerIndex < 0 || markerIndex >= clip.EventMarkers.Count)
+                return;
+            var marker = clip.EventMarkers[markerIndex];
+            if (marker == null || marker.EventId == 0)
+                return;
+            fireMode = (byte)Mathf.Clamp(fireMode, 0, 1);
+            if (marker.FireMode == fireMode)
+                return;
+            RecordEventUndo("Set Sprite Animation Event Fire Mode");
+            marker.FireMode = fireMode;
+            clip.SyncLegacyEventsFromMarkers();
+            _status = marker.FiresOnce
+                ? $"Fire mode Once · {EventName(marker.EventId)}"
+                : $"Fire mode Loop · {EventName(marker.EventId)}";
+            SealEventUndo();
+            Repaint();
         }
 
         void ShowTimelineFrameMenu(SpriteClipDef clip)
@@ -6540,7 +6849,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             clip.EnsureFrameData();
             frame = Mathf.Clamp(frame, 0, clip.Frames.Length - 1);
             if (recordUndo)
-                RecordProfileUndo("Add Sprite Animation Event");
+                RecordEventUndo("Add Sprite Animation Event");
             var marker = clip.AddEventMarker(frame, eventId, normalizedTime);
             int index = clip.EventMarkers.IndexOf(marker);
             _selectedEventFrame = frame;
@@ -6555,7 +6864,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
             }
             _status = $"Added {EventName(eventId)} at {authoredTime:F3}s";
-            SaveDirty();
+            if (recordUndo)
+                SealEventUndo();
+            else
+                SaveDirty();
             Repaint();
         }
 
@@ -6583,7 +6895,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             if (recordUndo)
-                RecordProfileUndo("Set Sprite Animation Event");
+                RecordEventUndo("Set Sprite Animation Event");
             var marker = clip.EventMarkers[existing];
             marker.EventId = eventId;
             marker.NormalizedTime = Mathf.Clamp01(normalizedTime);
@@ -6600,7 +6912,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _previewTime = PreviewTimeForAuthoredTime(clip, authoredTime);
             }
             _status = $"Set {EventName(eventId)} at {authoredTime:F3}s";
-            SaveDirty();
+            if (recordUndo)
+                SealEventUndo();
+            else
+                SaveDirty();
             Repaint();
         }
 
@@ -6616,7 +6931,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (marker == null)
                 return;
             if (recordUndo)
-                RecordProfileUndo("Clear Sprite Animation Event");
+                RecordEventUndo("Clear Sprite Animation Event");
             int frame = marker.FrameIndex;
             byte eventId = marker.EventId;
             clip.RemoveEventMarker(marker);
@@ -6626,7 +6941,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (focusPreview && clip == CurrentClip && frame >= 0 && frame < clip.Frames.Length)
                 _selectedFrame = frame;
             _status = $"Cleared {EventName(eventId)} on frame {frame + 1}";
-            SaveDirty();
+            if (recordUndo)
+                SealEventUndo();
+            else
+                SaveDirty();
             Repaint();
         }
 
@@ -9217,41 +9535,431 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             GUILayout.Space(6f);
             _profile.Events ??= new List<SpriteEventDef>();
+            SyncEventTypeSelection();
+
             int unused = 0;
+            var visible = new List<int>();
             for (int i = 0; i < _profile.Events.Count; i++)
             {
                 var definition = _profile.Events[i];
                 if (definition == null || definition.Id == 0)
                     continue;
+                visible.Add(i);
                 if (CountEventPlacements(definition.Id) == 0)
                     unused++;
             }
 
-            EditorGUILayout.LabelField("EVENT TYPES",
-                unused > 0 ? $"{_profile.Events.Count}  •  {unused} unused" : $"{_profile.Events.Count}",
-                EditorStyles.miniBoldLabel);
+            int selectedCount = 0;
+            for (int v = 0; v < visible.Count; v++)
+            {
+                if (_selectedEventTypeIndices.Contains(visible[v]))
+                    selectedCount++;
+            }
+
+            string headerRight = unused > 0
+                ? $"{_profile.Events.Count}  •  {unused} unused"
+                : $"{_profile.Events.Count}";
+            if (selectedCount > 0)
+                headerRight += $"  •  {selectedCount} selected";
+
+            var headerRect = EditorGUILayout.GetControlRect(false, 18f);
+            EditorGUI.LabelField(headerRect, "EVENT TYPES", headerRight, EditorStyles.miniBoldLabel);
+            var headerEvt = Event.current;
+            if (headerEvt.type == EventType.MouseDown && headerEvt.button == 0 &&
+                headerRect.Contains(headerEvt.mousePosition))
+            {
+                ClearEventTypeSelection();
+                headerEvt.Use();
+                Repaint();
+            }
+
+            const float rowH = 20f;
+            const float delW = ClipRowDeleteWidth;
+            int pendingDelete = -1;
+            Color selectedColor = new Color(0.12f, 0.34f, 0.47f, 1f);
+
+            for (int v = 0; v < visible.Count; v++)
+            {
+                int index = visible[v];
+                var definition = _profile.Events[index];
+                int placed = CountEventPlacements(definition.Id);
+                bool isPrimary = index == _selectedEventTypeIndex;
+                bool isSelected = _selectedEventTypeIndices.Contains(index) || isPrimary;
+                bool renaming = _renamingEventId != 0 && _renamingEventId == definition.Id;
+
+                var row = GUILayoutUtility.GetRect(0f, rowH, GUILayout.ExpandWidth(true), GUILayout.Height(rowH));
+                EditorGUI.DrawRect(row, isSelected || renaming ? selectedColor : PanelAltColor);
+
+                var deleteRect = new Rect(row.xMax - delW - 2f, row.y + 2f, delW, 16f);
+                var nameRect = new Rect(row.x + 4f, row.y + 2f,
+                    Mathf.Max(20f, deleteRect.x - row.x - 6f), 16f);
+
+                string label = placed == 0
+                    ? $"{definition.Name}  •  ID {definition.Id}  •  not placed"
+                    : $"{definition.Name}  •  ID {definition.Id}  •  {placed} placed";
+
+                if (renaming)
+                {
+                    DrawInlineRenameField(nameRect, EventRenameControl,
+                        ref _renameEventValue, ref _focusEventRename, EditorStyles.textField);
+                }
+                else
+                {
+                    string tip = isSelected
+                        ? $"{definition.Name}\nSelected. Click again to unselect. Ctrl/Cmd multi, Shift range. F2 / double-click to rename. ✕ / Delete removes."
+                        : $"{definition.Name}\nClick to select. Ctrl/Cmd toggle, Shift range. F2 / double-click to rename.";
+                    GUI.Label(nameRect, new GUIContent(label, tip),
+                        isSelected ? EditorStyles.whiteLabel : _mutedStyle);
+                }
+
+                if (!renaming)
+                {
+                    Color prevGui = GUI.color;
+                    if (deleteRect.Contains(Event.current.mousePosition))
+                        GUI.color = new Color(1f, 0.42f, 0.42f, 1f);
+                    if (GUI.Button(deleteRect,
+                        new GUIContent("✕",
+                            selectedCount > 1 && isSelected
+                                ? $"Delete {selectedCount} selected event types."
+                                : "Delete event type"),
+                        EditorStyles.miniButton))
+                        pendingDelete = index;
+                    GUI.color = prevGui;
+                }
+
+                var input = Event.current;
+                if (!renaming &&
+                    input.type == EventType.MouseDown &&
+                    input.button == 0 &&
+                    row.Contains(input.mousePosition) &&
+                    !deleteRect.Contains(input.mousePosition))
+                {
+                    bool toggle = input.control || input.command;
+                    bool range = input.shift;
+                    SelectEventTypeCard(index, visible, toggle, range);
+                    if (!toggle && !range && input.clickCount >= 2)
+                    {
+                        BeginEventRename(definition.Id);
+                        input.Use();
+                        GUIUtility.ExitGUI();
+                    }
+                    input.Use();
+                    Repaint();
+                }
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button(new GUIContent("Add Event Type",
+                    "Create a new named Event ID for the timeline right-click menu.")))
+                {
+                    byte id = NextEventId();
+                    if (id != 0)
+                    {
+                        RecordProfileUndo("Add Sprite Event Type");
+                        _profile.Events.Add(new SpriteEventDef { Id = id, Name = $"Event {id}" });
+                        int added = _profile.Events.Count - 1;
+                        SelectEventTypeCard(added, null, false, false);
+                        SaveDirty();
+                    }
+                }
+                using (new EditorGUI.DisabledScope(selectedCount == 0))
+                {
+                    string delLabel = selectedCount > 1
+                        ? $"Delete {selectedCount}"
+                        : "Delete";
+                    if (GUILayout.Button(new GUIContent(delLabel,
+                        selectedCount > 1
+                            ? $"Delete {selectedCount} selected event types."
+                            : "Delete selected event type."),
+                        GUILayout.Width(selectedCount > 1 ? 88f : 64f)))
+                    {
+                        pendingDelete = _selectedEventTypeIndex >= 0
+                            ? _selectedEventTypeIndex
+                            : (selectedCount > 0 ? FirstSelectedEventTypeIndex() : -1);
+                    }
+                }
+            }
+
+            if (pendingDelete >= 0)
+            {
+                if (_renamingEventId != 0)
+                    CancelEventRename();
+                SyncEventTypeSelection();
+                if (_selectedEventTypeIndices.Count > 1 &&
+                    _selectedEventTypeIndices.Contains(pendingDelete))
+                {
+                    int n = _selectedEventTypeIndices.Count;
+                    if (EditorUtility.DisplayDialog(
+                        "Delete Event Types",
+                        $"Delete {n} selected event types?\nMarkers and socket triggers that use these IDs will also be removed. This cannot be undone except via Undo.",
+                        "Delete", "Cancel"))
+                        DeleteSelectedEventTypes();
+                }
+                else
+                {
+                    if (!_selectedEventTypeIndices.Contains(pendingDelete))
+                        SelectEventTypeCard(pendingDelete, visible, false, false);
+                    DeleteSelectedEventTypes();
+                }
+            }
+        }
+
+        void SyncEventTypeSelection()
+        {
+            if (_profile?.Events == null)
+            {
+                _selectedEventTypeIndices.Clear();
+                _selectedEventTypeIndex = -1;
+                _eventTypeListAnchor = -1;
+                return;
+            }
+            _selectedEventTypeIndices.RemoveWhere(i =>
+                i < 0 || i >= _profile.Events.Count ||
+                _profile.Events[i] == null || _profile.Events[i].Id == 0);
+            if (_eventTypeListAnchor >= 0 &&
+                (_eventTypeListAnchor >= _profile.Events.Count ||
+                 _profile.Events[_eventTypeListAnchor] == null ||
+                 _profile.Events[_eventTypeListAnchor].Id == 0))
+                _eventTypeListAnchor = -1;
+            if (_selectedEventTypeIndex >= 0 &&
+                _selectedEventTypeIndex < _profile.Events.Count &&
+                _profile.Events[_selectedEventTypeIndex] != null &&
+                _profile.Events[_selectedEventTypeIndex].Id != 0)
+            {
+                if (_selectedEventTypeIndices.Count == 0)
+                    _selectedEventTypeIndices.Add(_selectedEventTypeIndex);
+                else if (!_selectedEventTypeIndices.Contains(_selectedEventTypeIndex))
+                {
+                    _selectedEventTypeIndices.Clear();
+                    _selectedEventTypeIndices.Add(_selectedEventTypeIndex);
+                }
+            }
+            else if (_selectedEventTypeIndices.Count > 0)
+            {
+                int primary = int.MaxValue;
+                foreach (int i in _selectedEventTypeIndices)
+                    if (i < primary) primary = i;
+                _selectedEventTypeIndex = primary == int.MaxValue ? -1 : primary;
+            }
+            else
+                _selectedEventTypeIndex = -1;
+        }
+
+        int FirstSelectedEventTypeIndex()
+        {
+            int best = int.MaxValue;
+            foreach (int i in _selectedEventTypeIndices)
+                if (i < best) best = i;
+            return best == int.MaxValue ? -1 : best;
+        }
+
+        void ClearEventTypeSelection()
+        {
+            _selectedEventTypeIndices.Clear();
+            _selectedEventTypeIndex = -1;
+            _eventTypeListAnchor = -1;
+        }
+
+        void SelectEventTypeCard(int index, List<int> visible, bool toggle, bool range)
+        {
+            if (_profile?.Events == null || index < 0 || index >= _profile.Events.Count)
+                return;
+            var definition = _profile.Events[index];
+            if (definition == null || definition.Id == 0)
+                return;
+            if (_renamingEventId != 0 && _renamingEventId != definition.Id)
+                CommitEventRename();
+            if (IsRenamingAnything() && _renamingEventId == 0)
+                CommitAllRenames();
+
+            visible ??= BuildVisibleEventTypeIndices();
+
+            if (range && _eventTypeListAnchor >= 0)
+            {
+                int anchorPos = visible.IndexOf(_eventTypeListAnchor);
+                int indexPos = visible.IndexOf(index);
+                if (anchorPos < 0)
+                    anchorPos = indexPos;
+                if (indexPos >= 0 && anchorPos >= 0)
+                {
+                    int a = Mathf.Min(anchorPos, indexPos);
+                    int b = Mathf.Max(anchorPos, indexPos);
+                    if (!toggle)
+                        _selectedEventTypeIndices.Clear();
+                    for (int p = a; p <= b; p++)
+                        _selectedEventTypeIndices.Add(visible[p]);
+                    _selectedEventTypeIndex = index;
+                    ReleaseShortcutKeyboardFocus();
+                    return;
+                }
+            }
+
+            if (toggle)
+            {
+                if (_selectedEventTypeIndices.Contains(index) && _selectedEventTypeIndices.Count > 1)
+                {
+                    _selectedEventTypeIndices.Remove(index);
+                    if (_selectedEventTypeIndex == index)
+                        _selectedEventTypeIndex = FirstSelectedEventTypeIndex();
+                    _eventTypeListAnchor = index;
+                    ReleaseShortcutKeyboardFocus();
+                    return;
+                }
+                if (_selectedEventTypeIndices.Contains(index) && _selectedEventTypeIndices.Count == 1)
+                {
+                    ClearEventTypeSelection();
+                    ReleaseShortcutKeyboardFocus();
+                    return;
+                }
+                _selectedEventTypeIndices.Add(index);
+                _selectedEventTypeIndex = index;
+                _eventTypeListAnchor = index;
+                ReleaseShortcutKeyboardFocus();
+                return;
+            }
+
+            // Exclusive select — click again on the sole selection clears it.
+            if (_selectedEventTypeIndex == index &&
+                _selectedEventTypeIndices.Count == 1 &&
+                _selectedEventTypeIndices.Contains(index))
+            {
+                ClearEventTypeSelection();
+                if (!IsRenamingAnything())
+                    ReleaseShortcutKeyboardFocus();
+                return;
+            }
+
+            _selectedEventTypeIndices.Clear();
+            _selectedEventTypeIndices.Add(index);
+            _selectedEventTypeIndex = index;
+            _eventTypeListAnchor = index;
+            ReleaseShortcutKeyboardFocus();
+        }
+
+        List<int> BuildVisibleEventTypeIndices()
+        {
+            var visible = new List<int>();
+            if (_profile?.Events == null)
+                return visible;
             for (int i = 0; i < _profile.Events.Count; i++)
             {
                 var definition = _profile.Events[i];
                 if (definition == null || definition.Id == 0)
                     continue;
-                int placed = CountEventPlacements(definition.Id);
-                GUILayout.Label(
-                    placed == 0
-                        ? $"{definition.Name}  •  ID {definition.Id}  •  not placed"
-                        : $"{definition.Name}  •  ID {definition.Id}  •  {placed} placed",
-                    _mutedStyle);
+                visible.Add(i);
             }
-            if (GUILayout.Button(new GUIContent("Add Event Type",
-                "Create a new named Event ID for the timeline right-click menu.")))
+            return visible;
+        }
+
+        void DeleteSelectedEventTypes()
+        {
+            SyncEventTypeSelection();
+            if (_selectedEventTypeIndices.Count == 0 || _profile?.Events == null)
+                return;
+
+            var ordered = new List<int>(_selectedEventTypeIndices);
+            ordered.Sort();
+            var deletedIds = new HashSet<byte>();
+            for (int i = 0; i < ordered.Count; i++)
             {
-                byte id = NextEventId();
-                if (id == 0)
-                    return;
-                RecordProfileUndo("Add Sprite Event Type");
-                _profile.Events.Add(new SpriteEventDef { Id = id, Name = $"Event {id}" });
-                SaveDirty();
+                int index = ordered[i];
+                if (index < 0 || index >= _profile.Events.Count)
+                    continue;
+                var definition = _profile.Events[index];
+                if (definition == null || definition.Id == 0)
+                    continue;
+                deletedIds.Add(definition.Id);
             }
+            if (deletedIds.Count == 0)
+                return;
+
+            string undoName = deletedIds.Count == 1
+                ? "Delete Sprite Event Type"
+                : "Delete Sprite Event Types";
+            SyncWorkingProfileToAsset();
+            RecordDiscreteUndo(undoName);
+
+            int removedMarkers = RemoveMarkersAndTriggersForEventIds(deletedIds);
+
+            for (int i = ordered.Count - 1; i >= 0; i--)
+            {
+                int index = ordered[i];
+                if (index < 0 || index >= _profile.Events.Count)
+                    continue;
+                var definition = _profile.Events[index];
+                if (definition == null || !deletedIds.Contains(definition.Id))
+                    continue;
+                if (_renamingEventId == definition.Id)
+                    ClearEventRename();
+                _profile.Events.RemoveAt(index);
+            }
+
+            ClearEventTypeSelection();
+            SyncWorkingProfileToAsset();
+            _status = removedMarkers > 0
+                ? $"Deleted {deletedIds.Count} event type{(deletedIds.Count == 1 ? string.Empty : "s")} and {removedMarkers} placement{(removedMarkers == 1 ? string.Empty : "s")}"
+                : $"Deleted {deletedIds.Count} event type{(deletedIds.Count == 1 ? string.Empty : "s")}";
+            SaveDirty();
+            SealUndoGroup();
+            Repaint();
+        }
+
+        int RemoveMarkersAndTriggersForEventIds(HashSet<byte> deletedIds)
+        {
+            int removed = 0;
+            if (deletedIds == null || deletedIds.Count == 0)
+                return 0;
+
+            if (_profile?.Clips != null)
+            {
+                for (int c = 0; c < _profile.Clips.Count; c++)
+                {
+                    var clip = _profile.Clips[c];
+                    if (clip == null)
+                        continue;
+                    clip.EnsureEventMarkers();
+                    bool changed = false;
+                    for (int m = clip.EventMarkers.Count - 1; m >= 0; m--)
+                    {
+                        var marker = clip.EventMarkers[m];
+                        if (marker == null || !deletedIds.Contains(marker.EventId))
+                            continue;
+                        clip.RemoveEventMarker(marker);
+                        removed++;
+                        changed = true;
+                    }
+                    if (changed)
+                        clip.SyncLegacyEventsFromMarkers();
+                }
+            }
+
+            if (_profile?.SocketMotions != null)
+            {
+                for (int t = 0; t < _profile.SocketMotions.Count; t++)
+                {
+                    var track = _profile.SocketMotions[t];
+                    if (track?.Triggers == null)
+                        continue;
+                    for (int i = track.Triggers.Count - 1; i >= 0; i--)
+                    {
+                        var trigger = track.Triggers[i];
+                        if (trigger == null || !deletedIds.Contains(trigger.EventId))
+                            continue;
+                        track.Triggers.RemoveAt(i);
+                        removed++;
+                    }
+                }
+            }
+
+            if (_selectedEventIndex >= 0 || _selectedEventFrame >= 0)
+                PruneEventSelection(CurrentClip);
+            if (_selectedSocketTriggerTrack >= 0)
+            {
+                _selectedSocketTriggerTrack = -1;
+                _selectedSocketTriggerIndex = -1;
+            }
+            return removed;
         }
 
         int CountEventPlacements(byte eventId)
@@ -9431,18 +10139,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             bool renamingEvent = _renamingEventId != 0 && _renamingEventId == definition.Id;
             if (renamingEvent)
             {
-                var evtRow = EditorGUILayout.GetControlRect();
-                var evtLabelRect = new Rect(evtRow.x, evtRow.y, EditorGUIUtility.labelWidth, evtRow.height);
-                var evtFieldRect = new Rect(evtRow.x + EditorGUIUtility.labelWidth, evtRow.y,
-                    Mathf.Max(20f, evtRow.width - EditorGUIUtility.labelWidth), evtRow.height);
-                GUI.Label(evtLabelRect, "Event Name");
-                DrawInlineRenameField(evtFieldRect, EventRenameControl,
-                    ref _renameEventValue, ref _focusEventRename, EditorStyles.textField);
+                // EVENT TYPES list owns EventRenameControl — a second field with the
+                // same control name steals focus every frame (same class as clip rename).
+                EditorGUILayout.LabelField("Event Name", _renameEventValue);
             }
             else if (DrawRenameLabelRow("Event Name", definition.Name,
                 "Double-click to rename this event type.", out _))
             {
-                BeginEventRename(definition.Id);
+                int typeIndex = FindEventTypeIndex(definition.Id);
+                if (typeIndex >= 0)
+                    QueueEventTypeRename(typeIndex);
+                else
+                    BeginEventRename(definition.Id);
                 GUIUtility.ExitGUI();
             }
             definition.Color = EditorGUILayout.ColorField("Event Color", definition.Color);
@@ -12711,7 +13419,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return true;
             if (clip == null || clip.WrapMode == SpriteAnimWrap.PingPong)
                 return false;
-            return _previewLoop || clip.WrapMode != SpriteAnimWrap.Once;
+            return _previewLoop
+                || (clip.WrapMode != SpriteAnimWrap.Once
+                    && clip.WrapMode != SpriteAnimWrap.ReverseOnce);
         }
 
         void DrawEllipticalOrbitTools(SpriteClipDef clip)
@@ -20028,6 +20738,25 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (_selectedEventFrame >= 0)
                 {
                     DeleteSelectedEventMarker();
+                    evt.Use();
+                    return;
+                }
+                SyncEventTypeSelection();
+                if (_selectedEventTypeIndices.Count > 0)
+                {
+                    if (_selectedEventTypeIndices.Count > 1)
+                    {
+                        int n = _selectedEventTypeIndices.Count;
+                        if (!EditorUtility.DisplayDialog(
+                            "Delete Event Types",
+                            $"Delete {n} selected event types?\nMarkers and socket triggers that use these IDs will also be removed. This cannot be undone except via Undo.",
+                            "Delete", "Cancel"))
+                        {
+                            evt.Use();
+                            return;
+                        }
+                    }
+                    DeleteSelectedEventTypes();
                     evt.Use();
                     return;
                 }
