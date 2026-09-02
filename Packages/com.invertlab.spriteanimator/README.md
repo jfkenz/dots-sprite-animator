@@ -2,11 +2,11 @@
 
 Portable Unity 6000.0 package for DOTS-first 2D flipbook animation authoring and runtime playback.
 
-Published by **InvertLab**.
+Published by **Invert Lab**.
 
 ## Scope
 
-- Publisher: **InvertLab**.
+- Publisher: **Invert Lab**.
 - Package id: `com.invertlab.spriteanimator` (internal; not shown on the store).
 - Runtime namespace: `InvertLab.Sprites.DOTS`.
 - Runtime assembly: `InvertLab.SpriteAnimator.Runtime`.

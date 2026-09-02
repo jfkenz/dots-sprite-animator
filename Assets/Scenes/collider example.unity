@@ -119,6 +119,147 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &85883792
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 85883793}
+  m_Layer: 0
+  m_Name: HealthBarSocket
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &85883793
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 85883792}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.007142857, y: 0.2795699, z: 0}
+  m_LocalScale: {x: 1.0362911, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 664955197}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &664955196
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 664955197}
+  m_Layer: 0
+  m_Name: SpriteSockets
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &664955197
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 664955196}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: -1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 85883793}
+  m_Father: {fileID: 1291359533}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1062644983
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1062644984}
+  - component: {fileID: 1062644985}
+  m_Layer: 0
+  m_Name: Collider_Body_1_Square_0
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1062644984
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1062644983}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.26817462, y: -0.19259259, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1941741496}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!61 &1062644985
+BoxCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1062644983}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 1
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0, y: 0}
+    oldSize: {x: 0, y: 0}
+    newSize: {x: 0, y: 0}
+    adaptiveTilingThreshold: 0
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  m_Size: {x: 0.26079366, y: 0.6074074}
+  m_EdgeRadius: 0
 --- !u!1 &1291359528
 GameObject:
   m_ObjectHideFlags: 0
@@ -132,6 +273,7 @@ GameObject:
   - component: {fileID: 1291359531}
   - component: {fileID: 1291359530}
   - component: {fileID: 1291359529}
+  - component: {fileID: 1876501002}
   m_Layer: 0
   m_Name: enemy
   m_TagString: Untagged
@@ -157,8 +299,8 @@ MonoBehaviour:
   ClipIndex: 2
   FlipX: 1
   FlipY: 0
-  _time: 96.87622
-  _frame: 7
+  _time: 1.421762
+  _frame: 3
 --- !u!114 &1291359530
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -233,7 +375,13 @@ MonoBehaviour:
     FrameTweenModes: 0000000000000000
     FacingGroup: 
     FacingDirection: 255
-    Sockets: []
+    Sockets:
+    - Name: HealthBarSocket
+      FrameIndex: 0
+      LocalPosition: {x: -1, y: 26}
+      LocalAngle: 0
+      LocalScale: {x: 1.0362911, y: 1}
+      DrawLayer: 0
   - Name: Bringer-of-Death-SpritSheet row 2
     SheetIndex: 0
     Row: 1
@@ -644,8 +792,9 @@ MonoBehaviour:
   SizeUnits: 1
   Tint: {r: 1, g: 1, b: 1, a: 1}
   ShowScenePreview: 1
-  BakeUnityColliders: 0
-  BakeFrameColliders: 0
+  BakeUnityColliders: 1
+  BakeFrameColliders: 1
+  BakeUnitySockets: 1
   ShowSceneColliderGizmos: 1
 --- !u!23 &1291359531
 MeshRenderer:
@@ -713,10 +862,12 @@ Transform:
   m_GameObject: {fileID: 1291359528}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 3.302, y: 0.402, z: 0}
+  m_LocalPosition: {x: 1.338, y: 0.402, z: 0}
   m_LocalScale: {x: 2.8, y: 1.86, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1941741496}
+  - {fileID: 664955197}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1524384336
@@ -732,6 +883,8 @@ GameObject:
   - component: {fileID: 1524384339}
   - component: {fileID: 1524384338}
   - component: {fileID: 1524384337}
+  - component: {fileID: 1876501001}
+  - component: {fileID: 1876501004}
   m_Layer: 0
   m_Name: player
   m_TagString: Untagged
@@ -754,11 +907,11 @@ MonoBehaviour:
   PlayOnEnable: 1
   Speed: 1
   Playing: 1
-  ClipIndex: 13
+  ClipIndex: 0
   FlipX: 0
   FlipY: 0
-  _time: 96.86667
-  _frame: 0
+  _time: 1.421702
+  _frame: 5
 --- !u!114 &1524384338
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1581,8 +1734,9 @@ MonoBehaviour:
   SizeUnits: 1
   Tint: {r: 1, g: 1, b: 1, a: 1}
   ShowScenePreview: 1
-  BakeUnityColliders: 0
-  BakeFrameColliders: 0
+  BakeUnityColliders: 1
+  BakeFrameColliders: 1
+  BakeUnitySockets: 1
   ShowSceneColliderGizmos: 1
 --- !u!23 &1524384339
 MeshRenderer:
@@ -1845,6 +1999,94 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1876501001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1524384336}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3f8a1c92d4b4e7f8a6c5d0b1e2f3a4b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.ColliderExamplePlayer
+  MoveSpeed: 3
+  AttackKey: 106
+  LeftKey: 97
+  RightKey: 100
+  LeftArrow: 276
+  RightArrow: 275
+  IdleClipIndex: 0
+  WalkClipIndex: 1
+  AttackClipIndex: 13
+  ShowHelpOverlay: 0
+--- !u!114 &1876501002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1291359528}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d2e7f4a6b8c4d1e9f0a3b5c7d8e1f2a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.ColliderExampleEnemy
+  MaxHealth: 5
+  HealthBarWorldOffsetY: 1.15
+  FlashSeconds: 0.12
+  HealthBarSocketName: HealthBarSocket
+  HealthBarSocketId: 
+  DeadClipIndex: 3
+  HurtClipIndex: 2
+--- !u!114 &1876501004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1524384336}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5a8b3c6d9e0f4a1b2c3d4e5f6a7b8c9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.ColliderExampleBootstrap
+  BakeUnityColliders: 1
+  BakeFrameColliders: 1
+  BakeUnitySockets: 1
+--- !u!1 &1941741495
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1941741496}
+  m_Layer: 0
+  m_Name: SpriteColliders
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1941741496
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1941741495}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: -1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1062644984}
+  m_Father: {fileID: 1291359533}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

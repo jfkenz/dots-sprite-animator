@@ -117,6 +117,17 @@ namespace InvertLab.Sprites.DOTS
         Both = 2,
     }
 
+    /// <summary>
+    /// Per-clip cancel policy for <c>SpriteAnims.Play</c> / authoring Play.
+    /// Priority, Queue, PlayOneShot, OnCompleteClip, and Crossfade build on this.
+    /// </summary>
+    public enum SpriteClipInterrupt : byte
+    {
+        Always = 0,    // free cancel — idle/walk; any Play() replaces
+        Never = 1,     // locked until Once completes or Stop/Force — attack cast, death
+        AfterTime = 2, // cancelable only when normalized time >= CancelAfter (0-1)
+    }
+
     /// <summary>One animation clip definition inside a sheet profile.</summary>
     [Serializable]
     public class SpriteClipDef
@@ -141,6 +152,20 @@ namespace InvertLab.Sprites.DOTS
         public int[] FrameRows;
         public float FrameRate = DefaultFrameRate;
         public byte WrapMode = DefaultWrapMode; // 0 loop / 1 once / 2 pingpong / 3 reverse
+        /// <summary>Cancel policy for Play(); see <see cref="SpriteClipInterrupt"/>.</summary>
+        public byte Interrupt = (byte)SpriteClipInterrupt.Always;
+        /// <summary>Normalized 0-1 threshold when Interrupt == AfterTime.</summary>
+        public float CancelAfter = 0f;
+        /// <summary>Higher wins when Play is not forced. Equal priority uses Interrupt only.</summary>
+        public int Priority = 0;
+        /// <summary>Clip index to auto-Play when Once ends (after one-shot resume / queue). -1 = none.</summary>
+        public int OnCompleteClipIndex = -1;
+        /// <summary>Inclusive start frame of combo cancel window.</summary>
+        public int ComboWindowStartFrame = 0;
+        /// <summary>Inclusive end frame. &lt; 0 disables the window (InComboWindow is false).</summary>
+        public int ComboWindowEndFrame = -1;
+        /// <summary>While in the window, subtract this from current Priority for Play gating.</summary>
+        public int ComboWindowPriorityBoost = 0;
         public float[] FrameDurationScales = { 1f, 1f, 1f, 1f };
         public byte[] EventIds = { 0, 0, 0, 0 };
         // Normalized position inside each frame (0 = frame start, 1 = frame end).

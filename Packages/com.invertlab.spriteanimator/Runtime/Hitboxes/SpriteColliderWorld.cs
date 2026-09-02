@@ -5,11 +5,13 @@ namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
     /// Converts authored cell-UV colliders into local 2D pose (origin at the
-    /// sprite quad center, +y up) and optionally spawns Unity 2D colliders.
+    /// sprite quad bottom-center / feet, +y up) and optionally spawns Unity 2D colliders.
+    /// Unit cell: X -0.5..0.5, Y 0..1 (matches Scene preview mesh).
     /// </summary>
     public static class SpriteColliderWorld
     {
         public const string RootName = "SpriteColliders";
+        const string DestroyedSuffix = "_Destroyed";
 
         public static bool TryLocalFromUv(FrameBoxDef box,
             out Vector2 offset, out Vector2 size, out float angle)
@@ -20,9 +22,10 @@ namespace InvertLab.Sprites.DOTS
             if (box == null)
                 return false;
             Rect uv = box.RectUV;
+            // Cell UV is y-down; Scene/local is bottom-center (feet at y=0, top at y=1).
             offset = new Vector2(
                 uv.x + uv.width * 0.5f - 0.5f,
-                0.5f - (uv.y + uv.height * 0.5f));
+                1f - (uv.y + uv.height * 0.5f));
             size = new Vector2(
                 Mathf.Max(0.001f, uv.width),
                 Mathf.Max(0.001f, uv.height));
@@ -54,6 +57,8 @@ namespace InvertLab.Sprites.DOTS
                     yield return box;
             }
         }
+
+        static readonly HashSet<string> KeepScratch = new(System.StringComparer.Ordinal);
 
         public static void SyncUnityColliders(Transform host, IList<FrameBoxDef> boxes,
             string clipName, int frame, bool includeFrameBoxes, bool flipX = false, bool flipY = false)
@@ -107,11 +112,33 @@ namespace InvertLab.Sprites.DOTS
             root.localRotation = Quaternion.identity;
             root.localScale = new Vector3(flipX ? -1f : 1f, flipY ? -1f : 1f, 1f);
 
-            for (int i = root.childCount - 1; i >= 0; i--)
-                DestroyGo(root.GetChild(i).gameObject);
-
+            // Reuse children by stable name — avoid destroy/recreate every sync
+            // (DestroyImmediate is illegal in OnValidate/physics/animation/render;
+            // deferred Destroy during play would leave duplicate children for a frame).
+            KeepScratch.Clear();
             for (int i = 0; i < spawn.Count; i++)
-                CreateUnityCollider(root, spawn[i], i);
+            {
+                var box = spawn[i];
+                string name = ColliderChildName(box, i);
+                KeepScratch.Add(name);
+                try
+                {
+                    EnsureUnityCollider(root, box, i, name);
+                }
+                catch (System.Exception ex)
+                {
+                    // One bad box must not abort the tick / remaining colliders.
+                    Debug.LogException(ex);
+                }
+            }
+
+            for (int i = root.childCount - 1; i >= 0; i--)
+            {
+                Transform child = root.GetChild(i);
+                if (child == null || KeepScratch.Contains(child.name))
+                    continue;
+                DestroyGo(child.gameObject);
+            }
         }
 
         public static void ClearUnityColliders(Transform host)
@@ -132,42 +159,198 @@ namespace InvertLab.Sprites.DOTS
         {
             if (go == null)
                 return;
+            // Rename before deferred Destroy so Find(name) / child scan cannot hit a zombie.
 #if UNITY_EDITOR
-            Object.DestroyImmediate(go);
+            if (Application.isPlaying)
+            {
+                MarkDestroyedName(go);
+                Object.Destroy(go);
+            }
+            else
+                Object.DestroyImmediate(go);
 #else
+            MarkDestroyedName(go);
             Object.Destroy(go);
 #endif
         }
 
-        static void CreateUnityCollider(Transform root, FrameBoxDef box, int index)
+        static void MarkDestroyedName(GameObject go)
+        {
+            if (go == null)
+                return;
+            if (!go.name.EndsWith(DestroyedSuffix, System.StringComparison.Ordinal))
+                go.name = go.name + DestroyedSuffix;
+        }
+
+        static void DestroyColliderComponent(Collider2D collider)
+        {
+            if (collider == null)
+                return;
+#if UNITY_EDITOR
+            if (Application.isPlaying)
+                Object.Destroy(collider);
+            else
+                Object.DestroyImmediate(collider);
+#else
+            Object.Destroy(collider);
+#endif
+        }
+
+        static string ColliderChildName(FrameBoxDef box, int index)
+        {
+            string label = box.IsCharacter ? "Body" : box.IsClip ? "Clip" : "Frame";
+            return $"Collider_{label}_{box.Id}_{box.Shape}_{index}";
+        }
+
+        /// <summary>
+        /// Find a live (not Unity-destroyed / not pending-destroy) child by exact name.
+        /// Skips zombies that deferred Destroy left under the root for the rest of the frame.
+        /// </summary>
+        static Transform FindLiveChild(Transform root, string name)
+        {
+            if (root == null || string.IsNullOrEmpty(name))
+                return null;
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform t = root.GetChild(i);
+                // Unity fake-null: pending Destroy still enumerable but == null.
+                if (t == null)
+                    continue;
+                if (t.name != name)
+                    continue;
+                if (t.gameObject == null)
+                    continue;
+                if (t.name.EndsWith(DestroyedSuffix, System.StringComparison.Ordinal))
+                    continue;
+                return t;
+            }
+            return null;
+        }
+
+        static Collider2D GetLiveShapeCollider(GameObject go, SpriteColliderShape shape)
+        {
+            if (go == null)
+                return null;
+            Collider2D c;
+            if (shape == SpriteColliderShape.Circle)
+                c = go.GetComponent<CircleCollider2D>();
+            else if (shape == SpriteColliderShape.Polygon)
+                c = go.GetComponent<PolygonCollider2D>();
+            else
+                c = go.GetComponent<BoxCollider2D>();
+            // Unity overloaded == treats destroyed components as null.
+            return c == null ? null : c;
+        }
+
+        /// <summary>
+        /// Ensure the GameObject has exactly the Collider2D type for <paramref name="shape"/>.
+        /// Wrong/missing types are stripped; APIs must use the returned live instance only.
+        /// </summary>
+        static Collider2D EnsureShapeCollider(GameObject go, SpriteColliderShape shape)
+        {
+            if (go == null)
+                return null;
+
+            Collider2D wanted = GetLiveShapeCollider(go, shape);
+            Collider2D[] all = go.GetComponents<Collider2D>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                Collider2D c = all[i];
+                if (c == null)
+                    continue;
+                if (wanted != null && ReferenceEquals(c, wanted))
+                    continue;
+                DestroyColliderComponent(c);
+            }
+
+            if (wanted != null)
+                return wanted;
+
+            // Any Collider2D still pending Destroy on this GO blocks a reliable AddComponent
+            // (especially same-type). Signal caller to recreate a clean GameObject.
+            if (HasPendingCollider(go))
+                return null;
+
+            Collider2D added;
+            if (shape == SpriteColliderShape.Circle)
+                added = go.AddComponent<CircleCollider2D>();
+            else if (shape == SpriteColliderShape.Polygon)
+                added = go.AddComponent<PolygonCollider2D>();
+            else
+                added = go.AddComponent<BoxCollider2D>();
+            // Unity fake-null / failed add → caller recreates a fresh GameObject.
+            return added == null ? null : added;
+        }
+
+        static bool HasPendingCollider(GameObject go)
+        {
+            // GetComponents can still list components Destroy() has not removed yet.
+            // C# non-null + Unity == null => pending Destroy.
+            Collider2D[] all = go.GetComponents<Collider2D>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                Collider2D c = all[i];
+                if (!ReferenceEquals(c, null) && c == null)
+                    return true;
+            }
+            return false;
+        }
+
+        static void EnsureUnityCollider(Transform root, FrameBoxDef box, int index, string name)
         {
             if (!TryLocalFromUv(box, out var offset, out var size, out float angle))
                 return;
-            string label = box.IsCharacter ? "Body" : box.IsClip ? "Clip" : "Frame";
-            var go = new GameObject($"Collider_{label}_{box.Id}_{box.Shape}_{index}");
-            go.transform.SetParent(root, false);
+
+            Transform child = FindLiveChild(root, name);
+            GameObject go;
+            if (child == null)
+            {
+                go = new GameObject(name);
+                go.transform.SetParent(root, false);
+            }
+            else
+                go = child.gameObject;
+
             go.transform.localPosition = new Vector3(offset.x, offset.y, 0f);
             go.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
             go.transform.localScale = Vector3.one;
-            Collider2D collider;
+
+            Collider2D collider = EnsureShapeCollider(go, box.Shape);
+            if (collider == null)
+            {
+                // Pending same-type Destroy blocked AddComponent — retire this GO and retry fresh.
+                DestroyGo(go);
+                go = new GameObject(name);
+                go.transform.SetParent(root, false);
+                go.transform.localPosition = new Vector3(offset.x, offset.y, 0f);
+                go.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
+                go.transform.localScale = Vector3.one;
+                collider = EnsureShapeCollider(go, box.Shape);
+                if (collider == null)
+                    return;
+            }
+
             if (box.Shape == SpriteColliderShape.Circle)
             {
-                var circle = go.AddComponent<CircleCollider2D>();
+                var circle = collider as CircleCollider2D;
+                if (circle == null)
+                    return;
                 circle.radius = Mathf.Max(size.x, size.y) * 0.5f;
-                collider = circle;
             }
             else if (box.Shape == SpriteColliderShape.Polygon)
             {
-                var polygon = go.AddComponent<PolygonCollider2D>();
+                var polygon = collider as PolygonCollider2D;
+                if (polygon == null)
+                    return;
                 polygon.pathCount = 1;
                 polygon.SetPath(0, PolygonLocalPoints(box, size));
-                collider = polygon;
             }
             else
             {
-                var box2d = go.AddComponent<BoxCollider2D>();
+                var box2d = collider as BoxCollider2D;
+                if (box2d == null)
+                    return;
                 box2d.size = size;
-                collider = box2d;
             }
             collider.isTrigger = box.IsTrigger;
             collider.offset = Vector2.zero;

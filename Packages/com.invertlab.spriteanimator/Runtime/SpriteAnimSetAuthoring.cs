@@ -3,7 +3,13 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.Rendering;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
+
 
 namespace InvertLab.Sprites.DOTS
 {
@@ -25,12 +31,18 @@ namespace InvertLab.Sprites.DOTS
         [Tooltip("Optional profile authored in Window > DOTS Sprite Animator. When set, it overrides Sheet, grid, and Clips below.")]
         public ScriptableSpriteSheetProfile Profile;
 
+
+
         [Tooltip("Spritesheet: grid of frames, left-to-right then top-to-bottom")]
         public Texture2D Sheet;
+
+
 
         [Tooltip("Grid columns / rows in the sheet")]
         public int Columns = 4;
         public int Rows = 4;
+
+
 
         [System.Serializable]
         public struct ClipAuthoring
@@ -43,6 +55,13 @@ namespace InvertLab.Sprites.DOTS
             public float  FrameRate; // frames per second
             public bool   Loop;
             public byte   WrapMode;
+            public byte   Interrupt;   // SpriteClipInterrupt.*
+            public float  CancelAfter; // 0-1 when Interrupt == AfterTime
+            public int    Priority;    // default 0
+            public int    OnCompleteClipIndex; // -1 = none
+            public int    ComboWindowStartFrame; // inclusive
+            public int    ComboWindowEndFrame;   // inclusive; -1 = disabled
+            public int    ComboWindowPriorityBoost;
             public float[] FrameDurationScales;
             public byte[] EventIds;
             public float[] EventNormalizedTimes;
@@ -55,35 +74,75 @@ namespace InvertLab.Sprites.DOTS
             public FrameSocketDef[] Sockets;
         }
 
-        [Tooltip("Animation states — e.g. soldier: Idle, Run, Attack, Block")]
+
+
+        [Tooltip("Animation states â€” e.g. soldier: Idle, Run, Attack, Block")]
         public ClipAuthoring[] Clips =
         {
-            new ClipAuthoring { Name = "Idle",   Row = 0, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 8f,  Loop = true },
-            new ClipAuthoring { Name = "Run",    Row = 1, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 10f, Loop = true },
-            new ClipAuthoring { Name = "Attack", Row = 2, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 12f, Loop = false },
-            new ClipAuthoring { Name = "Block",  Row = 3, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 8f,  Loop = true },
+            new ClipAuthoring { Name = "Idle",   Row = 0, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 8f,  Loop = true, OnCompleteClipIndex = -1, ComboWindowEndFrame = -1 },
+            new ClipAuthoring { Name = "Run",    Row = 1, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 10f, Loop = true, OnCompleteClipIndex = -1, ComboWindowEndFrame = -1 },
+            new ClipAuthoring { Name = "Attack", Row = 2, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 12f, Loop = false, OnCompleteClipIndex = -1, ComboWindowEndFrame = -1 },
+            new ClipAuthoring { Name = "Block",  Row = 3, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 8f,  Loop = true, OnCompleteClipIndex = -1, ComboWindowEndFrame = -1 },
         };
+
+
 
         [Tooltip("First clip to play")]
         public int InitialClipIndex = 0;
 
+
+
         [Min(0.01f)]
         public float SizeUnits = 1f;
+
+
 
         [Tooltip("Optional tint")]
         public Color Tint = Color.white;
 
-        [Tooltip("Show the top clip first frame on this Quad in the Scene view. Uncheck to hide the preview mesh.")]
-        public bool ShowScenePreview = true;
+
+
+        [FormerlySerializedAs("ShowScenePreview")]
+        [Tooltip("Edit Mode Scene Quad only (bottom-center cell pivot, like the animator preview). Uncheck to hide the sprite mesh. Does not affect Play mode ECS.")]
+        public bool ShowSpriteInScene = true;
+
+
 
         [Tooltip("Spawn Unity 2D Box/Circle/Polygon colliders on this object from the profile.")]
         public bool BakeUnityColliders;
 
+
+
         [Tooltip("Also spawn this-frame slash colliders. Off = Character and This Clip body colliders only.")]
         public bool BakeFrameColliders;
 
+
+
+        [Tooltip("Spawn Unity Transform children under SpriteSockets from independent motions and frame sockets.")]
+        public bool BakeUnitySockets = true;
+
+
+
         [Tooltip("Draw Query AABB gizmos in the Scene view (custom physics, not Unity colliders).")]
         public bool ShowSceneColliderGizmos = true;
+
+
+
+        [Tooltip("Draw socket discs/labels in the Scene view for the current clip/frame.")]
+        public bool ShowSceneSocketGizmos = true;
+
+
+
+        [Tooltip("Bake an empty Pivot child at the authored profile.Pivot in mesh-local space (not cell feet unless pivot is bottom-center).")]
+        public bool BakePivot = true;
+
+
+
+        [Tooltip("Draw a Scene gizmo crosshair and Pivot label at the authored profile.Pivot (matches editor green pivot).")]
+        public bool ShowScenePivotGizmos = true;
+
+
+
 
 
         public bool ApplyFromProfile()
@@ -92,12 +151,16 @@ namespace InvertLab.Sprites.DOTS
             if (data == null)
                 return false;
 
+
+
             data.EnsureSheets();
             SpriteSheetDef bakeSheet = null;
             if (data.Clips != null && data.Clips.Count > 0)
                 bakeSheet = data.SheetForClip(data.Clips[0]);
             if (bakeSheet == null && data.Sheets != null && data.Sheets.Count > 0)
                 bakeSheet = data.Sheets[0];
+
+
 
             if (bakeSheet != null)
             {
@@ -114,8 +177,12 @@ namespace InvertLab.Sprites.DOTS
                 Rows = Mathf.Max(1, data.Rows);
             }
 
+
+
             if (data.Clips != null && data.Clips.Count > 0)
                 Clips = CopyClips(data.Clips);
+
+
 
             int clipCount = Clips != null ? Clips.Length : 0;
             InitialClipIndex = clipCount > 0
@@ -126,6 +193,8 @@ namespace InvertLab.Sprites.DOTS
 #endif
             return true;
         }
+
+
 
         public bool TryGetClipSheet(int clipIndex, out Texture2D texture, out int columns, out int rows, out float ppu)
         {
@@ -155,18 +224,56 @@ namespace InvertLab.Sprites.DOTS
             return texture != null;
         }
 
+
+
         void OnValidate()
         {
             if (Profile != null)
                 ApplyFromProfile();
 #if UNITY_EDITOR
             RefreshQuadPreview();
-            if (BakeUnityColliders)
-                SyncUnityColliders();
+            if (BakeUnityColliders || BakeUnitySockets)
+                ScheduleUnityColliderSync();
 #endif
         }
 
+
+
 #if UNITY_EDITOR
+        const string PreviewMeshName = "InvertLab Preview Quad";
+        const string PreviewMaterialName = "InvertLab Sprite Preview";
+        static bool _loggedMissingPreviewShader;
+
+
+
+        void OnEnable()
+        {
+            // Domain reload / component enable: re-apply crop (DontSave mesh/material).
+            if (!Application.isPlaying)
+                RefreshQuadPreview();
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+        }
+
+        void OnDisable()
+        {
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+        }
+
+        void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            // After Play→Stop teardown finishes, rebuild colliders/sockets/preview
+            // via delayCall — never Clear/Sync with DestroyImmediate during exit.
+            if (state == PlayModeStateChange.EnteredEditMode)
+            {
+                RefreshQuadPreview();
+                if (BakeUnityColliders || BakeUnitySockets || BakePivot)
+                    ScheduleUnityColliderSync();
+            }
+        }
+
+
+
         void RefreshQuadPreview()
         {
             var player = GetComponent<SpriteAnimPlayerAuthoring>();
@@ -176,7 +283,16 @@ namespace InvertLab.Sprites.DOTS
                 ApplyQuadPreview();
         }
 
+
+
+        /// <summary>Editor entry: re-apply Scene Quad crop for the current player clip/frame.</summary>
+        public void RefreshScenePreview() => RefreshQuadPreview();
+
+
+
         public void ApplyQuadPreview() => ApplyQuadPreview(0, 0);
+
+
 
         public void ApplyQuadPreview(int clipIndex, int frameIndex)
         {
@@ -185,18 +301,21 @@ namespace InvertLab.Sprites.DOTS
             if (filter == null || renderer == null)
                 return;
 
-            var mesh = filter.sharedMesh;
-            if (mesh == null)
-                return;
-            if (mesh.name.IndexOf("Quad", System.StringComparison.OrdinalIgnoreCase) < 0 && mesh.vertexCount != 4)
-                return;
 
-            if (!ShowScenePreview)
+
+            if (!ShowSpriteInScene)
             {
+                // Keep mesh reference so turning Show Sprite back on works.
                 renderer.SetPropertyBlock(null);
                 renderer.enabled = false;
                 return;
             }
+
+            // Recreate preview mesh before any sheet/shader early-outs so Refresh /
+            // EnteredEditMode never leave MeshFilter.sharedMesh null when Show Sprite is on.
+            var previewMesh = EnsurePreviewMesh(filter);
+            if (previewMesh == null)
+                return;
 
             Texture2D previewSheet = Sheet;
             int previewColumns = Mathf.Max(1, Columns);
@@ -218,29 +337,64 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
 
+
+
             if (previewSheet == null)
                 return;
 
-            var shader = Shader.Find(SpriteShaderLibrary.UnlitShader);
+
+
+            // Preview must NOT use the DOTS Unlit shader: Entities Graphics can
+            // force DOTS_INSTANCING_ON globally, so MeshRenderer ignores material
+            // / MPB _CropST and draws the full sheet (property default 1,1,0,0).
+            var shader = Shader.Find(SpriteShaderLibrary.PreviewShader);
+            if (shader == null)
+            {
+                if (!_loggedMissingPreviewShader)
+                {
+                    _loggedMissingPreviewShader = true;
+                    Debug.LogError(
+                        $"InvertLab: Shader.Find(\"{SpriteShaderLibrary.PreviewShader}\") returned null. " +
+                        "Scene Quad preview crop may show the full sheet until the Preview shader imports.",
+                        this);
+                }
+                shader = Shader.Find(SpriteShaderLibrary.UnlitShader);
+            }
             if (shader == null)
                 return;
 
+
+
             var mat = renderer.sharedMaterial;
-            if (mat == null || mat.shader != shader)
+            bool usingPreviewShader = shader.name == SpriteShaderLibrary.PreviewShader;
+            bool wrongMat = mat == null
+                || mat.shader != shader
+                || mat.name != PreviewMaterialName
+                || (usingPreviewShader && mat.shader != null
+                    && mat.shader.name == SpriteShaderLibrary.UnlitShader);
+            if (wrongMat)
             {
                 mat = new Material(shader)
                 {
-                    name = "InvertLab Sprite Preview",
+                    name = PreviewMaterialName,
                     hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild
                 };
                 renderer.sharedMaterial = mat;
             }
 
+
+
             mat.enableInstancing = false;
-            mat.DisableKeyword("DOTS_INSTANCING_ON");
-            var kw = new LocalKeyword(shader, "DOTS_INSTANCING_ON");
-            if (kw.isValid)
-                mat.SetKeyword(kw, false);
+            // Fallback path only: keep crop working if Preview shader is not imported yet.
+            if (mat.shader != null && mat.shader.name == SpriteShaderLibrary.UnlitShader)
+            {
+                mat.DisableKeyword("DOTS_INSTANCING_ON");
+                var kw = new LocalKeyword(mat.shader, "DOTS_INSTANCING_ON");
+                if (kw.isValid)
+                    mat.SetKeyword(kw, false);
+            }
+
+
 
             int cols = previewColumns;
             int rows = previewRows;
@@ -258,26 +412,51 @@ namespace InvertLab.Sprites.DOTS
                     cols, rows, out row, out col);
             }
 
+
+
             float w = 1f / cols;
             float h = 1f / rows;
+            // Cell rect in sheet UV: scale.xy, offset.zw (bottom-left of cell).
             var cropST = new Vector4(w, h, col * w, 1f - (row + 1) * h);
             var flip = PreviewFlipVector();
 
+
+
+            // Nuclear backup: bake cell (+ flip) into DontSave mesh UVs so a broken
+            // crop shader still cannot show the full sheet. Then _CropST = (1,1,0,0).
+            // Bottom-center cell pivot (feet at transform): X -0.5..0.5, Y 0..1.
+            ApplyBottomCenterCellVertices(previewMesh);
+            BakePreviewCellUVs(previewMesh, cropST, flip.x > 0.5f, flip.y > 0.5f);
+
+
+
+            var identityCrop = new Vector4(1f, 1f, 0f, 0f);
+            var identityFlip = Vector4.zero;
+
+
+
             mat.SetTexture("_MainTex", previewSheet);
             mat.SetColor("_Color", Tint);
-            mat.SetVector("_CropST", cropST);
-            mat.SetVector("_Flip", flip);
+            mat.SetVector("_CropST", identityCrop);
+            mat.SetVector("_Flip", identityFlip);
+
+
 
             var block = new MaterialPropertyBlock();
             block.SetTexture("_MainTex", previewSheet);
             block.SetColor("_Color", Tint);
-            block.SetVector("_CropST", cropST);
-            block.SetVector("_Flip", flip);
+            block.SetVector("_CropST", identityCrop);
+            block.SetVector("_Flip", identityFlip);
             renderer.SetPropertyBlock(block);
+
+
 
             renderer.enabled = true;
 
-            // 1x1 Quad crop is UV-only; scale the transform so PPU is visible in Scene view.
+
+
+            // 1x1 preview mesh is UV-baked; scale so PPU matches cell world size.
+            // Mesh is bottom-center: localScale (sx,sy,1) â†’ width sx, height sy, feet at position.
             if (clipSheet != null &&
                 SpriteSheetProfile.TryGetCellPixels(clipSheet, out float cellW, out float cellH))
             {
@@ -294,6 +473,143 @@ namespace InvertLab.Sprites.DOTS
             }
         }
 
+
+
+        /// <summary>
+        /// Ensure MeshFilter has a DontSave "InvertLab Preview Quad". Recreate whenever
+        /// sharedMesh is null, destroyed (Unity fake-null), or not our preview mesh.
+        /// Never leaves sharedMesh null; never mutates the shared builtin Quad.
+        /// </summary>
+        Mesh EnsurePreviewMesh(MeshFilter filter)
+        {
+            var current = filter.sharedMesh;
+            // Unity overloaded == is true for destroyed objects (fake null).
+            if (current != null && current.name == PreviewMeshName && current.vertexCount == 4)
+                return current;
+
+            // Missing / destroyed / wrong mesh: build from builtin Quad (or hand-roll).
+            Mesh source = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+            Mesh clone;
+            if (source != null)
+            {
+                clone = Object.Instantiate(source);
+            }
+            else
+            {
+                // Fallback if builtin resource unavailable in this editor context.
+                clone = new Mesh();
+                clone.vertices = new[]
+                {
+                    new Vector3(-0.5f, -0.5f, 0f),
+                    new Vector3(0.5f, -0.5f, 0f),
+                    new Vector3(-0.5f, 0.5f, 0f),
+                    new Vector3(0.5f, 0.5f, 0f),
+                };
+                clone.uv = new[]
+                {
+                    new Vector2(0f, 0f),
+                    new Vector2(1f, 0f),
+                    new Vector2(0f, 1f),
+                    new Vector2(1f, 1f),
+                };
+                clone.triangles = new[] { 0, 2, 1, 2, 3, 1 };
+                clone.RecalculateNormals();
+                clone.RecalculateBounds();
+            }
+
+            clone.name = PreviewMeshName;
+            clone.hideFlags = HideFlags.HideAndDontSave;
+
+            // Capture corner UVs from Unity Quad positions BEFORE rebaking verts
+            // (clone may already have been UV-baked if source was a previous preview mesh).
+            var verts = clone.vertices;
+            if (verts != null && verts.Length == 4)
+            {
+                var baseUvs = new Vector2[verts.Length];
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    // Unity builtin Quad: x,y in {-0.5,+0.5} → UV (0/1, 0/1).
+                    baseUvs[i] = new Vector2(verts[i].x >= 0f ? 1f : 0f, verts[i].y >= 0f ? 1f : 0f);
+                }
+                clone.uv = baseUvs;
+            }
+
+            ApplyBottomCenterCellVertices(clone);
+            filter.sharedMesh = clone;
+            return clone;
+        }
+
+
+
+        /// <summary>
+        /// Rebake preview quad so cell feet sit at local y=0 (bottom-center pivot).
+        /// X stays -0.5..0.5; Y becomes 0..1. Safe for both center (Â±0.5) and
+        /// already-bottom (0..1) source verts.
+        /// </summary>
+        static void ApplyBottomCenterCellVertices(Mesh mesh)
+        {
+            if (mesh == null)
+                return;
+            var verts = mesh.vertices;
+            if (verts == null || verts.Length == 0)
+                return;
+            bool changed = false;
+            for (int i = 0; i < verts.Length; i++)
+            {
+                float u01 = verts[i].x >= 0f ? 1f : 0f;
+                // Center layout uses Â±0.5; bottom layout uses 0 and 1. Mid threshold works for both.
+                float v01 = verts[i].y > 0.25f ? 1f : 0f;
+                var next = new Vector3(
+                    Mathf.Lerp(-0.5f, 0.5f, u01),
+                    Mathf.Lerp(0f, 1f, v01),
+                    0f);
+                if ((next - verts[i]).sqrMagnitude > 1e-8f)
+                    changed = true;
+                verts[i] = next;
+            }
+            if (!changed)
+                return;
+            mesh.vertices = verts;
+            mesh.RecalculateBounds();
+        }
+
+
+
+        /// <summary>
+        /// Set mesh UVs to the cell rect. Bottom-center preview verts by position:
+        /// BL(x&lt;0,y~0), BR(x&gt;0,y~0), TL(x&lt;0,y~1), TR(x&gt;0,y~1)
+        /// â†’ (z,w), (z+x,w), (z,w+y), (z+x,w+y). Flip swaps cell edges first.
+        /// </summary>
+        static void BakePreviewCellUVs(Mesh mesh, Vector4 cropST, bool flipX, bool flipY)
+        {
+            var verts = mesh.vertices;
+            if (verts == null || verts.Length == 0)
+                return;
+
+
+
+            float u0 = flipX ? cropST.z + cropST.x : cropST.z;
+            float u1 = flipX ? cropST.z : cropST.z + cropST.x;
+            float v0 = flipY ? cropST.w + cropST.y : cropST.w;
+            float v1 = flipY ? cropST.w : cropST.w + cropST.y;
+
+
+
+            var uvs = new Vector2[verts.Length];
+            for (int i = 0; i < verts.Length; i++)
+            {
+                float u01 = verts[i].x >= 0f ? 1f : 0f;
+                // Bottom-center mesh: y in {0,1} (also tolerates legacy Â±0.5).
+                float v01 = verts[i].y >= 0.5f ? 1f : 0f;
+                uvs[i] = new Vector2(
+                    Mathf.Lerp(u0, u1, u01),
+                    Mathf.Lerp(v0, v1, v01));
+            }
+            mesh.uv = uvs;
+        }
+
+
+
         Vector4 PreviewFlipVector()
         {
             var player = GetComponent<SpriteAnimPlayerAuthoring>();
@@ -301,6 +617,79 @@ namespace InvertLab.Sprites.DOTS
                 return Vector4.zero;
             return new Vector4(player.FlipX ? 1f : 0f, player.FlipY ? 1f : 0f, 0f, 0f);
         }
+
+
+
+#if UNITY_EDITOR
+        bool _colliderSyncScheduled;
+
+
+
+        /// <summary>
+        /// OnValidate / play-mode transitions must not create/destroy colliders/sockets
+        /// inline (DestroyImmediate illegal during validation, physics, animation, render,
+        /// and play-mode teardown). Always defer via delayCall in the editor; runtime
+        /// play Tick still calls SyncUnityColliders / SyncUnitySockets directly (those
+        /// paths use Object.Destroy while playing and reuse children).
+        /// </summary>
+        public void ScheduleUnityColliderSync()
+        {
+            if (_colliderSyncScheduled)
+                return;
+            _colliderSyncScheduled = true;
+            EditorApplication.delayCall += FlushScheduledUnityColliderSync;
+        }
+
+
+
+        void FlushScheduledUnityColliderSync()
+        {
+            _colliderSyncScheduled = false;
+            if (this == null)
+                return;
+
+            // Still entering/exiting play mode: wait until the transition completes
+            // (isPlayingOrWillChangePlaymode stays true after isPlaying flips false).
+            if (EditorApplication.isPlayingOrWillChangePlaymode && !Application.isPlaying)
+            {
+                _colliderSyncScheduled = true;
+                EditorApplication.delayCall += FlushScheduledUnityColliderSync;
+                return;
+            }
+
+            try
+            {
+                if (BakeUnityColliders)
+                    SyncUnityColliders();
+                else
+                    SpriteColliderWorld.ClearUnityColliders(transform);
+                if (BakeUnitySockets)
+                    SyncUnitySockets();
+                else
+                {
+                    SpriteSocketWorld.ClearUnitySockets(transform);
+                    if (BakePivot)
+                    {
+                        var data = Profile?.Data;
+                        ResolveUnitySyncClip(out string pivotClip, out _, out var pivotPlayer);
+                        SpriteSocketWorld.SyncPivotMarker(
+                            transform, data, pivotClip,
+                            pivotPlayer != null && pivotPlayer.FlipX,
+                            pivotPlayer != null && pivotPlayer.FlipY);
+                    }
+                    else
+                        SpriteSocketWorld.ClearPivotMarker(transform);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning(
+                    $"InvertLab: deferred collider/socket sync failed: {ex.Message}", this);
+            }
+        }
+#endif
+
+
 
         public void SyncUnityColliders()
         {
@@ -310,26 +699,163 @@ namespace InvertLab.Sprites.DOTS
                 SpriteColliderWorld.ClearUnityColliders(transform);
                 return;
             }
-            int clipIndex = InitialClipIndex;
-            int frame = 0;
-            var player = GetComponent<SpriteAnimPlayerAuthoring>();
-            if (player != null)
-            {
-                clipIndex = player.ClipIndex;
-                frame = player.Frame;
-            }
-            string clipName = "clip";
-            if (Clips != null && clipIndex >= 0 && clipIndex < Clips.Length)
-                clipName = string.IsNullOrEmpty(Clips[clipIndex].Name)
-                    ? "clip" : Clips[clipIndex].Name;
-            else if (data.Clips != null && clipIndex >= 0 && clipIndex < data.Clips.Count)
-                clipName = data.Clips[clipIndex].Name;
+            ResolveUnitySyncClip(out string clipName, out int frame, out var player);
             SpriteColliderWorld.SyncUnityColliders(
                 transform, data.Hitboxes, clipName, frame, BakeFrameColliders,
                 player != null && player.FlipX, player != null && player.FlipY);
         }
 
+
+
+        public void SyncUnitySockets()
+        {
+            var data = Profile?.Data;
+            if (!BakeUnitySockets || data == null)
+            {
+                SpriteSocketWorld.ClearUnitySockets(transform);
+                if (BakePivot)
+                {
+                    ResolveUnitySyncClip(out string pivotClip, out _, out var pivotPlayer);
+                    SpriteSocketWorld.SyncPivotMarker(
+                        transform, data, pivotClip,
+                        pivotPlayer != null && pivotPlayer.FlipX,
+                        pivotPlayer != null && pivotPlayer.FlipY);
+                }
+                else
+                    SpriteSocketWorld.ClearPivotMarker(transform);
+                return;
+            }
+
+
+
+            ResolveUnitySyncClip(out string clipName, out int frame, out var player);
+            float independentTime = 0f;
+            if (Application.isPlaying)
+                independentTime = Time.time * Mathf.Max(0.01f, data.IndependentMotionSpeed);
+
+
+
+            SpriteSocketWorld.SyncUnitySockets(
+                transform, data, clipName, frame, independentTime,
+                player != null && player.FlipX, player != null && player.FlipY, BakePivot);
+        }
+
+
+
+        void ResolveUnitySyncClip(out string clipName, out int frame, out SpriteAnimPlayerAuthoring player)
+        {
+            var data = Profile?.Data;
+            int clipIndex = InitialClipIndex;
+            frame = 0;
+            player = GetComponent<SpriteAnimPlayerAuthoring>();
+            if (player != null)
+            {
+                clipIndex = player.ClipIndex;
+                frame = player.Frame;
+            }
+            clipName = "clip";
+            if (Clips != null && clipIndex >= 0 && clipIndex < Clips.Length)
+                clipName = string.IsNullOrEmpty(Clips[clipIndex].Name)
+                    ? "clip" : Clips[clipIndex].Name;
+            else if (data?.Clips != null && clipIndex >= 0 && clipIndex < data.Clips.Count)
+                clipName = data.Clips[clipIndex].Name;
+        }
+
+
+
         void OnDrawGizmos()
+        {
+            DrawSceneCellFrameGizmo();
+            DrawScenePivotGizmo();
+            DrawSceneColliderGizmos();
+            DrawSceneSocketGizmos();
+        }
+
+
+
+        /// <summary>
+        /// Cyan wire of the full cell bounds (padding included), matching the
+        /// animator preview teal cell outline. Drawn in bottom-center local space.
+        /// </summary>
+        void DrawSceneCellFrameGizmo()
+        {
+            if (!ShowSpriteInScene)
+                return;
+            var filter = GetComponent<MeshFilter>();
+            var renderer = GetComponent<MeshRenderer>();
+            if (filter == null || renderer == null || !renderer.enabled)
+                return;
+
+
+
+            Gizmos.matrix = transform.localToWorldMatrix;
+            Gizmos.color = new Color(0.25f, 0.9f, 0.95f, 0.95f);
+            // Unit cell with bottom-center pivot: center at (0, 0.5), size 1x1.
+            Gizmos.DrawWireCube(new Vector3(0f, 0.5f, 0f), new Vector3(1f, 1f, 0.02f));
+            Gizmos.matrix = Matrix4x4.identity;
+        }
+
+
+
+        /// <summary>
+        /// Crosshair + optional "Pivot" label at the authored profile.Pivot in mesh-local
+        /// space (matches the editor green pivot). Falls back to the Pivot child when baked.
+        /// </summary>
+        void DrawScenePivotGizmo()
+        {
+            if (!ShowScenePivotGizmos)
+                return;
+
+
+
+            Vector3 origin = ResolveScenePivotWorldPosition();
+            float sx = Mathf.Abs(transform.lossyScale.x);
+            float sy = Mathf.Abs(transform.lossyScale.y);
+            float arm = Mathf.Clamp(Mathf.Max(sx, sy) * 0.08f, 0.06f, 0.35f);
+
+
+
+            Gizmos.color = new Color(0.25f, 0.95f, 0.4f, 0.98f);
+            Gizmos.DrawLine(origin + Vector3.left * arm, origin + Vector3.right * arm);
+            Gizmos.DrawLine(origin + Vector3.down * arm, origin + Vector3.up * arm);
+            Gizmos.DrawWireSphere(origin, arm * 0.22f);
+            Handles.color = Gizmos.color;
+            Handles.Label(origin + Vector3.up * (arm * 1.35f), "Pivot");
+        }
+
+
+
+        Vector3 ResolveScenePivotWorldPosition()
+        {
+            var marker = transform.Find(SpriteSocketWorld.PivotName);
+            if (marker != null)
+                return marker.position;
+
+
+
+            var data = Profile?.Data;
+            if (data == null)
+                return transform.position;
+
+
+
+            ResolveUnitySyncClip(out string clipName, out _, out var player);
+            var sheet = SpriteSocketWorld.DisplaySheet(data, clipName);
+            Vector2 pivot = data.Pivot == default ? SpriteSheetProfile.DefaultPivot : data.Pivot;
+            Vector2 meshLocal = SpriteSocketWorld.PixelsFromPivotToMeshLocal(sheet, pivot, Vector2.zero);
+            meshLocal = SpriteSocketWorld.MirrorAroundCellCenter(
+                meshLocal, sheet,
+                player != null && player.FlipX,
+                player != null && player.FlipY);
+            Vector3 hostScale = transform.localScale;
+            float invSx = 1f / (Mathf.Abs(hostScale.x) > 1e-4f ? hostScale.x : 1f);
+            float invSy = 1f / (Mathf.Abs(hostScale.y) > 1e-4f ? hostScale.y : 1f);
+            return transform.TransformPoint(new Vector3(meshLocal.x * invSx, meshLocal.y * invSy, 0f));
+        }
+
+
+
+        void DrawSceneColliderGizmos()
         {
             if (!ShowSceneColliderGizmos)
                 return;
@@ -386,7 +912,90 @@ namespace InvertLab.Sprites.DOTS
             }
             Gizmos.matrix = Matrix4x4.identity;
         }
+
+
+
+        static readonly List<SpriteSocketWorld.LocalPose> _socketGizmoScratch = new(16);
+
+
+
+        void DrawSceneSocketGizmos()
+        {
+            if (!ShowSceneSocketGizmos)
+                return;
+
+
+
+            const float radius = 0.05f;
+            var socketRoot = transform.Find(SpriteSocketWorld.RootName);
+            if (socketRoot != null && socketRoot.childCount > 0)
+            {
+                Gizmos.matrix = Matrix4x4.identity;
+                for (int i = 0; i < socketRoot.childCount; i++)
+                {
+                    var child = socketRoot.GetChild(i);
+                    if (child == null)
+                        continue;
+                    DrawSocketDisc(child.position, child.name, radius);
+                }
+                return;
+            }
+
+
+
+            var data = Profile?.Data;
+            if (data == null)
+                return;
+
+
+
+            ResolveUnitySyncClip(out string clipName, out int frame, out var player);
+            float independentTime = 0f;
+            if (Application.isPlaying)
+                independentTime = Time.time * Mathf.Max(0.01f, data.IndependentMotionSpeed);
+
+
+
+            SpriteSocketWorld.CollectLocalPoses(data, clipName, frame, independentTime, _socketGizmoScratch);
+            if (_socketGizmoScratch.Count == 0)
+                return;
+
+
+
+            Vector3 hostScale = transform.localScale;
+            float invSx = 1f / (Mathf.Abs(hostScale.x) > 1e-4f ? hostScale.x : 1f);
+            float invSy = 1f / (Mathf.Abs(hostScale.y) > 1e-4f ? hostScale.y : 1f);
+            bool flipX = player != null && player.FlipX;
+            bool flipY = player != null && player.FlipY;
+            var displaySheet = SpriteSocketWorld.DisplaySheet(data, clipName);
+
+
+
+            Gizmos.matrix = Matrix4x4.identity;
+            for (int i = 0; i < _socketGizmoScratch.Count; i++)
+            {
+                var pose = _socketGizmoScratch[i];
+                Vector2 meshLocal = SpriteSocketWorld.MirrorAroundCellCenter(
+                    pose.Position, displaySheet, flipX, flipY);
+                var local = new Vector3(meshLocal.x * invSx, meshLocal.y * invSy, 0f);
+                DrawSocketDisc(transform.TransformPoint(local), pose.Name, radius);
+            }
+        }
+
+
+
+        static void DrawSocketDisc(Vector3 worldPos, string label, float radius)
+        {
+            Gizmos.color = new Color(0.35f, 0.85f, 1f, 0.95f);
+            Gizmos.DrawWireSphere(worldPos, radius);
+            Gizmos.DrawSphere(worldPos, radius * 0.35f);
+            Handles.color = Gizmos.color;
+            Handles.Label(worldPos + Vector3.up * (radius * 1.6f),
+                string.IsNullOrEmpty(label) ? "socket" : label);
+        }
 #endif
+
+
 
         static ClipAuthoring[] CopyClips(List<SpriteClipDef> clips)
         {
@@ -397,6 +1006,8 @@ namespace InvertLab.Sprites.DOTS
                 if (src == null)
                     continue;
 
+
+
                 result[i] = new ClipAuthoring
                 {
                     Name = src.Name,
@@ -406,6 +1017,13 @@ namespace InvertLab.Sprites.DOTS
                     FrameRows = CopyArray(src.FrameRows),
                     FrameRate = src.FrameRate,
                     WrapMode = src.WrapMode,
+                    Interrupt = src.Interrupt,
+                    CancelAfter = src.CancelAfter,
+                    Priority = src.Priority,
+                    OnCompleteClipIndex = src.OnCompleteClipIndex,
+                    ComboWindowStartFrame = src.ComboWindowStartFrame,
+                    ComboWindowEndFrame = src.ComboWindowEndFrame,
+                    ComboWindowPriorityBoost = src.ComboWindowPriorityBoost,
                     Loop = src.WrapMode == SpriteAnimWrap.Loop
                         || src.WrapMode == SpriteAnimWrap.ReverseLoop,
                     FrameDurationScales = CopyArray(src.FrameDurationScales),
@@ -423,6 +1041,8 @@ namespace InvertLab.Sprites.DOTS
             return result;
         }
 
+
+
         static T[] CopyArray<T>(T[] source)
         {
             if (source == null)
@@ -430,10 +1050,14 @@ namespace InvertLab.Sprites.DOTS
             return (T[])source.Clone();
         }
 
+
+
         static FrameSocketDef[] CopySockets(List<FrameSocketDef> sockets)
         {
             if (sockets == null || sockets.Count == 0)
                 return null;
+
+
 
             var result = new FrameSocketDef[sockets.Count];
             for (int i = 0; i < sockets.Count; i++)
@@ -441,6 +1065,8 @@ namespace InvertLab.Sprites.DOTS
                 var src = sockets[i];
                 if (src == null)
                     continue;
+
+
 
                 result[i] = new FrameSocketDef
                 {
@@ -454,6 +1080,8 @@ namespace InvertLab.Sprites.DOTS
             }
             return result;
         }
+
+
 
         static SpriteAnimSetBuilder.SocketInventoryInput[] BuildSocketInventoryInputs(
             SpriteSheetProfile profile)
@@ -492,6 +1120,8 @@ namespace InvertLab.Sprites.DOTS
             return result;
         }
 
+
+
         class Baker : Baker<SpriteAnimSetAuthoring>
         {
             public override void Bake(SpriteAnimSetAuthoring authoring)
@@ -504,6 +1134,8 @@ namespace InvertLab.Sprites.DOTS
                     profile.EnsureSocketMotions();
                 }
 
+
+
                 SpriteSheetDef bakeSheetDef = null;
                 bool useProfile = profile?.Clips != null && profile.Clips.Count > 0;
                 if (useProfile)
@@ -515,14 +1147,22 @@ namespace InvertLab.Sprites.DOTS
                 if (sheet == null || clipCount == 0)
                     return;
 
+
+
                 if (authoring.Profile != null)
                     DependsOn(authoring.Profile);
                 DependsOn(sheet);
 
+
+
                 var entity = GetEntity(authoring, TransformUsageFlags.Renderable);
+
+
 
                 // data-only bake: the GPU-instanced renderer consumes these directly
                 // (no GameObjects graphics components involved)
+
+
 
                 // ---- clip blob ----
                 var inputs = new SpriteAnimSetBuilder.ClipInput[clipCount];
@@ -577,6 +1217,8 @@ namespace InvertLab.Sprites.DOTS
                             : (byte)SpriteEaseMode.Linear;
                     }
 
+
+
                     int socketCount = useProfile
                         ? profileClip.Sockets?.Count ?? 0
                         : authorClip.Sockets?.Length ?? 0;
@@ -605,6 +1247,8 @@ namespace InvertLab.Sprites.DOTS
                         };
                     }
 
+
+
                     inputs[i] = new SpriteAnimSetBuilder.ClipInput
                     {
                         Name = useProfile
@@ -614,6 +1258,21 @@ namespace InvertLab.Sprites.DOTS
                             ? profileClip.WrapMode == SpriteAnimWrap.Loop || profileClip.WrapMode == SpriteAnimWrap.ReverseLoop
                             : authorClip.Loop || authorClip.WrapMode == SpriteAnimWrap.ReverseLoop,
                         WrapMode = useProfile ? profileClip.WrapMode : authorClip.WrapMode,
+                        Interrupt = useProfile ? profileClip.Interrupt : authorClip.Interrupt,
+                        CancelAfter = useProfile ? profileClip.CancelAfter : authorClip.CancelAfter,
+                        Priority = useProfile ? profileClip.Priority : authorClip.Priority,
+                        OnCompleteClipIndex = useProfile
+                            ? profileClip.OnCompleteClipIndex
+                            : authorClip.OnCompleteClipIndex,
+                        ComboWindowStartFrame = useProfile
+                            ? profileClip.ComboWindowStartFrame
+                            : authorClip.ComboWindowStartFrame,
+                        ComboWindowEndFrame = useProfile
+                            ? profileClip.ComboWindowEndFrame
+                            : authorClip.ComboWindowEndFrame,
+                        ComboWindowPriorityBoost = useProfile
+                            ? profileClip.ComboWindowPriorityBoost
+                            : authorClip.ComboWindowPriorityBoost,
                         FrameRate = Mathf.Max(0.1f, useProfile ? profileClip.FrameRate : authorClip.FrameRate),
                         GlobalFrameIndices = slots,
                         FrameDurationScales = useProfile ? profileClip.FrameDurationScales : authorClip.FrameDurationScales,
@@ -717,6 +1376,8 @@ namespace InvertLab.Sprites.DOTS
                     };
                 }
 
+
+
                 var inventoryInputs = BuildSocketInventoryInputs(profile);
                 var (setRef, player) = SpriteAnimSetBuilder.Build(
                     Allocator.Persistent, inputs, motionInputs, inventoryInputs);
@@ -730,8 +1391,16 @@ namespace InvertLab.Sprites.DOTS
                     DependsOn(playerAuthoring);
                     initialClip = Mathf.Clamp(playerAuthoring.ClipIndex, 0, clipCount - 1);
                     player.ClipIndex = initialClip;
-                    player.Speed = Mathf.Max(0.01f, playerAuthoring.Speed);
+                    player.Speed = playerAuthoring.Speed; // allow 0 (freeze) and negative (rewind)
                     player.Playing = playerAuthoring.Playing ? (byte)1 : (byte)0;
+                    player.QueuedClipIndex = playerAuthoring.QueuedClipIndex;
+                    player.QueuedForce = playerAuthoring.QueuedForce;
+                    player.ResumeClipIndex = playerAuthoring.ResumeClipIndex;
+                    player.OneShotActive = playerAuthoring.OneShotActive;
+                    player.CrossfadeDuration = Mathf.Max(0f, playerAuthoring.CrossfadeDuration);
+                    player.BlendOutTime = 0f;
+                    player.BlendDuration = 0f;
+                    player.Blend = 0f;
                     flipX = playerAuthoring.FlipX ? (byte)1 : (byte)0;
                     flipY = playerAuthoring.FlipY ? (byte)1 : (byte)0;
                 }
@@ -812,6 +1481,8 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
 
+
+
             static SpriteAnimSetBuilder.ClipInput.EventKeyInput[] EventKeysFromProfile(SpriteClipDef clip)
             {
                 if (clip == null)
@@ -849,6 +1520,8 @@ namespace InvertLab.Sprites.DOTS
                 }
                 return keys;
             }
+
+
 
             static SpriteAnimSetBuilder.ClipInput.EventPayloadInput[] PayloadsFromMarker(
                 SpriteClipEventMarker marker)
@@ -893,3 +1566,6 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 }
+
+
+

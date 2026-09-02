@@ -9,7 +9,7 @@ namespace InvertLab.Sprites.DOTS.Tests
     public sealed class SpriteColliderBakeTests
     {
         [Test]
-        public void LocalFromUvPutsFullCellAtOrigin()
+        public void LocalFromUvPutsFullCellAboveBottomPivot()
         {
             var box = new FrameBoxDef
             {
@@ -19,8 +19,9 @@ namespace InvertLab.Sprites.DOTS.Tests
 
             Assert.IsTrue(SpriteColliderWorld.TryLocalFromUv(
                 box, out var offset, out var size, out float angle));
+            // Bottom-center cell pivot: full-cell center sits at local (0, 0.5).
             Assert.AreEqual(0f, offset.x, 0.0001f);
-            Assert.AreEqual(0f, offset.y, 0.0001f);
+            Assert.AreEqual(0.5f, offset.y, 0.0001f);
             Assert.AreEqual(1f, size.x, 0.0001f);
             Assert.AreEqual(1f, size.y, 0.0001f);
             Assert.AreEqual(0f, angle, 0.0001f);

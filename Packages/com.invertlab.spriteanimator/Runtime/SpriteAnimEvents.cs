@@ -5,6 +5,16 @@ using UnityEngine;
 namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
+    /// Reserved <see cref="SpriteAnimEventBuffer.Id"/> values for clip lifecycle.
+    /// User-authored frame events should stay below these (1–249).
+    /// </summary>
+    public static class SpriteAnimLifecycleId
+    {
+        public const byte Start = 250;
+        public const byte Complete = 251;
+    }
+
+    /// <summary>
     /// Managed bridge for animation events. Pure ECS consumers should query
     /// SpriteAnimEventBuffer with SpriteAnimEventsPending instead.
     /// </summary>
@@ -12,11 +22,28 @@ namespace InvertLab.Sprites.DOTS
     {
         public static event Action<Entity, SpriteAnimEventBuffer> Raised;
 
+        /// <summary>Fired when a clip successfully begins (Play / chained completion start).</summary>
+        public static event Action<Entity, int> ClipStarted;
+
+        /// <summary>Fired when a Once clip finishes (forward end or reverse-to-start). Not on Loop wraps.</summary>
+        public static event Action<Entity, int> ClipCompleted;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void Reset() => Raised = null;
+        static void Reset()
+        {
+            Raised = null;
+            ClipStarted = null;
+            ClipCompleted = null;
+        }
 
         internal static void Raise(Entity entity, SpriteAnimEventBuffer animationEvent)
             => Raised?.Invoke(entity, animationEvent);
+
+        internal static void RaiseClipStarted(Entity entity, int clipIndex)
+            => ClipStarted?.Invoke(entity, clipIndex);
+
+        internal static void RaiseClipCompleted(Entity entity, int clipIndex)
+            => ClipCompleted?.Invoke(entity, clipIndex);
 
         /// <summary>Install event storage on an entity created without an authoring baker.</summary>
         public static void Ensure(EntityManager entityManager, Entity entity)
@@ -118,7 +145,14 @@ namespace InvertLab.Sprites.DOTS
                               .WithEntityAccess())
             {
                 for (int i = 0; i < events.Length; i++)
-                    SpriteAnimEvents.Raise(entity, events[i]);
+                {
+                    var ev = events[i];
+                    SpriteAnimEvents.Raise(entity, ev);
+                    if (ev.Id == SpriteAnimLifecycleId.Start)
+                        SpriteAnimEvents.RaiseClipStarted(entity, ev.ClipIndex);
+                    else if (ev.Id == SpriteAnimLifecycleId.Complete)
+                        SpriteAnimEvents.RaiseClipCompleted(entity, ev.ClipIndex);
+                }
             }
         }
     }

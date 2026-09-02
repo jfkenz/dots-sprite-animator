@@ -142,7 +142,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             var set = quad.AddComponent<SpriteAnimSetAuthoring>();
             set.Profile = profile;
             set.InitialClipIndex = 0;
-            set.ShowScenePreview = true;
+            set.ShowSpriteInScene = true;
             set.ApplyFromProfile();
 
             var player = quad.AddComponent<SpriteAnimPlayerAuthoring>();

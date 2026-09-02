@@ -1,7 +1,7 @@
 {
   "name": "com.invertlab.spriteanimator",
   "displayName": "DOTS Sprite Animator",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "unity": "6000.0",
   "description": "Portable DOTS-first 2D flipbook sprite animation package with timeline authoring, events, colliders, sockets, and CPU/GPU playback paths.",
   "author": {

@@ -33,6 +33,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -82,7 +89,13 @@ MonoBehaviour:
       FrameTweenModes: 0000000000000000
       FacingGroup: 
       Facing: 255
-      Sockets: []
+      Sockets:
+      - Name: HealthBarSocket
+        FrameIndex: 0
+        LocalPosition: {x: -1, y: 71}
+        LocalAngle: 0
+        LocalScale: {x: 1.0362911, y: 1}
+        DrawLayer: 0
       EventMarkers: []
     - Name: Bringer-of-Death-SpritSheet row 2
       SheetIndex: 0
@@ -91,6 +104,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -149,6 +169,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -207,6 +234,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -265,6 +299,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -323,6 +364,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -381,6 +429,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -439,6 +494,13 @@ MonoBehaviour:
       FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -527,6 +589,8 @@ MonoBehaviour:
       Lifetime: 0
       Physics: 0
       IsTrigger: 1
+      CharacterIncludeClips: []
+      CharacterExcludeClips: []
     - ClipName: Bringer-of-Death-SpritSheet row 3
       FrameIndex: 5
       RectUV:
@@ -558,9 +622,84 @@ MonoBehaviour:
       Lifetime: 0
       Physics: 0
       IsTrigger: 1
+      CharacterIncludeClips: []
+      CharacterExcludeClips: []
+    - ClipName: Bringer-of-Death-SpritSheet row 1
+      FrameIndex: -1
+      RectUV:
+        serializedVersion: 2
+        x: 0.10142855
+        y: 0.3888889
+        width: 0.26079366
+        height: 0.6074074
+      Id: 1
+      Shape: 0
+      PolygonUV: []
+      Angle: 0
+      Hidden: 0
+      Locked: 0
+      Lifetime: 1
+      Physics: 2
+      IsTrigger: 1
+      CharacterIncludeClips: []
+      CharacterExcludeClips:
+      - Bringer-of-Death-SpritSheet row 8
+      - Bringer-of-Death-SpritSheet row 7
     SocketCatalog:
-      Items: []
-    SocketMotions: []
+      Items:
+      - SocketName: HealthBarSocket
+        SocketId: ui.healthbar
+        Texture: {fileID: 0}
+        Profile: {fileID: 0}
+        ClipName: 
+        PlayMode: 0
+        Columns: 1
+        Rows: 1
+        Pivot: {x: 0.5, y: 0.5}
+        CellIndex: 0
+        GripPixels: {x: 0, y: 0}
+        Scale: 1
+        FlipX: 0
+        SortingOffset: 0
+        PreviewEnabled: 1
+        PathWrap: 0
+        MotionMode: 1
+        Speed: 1
+    SocketMotions:
+    - SocketName: HealthBarSocket
+      ReferenceSheetIndex: 0
+      Duration: 1
+      Loop: 1
+      DefaultEaseMode: 1
+      DefaultPathMode: 0
+      DefaultRotationMode: 0
+      AnchorSpace: 0
+      Keys:
+      - NormalizedTime: 0
+        LocalPosition: {x: 1, y: 28}
+        LocalAngle: 0
+        LocalScale: {x: 1.0362911, y: 1}
+        DrawLayer: 0
+        EaseMode: 1
+        PathMode: 0
+        InTangent: {x: 0, y: 0}
+        OutTangent: {x: 0, y: 0}
+        ArcBulge: 0
+        ArcClockwise: 0
+        RotationMode: 0
+        RotationTurns: 0
+        FacingAngleOffset: 0
+        AllowOvershoot: 0
+        UseCustomEase: 0
+        CustomEaseCurve:
+          serializedVersion: 2
+          m_Curve: []
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        CustomEaseSamplesA: {x: 0, y: 0.14285715, z: 0.2857143, w: 0.42857143}
+        CustomEaseSamplesB: {x: 0.5714286, y: 0.71428573, z: 0.85714287, w: 1}
+      Triggers: []
     SocketInventories: []
     IndependentTimelineInitialized: 1
     IndependentTimelineUsesSeconds: 1

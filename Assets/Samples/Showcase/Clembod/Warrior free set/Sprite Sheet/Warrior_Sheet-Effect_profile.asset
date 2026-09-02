@@ -870,7 +870,7 @@ MonoBehaviour:
       Hidden: 0
       Locked: 0
       Lifetime: 0
-      Physics: 0
+      Physics: 2
       IsTrigger: 1
     - ClipName: Bringer-of-Death-SpritSheet row 14
       FrameIndex: 2
@@ -897,7 +897,7 @@ MonoBehaviour:
       Hidden: 0
       Locked: 0
       Lifetime: 0
-      Physics: 0
+      Physics: 2
       IsTrigger: 1
     SocketCatalog:
       Items: []

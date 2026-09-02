@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0] - 2026-09-02
+
+- Scene sockets: convert pivot-relative pixel poses to bottom-center mesh local so independent/frame sockets (e.g. HealthBarSocket) match the animator preview after the cell pivot change. Formula: meshLocal = ((pivot - (0.5,0)) * cellSize + pixels) / PPU.
+- Added Bake Pivot (default on) — empty Pivot child at local (0,0) — and Show Scene Pivot gizmo (crosshair + label).
+
+- Editor: renamed inspector toggle **Show Scene Preview** -> **Show Sprite** (`ShowSpriteInScene`, FormerlySerializedAs).
+- Combat/playback pack: `Hitstop`/`Hold`/`HoldAtFrame` (shared `HitstopRemaining`/`HitstopRestoreSpeed`/`HitstopActive` timer; simulation delta), combo window (`ComboWindowStartFrame`/`EndFrame`/`PriorityBoost` on clip + blob; `InComboWindow`/`TryComboPlay`; interrupt Always + priority boost in window), facing helpers (`SetFacing`, `PlayMirrored`, `Play`/`PlayFacing` flipX overloads), `PlayRandomStart`, `PlayWeighted` (NativeArray + managed + up to 4 pairs).
+- Clip extras: `SetSpeed`/`GetSpeed` (negative = rewind, 0 = freeze clock), `Pause`/`Resume`/`Freeze`/`Unfreeze`, `SeekFrame`/`SeekNormalized`/`SetTime` on `SpriteAnims` and `SpriteAnimPlayerAuthoring`.
+- Lifecycle: `SpriteAnimEvents.ClipStarted` / `ClipCompleted` (+ reserved Ids 250/251). Once + negative speed completes at phase 0.
+- Playback control: clip `Interrupt` modes `Always` / `Never` / `AfterTime`, plus clip `Priority` gating for `Play`.
+- Queue helpers: `PlayOrQueue` and `PlayOneShot` on the authoring player.
+- Clip `OnCompleteClipIndex` chaining when a once-shot finishes.
+- Crossfade: `Blend` weight (1->0) exposed for gameplay / shaders during fade.
+- Sockets: `SyncUnitySockets` keeps GameObject socket transforms aligned with the current frame.
+- Editor: rename UX control IDs cleaned up; frame-delete now persists correctly on Save Profile.
+- Package cleanup: removed broken BallForge/legacy Examples scene; control focus names use InvertLab prefixes.
+
 ## 0.7.0 - 2026-08-27
 
 - Rebranded package ownership under **InvertLab**:

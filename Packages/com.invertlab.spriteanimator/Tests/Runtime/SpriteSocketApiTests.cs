@@ -5,6 +5,8 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
 
+
+
 namespace InvertLab.Sprites.DOTS.Tests
 {
     public sealed class SpriteSocketApiTests
@@ -24,7 +26,11 @@ namespace InvertLab.Sprites.DOTS.Tests
                 },
             };
 
+
+
             profile.EnsureSocketCatalog();
+
+
 
             Assert.AreEqual("head.slot", profile.SocketCatalog.Items[0].SocketId);
             Assert.AreEqual("head.slot.2", profile.SocketCatalog.Items[1].SocketId);
@@ -33,6 +39,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             profile.EnsureSocketCatalog();
             Assert.AreEqual(stableId, profile.SocketCatalog.Items[0].SocketId);
         }
+
+
 
         [Test]
         public void IndependentTracksMigrateToOneMasterTimeline()
@@ -48,7 +56,11 @@ namespace InvertLab.Sprites.DOTS.Tests
                 },
             };
 
+
+
             profile.EnsureSocketMotions();
+
+
 
             Assert.AreEqual(21, profile.IndependentMotionFrameCount);
             Assert.AreEqual(2f, profile.IndependentMotionDuration, 0.0001f);
@@ -59,6 +71,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.IsTrue(profile.SocketMotions[0].Loop);
             Assert.IsTrue(profile.SocketMotions[1].Loop);
         }
+
+
 
         [Test]
         public void IndependentDrawLayerHoldsUntilNextKey()
@@ -73,6 +87,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                 },
             };
 
+
+
             Assert.AreEqual(SpriteSocketKeys.DrawFront,
                 SpriteSocketKeys.ResolveIndependentDrawLayer(track, 0.1f));
             Assert.AreEqual(SpriteSocketKeys.DrawBehind,
@@ -84,11 +100,15 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.IsTrue(SpriteSocketKeys.IsIndependentDrawnBehind(track, 0.4f, false));
             Assert.IsFalse(SpriteSocketKeys.IsIndependentDrawnBehind(track, 0.9f, true));
 
+
+
             track.Loop = false;
             Assert.AreEqual(SpriteSocketKeys.DrawUnset,
                 SpriteSocketKeys.ResolveIndependentDrawLayer(track, 0.1f));
             Assert.IsTrue(SpriteSocketKeys.IsIndependentDrawnBehind(track, 0.1f, true));
         }
+
+
 
         [Test]
         public void TriggerCrossingsIncludeEveryHighSpeedLoop()
@@ -96,11 +116,15 @@ namespace InvertLab.Sprites.DOTS.Tests
             int count = SpriteSocketTriggerUtility.CountCrossings(
                 0.1f, 3.6f, 1f, 0.5f, true, out int firstSequence);
 
+
+
             Assert.AreEqual(4, count);
             Assert.AreEqual(0, firstSequence);
             Assert.AreEqual(0, SpriteSocketTriggerUtility.CountCrossings(
                 0.5f, 0.6f, 1f, 0.5f, false, out _));
         }
+
+
 
         [Test]
         public void IndependentKeyStepConvertsSecondsAndFrames()
@@ -114,6 +138,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                     true, 0.1f, 12f, 3),
                 0.0001f);
         }
+
+
 
         [Test]
         public void NaturalEasePresetsKeepStableEndpoints()
@@ -136,11 +162,15 @@ namespace InvertLab.Sprites.DOTS.Tests
                 SpriteEase.Evaluate(SpriteEaseMode.EaseInOut, 0.5f), 0.0001f);
         }
 
+
+
         [Test]
         public void NoneMotionOptionsDisableEasePathAndRotation()
         {
             Assert.AreEqual(0.4f,
                 SpriteEase.Evaluate(SpriteEaseMode.None, 0.4f), 0.0001f);
+
+
 
             var p1 = new float2(0f, 0f);
             var p2 = new float2(4f, 2f);
@@ -155,6 +185,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                 12f, 90f, 0, 0f, new float2(1f, 0f), 0.5f), 0.0001f);
         }
 
+
+
         [Test]
         public void OvershootPolicyClampsOrPreservesBackEase()
         {
@@ -166,6 +198,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual(1f, clamped, 0.0001f);
         }
 
+
+
         [Test]
         public void LinearAndSmoothSocketPathsUseDifferentSpatialInterpolation()
         {
@@ -174,14 +208,20 @@ namespace InvertLab.Sprites.DOTS.Tests
             var p2 = new float2(1f, 1f);
             var p3 = new float2(3f, 0f);
 
+
+
             float2 linear = SpriteSocketMotionInterpolation.Position(
                 (byte)SpriteSocketPathMode.Linear, p0, p1, p2, p3, 0.5f);
             float2 smooth = SpriteSocketMotionInterpolation.Position(
                 (byte)SpriteSocketPathMode.SmoothPath, p0, p1, p2, p3, 0.5f);
 
+
+
             Assert.AreEqual(new float2(0.5f, 0.5f), linear);
             Assert.AreNotEqual(linear, smooth);
         }
+
+
 
         [Test]
         public void EverySocketPathHasStableEndpointsAndFiniteDerivative()
@@ -211,6 +251,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             }
         }
 
+
+
         [Test]
         public void RotationModesRespectDirectionTurnsAndPathFacing()
         {
@@ -232,6 +274,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual(105f, facing, 0.0001f);
         }
 
+
+
         [Test]
         public void CustomEaseCacheMatchesBurstSampleEvaluation()
         {
@@ -249,6 +293,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                 key.CustomEaseSamplesB.x, key.CustomEaseSamplesB.y,
                 key.CustomEaseSamplesB.z, key.CustomEaseSamplesB.w);
 
+
+
             for (int i = 0; i <= 20; i++)
             {
                 float t = i / 20f;
@@ -258,6 +304,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                 Assert.That(burst, Is.InRange(0f, 1f));
             }
         }
+
+
 
         [Test]
         public void CustomEaseCacheClampsOvershootAndReverseMotion()
@@ -272,7 +320,11 @@ namespace InvertLab.Sprites.DOTS.Tests
                     new UnityEngine.Keyframe(1f, 1f)),
             };
 
+
+
             key.RebuildCustomEaseSamples();
+
+
 
             float previous = -1f;
             for (int i = 0; i <= 20; i++)
@@ -285,6 +337,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual(0f, key.EvaluateCustomEase(0f), 0.0001f);
             Assert.AreEqual(1f, key.EvaluateCustomEase(1f), 0.0001f);
         }
+
+
 
         [Test]
         public void CustomEaseCanPreserveOvershootWhenEnabled()
@@ -301,10 +355,14 @@ namespace InvertLab.Sprites.DOTS.Tests
             };
             key.RebuildCustomEaseSamples();
 
+
+
             Assert.Greater(key.EvaluateCustomEase(0.5f), 1f);
             Assert.Less(key.EvaluateCustomEase(0.75f),
                 key.EvaluateCustomEase(0.5f));
         }
+
+
 
         [Test]
         public void InvalidSocketPathMigratesToSmoothPath()
@@ -317,13 +375,19 @@ namespace InvertLab.Sprites.DOTS.Tests
                 },
             };
 
+
+
             track.Normalize(1);
+
+
 
             Assert.AreEqual((byte)SpriteSocketPathMode.SmoothPath,
                 track.Keys[0].PathMode);
             Assert.AreEqual((byte)SpriteSocketRotationMode.Shortest,
                 track.Keys[0].RotationMode);
         }
+
+
 
         [Test]
         public void TrackStyleDefaultsSurviveNormalizeAndRejectInvalidValues()
@@ -336,7 +400,11 @@ namespace InvertLab.Sprites.DOTS.Tests
                 AnchorSpace = (byte)SpriteSocketAnchorSpace.World,
             };
 
+
+
             track.Normalize(1);
+
+
 
             Assert.AreEqual((byte)SpriteEaseMode.BounceOut, track.DefaultEaseMode);
             Assert.AreEqual((byte)SpriteSocketPathMode.Arc, track.DefaultPathMode);
@@ -344,11 +412,15 @@ namespace InvertLab.Sprites.DOTS.Tests
                 track.DefaultRotationMode);
             Assert.AreEqual((byte)SpriteSocketAnchorSpace.World, track.AnchorSpace);
 
+
+
             track.DefaultEaseMode = 99;
             track.DefaultPathMode = 99;
             track.DefaultRotationMode = 99;
             track.AnchorSpace = 99;
             track.Normalize(1);
+
+
 
             Assert.AreEqual((byte)SpriteEaseMode.SmoothStep, track.DefaultEaseMode);
             Assert.AreEqual((byte)SpriteSocketPathMode.SmoothPath, track.DefaultPathMode);
@@ -357,6 +429,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual((byte)SpriteSocketAnchorSpace.CharacterPivot,
                 track.AnchorSpace);
         }
+
+
 
         [Test]
         public void ExtendingIndependentTimelinePreservesAbsoluteTimes()
@@ -384,7 +458,11 @@ namespace InvertLab.Sprites.DOTS.Tests
                 },
             };
 
+
+
             Assert.IsTrue(profile.ExtendIndependentMotionDurationPreserveTimes(2.5f));
+
+
 
             var track = profile.SocketMotions[0];
             Assert.AreEqual(2.5f, profile.IndependentMotionDuration, 0.0001f);
@@ -395,6 +473,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                 track.Triggers[0].NormalizedTime * profile.IndependentMotionDuration,
                 0.0001f);
         }
+
+
 
         [Test]
         public void FrameAttachedSocketMovesBetweenFrameKeys()
@@ -423,11 +503,15 @@ namespace InvertLab.Sprites.DOTS.Tests
             };
             clip.EnsureFrameData();
 
+
+
             Assert.IsTrue(SpriteSocketKeys.TrySampleAtTime(
                 clip.Sockets, "Helmet", clip, 0.5f, false, false,
                 out var position, out _, out _, out _));
             Assert.AreEqual(new UnityEngine.Vector2(0.5f, 0.5f), position);
         }
+
+
 
         [Test]
         public void BuilderBakesSocketIdsAndTriggers()
@@ -494,6 +578,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                 },
             };
 
+
+
             var (setRef, _) = SpriteAnimSetBuilder.Build(Allocator.Temp, clips, motions);
             Assert.AreEqual(SpriteSockets.Hash("combat.muzzle"),
                 setRef.Set.Value.Clips[0].FrameSockets[0].SocketIdHash);
@@ -524,6 +610,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             setRef.Set.Dispose();
         }
 
+
+
         [Test]
         public void WorldAnchorCompensatesForCharacterTranslationAndRotation()
         {
@@ -534,13 +622,19 @@ namespace InvertLab.Sprites.DOTS.Tests
                 quaternion.RotateZ(math.radians(90f)),
                 new float3(1f));
 
+
+
             SpriteSocketMotionSystem.ResolveWorldAnchor(
                 new float3(10f, 5f, 0f), 0f, movedCharacter, ref position, ref angle);
+
+
 
             Assert.AreEqual(0f, position.x, 0.0001f);
             Assert.AreEqual(1f, position.y, 0.0001f);
             Assert.AreEqual(-75f, angle, 0.0001f);
         }
+
+
 
         [Test]
         public void LookupResolvesLocalAndWorldPose()
@@ -558,8 +652,12 @@ namespace InvertLab.Sprites.DOTS.Tests
                 LocalScale = new float2(1f),
             });
 
+
+
             Assert.IsTrue(SpriteSockets.TryGetPose(buffer, SpriteSockets.Hash(id), out var local));
             Assert.AreEqual(new float2(2f, 3f), local.LocalPosition);
+
+
 
             var localToWorld = new LocalToWorld
             {
@@ -571,6 +669,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.That(worldPose.Position.x, Is.EqualTo(12f).Within(0.0001f));
             Assert.That(worldPose.Position.y, Is.EqualTo(23f).Within(0.0001f));
         }
+
+
 
         [Test]
         public void PlayDoesNotResetIndependentSocketClock()
@@ -602,6 +702,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             world.EntityManager.AddComponentData(entity,
                 new SpriteSocketMotionPlayer { Time = 3.25f, Speed = 2f, Playing = 1 });
 
+
+
             Assert.IsTrue(SpriteAnims.Play(world.EntityManager, entity, 1));
             var motionPlayer =
                 world.EntityManager.GetComponentData<SpriteSocketMotionPlayer>(entity);
@@ -609,5 +711,51 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual(2f, motionPlayer.Speed);
             setRef.Set.Dispose();
         }
+
+
+
+        
+        [Test]
+        public void MirrorAroundCellCenter_WithoutTexture_UsesUnitCellHeight()
+        {
+            var sheet = new SpriteSheetDef
+            {
+                Columns = 1,
+                Rows = 1,
+                PixelsPerUnit = 100f,
+            };
+            var p = new UnityEngine.Vector2(0.25f, 0.25f);
+            var mirroredX = SpriteSocketWorld.MirrorAroundCellCenter(p, sheet, true, false);
+            Assert.AreEqual(-0.25f, mirroredX.x, 0.0001f);
+            Assert.AreEqual(0.25f, mirroredX.y, 0.0001f);
+
+            var mirroredY = SpriteSocketWorld.MirrorAroundCellCenter(p, sheet, false, true);
+            Assert.AreEqual(0.25f, mirroredY.x, 0.0001f);
+            Assert.AreEqual(0.75f, mirroredY.y, 0.0001f);
+
+            var both = SpriteSocketWorld.MirrorAroundCellCenter(p, sheet, true, true);
+            Assert.AreEqual(-0.25f, both.x, 0.0001f);
+            Assert.AreEqual(0.75f, both.y, 0.0001f);
+        }
+
+        [Test]
+        public void PixelsFromPivotToMeshLocal_WithoutTexture_ReturnsPixelsOverPpu()
+        {
+            var sheet = new SpriteSheetDef
+            {
+                Columns = 1,
+                Rows = 1,
+                PixelsPerUnit = 50f,
+            };
+            var local = SpriteSocketWorld.PixelsFromPivotToMeshLocal(
+                sheet, new UnityEngine.Vector2(0.5f, 0.5f), new UnityEngine.Vector2(10f, -20f));
+            Assert.AreEqual(10f / 50f, local.x, 0.0001f);
+            Assert.AreEqual(-20f / 50f, local.y, 0.0001f);
+        }
+
+
+
+
     }
 }
+

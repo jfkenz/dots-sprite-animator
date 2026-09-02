@@ -87,7 +87,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (renderer != null)
                     Undo.RecordObject(renderer, "Setup Authoring Example Scene");
                 set.Profile = profile;
-                set.ShowScenePreview = true;
+                set.ShowSpriteInScene = true;
                 set.ApplyFromProfile();
                 set.ApplyQuadPreview();
                 EditorUtility.SetDirty(set);

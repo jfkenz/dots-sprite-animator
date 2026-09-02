@@ -121,7 +121,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         const string PackageVersion = "0.8.0";
         const float ToolbarHeight = 48f;
-        const float TimelineHeight = 244f;
+        const float DefaultTimelineHeight = 244f;
+        const float MinTimelineHeight = 120f;
+        const float MinWorkAreaHeight = 230f;
         const float TimelineEventLaneY = 27f;
         const float TimelineEventLaneH = 23f;
         const float TimelineDrawLaneY = 50f;
@@ -134,7 +136,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float IndependentTrackRowH = 42f;
         const float DefaultClipPanelWidth = 220f;
         const float DefaultInspectorPanelWidth = 340f;
-        const float MinClipPanelWidth = 196f;
+        const float MinClipPanelWidth = 180f;
         const float MinPreviewPanelWidth = 220f;
         const float MinInspectorPanelWidth = 260f;
         const float Gap = 8f;
@@ -153,12 +155,18 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float SocketGroupGizmoPad = 28f;
         const float SocketGroupGizmoMinHalf = 36f;
         const int SocketProfilePickerId = 0x5A0C3701;
-        const string ClipRenameControl = "BallForgeSpriteAnimator.ClipRename";
+        const string ClipRenameControl = "InvertLabSpriteAnimator.ClipRename";
         const string SheetRenameControl = "InvertLabSpriteAnimator.SheetRename";
-        const string StringFieldControlPrefix = "BallForgeSpriteAnimator.Text.";
+        const string SocketNameRenameControl = "InvertLabSpriteAnimator.SocketNameRename";
+        const string SocketIdRenameControl = "InvertLabSpriteAnimator.SocketIdRename";
+        const string InventoryRenameControl = "InvertLabSpriteAnimator.InventoryRename";
+        const string EventRenameControl = "InvertLabSpriteAnimator.EventRename";
+        const string StringFieldControlPrefix = "InvertLabSpriteAnimator.Text.";
         const float SheetRowHeight = 38f;
-        const float NestedClipRowHeight = 36f;
+        const float NestedClipRowHeight = 22f;
         const float ClipNestIndent = 14f;
+        const float ClipRowDeleteWidth = 18f;
+        const float ClipRowFoldWidth = 14f;
 
         static readonly Color WindowColor = new(0.075f, 0.086f, 0.105f);
         static readonly Color PanelColor = new(0.105f, 0.12f, 0.145f);
@@ -173,8 +181,10 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] SpriteSheetProfile _profile;
         [SerializeField] float _clipPanelWidth = DefaultClipPanelWidth;
         [SerializeField] float _inspectorPanelWidth = DefaultInspectorPanelWidth;
+        [SerializeField] float _timelinePanelHeight = DefaultTimelineHeight;
+        [SerializeField] bool _clipRowDetailsExpanded = true;
         [SerializeField] PreviewOffsetMode _previewOffsetMode = PreviewOffsetMode.Authored;
-        ScriptableSpriteSheetProfile _asset;
+        [SerializeField] ScriptableSpriteSheetProfile _asset;
         ScriptableSpriteSheetProfile _undoProxy;
         bool _showHistoryPanel;
         Rect _historyWindowRect = new(40f, 56f, 280f, 340f);
@@ -183,6 +193,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         readonly List<string> _redoNames = new();
         readonly List<int> _sheetClipCounts = new();
         int _selectedClip;
+        readonly HashSet<int> _selectedClips = new();
         int _selectedSheet;
         bool _showTimelineInputHelp;
         bool _showSheetCellPicker;
@@ -385,6 +396,25 @@ namespace InvertLab.Sprites.DOTS.Editor
         string _renameClipValue = string.Empty;
         string _renameClipOriginal = string.Empty;
         bool _focusClipRename;
+        Rect _clipRenameFieldRect;
+        bool _hasClipRenameFieldRect;
+        string _renamingSocketName;
+        string _renameSocketNameValue = string.Empty;
+        string _renameSocketNameOriginal = string.Empty;
+        bool _focusSocketNameRename;
+        string _renamingSocketId;
+        string _renameSocketIdValue = string.Empty;
+        string _renameSocketIdOriginal = string.Empty;
+        bool _focusSocketIdRename;
+        int _renamingInventoryIndex = -1;
+        string _renameInventoryValue = string.Empty;
+        string _renameInventoryOriginal = string.Empty;
+        bool _focusInventoryRename;
+        int _renameInventoryTargetIndex = -1;
+        byte _renamingEventId;
+        string _renameEventValue = string.Empty;
+        string _renameEventOriginal = string.Empty;
+        bool _focusEventRename;
         TimelineDragMode _timelineDragMode;
         Vector2 _timelineDragStartScreen;
         Vector2 _timelineDragContentMouse;
@@ -393,6 +423,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _panClickPlacesPlayhead;
         float _panelResizeMouseStartX;
         float _panelResizeWidthStart;
+        float _panelResizeMouseStartY;
+        float _panelResizeHeightStart;
         int _dragFrameIndex = -1;
         int _dropFrameSlot = -1;
         bool _reorderMoved;
@@ -560,7 +592,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             EnsureStyles();
             HandleGlobalShortcuts();
             PollSocketProfilePicker();
-            if (Event.current.type == EventType.MouseDown && Event.current.button == 0)
+            // Focusing the window clears IMGUI text-field focus. While an inline rename is
+            // active that makes HandleBrowserRenameKeys treat the click as click-away and
+            // immediately commit - so skip Focus() until rename finishes.
+            if (Event.current.type == EventType.MouseDown && Event.current.button == 0 &&
+                !IsRenamingAnything())
                 Focus();
 
             // Keep Layout/Repaint call order stable, but hide mouse events from the
@@ -571,18 +607,24 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Event.current.type = EventType.Ignore;
 
             int timelineControlId = GUIUtility.GetControlID(
-                "BallForgeSpriteAnimatorTimeline".GetHashCode(), FocusType.Passive);
+                "InvertLabSpriteAnimatorTimeline".GetHashCode(), FocusType.Passive);
             HandleActiveTimelineDrag(timelineControlId);
             EditorGUI.DrawRect(new Rect(Vector2.zero, position.size), WindowColor);
 
             DrawToolbar(new Rect(0f, 0f, position.width, ToolbarHeight));
 
-            float timelineHeight = Mathf.Min(TimelineHeight, position.height * 0.38f);
+            float maxTimeline = Mathf.Max(MinTimelineHeight,
+                position.height - ToolbarHeight - MinWorkAreaHeight - Gap * 3f);
+            if (_timelinePanelHeight < 1f)
+                _timelinePanelHeight = DefaultTimelineHeight;
+            _timelinePanelHeight = Mathf.Clamp(_timelinePanelHeight, MinTimelineHeight, maxTimeline);
+            float timelineHeight = _timelinePanelHeight;
             var workRect = new Rect(
                 Gap,
                 ToolbarHeight + Gap,
                 position.width - Gap * 2f,
-                Mathf.Max(230f, position.height - ToolbarHeight - timelineHeight - Gap * 3f));
+                Mathf.Max(MinWorkAreaHeight,
+                    position.height - ToolbarHeight - timelineHeight - Gap * 3f));
             ClampPanelWidths(workRect.width);
             float centerWidth = workRect.width - _clipPanelWidth - _inspectorPanelWidth - Gap * 2f;
             var clipsRect = new Rect(workRect.x, workRect.y, _clipPanelWidth, workRect.height);
@@ -590,11 +632,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             var previewRect = new Rect(leftSplitter.xMax, workRect.y, centerWidth, workRect.height);
             var rightSplitter = new Rect(previewRect.xMax, workRect.y, Gap, workRect.height);
             var inspectorRect = new Rect(rightSplitter.xMax, workRect.y, _inspectorPanelWidth, workRect.height);
+            var timelineSplitter = new Rect(Gap, workRect.yMax, position.width - Gap * 2f, Gap);
             var timelineRect = new Rect(
                 Gap,
-                workRect.yMax + Gap,
+                timelineSplitter.yMax,
                 position.width - Gap * 2f,
-                position.height - workRect.yMax - Gap * 2f);
+                Mathf.Max(MinTimelineHeight, position.height - timelineSplitter.yMax - Gap));
 
             DrawPanel(clipsRect);
             DrawPanel(previewRect);
@@ -608,6 +651,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPreview(previewRect);
             DrawPanelSplitter(leftSplitter, true, workRect.width);
             DrawPanelSplitter(rightSplitter, false, workRect.width);
+            DrawTimelineSplitter(timelineSplitter);
             DrawTimeline(timelineRect, timelineControlId);
             DrawHistoryOverlay();
 
@@ -633,14 +677,15 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawPanelSplitter(Rect rect, bool resizeClipPanel, float workWidth)
         {
+            var hit = new Rect(rect.x - 2f, rect.y, rect.width + 4f, rect.height);
             int controlId = GUIUtility.GetControlID(
-                (resizeClipPanel ? "BallForgeClipSplitter" : "BallForgeInspectorSplitter").GetHashCode(),
-                FocusType.Passive, rect);
+                (resizeClipPanel ? "InvertLabClipSplitter" : "InvertLabInspectorSplitter").GetHashCode(),
+                FocusType.Passive, hit);
             var evt = Event.current;
             bool active = GUIUtility.hotControl == controlId;
-            bool hovered = rect.Contains(evt.mousePosition);
+            bool hovered = hit.Contains(evt.mousePosition);
 
-            EditorGUIUtility.AddCursorRect(rect, MouseCursor.ResizeHorizontal);
+            EditorGUIUtility.AddCursorRect(hit, MouseCursor.ResizeHorizontal);
             Color grip = active || hovered ? AccentColor : BorderColor;
             EditorGUI.DrawRect(new Rect(rect.center.x - 1f, rect.y + 4f, 2f, rect.height - 8f), grip);
 
@@ -678,6 +723,60 @@ namespace InvertLab.Sprites.DOTS.Editor
                 else
                     _inspectorPanelWidth = _panelResizeWidthStart - delta;
                 ClampPanelWidths(workWidth);
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseUp && evt.button == 0 && active)
+            {
+                GUIUtility.hotControl = 0;
+                evt.Use();
+                Repaint();
+            }
+        }
+
+        void DrawTimelineSplitter(Rect rect)
+        {
+            // Slightly taller hit target than the visual gap for easier vertical drag.
+            var hit = new Rect(rect.x, rect.y - 2f, rect.width, rect.height + 4f);
+            int controlId = GUIUtility.GetControlID(
+                "InvertLabTimelineSplitter".GetHashCode(), FocusType.Passive, hit);
+            var evt = Event.current;
+            bool active = GUIUtility.hotControl == controlId;
+            bool hovered = hit.Contains(evt.mousePosition);
+
+            EditorGUIUtility.AddCursorRect(hit, MouseCursor.ResizeVertical);
+            Color grip = active || hovered ? AccentColor : BorderColor;
+            EditorGUI.DrawRect(new Rect(rect.x + 8f, rect.center.y - 1f, rect.width - 16f, 2f), grip);
+
+            if (evt.type == EventType.MouseDown && evt.button == 0 && hovered)
+            {
+                if (evt.clickCount >= 2)
+                {
+                    _timelinePanelHeight = DefaultTimelineHeight;
+                    _status = "Reset timeline height";
+                }
+                else
+                {
+                    GUIUtility.hotControl = controlId;
+                    _panelResizeMouseStartY = evt.mousePosition.y;
+                    _panelResizeHeightStart = _timelinePanelHeight;
+                }
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (evt.type == EventType.MouseDrag && active)
+            {
+                // Dragging the bar down grows the timeline (upper work area shrinks).
+                float delta = evt.mousePosition.y - _panelResizeMouseStartY;
+                _timelinePanelHeight = _panelResizeHeightStart - delta;
+                float maxTimeline = Mathf.Max(MinTimelineHeight,
+                    position.height - ToolbarHeight - MinWorkAreaHeight - Gap * 3f);
+                _timelinePanelHeight = Mathf.Clamp(
+                    _timelinePanelHeight, MinTimelineHeight, maxTimeline);
                 evt.Use();
                 Repaint();
                 return;
@@ -1201,7 +1300,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 float cardH = cardPad + headerH + cardPad;
                 if (expanded)
                 {
-                    float insetH = insetMargin + n * clipRowH + 4f + actionH + insetMargin;
+                    float clipsH = MeasureSheetClipRowsHeight(s, clipCount, clipRowH);
+                    float insetH = insetMargin + clipsH + 4f + actionH + insetMargin;
                     cardH = cardPad + headerH + 6f + insetH + cardPad;
                     if (!stackAddSheet)
                         cardH += 4f + addSheetH;
@@ -1214,6 +1314,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 new Rect(0f, 0f, listRect.width - 15f, contentHeight));
 
             var input = Event.current;
+            if (_renamingClip < 0)
+                _hasClipRenameFieldRect = false;
             HandleBrowserRenameKeys(input);
 
             float y = 4f;
@@ -1231,7 +1333,10 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 float insetH = 0f;
                 if (expanded)
-                    insetH = insetMargin + clipsOnSheet * clipRowH + 4f + actionH + insetMargin;
+                {
+                    float clipsH = MeasureSheetClipRowsHeight(s, clipCount, clipRowH);
+                    insetH = insetMargin + clipsH + 4f + actionH + insetMargin;
+                }
                 float cardH = cardPad + headerH + cardPad;
                 if (expanded)
                 {
@@ -1298,6 +1403,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                     float clipY = inset.y + insetMargin;
                     int pendingDeleteClip = -1;
+                    int pendingDuplicateClip = -1;
+                    SyncClipMultiSelection();
                     if (_profile.Clips != null)
                     {
                         for (int i = 0; i < clipCount; i++)
@@ -1305,63 +1412,143 @@ namespace InvertLab.Sprites.DOTS.Editor
                             var clip = _profile.Clips[i];
                             if (clip == null || clip.SheetIndex != s)
                                 continue;
-                            var itemRect = new Rect(inset.x + 4f, clipY, inset.width - 8f, clipRowH - 2f);
-                            const float rowDeleteW = 44f;
-                            var rowDeleteRect = new Rect(itemRect.xMax - rowDeleteW - 4f,
-                                itemRect.y + 6f, rowDeleteW, itemRect.height - 12f);
-                            var clipNameRect = new Rect(itemRect.x + 8f, itemRect.y + 2f,
-                                Mathf.Max(20f, rowDeleteRect.x - itemRect.x - 12f), 16f);
+
+                            bool isPrimary = i == _selectedClip;
+                            bool isSelected = _selectedClips.Contains(i) || isPrimary;
+                            bool showDetail = isPrimary && isSelected && _clipRowDetailsExpanded;
+                            float detailH = showDetail ? MeasureClipRowDetailHeight(clip) : 0f;
+                            float rowH = clipRowH + detailH;
+                            var itemRect = new Rect(inset.x + 4f, clipY, inset.width - 8f, rowH - 2f);
+                            var headerRow = new Rect(itemRect.x, itemRect.y, itemRect.width, clipRowH - 2f);
+
+                            // Compact row: [fold][name……][✕] — fold column reserved on all rows for alignment.
+                            float foldW = ClipRowFoldWidth;
+                            float delW = ClipRowDeleteWidth;
+                            float nameLeft = headerRow.x + 4f + foldW;
+                            float nameRight = headerRow.xMax - 4f - delW - 2f;
+                            var foldRect = new Rect(headerRow.x + 2f, headerRow.y + 2f, foldW, 16f);
+                            var deleteRect = new Rect(nameRight + 2f, headerRow.y + 2f, delW, 16f);
+                            var clipNameRect = new Rect(nameLeft, headerRow.y + 2f,
+                                Mathf.Max(20f, nameRight - nameLeft), 16f);
+                            var detailRect = new Rect(
+                                itemRect.x + ClipNestIndent,
+                                headerRow.yMax + 2f,
+                                Mathf.Max(40f, itemRect.width - ClipNestIndent - 4f),
+                                showDetail ? Mathf.Max(0f, detailH - 4f) : 0f);
 
                             bool isRenamingClip = i == _renamingClip;
+                            // Draw selection chrome with DrawRect (not a button-styled Box) so the
+                            // row never competes with the inline rename TextField for hotControl.
+                            EditorGUI.DrawRect(itemRect, isSelected || isRenamingClip
+                                ? new Color(0.12f, 0.34f, 0.47f, 1f)
+                                : PanelAltColor);
+                            if (showDetail)
+                            {
+                                var detailBg = new Rect(itemRect.x + 1f, headerRow.yMax,
+                                    itemRect.width - 2f, itemRect.yMax - headerRow.yMax - 1f);
+                                EditorGUI.DrawRect(detailBg, new Color(0.08f, 0.1f, 0.13f, 0.95f));
+                            }
+
+                            // Draw interactive controls FIRST so they receive MouseDown before
+                            // any row-select Event.Use() on leftover chrome.
+                            if (isPrimary && !isRenamingClip)
+                            {
+                                bool nextOpen = EditorGUI.Foldout(foldRect, showDetail,
+                                    GUIContent.none, true);
+                                if (nextOpen != showDetail)
+                                {
+                                    _clipRowDetailsExpanded = nextOpen;
+                                    if (nextOpen && !isSelected)
+                                        SelectClipCard(i);
+                                    Repaint();
+                                }
+                            }
+
                             if (isRenamingClip)
                             {
-                                GUI.Box(itemRect, GUIContent.none, _clipSelectedStyle);
-                                GUI.SetNextControlName(ClipRenameControl);
-                                _renameClipValue = GUI.TextField(clipNameRect, _renameClipValue, EditorStyles.boldLabel);
-                                if (_focusClipRename || GUI.GetNameOfFocusedControl() != ClipRenameControl)
-                                {
-                                    EditorGUI.FocusTextInControl(ClipRenameControl);
-                                    if (GUI.GetNameOfFocusedControl() == ClipRenameControl)
-                                        _focusClipRename = false;
-                                }
+                                _clipRenameFieldRect = clipNameRect;
+                                _hasClipRenameFieldRect = true;
+                                DrawInlineRenameField(clipNameRect, ClipRenameControl,
+                                    ref _renameClipValue, ref _focusClipRename, EditorStyles.textField);
                             }
                             else
                             {
-                                GUI.Box(itemRect, GUIContent.none,
-                                    i == _selectedClip ? _clipSelectedStyle : _clipStyle);
-                                if (input.type == EventType.MouseDown &&
-                                    itemRect.Contains(input.mousePosition) &&
-                                    !rowDeleteRect.Contains(input.mousePosition))
-                                {
-                                    if (input.button == 0)
-                                    {
-                                        SelectClipCard(i);
-                                        if (clipNameRect.Contains(input.mousePosition) && input.clickCount >= 2)
-                                            BeginClipRename(i);
-                                        input.Use();
-                                    }
-                                    else if (input.button == 1)
-                                    {
-                                        SelectClipCard(i);
-                                        ShowClipListContextMenu(i);
-                                        input.Use();
-                                    }
-                                }
-                                string clipName = string.IsNullOrWhiteSpace(clip.Name) ? $"Clip {i + 1}" : clip.Name;
-                                GUI.Label(clipNameRect,
-                                    new GUIContent(clipName, "Click to select. F2 or double-click the name to rename. Right-click for Duplicate / Delete."),
+                                string clipName = string.IsNullOrWhiteSpace(clip.Name)
+                                    ? $"Clip {i + 1}"
+                                    : clip.Name;
+                                string tip = showDetail
+                                    ? $"{clipName}\nPrimary selection (detail expanded). F2 / double-click name to rename. Ctrl/Cmd multi, Shift range."
+                                    : isPrimary
+                                        ? $"{clipName}\nPrimary selection (detail collapsed — use ▸ to expand). F2 / double-click name to rename."
+                                        : $"{clipName}\nClick to select. Ctrl/Cmd toggle, Shift range. F2 / double-click name to rename.";
+                                GUI.Label(clipNameRect, new GUIContent(clipName, tip),
                                     EditorStyles.boldLabel);
                             }
-                            int frameCount = clip.Frames?.Length ?? 0;
-                            GUI.Label(new Rect(itemRect.x + 8f, itemRect.y + 18f,
-                                Mathf.Max(20f, rowDeleteRect.x - itemRect.x - 12f), 13f),
-                                $"{frameCount} frames   {clip.FrameRate:F1} fps", _mutedStyle);
-                            if (GUI.Button(rowDeleteRect,
-                                new GUIContent("Delete", "Delete this clip from the sheet."),
-                                EditorStyles.miniButton))
-                                pendingDeleteClip = i;
-                            clipY += clipRowH;
+
+                            if (!isRenamingClip)
+                            {
+                                // ✕ immediately after the name column.
+                                Color prevGui = GUI.color;
+                                bool delHover = deleteRect.Contains(input.mousePosition);
+                                if (delHover)
+                                    GUI.color = new Color(1f, 0.42f, 0.42f, 1f);
+                                if (GUI.Button(deleteRect,
+                                    new GUIContent("✕",
+                                        _selectedClips.Count > 1 && _selectedClips.Contains(i)
+                                            ? $"Delete {_selectedClips.Count} selected clips."
+                                            : "Delete clip"),
+                                    EditorStyles.miniButton))
+                                    pendingDeleteClip = i;
+                                GUI.color = prevGui;
+                            }
+
+                            if (showDetail && !isRenamingClip)
+                            {
+                                if (DrawClipRowDetail(detailRect, clip, i))
+                                    pendingDuplicateClip = i;
+                            }
+
+                            // Leftover clicks on name chrome only — never Use() on ✕ / fold /
+                            // expanded detail (EditorGUI controls must process those first).
+                            if (!isRenamingClip &&
+                                input.type == EventType.MouseDown &&
+                                !deleteRect.Contains(input.mousePosition) &&
+                                !(isPrimary && foldRect.Contains(input.mousePosition)) &&
+                                !(showDetail && detailRect.height > 0f &&
+                                  detailRect.Contains(input.mousePosition)))
+                            {
+                                if (input.button == 0 &&
+                                    clipNameRect.Contains(input.mousePosition))
+                                {
+                                    bool toggle = input.control || input.command;
+                                    bool range = input.shift;
+                                    SelectClipCard(i, toggle, range);
+                                    if (!toggle && !range && input.clickCount >= 2)
+                                    {
+                                        BeginClipRename(i);
+                                        input.Use();
+                                        GUIUtility.ExitGUI();
+                                    }
+                                    input.Use();
+                                }
+                                else if (input.button == 1 &&
+                                         headerRow.Contains(input.mousePosition))
+                                {
+                                    if (!_selectedClips.Contains(i))
+                                        SelectClipCard(i);
+                                    ShowClipListContextMenu(i);
+                                    input.Use();
+                                }
+                            }
+                            clipY += rowH;
                         }
+                    }
+
+                    if (pendingDuplicateClip >= 0)
+                    {
+                        CommitAllRenames();
+                        SelectClipCard(pendingDuplicateClip);
+                        DuplicateClip();
                     }
 
                     var actionBar = new Rect(inset.x + 4f, inset.yMax - insetMargin - actionH,
@@ -1371,7 +1558,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (pendingDeleteClip >= 0)
                     {
                         CancelAllRenames();
-                        DeleteClipAt(pendingDeleteClip);
+                        if (_selectedClips.Count > 1 && _selectedClips.Contains(pendingDeleteClip))
+                        {
+                            int n = _selectedClips.Count;
+                            if (EditorUtility.DisplayDialog(
+                                "Delete Clips",
+                                $"Delete {n} selected clips? This cannot be undone except via Undo.",
+                                "Delete", "Cancel"))
+                                DeleteSelectedClips();
+                        }
+                        else
+                            DeleteClipAt(pendingDeleteClip);
                     }
 
                     if (!stackAddSheet)
@@ -1426,16 +1623,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             x += w1 + gap;
             using (new EditorGUI.DisabledScope(!canMutateClip))
             {
-                if (GUI.Button(new Rect(x, top.y, w2, top.height), "Duplicate", _transportStyle))
+                string dupLabel = _selectedClips.Count > 1 ? $"Dup {_selectedClips.Count}" : "Duplicate";
+                string delLabel = _selectedClips.Count > 1 ? $"Del {_selectedClips.Count}" : "Delete";
+                if (GUI.Button(new Rect(x, top.y, w2, top.height), dupLabel, _transportStyle))
                 {
                     CommitAllRenames();
-                    DuplicateClip();
+                    DuplicateSelectedClips();
                 }
                 x += w2 + gap;
-                if (GUI.Button(new Rect(x, top.y, w3, top.height), "Delete", _transportStyle))
+                if (GUI.Button(new Rect(x, top.y, w3, top.height), delLabel, _transportStyle))
                 {
                     CancelAllRenames();
-                    DeleteClip();
+                    DeleteSelectedClips();
                 }
             }
 
@@ -1477,45 +1676,155 @@ namespace InvertLab.Sprites.DOTS.Editor
         void HandleBrowserRenameKeys(Event input)
         {
             string focused = GUI.GetNameOfFocusedControl();
-            if (_renamingSheet >= 0 && input.type == EventType.KeyDown &&
-                focused == SheetRenameControl)
+            if (input.type == EventType.MouseDown && input.button == 0 && IsRenamingAnything())
             {
-                if (input.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
+                // Click-away commits the active inline rename (same as Enter).
+                // Prefer rect hit-test: Focus()/other controls can clear the focused name
+                // before we run, which previously false-committed on the rename field click.
+                bool onRenameField =
+                    focused == ClipRenameControl ||
+                    focused == SheetRenameControl ||
+                    focused == SocketNameRenameControl ||
+                    focused == SocketIdRenameControl ||
+                    focused == InventoryRenameControl ||
+                    focused == EventRenameControl ||
+                    _focusClipRename ||
+                    _focusSheetRename ||
+                    _focusSocketNameRename ||
+                    _focusSocketIdRename ||
+                    _focusInventoryRename ||
+                    _focusEventRename ||
+                    (_renamingClip >= 0 && _hasClipRenameFieldRect &&
+                     _clipRenameFieldRect.Contains(input.mousePosition));
+                if (!onRenameField)
+                {
+                    CommitAllRenames();
+                    // do not Use() - let the click select underneath
+                }
+            }
+
+            if (input.type == EventType.KeyDown &&
+                (input.keyCode == KeyCode.Return || input.keyCode == KeyCode.KeypadEnter))
+            {
+                if (_renamingSheet >= 0 && focused == SheetRenameControl)
                 {
                     CommitSheetRename();
                     input.Use();
+                    return;
                 }
-                else if (input.keyCode == KeyCode.Escape)
-                {
-                    CancelSheetRename();
-                    input.Use();
-                }
-            }
-            else if (_renamingClip >= 0 && input.type == EventType.KeyDown &&
-                     focused == ClipRenameControl)
-            {
-                if (input.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
+                if (_renamingClip >= 0 && focused == ClipRenameControl)
                 {
                     CommitClipRename();
                     input.Use();
+                    return;
                 }
-                else if (input.keyCode == KeyCode.Escape)
+                if (!string.IsNullOrEmpty(_renamingSocketName) && focused == SocketNameRenameControl)
+                {
+                    CommitSocketNameRename();
+                    input.Use();
+                    return;
+                }
+                if (!string.IsNullOrEmpty(_renamingSocketId) && focused == SocketIdRenameControl)
+                {
+                    CommitSocketIdRename();
+                    input.Use();
+                    return;
+                }
+                if (_renamingInventoryIndex >= 0 && focused == InventoryRenameControl)
+                {
+                    CommitInventoryRename();
+                    input.Use();
+                    return;
+                }
+                if (_renamingEventId != 0 && focused == EventRenameControl)
+                {
+                    CommitEventRename();
+                    input.Use();
+                    return;
+                }
+            }
+
+            if (input.type == EventType.KeyDown && input.keyCode == KeyCode.Escape)
+            {
+                if (_renamingSheet >= 0 && focused == SheetRenameControl)
+                {
+                    CancelSheetRename();
+                    input.Use();
+                    return;
+                }
+                if (_renamingClip >= 0 && focused == ClipRenameControl)
                 {
                     CancelClipRename();
                     input.Use();
+                    return;
+                }
+                if (!string.IsNullOrEmpty(_renamingSocketName) && focused == SocketNameRenameControl)
+                {
+                    CancelSocketNameRename();
+                    input.Use();
+                    return;
+                }
+                if (!string.IsNullOrEmpty(_renamingSocketId) && focused == SocketIdRenameControl)
+                {
+                    CancelSocketIdRename();
+                    input.Use();
+                    return;
+                }
+                if (_renamingInventoryIndex >= 0 && focused == InventoryRenameControl)
+                {
+                    CancelInventoryRename();
+                    input.Use();
+                    return;
+                }
+                if (_renamingEventId != 0 && focused == EventRenameControl)
+                {
+                    CancelEventRename();
+                    input.Use();
+                    return;
                 }
             }
-            else if (_renamingClip < 0 && _renamingSheet < 0 &&
-                     input.type == EventType.KeyDown && input.keyCode == KeyCode.F2 &&
-                     !IsEditingStringTextField())
-            {
-                if (CurrentClip != null)
-                    BeginClipRename(_selectedClip);
-                else if (_profile.Sheets != null && _profile.Sheets.Count > 0)
-                    BeginSheetRename(_selectedSheet);
-                input.Use();
-            }
 
+            if (input.type == EventType.KeyDown && input.keyCode == KeyCode.F2 &&
+                !IsRenamingAnything() && !IsEditingStringTextField())
+            {
+                if (TryBeginPreferredRename())
+                    input.Use();
+            }
+        }
+
+        bool IsRenamingAnything()
+            => _renamingClip >= 0
+               || _renamingSheet >= 0
+               || !string.IsNullOrEmpty(_renamingSocketName)
+               || !string.IsNullOrEmpty(_renamingSocketId)
+               || _renamingInventoryIndex >= 0
+               || _renamingEventId != 0;
+
+        bool TryBeginPreferredRename()
+        {
+            if (!string.IsNullOrEmpty(_selectedSocketName))
+            {
+                BeginSocketNameRename(_selectedSocketName);
+                return true;
+            }
+            if (_renameInventoryTargetIndex >= 0 &&
+                _profile?.SocketInventories != null &&
+                _renameInventoryTargetIndex < _profile.SocketInventories.Count)
+            {
+                BeginInventoryRename(_renameInventoryTargetIndex);
+                return true;
+            }
+            if (CurrentClip != null)
+            {
+                BeginClipRename(_selectedClip);
+                return true;
+            }
+            if (_profile?.Sheets != null && _profile.Sheets.Count > 0)
+            {
+                BeginSheetRename(_selectedSheet);
+                return true;
+            }
+            return false;
         }
 
         void EnsureSheetFoldState()
@@ -1772,10 +2081,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             string newName = UniqueSheetName(_renameSheetValue, _renamingSheet);
             if (def != null && !string.Equals(def.Name, newName, StringComparison.Ordinal))
             {
-                RecordProfileUndo("Rename Sprite Sheet");
+                SyncWorkingProfileToAsset();
+                RecordDiscreteUndo("Rename Sprite Sheet");
                 def.Name = newName;
+                SyncWorkingProfileToAsset();
                 _status = $"Renamed sheet to {newName}";
                 SaveDirty();
+                SealUndoGroup();
             }
             ClearSheetRename();
         }
@@ -1829,6 +2141,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CommitClipRename();
             if (_renamingSheet >= 0)
                 CommitSheetRename();
+            if (!string.IsNullOrEmpty(_renamingSocketName))
+                CommitSocketNameRename();
+            if (!string.IsNullOrEmpty(_renamingSocketId))
+                CommitSocketIdRename();
+            if (_renamingInventoryIndex >= 0)
+                CommitInventoryRename();
+            if (_renamingEventId != 0)
+                CommitEventRename();
         }
 
         void CancelAllRenames()
@@ -1837,6 +2157,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CancelClipRename();
             if (_renamingSheet >= 0)
                 CancelSheetRename();
+            if (!string.IsNullOrEmpty(_renamingSocketName))
+                CancelSocketNameRename();
+            if (!string.IsNullOrEmpty(_renamingSocketId))
+                CancelSocketIdRename();
+            if (_renamingInventoryIndex >= 0)
+                CancelInventoryRename();
+            if (_renamingEventId != 0)
+                CancelEventRename();
         }
 
         void WriteActiveSheetFromLegacy()
@@ -1880,27 +2208,310 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
 
-        void SelectClipCard(int index)
+        float MeasureSheetClipRowsHeight(int sheetIndex, int clipCount, float baseRowH)
+        {
+            float h = 0f;
+            if (_profile?.Clips == null)
+                return h;
+            SyncClipMultiSelection();
+            for (int i = 0; i < clipCount; i++)
+            {
+                var clip = _profile.Clips[i];
+                if (clip == null || clip.SheetIndex != sheetIndex)
+                    continue;
+                bool isPrimary = i == _selectedClip;
+                bool isSelected = _selectedClips.Contains(i) || isPrimary;
+                bool showDetail = isPrimary && isSelected && _clipRowDetailsExpanded;
+                h += baseRowH;
+                if (showDetail)
+                    h += MeasureClipRowDetailHeight(clip);
+            }
+            return h;
+        }
+
+        float MeasureClipRowDetailHeight(SpriteClipDef clip)
+        {
+            float line = EditorGUIUtility.singleLineHeight + 3f;
+            // Single-column stacked detail (full width):
+            // FPS, Wrap, Interrupt, [Cancel After], Priority, Frames, On Done,
+            // Combo Start, Combo End, Boost, Duplicate.
+            int rows = 10; // base fields + Duplicate row
+            if (clip != null && clip.Interrupt == (byte)SpriteClipInterrupt.AfterTime)
+                rows++;
+            return 8f + rows * line;
+        }
+
+        /// <summary>
+        /// Collider-style indented detail under the primary clip row (single column).
+        /// Returns true when Duplicate was pressed.
+        /// </summary>
+        bool DrawClipRowDetail(Rect rect, SpriteClipDef clip, int clipIndex)
+        {
+            _ = clipIndex;
+            if (clip == null || rect.height < 8f)
+                return false;
+
+            bool duplicate = false;
+            GUILayout.BeginArea(rect);
+            float prevLabelWidth = EditorGUIUtility.labelWidth;
+            // Full-width single column: keep labels narrow so controls stay clickable.
+            // Default labelWidth (150) still crushes IntField/Popup on typical clip cards.
+            EditorGUIUtility.labelWidth = Mathf.Clamp(rect.width * 0.36f, 72f, 100f);
+            try
+            {
+                // Order: FPS → Wrap → Interrupt (+ Cancel After) → Priority → Frames →
+                // On Done → Combo Start → Combo End → Boost → Duplicate.
+                Rect fpsRow = EditorGUILayout.GetControlRect();
+                Rect fpsFieldRect = EditorGUI.PrefixLabel(fpsRow,
+                    new GUIContent("FPS", ClipFpsTooltip));
+                DrawClipFpsField(fpsFieldRect, clip);
+
+                EditorGUI.BeginChangeCheck();
+                byte wrap = (byte)EditorGUILayout.Popup(
+                    new GUIContent("Wrap", "Loop / Once / Ping Pong / Reverse Loop"),
+                    clip.WrapMode,
+                    new[] { "Loop", "Once", "Ping Pong", "Reverse Loop" });
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordProfileUndo("Set Sprite Clip Wrap Mode");
+                    clip.WrapMode = wrap;
+                    SaveDirty();
+                }
+
+                EditorGUI.BeginChangeCheck();
+                byte interrupt = (byte)EditorGUILayout.Popup(
+                    new GUIContent("Interrupt",
+                        "Always = locomotion. Never = hard cast/death. AfterTime = cancel window."),
+                    clip.Interrupt,
+                    new[] { "Always", "Never", "After Time" });
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordProfileUndo("Set Sprite Clip Interrupt");
+                    clip.Interrupt = interrupt;
+                    SaveDirty();
+                }
+
+                if (clip.Interrupt == (byte)SpriteClipInterrupt.AfterTime)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    float cancelAfter = EditorGUILayout.Slider(
+                        new GUIContent("Cancel After",
+                            "Normalized 0-1. Play() blocked until this point unless force."),
+                        clip.CancelAfter, 0f, 1f);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        RecordProfileUndo("Set Sprite Clip Cancel After");
+                        clip.CancelAfter = cancelAfter;
+                        SaveDirty();
+                    }
+                }
+
+                EditorGUI.BeginChangeCheck();
+                int priority = EditorGUILayout.IntField(
+                    new GUIContent("Priority",
+                        "Higher priority blocks lower-priority Play() while playing (!force)."),
+                    clip.Priority);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordProfileUndo("Set Sprite Clip Priority");
+                    clip.Priority = priority;
+                    SaveDirty();
+                }
+
+                int frameCount = clip.Frames?.Length ?? 0;
+                EditorGUILayout.LabelField(
+                    new GUIContent("Frames", "Frame count for this clip (readonly)."),
+                    new GUIContent(frameCount.ToString()),
+                    EditorStyles.miniLabel);
+
+                DrawOnCompleteClipFieldCompact(clip);
+
+                EditorGUI.BeginChangeCheck();
+                int comboStart = EditorGUILayout.IntField(
+                    new GUIContent("Combo Start",
+                        "Inclusive start frame. Combo window disabled while End < 0."),
+                    clip.ComboWindowStartFrame);
+                int comboEnd = EditorGUILayout.IntField(
+                    new GUIContent("Combo End",
+                        "Inclusive end frame. Set to -1 to disable."),
+                    clip.ComboWindowEndFrame);
+                int comboBoost = EditorGUILayout.IntField(
+                    new GUIContent("Boost",
+                        "While inside the window, subtract from Priority for Play gating."),
+                    clip.ComboWindowPriorityBoost);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordProfileUndo("Set Sprite Clip Combo Window");
+                    clip.ComboWindowStartFrame = comboStart;
+                    clip.ComboWindowEndFrame = comboEnd;
+                    clip.ComboWindowPriorityBoost = comboBoost;
+                    SaveDirty();
+                }
+
+                if (GUILayout.Button(
+                    new GUIContent("Duplicate this clip", "Duplicate the primary clip."),
+                    EditorStyles.miniButton))
+                    duplicate = true;
+            }
+            finally
+            {
+                EditorGUIUtility.labelWidth = prevLabelWidth;
+                GUILayout.EndArea();
+            }
+            return duplicate;
+        }
+
+        void DrawOnCompleteClipFieldCompact(SpriteClipDef clip)
+        {
+            if (clip == null || _profile?.Clips == null)
+                return;
+
+            var names = new List<string> { "(None)" };
+            var indices = new List<int> { -1 };
+            int selected = 0;
+            for (int i = 0; i < _profile.Clips.Count; i++)
+            {
+                var other = _profile.Clips[i];
+                if (other == null)
+                    continue;
+                string label = string.IsNullOrWhiteSpace(other.Name) ? $"Clip {i}" : other.Name;
+                names.Add($"{i}: {label}");
+                indices.Add(i);
+                if (i == clip.OnCompleteClipIndex)
+                    selected = names.Count - 1;
+            }
+            if (clip.OnCompleteClipIndex >= 0 && selected == 0)
+            {
+                names.Add($"{clip.OnCompleteClipIndex}: (missing)");
+                indices.Add(clip.OnCompleteClipIndex);
+                selected = names.Count - 1;
+            }
+
+            EditorGUI.BeginChangeCheck();
+            int pick = EditorGUILayout.Popup(
+                new GUIContent("On Done",
+                    "When Once ends: auto-Play this clip. (None) = -1."),
+                selected, names.ToArray());
+            if (EditorGUI.EndChangeCheck() && pick >= 0 && pick < indices.Count)
+            {
+                RecordProfileUndo("Set Sprite Clip On Complete");
+                clip.OnCompleteClipIndex = indices[pick];
+                SaveDirty();
+            }
+        }
+
+        void SyncClipMultiSelection()
+        {
+            if (_profile?.Clips == null)
+            {
+                _selectedClips.Clear();
+                return;
+            }
+            _selectedClips.RemoveWhere(i => i < 0 || i >= _profile.Clips.Count);
+            if (_selectedClip >= 0 && _selectedClip < _profile.Clips.Count)
+            {
+                if (_selectedClips.Count == 0)
+                    _selectedClips.Add(_selectedClip);
+                else if (!_selectedClips.Contains(_selectedClip))
+                {
+                    _selectedClips.Clear();
+                    _selectedClips.Add(_selectedClip);
+                }
+            }
+            else if (_selectedClips.Count > 0)
+            {
+                // Keep primary on first remaining selection.
+                int primary = int.MaxValue;
+                foreach (int i in _selectedClips)
+                    if (i < primary) primary = i;
+                if (primary != int.MaxValue)
+                    _selectedClip = primary;
+            }
+        }
+
+        void SelectClipCard(int index) => SelectClipCard(index, false, false);
+
+        void SelectClipCard(int index, bool toggle, bool range)
         {
             if (_profile?.Clips == null || index < 0 || index >= _profile.Clips.Count)
                 return;
             if (_renamingClip >= 0 && _renamingClip != index)
-                CancelClipRename();
+                CommitClipRename();
             if (_renamingSheet >= 0)
                 CommitSheetRename();
-            if (_selectedClip == index)
+            if (!string.IsNullOrEmpty(_renamingSocketName) ||
+                !string.IsNullOrEmpty(_renamingSocketId) ||
+                _renamingInventoryIndex >= 0 ||
+                _renamingEventId != 0)
+                CommitAllRenames();
+
+            if (range && _selectedClip >= 0)
             {
-                ReleaseShortcutKeyboardFocus();
+                int a = Mathf.Min(_selectedClip, index);
+                int b = Mathf.Max(_selectedClip, index);
+                if (!toggle)
+                    _selectedClips.Clear();
+                for (int i = a; i <= b; i++)
+                {
+                    var c = _profile.Clips[i];
+                    if (c != null && c.SheetIndex == _profile.Clips[index].SheetIndex)
+                        _selectedClips.Add(i);
+                }
+                ApplyPrimaryClip(index, refreshPreview: true);
                 return;
             }
-            if (_selectedClip != index)
+
+            if (toggle)
+            {
+                if (_selectedClips.Contains(index) && _selectedClips.Count > 1)
+                {
+                    _selectedClips.Remove(index);
+                    if (_selectedClip == index)
+                    {
+                        int next = int.MaxValue;
+                        foreach (int i in _selectedClips)
+                            if (i < next) next = i;
+                        ApplyPrimaryClip(next == int.MaxValue ? index : next, refreshPreview: true);
+                    }
+                    else
+                        ReleaseShortcutKeyboardFocus();
+                    return;
+                }
+                _selectedClips.Add(index);
+                ApplyPrimaryClip(index, refreshPreview: true);
+                return;
+            }
+
+            // Exclusive select - clip list is now the F2 rename target (not a stale socket).
+            _selectedSocketName = null;
+            _renameInventoryTargetIndex = -1;
+            if (_selectedClip == index && _selectedClips.Count == 1 && _selectedClips.Contains(index))
+            {
+                if (!IsRenamingAnything())
+                    ReleaseShortcutKeyboardFocus();
+                return;
+            }
+            _selectedClips.Clear();
+            _selectedClips.Add(index);
+            ApplyPrimaryClip(index, refreshPreview: _selectedClip != index);
+        }
+
+        void ApplyPrimaryClip(int index, bool refreshPreview)
+        {
+            if (_profile?.Clips == null || index < 0 || index >= _profile.Clips.Count)
+                return;
+            if (refreshPreview && _selectedClip != index)
             {
                 _selectedOnionFrame = -1;
                 ClearColliderSelection();
                 _selectedEventFrame = -1;
-            _selectedEventIndex = -1;
+                _selectedEventIndex = -1;
             }
+            bool primaryChanged = _selectedClip != index;
             _selectedClip = index;
+            _selectedClips.Add(index);
+            if (primaryChanged)
+                _clipRowDetailsExpanded = true;
             var clip = _profile.Clips[index];
             if (clip != null && _profile.Sheets != null && _profile.Sheets.Count > 0)
             {
@@ -1909,8 +2520,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _profile.SyncLegacyFromSheet(_selectedSheet);
                 InvalidateSheetPixelCache();
             }
-            SelectOnlyFrame(0);
-            _previewTime = 0f;
+            if (refreshPreview)
+            {
+                SelectOnlyFrame(0);
+                _previewTime = 0f;
+            }
             ReleaseShortcutKeyboardFocus();
         }
 
@@ -1919,12 +2533,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (clipIndex < 0 || clipIndex >= _profile.Clips.Count)
                 return;
 
-            if (_renamingClip >= 0 && _renamingClip != clipIndex)
-                CommitClipRename();
-            if (_renamingSheet >= 0)
-                CommitSheetRename();
+            CommitAllRenames();
 
             _selectedClip = clipIndex;
+            _selectedClips.Clear();
+            _selectedClips.Add(clipIndex);
             _renamingClip = clipIndex;
             _renameClipOriginal = _profile.Clips[clipIndex].Name;
             _renameClipValue = string.IsNullOrWhiteSpace(_renameClipOriginal)
@@ -1948,11 +2561,17 @@ namespace InvertLab.Sprites.DOTS.Editor
             string newName = UniqueClipName(_renameClipValue, clipIndex);
             if (!string.Equals(oldName, newName, StringComparison.Ordinal))
             {
-                RecordProfileUndo("Rename Sprite Animation Clip");
+                // Discrete complete-object undo + seal: DrawInspector's PrepareInspectorUndo
+                // runs later on the same KeyDown/MouseDown and would otherwise RecordObject
+                // after the Name write, leaving Edit>Undo / Ctrl+Z unable to restore.
+                SyncWorkingProfileToAsset();
+                RecordDiscreteUndo("Rename Clip");
                 clip.Name = newName;
                 RenameHitboxClip(oldName, newName);
+                SyncWorkingProfileToAsset();
                 _status = $"Renamed clip to {newName}";
                 SaveDirty();
+                SealUndoGroup();
             }
             ClearClipRename();
         }
@@ -1970,8 +2589,314 @@ namespace InvertLab.Sprites.DOTS.Editor
             _renameClipValue = string.Empty;
             _renameClipOriginal = string.Empty;
             _focusClipRename = false;
+            _hasClipRenameFieldRect = false;
             GUI.FocusControl(null);
             Repaint();
+        }
+
+        void BeginSocketNameRename(string socketName)
+        {
+            socketName = SpriteSocketKeys.CanonicalName(socketName);
+            if (string.IsNullOrEmpty(socketName))
+                return;
+            CommitAllRenames();
+            _selectedSocketName = socketName;
+            _renamingSocketName = socketName;
+            _renameSocketNameOriginal = socketName;
+            _renameSocketNameValue = socketName;
+            _focusSocketNameRename = true;
+            Repaint();
+        }
+
+        void CommitSocketNameRename()
+        {
+            if (string.IsNullOrEmpty(_renamingSocketName))
+            {
+                ClearSocketNameRename();
+                return;
+            }
+            string previousName = _renamingSocketName;
+            string nextName = SpriteSocketKeys.CanonicalName(_renameSocketNameValue);
+            if (string.IsNullOrEmpty(nextName))
+                nextName = previousName;
+            if (!SpriteSocketKeys.NamesEqual(nextName, previousName))
+            {
+                SyncWorkingProfileToAsset();
+                RecordDiscreteUndo("Rename Socket");
+                var clip = CurrentClip;
+                if (clip != null)
+                    SpriteSocketKeys.RenameIdentity(clip.Sockets, previousName, nextName);
+                var motion = _profile?.FindSocketMotion(previousName);
+                if (motion != null)
+                    motion.SocketName = nextName;
+                _selectedSockets.Remove(SpriteSocketKeys.CanonicalName(previousName));
+                _selectedSockets.Add(nextName);
+                _selectedSocketName = nextName;
+                bool oldStillUsed = SpriteSocketKeys.NameExistsOnAnyClip(_profile?.Clips, previousName);
+                _profile?.SocketCatalog?.SyncRename(previousName, nextName, oldStillUsed);
+                // Keep inventory membership in sync
+                if (_profile?.SocketInventories != null)
+                {
+                    for (int i = 0; i < _profile.SocketInventories.Count; i++)
+                    {
+                        var inv = _profile.SocketInventories[i];
+                        if (inv?.SocketNames == null)
+                            continue;
+                        for (int n = 0; n < inv.SocketNames.Count; n++)
+                        {
+                            if (SpriteSocketKeys.NamesEqual(inv.SocketNames[n], previousName))
+                                inv.SocketNames[n] = nextName;
+                        }
+                    }
+                }
+                SyncWorkingProfileToAsset();
+                _status = $"Renamed socket to {nextName}";
+                SaveDirty();
+                SealUndoGroup();
+            }
+            ClearSocketNameRename();
+        }
+
+        void CancelSocketNameRename()
+        {
+            if (!string.IsNullOrEmpty(_renamingSocketName))
+                _status = $"Kept socket name {_renameSocketNameOriginal}";
+            ClearSocketNameRename();
+        }
+
+        void ClearSocketNameRename()
+        {
+            _renamingSocketName = null;
+            _renameSocketNameValue = string.Empty;
+            _renameSocketNameOriginal = string.Empty;
+            _focusSocketNameRename = false;
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        void BeginSocketIdRename(string socketName)
+        {
+            socketName = SpriteSocketKeys.CanonicalName(socketName);
+            if (string.IsNullOrEmpty(socketName) || _profile == null)
+                return;
+            CommitAllRenames();
+            _profile.EnsureSocketCatalog();
+            var item = _profile.SocketCatalog.Ensure(socketName);
+            _selectedSocketName = socketName;
+            _renamingSocketId = socketName;
+            _renameSocketIdOriginal = item.SocketId ?? string.Empty;
+            _renameSocketIdValue = _renameSocketIdOriginal;
+            _focusSocketIdRename = true;
+            Repaint();
+        }
+
+        void CommitSocketIdRename()
+        {
+            if (string.IsNullOrEmpty(_renamingSocketId) || _profile == null)
+            {
+                ClearSocketIdRename();
+                return;
+            }
+            _profile.EnsureSocketCatalog();
+            var catalogItem = _profile.SocketCatalog.Find(_renamingSocketId);
+            if (catalogItem == null)
+            {
+                ClearSocketIdRename();
+                return;
+            }
+            string canonical = SpriteSocketIdUtility.Canonical(_renameSocketIdValue, _renamingSocketId);
+            if (!string.Equals(canonical, catalogItem.SocketId, StringComparison.Ordinal))
+            {
+                if (SocketIdUsedByOther(canonical, catalogItem))
+                {
+                    _status = $"Socket ID '{canonical}' is already used";
+                }
+                else
+                {
+                    SyncWorkingProfileToAsset();
+                    RecordDiscreteUndo("Set Socket ID");
+                    catalogItem.SocketId = canonical;
+                    SyncWorkingProfileToAsset();
+                    _status = $"{_renamingSocketId} ID = {canonical}";
+                    SaveDirty();
+                    SealUndoGroup();
+                }
+            }
+            ClearSocketIdRename();
+        }
+
+        void CancelSocketIdRename()
+        {
+            if (!string.IsNullOrEmpty(_renamingSocketId))
+                _status = $"Kept socket ID {_renameSocketIdOriginal}";
+            ClearSocketIdRename();
+        }
+
+        void ClearSocketIdRename()
+        {
+            _renamingSocketId = null;
+            _renameSocketIdValue = string.Empty;
+            _renameSocketIdOriginal = string.Empty;
+            _focusSocketIdRename = false;
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        void BeginInventoryRename(int inventoryIndex)
+        {
+            if (_profile?.SocketInventories == null ||
+                inventoryIndex < 0 || inventoryIndex >= _profile.SocketInventories.Count)
+                return;
+            CommitAllRenames();
+            var inventory = _profile.SocketInventories[inventoryIndex];
+            _renamingInventoryIndex = inventoryIndex;
+            _renameInventoryTargetIndex = inventoryIndex;
+            _renameInventoryOriginal = inventory?.Name ?? string.Empty;
+            _renameInventoryValue = string.IsNullOrWhiteSpace(_renameInventoryOriginal)
+                ? $"Group {inventoryIndex + 1}"
+                : _renameInventoryOriginal;
+            _focusInventoryRename = true;
+            Repaint();
+        }
+
+        void CommitInventoryRename()
+        {
+            if (_renamingInventoryIndex < 0 ||
+                _profile?.SocketInventories == null ||
+                _renamingInventoryIndex >= _profile.SocketInventories.Count)
+            {
+                ClearInventoryRename();
+                return;
+            }
+            var inventory = _profile.SocketInventories[_renamingInventoryIndex];
+            string nextName = string.IsNullOrWhiteSpace(_renameInventoryValue)
+                ? (string.IsNullOrWhiteSpace(_renameInventoryOriginal)
+                    ? $"Group {_renamingInventoryIndex + 1}"
+                    : _renameInventoryOriginal)
+                : _renameInventoryValue.Trim();
+            if (inventory != null &&
+                !string.Equals(nextName, inventory.Name, StringComparison.Ordinal))
+            {
+                SyncWorkingProfileToAsset();
+                RecordDiscreteUndo("Rename Socket Group");
+                inventory.Name = nextName;
+                SyncWorkingProfileToAsset();
+                _status = $"Renamed group to {nextName}";
+                SaveDirty();
+                SealUndoGroup();
+            }
+            ClearInventoryRename();
+        }
+
+        void CancelInventoryRename()
+        {
+            if (_renamingInventoryIndex >= 0)
+                _status = $"Kept group name {_renameInventoryOriginal}";
+            ClearInventoryRename();
+        }
+
+        void ClearInventoryRename()
+        {
+            _renamingInventoryIndex = -1;
+            _renameInventoryValue = string.Empty;
+            _renameInventoryOriginal = string.Empty;
+            _focusInventoryRename = false;
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        void BeginEventRename(byte eventId)
+        {
+            if (eventId == 0 || _profile?.Events == null)
+                return;
+            var definition = _profile.Events.Find(e => e != null && e.Id == eventId);
+            if (definition == null)
+                return;
+            CommitAllRenames();
+            _renamingEventId = eventId;
+            _renameEventOriginal = definition.Name ?? string.Empty;
+            _renameEventValue = string.IsNullOrWhiteSpace(_renameEventOriginal)
+                ? $"Event {eventId}"
+                : _renameEventOriginal;
+            _focusEventRename = true;
+            Repaint();
+        }
+
+        void CommitEventRename()
+        {
+            if (_renamingEventId == 0 || _profile?.Events == null)
+            {
+                ClearEventRename();
+                return;
+            }
+            var definition = _profile.Events.Find(e => e != null && e.Id == _renamingEventId);
+            if (definition == null)
+            {
+                ClearEventRename();
+                return;
+            }
+            string nextName = string.IsNullOrWhiteSpace(_renameEventValue)
+                ? $"Event {_renamingEventId}"
+                : _renameEventValue.Trim();
+            if (!string.Equals(nextName, definition.Name, StringComparison.Ordinal))
+            {
+                SyncWorkingProfileToAsset();
+                RecordDiscreteUndo("Rename Sprite Event");
+                definition.Name = nextName;
+                SyncWorkingProfileToAsset();
+                _status = $"Renamed event to {nextName}";
+                SaveDirty();
+                SealUndoGroup();
+            }
+            ClearEventRename();
+        }
+
+        void CancelEventRename()
+        {
+            if (_renamingEventId != 0)
+                _status = $"Kept event name {_renameEventOriginal}";
+            ClearEventRename();
+        }
+
+        void ClearEventRename()
+        {
+            _renamingEventId = 0;
+            _renameEventValue = string.Empty;
+            _renameEventOriginal = string.Empty;
+            _focusEventRename = false;
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        void DrawInlineRenameField(Rect rect, string controlName, ref string value,
+            ref bool focusFlag, GUIStyle style = null)
+        {
+            GUI.SetNextControlName(controlName);
+            value = GUI.TextField(rect, value, style ?? EditorStyles.textField);
+            if (focusFlag || GUI.GetNameOfFocusedControl() != controlName)
+            {
+                EditorGUI.FocusTextInControl(controlName);
+                if (GUI.GetNameOfFocusedControl() == controlName)
+                    focusFlag = false;
+            }
+        }
+
+        bool DrawRenameLabelRow(string label, string display, string tip, out Rect valueRect)
+        {
+            var row = EditorGUILayout.GetControlRect();
+            var labelRect = new Rect(row.x, row.y, EditorGUIUtility.labelWidth, row.height);
+            valueRect = new Rect(row.x + EditorGUIUtility.labelWidth, row.y,
+                Mathf.Max(20f, row.width - EditorGUIUtility.labelWidth), row.height);
+            GUI.Label(labelRect, label);
+            GUI.Label(valueRect, new GUIContent(display ?? string.Empty, tip));
+            var evt = Event.current;
+            if (evt.type == EventType.MouseDown && evt.button == 0 &&
+                valueRect.Contains(evt.mousePosition) && evt.clickCount >= 2)
+            {
+                evt.Use();
+                return true;
+            }
+            return false;
         }
 
         string UniqueClipName(string requestedName, int ignoredClipIndex)
@@ -2177,7 +3102,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             int previewControlId = GUIUtility.GetControlID(
-                "BallForgeSpriteAnimatorPreview".GetHashCode(), FocusType.Keyboard, canvas);
+                "InvertLabSpriteAnimatorPreview".GetHashCode(), FocusType.Keyboard, canvas);
             if (!_showPivot && _draggingPivot)
             {
                 _draggingPivot = false;
@@ -2500,9 +3425,24 @@ namespace InvertLab.Sprites.DOTS.Editor
             var activeSheet = _profile.SheetAt(_selectedSheet);
             if (activeSheet != null)
             {
-                string sheetName = EditorGUILayout.TextField("Name", activeSheet.Name ?? string.Empty);
-                if (sheetName != activeSheet.Name)
-                    activeSheet.Name = sheetName;
+                bool renamingThisSheet = _renamingSheet == _selectedSheet && _renamingSheet >= 0;
+                if (renamingThisSheet)
+                {
+                    var sheetNameRow = EditorGUILayout.GetControlRect();
+                    var sheetNameLabel = new Rect(sheetNameRow.x, sheetNameRow.y, EditorGUIUtility.labelWidth, sheetNameRow.height);
+                    var sheetNameField = new Rect(sheetNameRow.x + EditorGUIUtility.labelWidth, sheetNameRow.y,
+                        Mathf.Max(20f, sheetNameRow.width - EditorGUIUtility.labelWidth), sheetNameRow.height);
+                    GUI.Label(sheetNameLabel, "Name");
+                    DrawInlineRenameField(sheetNameField, SheetRenameControl,
+                        ref _renameSheetValue, ref _focusSheetRename, EditorStyles.textField);
+                }
+                else if (DrawRenameLabelRow("Name",
+                    string.IsNullOrWhiteSpace(activeSheet.Name) ? $"Sheet {_selectedSheet + 1}" : activeSheet.Name,
+                    "Double-click or press F2 to rename this sheet.", out _))
+                {
+                    BeginSheetRename(_selectedSheet);
+                    GUIUtility.ExitGUI();
+                }
             }
             var newSheet = (Texture2D)EditorGUILayout.ObjectField("Texture", _profile.Sheet, typeof(Texture2D), false);
             if (newSheet != _profile.Sheet)
@@ -2651,15 +3591,29 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 GUILayout.Space(9f);
                 SectionLabel("CLIP");
-                string oldName = clip.Name;
-                clip.Name = DrawStringTextField("Name", clip.Name, "ClipName");
-                if (oldName != clip.Name)
-                    RenameHitboxClip(oldName, clip.Name);
+                bool renamingThisClip = _renamingClip == _selectedClip && _renamingClip >= 0;
+                if (renamingThisClip)
+                {
+                    // Left clip list owns ClipRenameControl - a second field with the same
+                    // control name steals focus every frame and makes typing impossible.
+                    EditorGUILayout.LabelField("Name", _renameClipValue);
+                }
+                else if (DrawRenameLabelRow("Name",
+                    string.IsNullOrWhiteSpace(clip.Name) ? $"Clip {_selectedClip + 1}" : clip.Name,
+                    "Double-click or press F2 to rename this clip.", out _))
+                {
+                    BeginClipRename(_selectedClip);
+                    GUIUtility.ExitGUI();
+                }
                 clip.Row = Mathf.Clamp(EditorGUILayout.IntField("Sheet Row", clip.Row), 0,
                     Mathf.Max(0, ClipSheetRows(clip) - 1));
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    clip.FrameRate = Mathf.Max(0.1f, EditorGUILayout.FloatField("Frame Rate", clip.FrameRate));
+                    EditorGUI.BeginChangeCheck();
+                    float clipFps = EditorGUILayout.FloatField(
+                        new GUIContent("FPS", ClipFpsTooltip), clip.FrameRate);
+                    if (EditorGUI.EndChangeCheck())
+                        ApplyClipFrameRate(clip, clipFps);
                     using (new EditorGUI.DisabledScope(
                         Mathf.Approximately(clip.FrameRate, SpriteClipDef.DefaultFrameRate)))
                     {
@@ -2685,6 +3639,65 @@ namespace InvertLab.Sprites.DOTS.Editor
                         }
                     }
                 }
+                EditorGUI.BeginChangeCheck();
+                byte interrupt = (byte)EditorGUILayout.Popup(
+                    new GUIContent("Interrupt",
+                        "Always = locomotion. Never = hard cast/death. AfterTime = cancel window after startup frames."),
+                    clip.Interrupt,
+                    new[] { "Always", "Never", "After Time" });
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordProfileUndo("Set Sprite Clip Interrupt");
+                    clip.Interrupt = interrupt;
+                    SaveDirty();
+                }
+                if (clip.Interrupt == (byte)SpriteClipInterrupt.AfterTime)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    float cancelAfter = EditorGUILayout.Slider(
+                        new GUIContent("Cancel After",
+                            "Normalized 0-1. Play() is blocked until playback reaches this point unless force=true."),
+                        clip.CancelAfter, 0f, 1f);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        RecordProfileUndo("Set Sprite Clip Cancel After");
+                        clip.CancelAfter = cancelAfter;
+                        SaveDirty();
+                    }
+                }
+                EditorGUI.BeginChangeCheck();
+                int priority = EditorGUILayout.IntField(
+                    new GUIContent("Priority",
+                        "Higher priority clips block lower-priority Play() while still playing (!force). Equal priority uses Interrupt."),
+                    clip.Priority);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordProfileUndo("Set Sprite Clip Priority");
+                    clip.Priority = priority;
+                    SaveDirty();
+                }
+                EditorGUI.BeginChangeCheck();
+                int comboStart = EditorGUILayout.IntField(
+                    new GUIContent("Combo Window Start",
+                        "Inclusive start frame. Combo window is disabled while End < 0."),
+                    clip.ComboWindowStartFrame);
+                int comboEnd = EditorGUILayout.IntField(
+                    new GUIContent("Combo Window End",
+                        "Inclusive end frame. Set to -1 to disable (InComboWindow = false)."),
+                    clip.ComboWindowEndFrame);
+                int comboBoost = EditorGUILayout.IntField(
+                    new GUIContent("Combo Priority Boost",
+                        "While inside the window, subtract this from current Priority for Play gating. Interrupt is also treated as Always."),
+                    clip.ComboWindowPriorityBoost);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordProfileUndo("Set Sprite Clip Combo Window");
+                    clip.ComboWindowStartFrame = comboStart;
+                    clip.ComboWindowEndFrame = comboEnd;
+                    clip.ComboWindowPriorityBoost = comboBoost;
+                    SaveDirty();
+                }
+                DrawOnCompleteClipField(clip);
                 clip.FacingGroup = DrawStringTextField(
                     new GUIContent("Facing Group", "Optional logical group name (e.g. Walk, Idle)."),
                     clip.FacingGroup, "FacingGroup");
@@ -2733,8 +3746,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ResolveClipSheetCell(clip, _selectedFrame, out _, out _, out int cellIndex);
                 EditorGUILayout.LabelField(
                     new GUIContent("Cell Index",
-                        "Row-major cell on this sheet: row × columns + column. Same index the 1×1 picker uses."),
-                    cellIndex.ToString());
+                        "Row-major cell on this sheet: row * columns + column. Same index the sheet-cell picker uses."),
+                    new GUIContent(cellIndex.ToString()));
                 float duration = clip.FrameDurationScales[_selectedFrame] / clip.FrameRate;
                 using (new EditorGUILayout.HorizontalScope())
                 {
@@ -3043,7 +4056,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             var deleteEmptyRect = new Rect(rect.xMax - deleteEmptyWidth - 8f, rect.y + 7f, deleteEmptyWidth, 20f);
             var addFrameRect = new Rect(deleteEmptyRect.x - addFrameWidth - headerBtnGap, rect.y + 7f, addFrameWidth, 20f);
             var pickSheetRect = new Rect(addFrameRect.x - pickSheetWidth - headerBtnGap, rect.y + 7f, pickSheetWidth, 20f);
+            // Editable clip FPS near timeline toolbar (shared with inspector / clip list).
+            const float fpsCaptionW = 26f;
+            const float fpsFieldW = 44f;
             float headerInfoX = bothRect.xMax + 8f;
+            var fpsCaptionRect = new Rect(headerInfoX, rect.y + 7f, fpsCaptionW, 20f);
+            GUI.Label(fpsCaptionRect, new GUIContent("FPS", ClipFpsTooltip), _mutedStyle);
+            var fpsFieldRect = new Rect(fpsCaptionRect.xMax + 2f, rect.y + 7f, fpsFieldW, 20f);
+            DrawClipFpsField(fpsFieldRect, clip);
+            headerInfoX = fpsFieldRect.xMax + 8f;
             float headerInfoWidth = pickSheetRect.x - headerBtnGap - headerInfoX;
             if (headerInfoWidth > 24f)
             {
@@ -3409,13 +4430,35 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawBorder(row, selected ? AccentColor : BorderColor, selected ? 1.5f : 1f);
 
                 var labelRect = new Rect(6f, y + 2f, labelWidth - 10f, 30f);
-                if (GUI.Button(labelRect,
+                bool renamingTrack = !string.IsNullOrEmpty(_renamingSocketName) &&
+                    SpriteSocketKeys.NamesEqual(_renamingSocketName, track.SocketName);
+                var trackLabelEvent = Event.current;
+                if (renamingTrack)
+                {
+                    var renameRect = new Rect(labelRect.x, labelRect.y, labelRect.width, 18f);
+                    DrawInlineRenameField(renameRect, SocketNameRenameControl,
+                        ref _renameSocketNameValue, ref _focusSocketNameRename,
+                        EditorStyles.boldLabel);
+                    GUI.Label(new Rect(labelRect.x, labelRect.y + 16f, labelRect.width, 14f),
+                        $"{track.Keys.Count} keys  •  master clock", _mutedStyle);
+                }
+                else
+                {
+                    if (trackLabelEvent.type == EventType.MouseDown &&
+                        trackLabelEvent.button == 0 &&
+                        labelRect.Contains(trackLabelEvent.mousePosition))
+                    {
+                        SelectPreviewSocket(track.SocketName, SelectionOp.Replace);
+                        if (trackLabelEvent.clickCount >= 2)
+                            BeginSocketNameRename(track.SocketName);
+                        trackLabelEvent.Use();
+                    }
+                    GUI.Label(labelRect,
                         new GUIContent(
                             $"{track.SocketName}\n{track.Keys.Count} keys  •  master clock",
-                            "Select this independent socket track."),
-                        _mutedWrapStyle))
-                    SelectPreviewSocket(track.SocketName, SelectionOp.Replace);
-                var trackLabelEvent = Event.current;
+                            "Click to select. Double-click or F2 to rename the socket."),
+                        _mutedWrapStyle);
+                }
                 if (labelRect.Contains(trackLabelEvent.mousePosition) &&
                     (trackLabelEvent.type == EventType.ContextClick ||
                      trackLabelEvent.type == EventType.MouseDown &&
@@ -8385,7 +9428,23 @@ namespace InvertLab.Sprites.DOTS.Editor
                 definition = new SpriteEventDef { Id = eventId, Name = $"Event {eventId}" };
                 _profile.Events.Add(definition);
             }
-            definition.Name = DrawStringTextField("Event Name", definition.Name, "EventName");
+            bool renamingEvent = _renamingEventId != 0 && _renamingEventId == definition.Id;
+            if (renamingEvent)
+            {
+                var evtRow = EditorGUILayout.GetControlRect();
+                var evtLabelRect = new Rect(evtRow.x, evtRow.y, EditorGUIUtility.labelWidth, evtRow.height);
+                var evtFieldRect = new Rect(evtRow.x + EditorGUIUtility.labelWidth, evtRow.y,
+                    Mathf.Max(20f, evtRow.width - EditorGUIUtility.labelWidth), evtRow.height);
+                GUI.Label(evtLabelRect, "Event Name");
+                DrawInlineRenameField(evtFieldRect, EventRenameControl,
+                    ref _renameEventValue, ref _focusEventRename, EditorStyles.textField);
+            }
+            else if (DrawRenameLabelRow("Event Name", definition.Name,
+                "Double-click to rename this event type.", out _))
+            {
+                BeginEventRename(definition.Id);
+                GUIUtility.ExitGUI();
+            }
             definition.Color = EditorGUILayout.ColorField("Event Color", definition.Color);
         }
 
@@ -8600,11 +9659,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                 "Click or drag a box. Shift = range, Ctrl/Cmd = toggle, Alt = subtract, Shift+Alt = intersect.",
                 _mutedStyle);
 
-            float rowH = independentView ? 52f : 32f;
-            const float rowTopH = 32f;
-            const float checkW = 18f;
-            const float dupW = 72f;
-            const float thumbW = 32f;
             _socketListRowRects.Clear();
             DrawSocketInventoryList(clip, names, independentView);
             if ((!_socketListMarqueePending && !_socketListMarqueeActive) ||
@@ -9439,43 +10493,46 @@ namespace InvertLab.Sprites.DOTS.Editor
                     else if (!onFrame)
                         GUILayout.Label("No key on this frame yet. Drag or edit to add one.", _mutedStyle);
 
-                    string nextName = DrawStringTextField("Name", name, "SocketName");
-                    if (!SpriteSocketKeys.NamesEqual(nextName, name))
+                    // Name: label by default; F2 / double-click begins inline rename.
+                    bool renamingName = !string.IsNullOrEmpty(_renamingSocketName) &&
+                        SpriteSocketKeys.NamesEqual(_renamingSocketName, name);
+                    if (renamingName)
                     {
-                        string previousName = name;
-                        SpriteSocketKeys.RenameIdentity(clip.Sockets, previousName, nextName);
-                        name = SpriteSocketKeys.CanonicalName(nextName);
-                        var motion = _profile.FindSocketMotion(previousName);
-                        if (motion != null)
-                            motion.SocketName = name;
-                        _selectedSockets.Remove(SpriteSocketKeys.CanonicalName(previousName));
-                        _selectedSockets.Add(name);
-                        _selectedSocketName = name;
-                        bool oldStillUsed = SpriteSocketKeys.NameExistsOnAnyClip(_profile.Clips, previousName);
-                        _profile.SocketCatalog.SyncRename(previousName, name, oldStillUsed);
-                        catalogItem = _profile.SocketCatalog.Find(name);
+                        var nameRow = EditorGUILayout.GetControlRect();
+                        var nameLabelRect = new Rect(nameRow.x, nameRow.y, EditorGUIUtility.labelWidth, nameRow.height);
+                        var nameFieldRect = new Rect(nameRow.x + EditorGUIUtility.labelWidth, nameRow.y,
+                            Mathf.Max(20f, nameRow.width - EditorGUIUtility.labelWidth), nameRow.height);
+                        GUI.Label(nameLabelRect, "Name");
+                        DrawInlineRenameField(nameFieldRect, SocketNameRenameControl,
+                            ref _renameSocketNameValue, ref _focusSocketNameRename, EditorStyles.textField);
+                    }
+                    else if (DrawRenameLabelRow("Name", name,
+                        "Double-click or press F2 to rename this socket.", out _))
+                    {
+                        BeginSocketNameRename(name);
+                        GUIUtility.ExitGUI();
                     }
 
                     catalogItem ??= _profile.SocketCatalog.Ensure(name);
-                    string socketId = catalogItem.SocketId;
-                    string nextSocketId = EditorGUILayout.DelayedTextField(
-                        new GUIContent("ID",
-                            "Stable code ID shared by Frame-Attached and Independent Motion sockets. Example: equipment.head or combat.muzzle."),
-                        socketId);
-                    if (!string.Equals(nextSocketId, socketId, StringComparison.Ordinal))
+                    string socketId = catalogItem.SocketId ?? string.Empty;
+                    bool renamingId = !string.IsNullOrEmpty(_renamingSocketId) &&
+                        SpriteSocketKeys.NamesEqual(_renamingSocketId, name);
+                    if (renamingId)
                     {
-                        string canonical = SpriteSocketIdUtility.Canonical(nextSocketId, name);
-                        if (SocketIdUsedByOther(canonical, catalogItem))
-                        {
-                            _status = $"Socket ID '{canonical}' is already used";
-                        }
-                        else
-                        {
-                            RecordProfileUndo("Set Socket ID");
-                            catalogItem.SocketId = canonical;
-                            _status = $"{name} ID = {canonical}";
-                            SaveDirty();
-                        }
+                        var idRow = EditorGUILayout.GetControlRect();
+                        var idLabelRect = new Rect(idRow.x, idRow.y, EditorGUIUtility.labelWidth, idRow.height);
+                        var idFieldRect = new Rect(idRow.x + EditorGUIUtility.labelWidth, idRow.y,
+                            Mathf.Max(20f, idRow.width - EditorGUIUtility.labelWidth), idRow.height);
+                        GUI.Label(idLabelRect, new GUIContent("ID",
+                            "Stable code ID shared by Frame-Attached and Independent Motion sockets."));
+                        DrawInlineRenameField(idFieldRect, SocketIdRenameControl,
+                            ref _renameSocketIdValue, ref _focusSocketIdRename, EditorStyles.textField);
+                    }
+                    else if (DrawRenameLabelRow("ID", socketId,
+                        "Double-click to rename the stable socket ID. F2 renames Name.", out _))
+                    {
+                        BeginSocketIdRename(name);
+                        GUIUtility.ExitGUI();
                     }
                     GUILayout.Label($"Code: SpriteSockets.Hash(\"{catalogItem.SocketId}\")", _mutedStyle);
 
@@ -10584,16 +11641,22 @@ namespace InvertLab.Sprites.DOTS.Editor
             var checkRect = new Rect(foldRect.xMax + 2f, header.y, 18f, 28f);
             DrawSocketListCheckbox(checkRect, anySelected);
 
-            string title = $"{inventory.Name}  •  {visible.Count}";
+            int inventoryIndex = _profile.SocketInventories != null
+                ? _profile.SocketInventories.IndexOf(inventory)
+                : -1;
             var nameRect = new Rect(checkRect.xMax + 6f, header.y + 5f, 160f, 18f);
-            string nextName = EditorGUI.DelayedTextField(nameRect, inventory.Name);
-            if (!string.Equals(nextName, inventory.Name, StringComparison.Ordinal))
+            bool renamingInv = inventoryIndex >= 0 && inventoryIndex == _renamingInventoryIndex;
+            if (renamingInv)
             {
-                RecordProfileUndo("Rename Socket Group");
-                inventory.Name = string.IsNullOrWhiteSpace(nextName)
-                    ? UniqueSocketGroupName(independentView)
-                    : nextName.Trim();
-                SaveDirty();
+                DrawInlineRenameField(nameRect, InventoryRenameControl,
+                    ref _renameInventoryValue, ref _focusInventoryRename,
+                    EditorStyles.boldLabel);
+            }
+            else
+            {
+                GUI.Label(nameRect, new GUIContent(inventory.Name,
+                    "Click to select group. Double-click or F2 to rename."),
+                    EditorStyles.boldLabel);
             }
             GUI.Label(new Rect(nameRect.xMax + 6f, header.y + 6f, 80f, 16f),
                 $"{visible.Count} sockets", _mutedStyle);
@@ -10620,10 +11683,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             var headerEvt = Event.current;
             if (headerEvt.type == EventType.MouseDown && headerEvt.button == 0 &&
                 header.Contains(headerEvt.mousePosition) &&
-                !foldRect.Contains(headerEvt.mousePosition) &&
-                !nameRect.Contains(headerEvt.mousePosition))
+                !foldRect.Contains(headerEvt.mousePosition))
             {
+                if (inventoryIndex >= 0)
+                    _renameInventoryTargetIndex = inventoryIndex;
                 SelectInventoryMembers(names, visible, ReadSelectionOp(headerEvt, orderedList: true));
+                if (!renamingInv && nameRect.Contains(headerEvt.mousePosition) &&
+                    headerEvt.clickCount >= 2 && inventoryIndex >= 0)
+                    BeginInventoryRename(inventoryIndex);
                 headerEvt.Use();
             }
             if (headerEvt.type == EventType.ContextClick && header.Contains(headerEvt.mousePosition) ||
@@ -11419,20 +12486,27 @@ namespace InvertLab.Sprites.DOTS.Editor
             var item = _profile?.SocketCatalog?.Find(name);
             if (_draggingSocket && IsSocketSelected(name))
             {
-                if (item != null && item.UsesOwnClock && _socketMoveMotionKeys.Count == 0)
+                // Independent sockets are drawn from motion sampling. Do not switch to
+                // frame-key poses during drag (that caused a visible jump / offset).
+                if (item != null && item.UsesOwnClock)
                 {
-                    for (int i = 0; i < _socketMoveNames.Count &&
-                                        i < _socketMoveKeys.Count; i++)
+                    if (_socketMoveMotionKeys.Count == 0)
                     {
-                        if (!SpriteSocketKeys.NamesEqual(_socketMoveNames[i], name) ||
-                            _socketMoveKeys[i] == null)
-                            continue;
-                        position = _socketMoveKeys[i].LocalPosition;
-                        angle = _socketMoveKeys[i].LocalAngle;
-                        scale = SpriteSocketKeys.ResolvedScale(
-                            _socketMoveKeys[i].LocalScale);
-                        return true;
+                        for (int i = 0; i < _socketMoveNames.Count &&
+                                            i < _socketMoveKeys.Count; i++)
+                        {
+                            if (!SpriteSocketKeys.NamesEqual(_socketMoveNames[i], name) ||
+                                _socketMoveKeys[i] == null)
+                                continue;
+                            position = _socketMoveKeys[i].LocalPosition;
+                            angle = _socketMoveKeys[i].LocalAngle;
+                            scale = SpriteSocketKeys.ResolvedScale(
+                                _socketMoveKeys[i].LocalScale);
+                            return true;
+                        }
                     }
+                    // Motion keys are live-updated by ApplySocketMotionKeyBodyMove;
+                    // fall through to TrySampleIndependentSocketMotion.
                 }
                 else if (clip.Sockets != null &&
                          SpriteSocketKeys.TryGetPose(clip.Sockets, name, frame,
@@ -14115,6 +15189,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             Vector2 pin = SocketToScreen(position, cell);
             Rect unrotated;
+            // Selection handles / crosshair must sit on the same screen point as the
+            // orange socket icon (pin). Preview art may be grip-offset from that pin.
             Vector2 pivot = pin;
             bool usedPreview = false;
             if (_showSocketPreviews)
@@ -14126,9 +15202,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                         out var texture, out int columns, out int rows, out _,
                         out _, out _, out _) &&
                     TryBuildSocketPreviewScreen(cell, item, texture, columns, rows, position,
-                        angle, scale, out pivot, out var spriteRect, out float signX, out float signY))
+                        angle, scale, out var attachScreen, out var spriteRect,
+                        out float signX, out float signY))
                 {
-                    unrotated = FlipRectAround(spriteRect, pivot, signX, signY);
+                    unrotated = FlipRectAround(spriteRect, attachScreen, signX, signY);
+                    pivot = pin;
                     usedPreview = true;
                 }
                 else
@@ -14738,6 +15816,81 @@ namespace InvertLab.Sprites.DOTS.Editor
             SealUndoGroup();
         }
 
+        void DuplicateSelectedClips()
+        {
+            SyncClipMultiSelection();
+            if (_selectedClips.Count <= 1)
+            {
+                DuplicateClip();
+                return;
+            }
+            var ordered = new List<int>(_selectedClips);
+            ordered.Sort();
+            // Duplicate high→low so inserts after each index don't scramble remaining sources.
+            for (int i = ordered.Count - 1; i >= 0; i--)
+            {
+                _selectedClip = ordered[i];
+                DuplicateClip();
+            }
+            SyncClipMultiSelection();
+        }
+
+        void DeleteSelectedClips()
+        {
+            SyncClipMultiSelection();
+            if (_selectedClips.Count <= 1)
+            {
+                DeleteClip();
+                return;
+            }
+            var ordered = new List<int>(_selectedClips);
+            ordered.Sort();
+            for (int i = ordered.Count - 1; i >= 0; i--)
+                DeleteClipAt(ordered[i]);
+            SyncClipMultiSelection();
+        }
+
+        void DrawOnCompleteClipField(SpriteClipDef clip)
+        {
+            if (clip == null || _profile?.Clips == null)
+                return;
+
+            var names = new List<string> { "(None)" };
+            var indices = new List<int> { -1 };
+            int selected = 0;
+            for (int i = 0; i < _profile.Clips.Count; i++)
+            {
+                var other = _profile.Clips[i];
+                if (other == null)
+                    continue;
+                string label = string.IsNullOrWhiteSpace(other.Name) ? $"Clip {i}" : other.Name;
+                names.Add($"{i}: {label}");
+                indices.Add(i);
+                if (i == clip.OnCompleteClipIndex)
+                    selected = names.Count - 1;
+            }
+
+            // Allow typed index that is not in list (legacy / deleted).
+            if (clip.OnCompleteClipIndex >= 0 && selected == 0)
+            {
+                names.Add($"{clip.OnCompleteClipIndex}: (missing)");
+                indices.Add(clip.OnCompleteClipIndex);
+                selected = names.Count - 1;
+            }
+
+            EditorGUI.BeginChangeCheck();
+            int pick = EditorGUILayout.Popup(
+                new GUIContent("On Complete Clip",
+                    "When Once ends and no one-shot resume / queue: auto-Play this clip. -1 = none."),
+                selected, names.ToArray());
+            if (EditorGUI.EndChangeCheck() && pick >= 0 && pick < indices.Count)
+            {
+                RecordProfileUndo("Set Sprite Clip On Complete");
+                clip.OnCompleteClipIndex = indices[pick];
+                SaveDirty();
+            }
+        }
+
         void DuplicateClip()
         {
             var source = CurrentClip;
@@ -14752,6 +15905,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 FrameRows = source.FrameRows != null ? (int[])source.FrameRows.Clone() : null,
                 FrameRate = source.FrameRate,
                 WrapMode = source.WrapMode,
+                Interrupt = source.Interrupt,
+                CancelAfter = source.CancelAfter,
+                Priority = source.Priority,
+                OnCompleteClipIndex = source.OnCompleteClipIndex,
                 FrameDurationScales = (float[])source.FrameDurationScales.Clone(),
                 EventIds = (byte[])source.EventIds.Clone(),
                 EventNormalizedTimes = (float[])source.EventNormalizedTimes.Clone(),
@@ -14791,6 +15948,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _profile.Hitboxes.AddRange(copiedHitboxes);
             _profile.Clips.Insert(_selectedClip + 1, clone);
             _selectedClip++;
+            _selectedClips.Clear();
+            _selectedClips.Add(_selectedClip);
             _collapsedSheets.Remove(clone.SheetIndex);
             SelectOnlyFrame(0);
             ClearColliderSelection();
@@ -14813,12 +15972,25 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             var clip = _profile.Clips[clipIndex];
             bool deletedSelected = clipIndex == _selectedClip;
-            RecordDiscreteUndo("Delete Sprite Animation Clip");
+            RecordDiscreteUndo("Delete Clip");
             _profile.Hitboxes.RemoveAll(box =>
                 box != null && !box.IsCharacter && box.ClipName == clip.Name);
             _profile.Clips.RemoveAt(clipIndex);
+            _selectedClips.Remove(clipIndex);
+            var remapped = new HashSet<int>();
+            foreach (int i in _selectedClips)
+            {
+                if (i > clipIndex) remapped.Add(i - 1);
+                else remapped.Add(i);
+            }
+            _selectedClips.Clear();
+            foreach (int i in remapped)
+                _selectedClips.Add(i);
             if (_profile.Clips.Count == 0)
+            {
                 _selectedClip = -1;
+                _selectedClips.Clear();
+            }
             else
             {
                 if (clipIndex < _selectedClip)
@@ -14830,6 +16002,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     : null;
                 if (remaining == null || remaining.SheetIndex != _selectedSheet)
                     _selectedClip = FirstClipIndexOfSheet(_selectedSheet);
+                if (_selectedClip >= 0)
+                    _selectedClips.Add(_selectedClip);
             }
             if (_renamingClip == clipIndex)
                 ClearClipRename();
@@ -15614,6 +16788,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             SelectOnlyFrame(Mathf.Clamp(landing, 0, newCount - 1));
             _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, _selectedFrame));
             PruneColliderSelection(clip, _selectedFrame);
+            // Keep SO Data pointing at the same working profile so SaveProfile
+            // cannot write a stale Frames array from a diverged _asset.Data.
+            SyncWorkingProfileToAsset();
             SaveDirty();
             _status = remove.Count == 1
                 ? $"Removed frame {FirstRemovedIndex(remove) + 1}  •  {clip.Frames.Length} remaining"
@@ -16037,6 +17214,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorUtility.SetDirty(_asset);
         }
 
+        /// <summary>
+        /// EditorWindow holds <see cref="_profile"/> while the SO holds Data.
+        /// They must stay the same reference after loads/undos or frame edits
+        /// (e.g. RemoveFrames) can mutate one copy while Save writes the other.
+        /// </summary>
+        void SyncWorkingProfileToAsset()
+        {
+            if (_asset == null || _profile == null)
+                return;
+            if (!ReferenceEquals(_asset.Data, _profile))
+                _asset.Data = _profile;
+            EditorUtility.SetDirty(_asset);
+        }
+
         bool CanSaveProfile()
         {
             return ResolveSaveTexture() != null;
@@ -16070,8 +17261,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             WriteActiveSheetFromLegacy();
             string texturePath = AssetDatabase.GetAssetPath(saveTex);
             string directory = Path.GetDirectoryName(texturePath)?.Replace('\\', '/');
+            // Bind an existing .asset without LoadAsset — LoadAsset would replace
+            // _profile with disk Data and discard in-memory frame deletions.
             if (_asset == null && !_createSeparateProfileOnSave)
-                TryLoadExistingAsset();
+                TryBindExistingAssetWithoutReload();
             if (_asset == null)
             {
                 string assetPath = UniqueProfileAssetPath(directory, saveTex.name);
@@ -16079,15 +17272,25 @@ namespace InvertLab.Sprites.DOTS.Editor
                 AssetDatabase.CreateAsset(_asset, assetPath);
             }
             _createSeparateProfileOnSave = false;
-            _asset.Data = _profile;
+            if (!ReferenceEquals(_asset.Data, _profile))
+                _asset.Data = _profile;
             EditorUtility.SetDirty(_asset);
             AssetDatabase.SaveAssets();
+            // After save, stay bound to whatever nested Data the SO retained.
+            if (_asset.Data != null)
+                _profile = _asset.Data;
 
             string savedPath = AssetDatabase.GetAssetPath(_asset);
             string jsonPath = savedPath.Replace(".asset", ".json");
             File.WriteAllText(jsonPath, _profile.ToJson());
-            AssetDatabase.ImportAsset(jsonPath);
-            _status = $"Saved {_asset.name}";
+            // Do not ImportAsset the sidecar: reimport refresh can reload the
+            // related .asset and resurface a stale Frames length (8 after 8→7).
+
+            var clip = CurrentClip;
+            int frames = clip?.Frames?.Length ?? 0;
+            _status = clip != null
+                ? $"Saved {_asset.name}  •  {clip.Name}: {frames} frames"
+                : $"Saved {_asset.name}";
             ShowNotification(new GUIContent("Profile saved"));
             SpriteSheetProfileRecents.Remember(_asset);
         }
@@ -16113,6 +17316,22 @@ namespace InvertLab.Sprites.DOTS.Editor
             var existing = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(assetPath);
             if (existing != null)
                 LoadAsset(existing);
+        }
+
+        /// <summary>
+        /// Point <see cref="_asset"/> at an existing sibling profile without
+        /// replacing the in-memory <see cref="_profile"/> (preserves edits).
+        /// </summary>
+        void TryBindExistingAssetWithoutReload()
+        {
+            if (_profile?.Sheet == null)
+                return;
+            string path = AssetDatabase.GetAssetPath(_profile.Sheet);
+            string directory = Path.GetDirectoryName(path)?.Replace('\\', '/');
+            string assetPath = $"{directory}/{_profile.Sheet.name}_profile.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(assetPath);
+            if (existing != null)
+                _asset = existing;
         }
 
         void LoadAsset(ScriptableSpriteSheetProfile asset)
@@ -18632,17 +19851,22 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         bool IsEditingStringTextField()
         {
-            if (_renamingClip >= 0)
+            if (IsRenamingAnything())
                 return true;
             if (!EditorGUIUtility.editingTextField)
                 return false;
             string focused = GUI.GetNameOfFocusedControl();
             return focused == ClipRenameControl ||
+                   focused == SheetRenameControl ||
+                   focused == SocketNameRenameControl ||
+                   focused == SocketIdRenameControl ||
+                   focused == InventoryRenameControl ||
+                   focused == EventRenameControl ||
                    (!string.IsNullOrEmpty(focused) && focused.StartsWith(StringFieldControlPrefix));
         }
 
         bool IsEditingAnyTextField()
-            => _renamingClip >= 0 || _renamingSheet >= 0 || EditorGUIUtility.editingTextField;
+            => IsRenamingAnything() || EditorGUIUtility.editingTextField;
 
         void ReleaseShortcutKeyboardFocus()
         {
@@ -18743,28 +19967,16 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.keyCode == KeyCode.F2)
             {
-                if (_renamingClip >= 0 || _renamingSheet >= 0)
+                if (IsRenamingAnything())
                     return;
-                if (CurrentClip == null)
+                if (IsEditingStringTextField() && !string.IsNullOrEmpty(GUI.GetNameOfFocusedControl()) &&
+                    GUI.GetNameOfFocusedControl().StartsWith(StringFieldControlPrefix))
+                    return;
+                if (TryBeginPreferredRename())
                 {
-                    if (_profile?.Sheets != null && _profile.Sheets.Count > 0)
-                    {
-                        BeginSheetRename(_selectedSheet);
-                        evt.Use();
-                        Repaint();
-                    }
-                    return;
+                    evt.Use();
+                    Repaint();
                 }
-                string focused = GUI.GetNameOfFocusedControl();
-                bool editingOther = EditorGUIUtility.editingTextField &&
-                    !string.IsNullOrEmpty(focused) &&
-                    focused.StartsWith(StringFieldControlPrefix) &&
-                    focused != StringFieldControlPrefix + "ClipName";
-                if (editingOther)
-                    return;
-                BeginClipRename(_selectedClip);
-                evt.Use();
-                Repaint();
                 return;
             }
 
@@ -19012,6 +20224,40 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _undoProxy.name = "DOTS Sprite Animator Undo";
             }
             _undoProxy.Data = _profile;
+        }
+
+
+        const string ChangeClipFpsUndoName = "Change Clip FPS";
+        const string ClipFpsTooltip =
+            "Clip playback frame rate. Runtime Speed multiplies this.";
+
+        bool ApplyClipFrameRate(SpriteClipDef clip, float newFrameRate)
+        {
+            if (clip == null)
+                return false;
+            float clamped = Mathf.Max(0.1f, newFrameRate);
+            if (Mathf.Approximately(clip.FrameRate, clamped))
+                return false;
+            // Discrete complete-object undo + seal (same pattern as rename) so
+            // PrepareInspectorUndo / other MouseDown records cannot swallow Ctrl+Z.
+            SyncWorkingProfileToAsset();
+            RecordDiscreteUndo(ChangeClipFpsUndoName);
+            clip.FrameRate = clamped;
+            SyncWorkingProfileToAsset();
+            SaveDirty();
+            SealUndoGroup();
+            return true;
+        }
+
+        void DrawClipFpsField(Rect fieldRect, SpriteClipDef clip)
+        {
+            if (clip == null)
+                return;
+            EditorGUI.BeginChangeCheck();
+            float fps = EditorGUI.FloatField(fieldRect,
+                new GUIContent(string.Empty, ClipFpsTooltip), clip.FrameRate);
+            if (EditorGUI.EndChangeCheck())
+                ApplyClipFrameRate(clip, fps);
         }
 
         void RecordDiscreteUndo(string operation)
