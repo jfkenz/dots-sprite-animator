@@ -68,8 +68,21 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
 
                 SpriteInstanceData d = _InstanceData[iid];
                 float2 quad = QUAD[vid];
+
+                // Mirror the QUAD around the authored pivot (geometry); UVs stay
+                // attached to their vertices. A single mirror only — also mirroring
+                // UVs around the cell center would cancel the flip (double mirror),
+                // and mirroring UVs around a non-center pivot would sample outside
+                // the cell and bleed the neighboring frame.
+                float2 pivot = d.Flip.zw;
+                if (pivot.x == 0.0 && pivot.y == 0.0)
+                    pivot = float2(0.5, 0.5);
+                float2 posed = quad;
+                posed.x = lerp(quad.x, 2.0 * (pivot.x - 0.5) - quad.x, saturate(d.Flip.x));
+                posed.y = lerp(quad.y, 2.0 * (pivot.y - 0.5) - quad.y, saturate(d.Flip.y));
+
                 float aspect = _CellAspect > 0.001 ? _CellAspect : 1.0;
-                float2 local = float2(quad.x * d.FrameTRS.x * aspect, quad.y * d.FrameTRS.y);
+                float2 local = float2(posed.x * d.FrameTRS.x * aspect, posed.y * d.FrameTRS.y);
                 float cs = cos(d.FrameTRS.z);
                 float sn = sin(d.FrameTRS.z);
                 float2 rotated = float2(
@@ -92,12 +105,8 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                     wpos.z = d.PosScale.y - rotated.y * d.PosScale.z;
                 }
 
+                // UVs unchanged (still the full cell, always inside it).
                 float2 uv = quad + 0.5;
-                float2 pivot = d.Flip.zw;
-                if (pivot.x == 0.0 && pivot.y == 0.0)
-                    pivot = float2(0.5, 0.5);
-                uv.x = lerp(uv.x, 2.0 * pivot.x - uv.x, saturate(d.Flip.x));
-                uv.y = lerp(uv.y, 2.0 * pivot.y - uv.y, saturate(d.Flip.y));
 
                 v2f o;
                 o.pos = TransformObjectToHClip(wpos); // identity object->world; data already world

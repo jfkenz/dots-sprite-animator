@@ -311,8 +311,8 @@ MonoBehaviour:
   FlipY: 0
   CrossfadeDuration: 0
   Blend: 0
-  _time: 0
-  _frame: 0
+  _time: 0.49302694
+  _frame: 3
   _queuedClip: -1
   _queuedForce: 0
   _resumeClip: -1
@@ -1263,9 +1263,9 @@ MonoBehaviour:
   SizeUnits: 1
   Tint: {r: 1, g: 1, b: 1, a: 1}
   ShowSpriteInScene: 1
-  BakeUnityColliders: 0
-  BakeFrameColliders: 0
-  BakeUnitySockets: 0
+  BakeUnityColliders: 1
+  BakeFrameColliders: 1
+  BakeUnitySockets: 1
   ShowSceneColliderGizmos: 1
   ShowSceneSocketGizmos: 1
   BakePivot: 1
@@ -1337,7 +1337,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.88, y: 0.88, z: 0.88}
+  m_LocalScale: {x: 1.38, y: 0.88, z: 0.88}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 536347361}

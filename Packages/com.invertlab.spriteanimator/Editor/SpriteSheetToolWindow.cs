@@ -144,6 +144,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float TimelineDragMoveThreshold = 1f;
         const float DefaultPreviewSpeed = 1f;
         const float PivotHandleHitRadius = 14f;
+        const string PivotLockedPrefsKey = "InvertLab.SpriteAnimator.PivotLocked";
         const float ColliderHandleSize = 8f;
         const float ColliderRotateHandleDistance = 26f;
         const float ColliderMinScreenHalf = 6f;
@@ -344,6 +345,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         Vector2 _previewPanStartOffset;
         bool _draggingPivot;
         bool _pivotSelected;
+        bool _pivotLocked;
+        Vector2 _pivotClipboard = SpriteSheetProfile.DefaultPivot;
+        bool _pivotClipboardValid;
+        Vector2 _socketPoseClipboardPosition;
+        float _socketPoseClipboardAngle;
+        Vector2 _socketPoseClipboardScale = Vector2.one;
+        bool _socketPoseClipboardValid;
         double _lastEditorTime;
         double _lastSpaceToggleTime = -1d;
         float _previewTime;
@@ -538,6 +546,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             EnsureProfile();
             wantsMouseMove = true;
             wantsMouseEnterLeaveWindow = true;
+            _pivotLocked = EditorPrefs.GetBool(PivotLockedPrefsKey, false);
             EditorApplication.update += TickPreview;
             Undo.undoRedoPerformed -= OnUndoRedo;
             Undo.undoRedoPerformed += OnUndoRedo;
@@ -676,6 +685,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPanel(inspectorRect);
             DrawPanel(timelineRect);
 
+            // Pivot handle wins over socket selected-fallback so RMB on the green
+            // pivot opens Pivot Actions even when a socket was previously selected.
+            HandleWindowPivotContextClick(previewRect);
             HandleWindowSocketContextClick(previewRect);
 
             DrawClipBrowser(clipsRect);
@@ -3205,10 +3217,13 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             int previewControlId = GUIUtility.GetControlID(
                 "InvertLabSpriteAnimatorPreview".GetHashCode(), FocusType.Keyboard, canvas);
-            if (!_showPivot && _draggingPivot)
+            if ((!_showPivot || _pivotLocked) && _draggingPivot)
             {
                 _draggingPivot = false;
-                _pivotSelected = false;
+                if (_pivotLocked)
+                    _pivotSelected = false;
+                else if (!_showPivot)
+                    _pivotSelected = false;
             }
             // Input arbitration: an armed creation tool owns the canvas. Otherwise
             // selected-collider handles, sockets, and pivot win, then preview marquee
@@ -3234,15 +3249,39 @@ namespace InvertLab.Sprites.DOTS.Editor
                         previewControlId, cell, new Rect(0f, 0f, contentW, contentH),
                         clip, state.Frame, onionGhosts);
                 }
+                else if (_showPreviewDebug &&
+                         TryHandleSocketLockBadgeClick(clip, state.Frame, cell))
+                {
+                }
+                else if (_showPivot && TryHandlePivotContextClick(cell))
+                {
+                }
                 else if (_showPreviewDebug && TryHandleSocketContextClick(clip, state.Frame, cell))
                 {
                 }
                 else if (_draggingColliderTransform)
                     HandleColliderTransformInput(previewControlId, cell, clip, state.Frame);
-                else if (_draggingPivot)
+                else if (_draggingPivot && !_pivotLocked)
                     HandlePivotInput(previewControlId, cell);
                 else if (_draggingSocket)
                     HandleSocketManipulationInput(previewControlId, cell, clip, state.Frame);
+                // Pivot handle wins over collider/socket bodies so a pivot inside a
+                // selected collider or near a socket pin stays grabbable by mouse.
+                else if (_showPivot && Event.current.type == EventType.MouseDown &&
+                         Event.current.button == 0 &&
+                         PivotHandleHitTest(cell, Event.current.mousePosition))
+                {
+                    if (_pivotLocked)
+                    {
+                        _status = "Pivot is locked — unlock in the inspector (lock icon) to drag";
+                        Event.current.Use();
+                        Repaint();
+                    }
+                    else
+                    {
+                        HandlePivotInput(previewControlId, cell);
+                    }
+                }
                 else if (_showHitboxes && Event.current.type == EventType.MouseDown &&
                          Event.current.button == 0 &&
                          HitSelectedColliderHandle(cell, Event.current.mousePosition) != ColliderHandleKind.None)
@@ -3256,10 +3295,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                          Event.current.button == 0 &&
                          FindSocketAt(clip, state.Frame, cell, Event.current.mousePosition) != null)
                     HandleSocketManipulationInput(previewControlId, cell, clip, state.Frame);
-                else if (_showPivot && Event.current.type == EventType.MouseDown &&
-                         Event.current.button == 0 &&
-                         PivotHandleContains(cell, Event.current.mousePosition))
-                    HandlePivotInput(previewControlId, cell);
                 else
                 {
                     bool selectionConsumed = HandlePreviewObjectSelectionInput(
@@ -3267,7 +3302,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         clip, state.Frame, onionGhosts);
                     if (!selectionConsumed)
                     {
-                        bool pivotConsumed = _showPivot &&
+                        bool pivotConsumed = _showPivot && !_pivotLocked &&
                             HandlePivotInput(previewControlId, cell);
                         if (!pivotConsumed && _profile.OnionSkinEnabled)
                             HandleOnionInput(previewControlId, cell, clip, state.Frame, onionGhosts);
@@ -3296,25 +3331,36 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             else if (Event.current.type != EventType.Used &&
                 _colliderCreationMode == ColliderCreationMode.None &&
-                _showPreviewDebug && clip != null &&
                 canvas.Contains(Event.current.mousePosition))
             {
                 Vector2 contentMouse = Event.current.mousePosition - canvas.position + _previewScroll;
-                TryHandleSocketContextClick(clip, state.Frame, cell, contentMouse);
+                if (_showPreviewDebug && clip != null &&
+                         TryHandleSocketLockBadgeClick(clip, state.Frame, cell, contentMouse))
+                {
+                }
+                else if (_showPivot && TryHandlePivotContextClick(cell, contentMouse))
+                {
+                }
+                else if (_showPreviewDebug && clip != null)
+                    TryHandleSocketContextClick(clip, state.Frame, cell, contentMouse);
             }
         }
 
         static Rect PreviewDebugToggleRect(Rect canvas)
             => new(canvas.xMax - 88f, canvas.yMax - 30f, 80f, 22f);
 
-        static Rect PreviewSizeToggleRect(Rect canvas)
+        static Rect PreviewPivotToggleRect(Rect canvas)
             => new(canvas.xMax - 176f, canvas.yMax - 30f, 80f, 22f);
 
+        static Rect PreviewSizeToggleRect(Rect canvas)
+            => new(canvas.xMax - 264f, canvas.yMax - 30f, 80f, 22f);
+
         static Rect PreviewCollidersToggleRect(Rect canvas)
-            => new(canvas.xMax - 280f, canvas.yMax - 30f, 96f, 22f);
+            => new(canvas.xMax - 368f, canvas.yMax - 30f, 96f, 22f);
 
         static bool PreviewOverlayToggleContains(Rect canvas, Vector2 mouse)
             => PreviewDebugToggleRect(canvas).Contains(mouse) ||
+               PreviewPivotToggleRect(canvas).Contains(mouse) ||
                PreviewSizeToggleRect(canvas).Contains(mouse) ||
                PreviewCollidersToggleRect(canvas).Contains(mouse);
 
@@ -3333,6 +3379,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Event.current.type = previewEvent;
             DrawPreviewCollidersToggle(canvas);
             DrawPreviewSizeToggle(canvas);
+            DrawPreviewPivotToggle(canvas);
             DrawPreviewDebugToggle(canvas);
         }
 
@@ -3366,6 +3413,26 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
+        void DrawPreviewPivotToggle(Rect canvas)
+        {
+            if (!GUI.Button(PreviewPivotToggleRect(canvas),
+                    new GUIContent(_showPivot ? "Pivot: On" : "Pivot: Off",
+                "Show or hide the green sheet pivot handle in the preview. Independent of Colliders, Size, and Debug. Use the inspector lock next to Show Pivot to prevent select/drag."),
+                    EditorStyles.miniButton))
+                return;
+            RecordWindowUndo("Toggle Show Pivot");
+            _showPivot = !_showPivot;
+            if (!_showPivot)
+            {
+                _draggingPivot = false;
+                _pivotSelected = false;
+            }
+            _status = _showPivot
+                ? "Pivot handle visible"
+                : "Pivot handle hidden";
+            Repaint();
+        }
+
         void DrawPreviewDebugToggle(Rect canvas)
         {
             if (!GUI.Button(PreviewDebugToggleRect(canvas),
@@ -3384,7 +3451,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawPreviewSpriteSizeBox(SpriteClipDef clip, int frame, Rect spriteRect)
         {
             var sheet = _profile.SheetForClip(clip);
-            if (!SpriteSheetProfile.TryGetCellPixels(sheet, out float cellW, out float cellH))
+            int cellIndex = CellIndexOf(clip, frame);
+            if (!SpriteSheetProfile.TryGetActiveCellPixels(sheet, cellIndex, out float cellW, out float cellH))
                 return;
             float ppu = SpriteSheetProfile.GetPixelsPerUnit(sheet);
             float worldW = cellW / ppu;
@@ -3476,10 +3544,15 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, 20f), "INSPECTOR", _sectionStyle);
             PrepareInspectorUndo();
-            // Always reserve the socket action bar so selecting a socket does not
+            // Always reserve the socket/pivot action bar so selecting one does not
             // shrink the inspector and jump the list under the next click.
             float top = 90f;
-            if (!string.IsNullOrEmpty(_selectedSocketName) && CurrentClip != null)
+            if (_pivotSelected && _showPivot)
+            {
+                var bar = new Rect(rect.x + 9f, rect.y + 32f, rect.width - 18f, 54f);
+                DrawSelectedPivotBar(bar);
+            }
+            else if (!string.IsNullOrEmpty(_selectedSocketName) && CurrentClip != null)
             {
                 var bar = new Rect(rect.x + 9f, rect.y + 32f, rect.width - 18f, 54f);
                 DrawSelectedSocketBar(bar);
@@ -3570,19 +3643,41 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPixelsPerUnitSize();
             using (new EditorGUILayout.HorizontalScope())
             {
-                _profile.Pivot = EditorGUILayout.Vector2Field("Pivot", _profile.Pivot);
-                using (new EditorGUI.DisabledScope(_profile.Pivot == SpriteSheetProfile.DefaultPivot))
+                using (new EditorGUI.DisabledScope(_pivotLocked))
                 {
-                    if (ResetValueButton("Reset the pivot to centered (0.5, 0.5)."))
+                    EditorGUI.BeginChangeCheck();
+                    Vector2 nextPivot = EditorGUILayout.Vector2Field(
+                        new GUIContent("Pivot",
+                            "Normalized cell pivot (0–1). (0,0)=bottom-left, (0.5,0.5)=center, (0.5,0)=feet. "
+                            + "In Cropped mode this is relative to the active cropped cell."),
+                        _profile.Pivot);
+                    if (EditorGUI.EndChangeCheck())
                     {
-                        RecordProfileUndo("Reset Sprite Pivot");
-                        _profile.Pivot = SpriteSheetProfile.DefaultPivot;
-                        _status = "Reset pivot to center";
+                        nextPivot.x = Mathf.Clamp01(nextPivot.x);
+                        nextPivot.y = Mathf.Clamp01(nextPivot.y);
+                        if (nextPivot != _profile.Pivot)
+                        {
+                            // PrepareInspectorUndo already recorded on mouse/key down.
+                            _profile.Pivot = nextPivot;
+                            WriteActiveSheetFromLegacy();
+                            _status = $"Pivot {_profile.Pivot.x:F3}, {_profile.Pivot.y:F3}";
+                        }
                     }
+                }
+                using (new EditorGUI.DisabledScope(_pivotLocked ||
+                    _profile.Pivot == SpriteSheetProfile.DefaultPivot))
+                {
+                    if (ResetValueButton("Reset the pivot to centered (0.5, 0.5). Unlock first if locked."))
+                        SetProfilePivot(SpriteSheetProfile.DefaultPivot, "Reset Sprite Pivot",
+                            "Reset pivot to center");
                 }
                 bool nextShowPivot = GUILayout.Toggle(_showPivot,
                     new GUIContent("Show Pivot",
-                        "Draw the sheet pivot as a green dot in the preview. Drag it to move. FlipX/FlipY mirror around this pivot so off-center art does not jump."),
+                        "Draw the sheet pivot as a green handle in the preview. "
+                        + "Also available as Pivot: On/Off on the preview overlay next to Colliders/Size/Debug. "
+                        + "Drag to move when unlocked; right-click (or select then Actions) for snap presets. "
+                        + "Use the lock icon beside this toggle to prevent select/drag. "
+                        + "FlipX/FlipY mirror around this pivot so off-center art does not jump."),
                     GUILayout.Width(92f));
                 if (nextShowPivot != _showPivot)
                 {
@@ -3592,6 +3687,48 @@ namespace InvertLab.Sprites.DOTS.Editor
                     {
                         _draggingPivot = false;
                         _pivotSelected = false;
+                    }
+                }
+                if (GUILayout.Button(PivotLockContent(_pivotLocked),
+                        EditorStyles.miniButton, GUILayout.Width(28f), GUILayout.Height(18f)))
+                    SetPivotLocked(!_pivotLocked);
+            }
+            if (_pivotSelected && _showPivot)
+            {
+                using (new EditorGUI.DisabledScope(_pivotLocked))
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUI.BeginChangeCheck();
+                    float px = EditorGUILayout.FloatField(
+                        new GUIContent("Pivot X", "Normalized 0–1 across the active cell."),
+                        _profile.Pivot.x);
+                    float py = EditorGUILayout.FloatField(
+                        new GUIContent("Pivot Y", "Normalized 0–1 up the active cell (0 = bottom / feet)."),
+                        _profile.Pivot.y);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        // PrepareInspectorUndo already recorded on mouse/key down.
+                        _profile.Pivot = new Vector2(Mathf.Clamp01(px), Mathf.Clamp01(py));
+                        WriteActiveSheetFromLegacy();
+                        _status = $"Pivot {_profile.Pivot.x:F3}, {_profile.Pivot.y:F3}";
+                    }
+                }
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button(new GUIContent("Pivot Actions…",
+                            "Snap presets, Character collider snap, opaque bounds, copy/paste, lock."),
+                        EditorStyles.miniButton))
+                        ShowPivotContextMenu();
+                    using (new EditorGUI.DisabledScope(_pivotLocked))
+                    {
+                        if (GUILayout.Button(new GUIContent("Snap Feet",
+                                "Snap pivot to bottom-center (0.5, 0) — platformer default."),
+                            EditorStyles.miniButton, GUILayout.Width(84f)))
+                            SetProfilePivot(new Vector2(0.5f, 0f), "Snap Pivot to Bottom Center");
+                        if (GUILayout.Button(new GUIContent("Snap Center",
+                                "Snap pivot to cell center (0.5, 0.5)."),
+                            EditorStyles.miniButton, GUILayout.Width(92f)))
+                            SetProfilePivot(SpriteSheetProfile.DefaultPivot, "Snap Pivot to Cell Center");
                     }
                 }
             }
@@ -3619,6 +3756,62 @@ namespace InvertLab.Sprites.DOTS.Editor
                 WriteActiveSheetFromLegacy();
                 RematchSheetsWorldSize(_selectedSheet);
             }
+
+            EditorGUI.BeginChangeCheck();
+            var nextLayout = (SpriteSheetCellLayoutMode)EditorGUILayout.EnumPopup(
+                new GUIContent("Cell Layout",
+                    "Grid: uniform Columns×Rows UV cells (current behavior). "
+                    + "Cropped: per-cell tight opaque rects that remove transparent spacing/gutters from sampled UVs. "
+                    + "Switching modes keeps the other mode's data when practical."),
+                _profile.CellLayoutMode);
+            if (EditorGUI.EndChangeCheck() && nextLayout != _profile.CellLayoutMode)
+            {
+                RecordProfileUndo("Change Sprite Cell Layout");
+                _profile.CellLayoutMode = nextLayout;
+                WriteActiveSheetFromLegacy();
+                if (nextLayout == SpriteSheetCellLayoutMode.Cropped &&
+                    !SpriteSheetProfile.HasCroppedCellData(_profile.SheetAt(_selectedSheet)))
+                {
+                    DetectSpacingAndCropCells(setMode: false);
+                    WriteActiveSheetFromLegacy();
+                }
+                else
+                {
+                    _status = nextLayout == SpriteSheetCellLayoutMode.Cropped
+                        ? "Cell layout: Cropped (using stored crop rects)"
+                        : "Cell layout: Grid (uniform cells; crop rects kept)";
+                }
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(_profile.Sheet == null))
+                {
+                    if (GUILayout.Button(new GUIContent("Detect spacing & crop cells",
+                        "Scan each grid cell for opaque bounds (alpha > 8), store tight crop rects, "
+                        + "and switch Cell Layout to Cropped. Transparent gutters are removed from UVs; "
+                        + "Columns/Rows stay as the coarse grid.")))
+                    {
+                        DetectSpacingAndCropCells(setMode: true);
+                        WriteActiveSheetFromLegacy();
+                        RematchSheetsWorldSize(_selectedSheet);
+                    }
+                }
+                if (_profile.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped &&
+                    SpriteSheetProfile.HasCroppedCellData(_profile.SheetAt(_selectedSheet)))
+                {
+                    if (GUILayout.Button(new GUIContent("Recompute crops",
+                        "Re-run opaque-bound detect for every cell and replace stored crop rects."),
+                        GUILayout.Width(130f)))
+                    {
+                        DetectSpacingAndCropCells(setMode: true);
+                        WriteActiveSheetFromLegacy();
+                        RematchSheetsWorldSize(_selectedSheet);
+                    }
+                }
+            }
+            DrawCroppedLayoutStatus();
+
             int gridCols = Mathf.Max(1, _profile.Columns);
             int gridRows = Mathf.Max(1, _profile.Rows);
             using (new EditorGUILayout.HorizontalScope())
@@ -8632,6 +8825,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     break;
                 }
             }
+            if (_selectedColliders.Count > 0)
+                _pivotSelected = false;
             _status = PreviewSelectionStatus();
         }
 
@@ -8654,6 +8849,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 if (_colliderListAnchor < 0)
                     _colliderListAnchor = index;
+                if (_selectedColliders.Count > 0)
+                    _pivotSelected = false;
                 _status = PreviewSelectionStatus();
                 return;
             }
@@ -8683,6 +8880,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int i = 0; i < names.Count; i++)
             {
                 string name = names[i];
+                if (IsSocketLocked(name))
+                    continue;
                 if (!TryGetPreviewSocketPose(clip, name, frame, out var position, out _, out _, out _))
                     continue;
                 _previewMarqueeSocketNames.Add(SpriteSocketKeys.CanonicalName(name));
@@ -8724,6 +8923,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedEventFrame = -1;
             _selectedEventIndex = -1;
             _selectedOnionFrame = -1;
+            if (_selectedColliders.Count > 0 || _selectedSockets.Count > 0)
+                _pivotSelected = false;
             SyncSocketPrimaryFromSelection();
         }
 
@@ -8732,7 +8933,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             int colliders = _selectedColliders.Count;
             int sockets = _selectedSockets.Count;
             if (colliders == 0 && sockets == 0)
+            {
+                if (_pivotSelected)
+                    return $"{prefix} profile pivot {_profile.Pivot.x:F2}, {_profile.Pivot.y:F2}";
                 return "Preview selection cleared";
+            }
             if (sockets == 0)
                 return $"{prefix} {colliders} collider{(colliders == 1 ? string.Empty : "s")}";
             if (colliders == 0)
@@ -11639,7 +11844,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             Vector2 contentMouse = evt.mousePosition - canvas.position + _previewScroll;
             int frame = EvaluatePreview(clip, _previewTime).Frame;
-            string hit = FindSocketAt(clip, frame, cell, contentMouse);
+            string hit = FindSocketAt(clip, frame, cell, contentMouse, includeLocked: true);
             if (hit == null &&
                 HitSelectedSocketHandle(cell, clip, frame, contentMouse) != ColliderHandleKind.None)
                 hit = _selectedSocketName;
@@ -11667,14 +11872,30 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             EditorGUI.DrawRect(rect, new Color(0.12f, 0.18f, 0.24f, 1f));
             DrawBorder(rect, AccentColor, 1f);
-            GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, 18f),
-                $"SOCKET  {_selectedSocketName}", EditorStyles.boldLabel);
-            if (GUI.Button(new Rect(rect.x + 8f, rect.y + 26f, 140f, 22f),
+            bool locked = IsSocketLocked(_selectedSocketName);
+            GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 52f, 18f),
+                $"SOCKET  {_selectedSocketName}" + (locked ? "  •  LOCKED" : string.Empty),
+                EditorStyles.boldLabel);
+            if (GUI.Button(new Rect(rect.xMax - 36f, rect.y + 3f, 28f, 20f),
+                    SocketLockContent(locked), EditorStyles.miniButton))
+            {
+                SetSocketsLocked(new[] { _selectedSocketName }, !locked);
+            }
+            float x = rect.x + 8f;
+            if (GUI.Button(new Rect(x, rect.y + 26f, 140f, 22f),
                     new GUIContent("Apply to Frames…",
                         "Copy this socket's position, rotation, and scale onto other frames."),
                     EditorStyles.miniButton))
             {
                 OpenSocketInheritPanel(CurrentClip, _selectedSocketName, _selectedFrame);
+            }
+            x += 148f;
+            if (GUI.Button(new Rect(x, rect.y + 26f, 110f, 22f),
+                    new GUIContent("Socket Actions…",
+                        "Lock, snap presets, Character collider, opaque bounds, copy/paste."),
+                    EditorStyles.miniButton))
+            {
+                ShowSocketContextMenu(CurrentClip, _selectedSocketName);
             }
         }
 
@@ -11685,7 +11906,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return false;
 
             Vector2 mouse = mouseOverride ?? evt.mousePosition;
-            string hit = FindSocketAt(clip, frame, cell, mouse);
+            string hit = FindSocketAt(clip, frame, cell, mouse, includeLocked: true);
             if (hit == null &&
                 HitSelectedSocketHandle(cell, clip, frame, mouse) != ColliderHandleKind.None)
                 hit = _selectedSocketName;
@@ -11710,14 +11931,23 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (clip == null || string.IsNullOrEmpty(hit))
                 return;
+            string name = SpriteSocketKeys.CanonicalName(hit);
+            if (IsSocketLocked(name))
+            {
+                // Locked sockets cannot enter selection; still open unlock/actions menu.
+                var lockedSelected = new List<string> { name };
+                var lockedMenu = new GenericMenu();
+                PopulateSocketContextMenu(lockedMenu, clip, name, lockedSelected, 1);
+                lockedMenu.ShowAsContext();
+                return;
+            }
             if (!IsSocketSelected(hit))
                 SelectPreviewSocket(hit, SelectionOp.Replace);
             else
-                _selectedSocketName = SpriteSocketKeys.CanonicalName(hit);
+                _selectedSocketName = name;
 
             var selected = new List<string>(_selectedSockets);
             int count = selected.Count;
-            string name = SpriteSocketKeys.CanonicalName(hit);
             var menu = new GenericMenu();
             PopulateSocketContextMenu(menu, clip, name, selected, count);
             menu.ShowAsContext();
@@ -11726,36 +11956,100 @@ namespace InvertLab.Sprites.DOTS.Editor
         void PopulateSocketContextMenu(GenericMenu menu, SpriteClipDef clip, string name,
             List<string> selected, int count)
         {
+            bool anyLocked = false;
+            bool allLocked = selected.Count > 0;
+            for (int i = 0; i < selected.Count; i++)
+            {
+                bool locked = IsSocketLocked(selected[i]);
+                anyLocked |= locked;
+                allLocked &= locked;
+            }
+            if (selected.Count == 0)
+                allLocked = IsSocketLocked(name);
+
+            if (allLocked)
+            {
+                menu.AddItem(new GUIContent(count > 1 ? $"Unlock {count} Sockets" : "Unlock Socket"),
+                    false, () => SetSocketsLocked(selected.Count > 0 ? selected : new List<string> { name }, false));
+                menu.AddSeparator(string.Empty);
+                menu.AddDisabledItem(new GUIContent("Snap / edit actions (unlock first)"));
+                menu.AddSeparator(string.Empty);
+            }
+            else
+            {
+                menu.AddItem(new GUIContent(count > 1 ? $"Lock {count} Sockets" : "Lock Socket"),
+                    false, () => SetSocketsLocked(selected.Count > 0 ? selected : new List<string> { name }, true));
+                if (anyLocked)
+                {
+                    menu.AddItem(new GUIContent("Unlock Selected"),
+                        false, () => SetSocketsLocked(selected, false));
+                }
+                menu.AddSeparator(string.Empty);
+                AddSocketSnapMenuItems(menu, clip, selected, name);
+                menu.AddSeparator(string.Empty);
+            }
+
             var catalogItem = _profile?.SocketCatalog?.Find(name);
             if (catalogItem != null && catalogItem.UsesOwnClock)
             {
                 int motionTrack = _profile.SocketMotions.IndexOf(
                     _profile.FindSocketMotion(name));
-                menu.AddItem(new GUIContent("Insert Key Here"), false,
-                    () => InsertIndependentMotionKey(false, motionTrack));
-                menu.AddItem(new GUIContent(
-                        $"Insert Next Key ({IndependentKeyStepLabel()})"),
-                    false, () => InsertIndependentMotionKey(true, motionTrack));
-                AddIndependentDrawLayerMenuItems(menu, selected, CurrentIndependentMotionTime());
-                menu.AddItem(new GUIContent("Snap Motion Center to Character Pivot"), false,
-                    () => SnapIndependentMotionCenterToPivot(selected));
+                if (!allLocked)
+                {
+                    menu.AddItem(new GUIContent("Insert Key Here"), false,
+                        () => InsertIndependentMotionKey(false, motionTrack));
+                    menu.AddItem(new GUIContent(
+                            $"Insert Next Key ({IndependentKeyStepLabel()})"),
+                        false, () => InsertIndependentMotionKey(true, motionTrack));
+                    AddIndependentDrawLayerMenuItems(menu, selected, CurrentIndependentMotionTime());
+                    menu.AddItem(new GUIContent("Snap Motion Center to Character Pivot"), false,
+                        () => SnapIndependentMotionCenterToPivot(selected));
+                }
+                else
+                {
+                    menu.AddDisabledItem(new GUIContent("Insert Key Here"));
+                    menu.AddDisabledItem(new GUIContent(
+                        $"Insert Next Key ({IndependentKeyStepLabel()})"));
+                    menu.AddDisabledItem(new GUIContent("Snap Motion Center to Character Pivot"));
+                }
                 menu.AddSeparator(string.Empty);
             }
-            menu.AddItem(new GUIContent("Set Transform…"), false, OpenSocketTransformPanel);
-            menu.AddItem(new GUIContent("Apply to Frames…"), false,
-                () => OpenSocketInheritPanel(clip, name, _selectedFrame, default, exitGui: false));
-            AddSocketPatternMenuItems(menu, clip);
+            if (!allLocked)
+            {
+                menu.AddItem(new GUIContent("Set Transform…"), false, OpenSocketTransformPanel);
+                menu.AddItem(new GUIContent("Apply to Frames…"), false,
+                    () => OpenSocketInheritPanel(clip, name, _selectedFrame, default, exitGui: false));
+                AddSocketPatternMenuItems(menu, clip);
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Set Transform…"));
+                menu.AddDisabledItem(new GUIContent("Apply to Frames…"));
+            }
             menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent(count > 1
+            if (!allLocked)
+            {
+                menu.AddItem(new GUIContent(count > 1
+                        ? $"Assign Profile to {count} Sockets…"
+                        : "Assign Profile…"),
+                    false, () => ShowSocketProfilePicker(selected));
+                menu.AddItem(new GUIContent(count > 1 ? "Clear Profiles" : "Clear Profile"),
+                    false, () => ClearSocketPreviewOnNames(selected));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent(count > 1
                     ? $"Assign Profile to {count} Sockets…"
-                    : "Assign Profile…"),
-                false, () => ShowSocketProfilePicker(selected));
-            menu.AddItem(new GUIContent(count > 1 ? "Clear Profiles" : "Clear Profile"),
-                false, () => ClearSocketPreviewOnNames(selected));
+                    : "Assign Profile…"));
+                menu.AddDisabledItem(new GUIContent(count > 1 ? "Clear Profiles" : "Clear Profile"));
+            }
             menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Duplicate"), false,
-                () => DuplicateSocketIdentity(clip, name));
-            bool canGroup = count >= 2;
+            if (!allLocked)
+                menu.AddItem(new GUIContent("Duplicate"), false,
+                    () => DuplicateSocketIdentity(clip, name));
+            else
+                menu.AddDisabledItem(new GUIContent("Duplicate"));
+            bool canGroup = count >= 2 && !allLocked;
             bool canUngroup = false;
             for (int s = 0; s < selected.Count; s++)
             {
@@ -11774,17 +12068,440 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GroupSelectedSocketInventory);
             else
                 menu.AddDisabledItem(new GUIContent(groupLabel));
-            if (canUngroup)
+            if (canUngroup && !allLocked)
                 menu.AddItem(new GUIContent(ungroupLabel), false,
                     UngroupSelectedSocketInventory);
             else
                 menu.AddDisabledItem(new GUIContent(ungroupLabel));
-            menu.AddItem(new GUIContent(count > 1 ? $"Delete {count} Sockets" : "Delete"),
-                false, () =>
+            if (!allLocked)
+            {
+                menu.AddItem(new GUIContent(count > 1 ? $"Delete {count} Sockets" : "Delete"),
+                    false, () =>
+                    {
+                        ClearColliderSelection();
+                        DeleteSelectedPreviewObjects();
+                    });
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent(count > 1
+                    ? $"Delete {count} Sockets (unlock first)"
+                    : "Delete (unlock first)"));
+            }
+        }
+
+        void AddSocketSnapMenuItems(GenericMenu menu, SpriteClipDef clip,
+            List<string> selected, string primaryName)
+        {
+            menu.AddItem(new GUIContent("Snap/Profile Pivot (0, 0)"), false,
+                () => SnapSelectedSocketsToLocalPixels(Vector2.zero, "Snap Socket to Profile Pivot",
+                    "Snapped socket(s) to profile pivot"));
+            menu.AddItem(new GUIContent("Snap/Cell Center"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(0.5f, 0.5f), "Snap Socket to Cell Center"));
+            menu.AddItem(new GUIContent("Snap/Bottom Center — Feet"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(0.5f, 0f), "Snap Socket to Bottom Center"));
+            menu.AddItem(new GUIContent("Snap/Top Center"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(0.5f, 1f), "Snap Socket to Top Center"));
+            menu.AddItem(new GUIContent("Snap/Left Center"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(0f, 0.5f), "Snap Socket to Left Center"));
+            menu.AddItem(new GUIContent("Snap/Right Center"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(1f, 0.5f), "Snap Socket to Right Center"));
+            menu.AddItem(new GUIContent("Snap/Corners/Bottom Left"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(0f, 0f), "Snap Socket to Bottom Left"));
+            menu.AddItem(new GUIContent("Snap/Corners/Bottom Right"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(1f, 0f), "Snap Socket to Bottom Right"));
+            menu.AddItem(new GUIContent("Snap/Corners/Top Left"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(0f, 1f), "Snap Socket to Top Left"));
+            menu.AddItem(new GUIContent("Snap/Corners/Top Right"), false,
+                () => SnapSelectedSocketsToCellUv(new Vector2(1f, 1f), "Snap Socket to Top Right"));
+            menu.AddSeparator(string.Empty);
+
+            FrameBoxDef character = ResolveCharacterColliderForPivotSnap();
+            if (character != null)
+            {
+                menu.AddItem(new GUIContent("Snap to Character Collider Center",
+                        "Uses the selected Character collider, else the first Character box visible on this clip."),
+                    false, SnapSelectedSocketsToCharacterColliderCenter);
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent(
+                    "Snap to Character Collider Center (add Character collider first)"));
+            }
+            menu.AddItem(new GUIContent("Add Character Collider…",
+                    "Create a Character (body) square collider on this profile."),
+                false, () => PromptAddCharacterColliderForPivot(snapAfter: false));
+            menu.AddSeparator(string.Empty);
+
+            if (TryGetOpaqueContentPivot(bottomCenter: false, out _))
+            {
+                menu.AddItem(new GUIContent("Snap to Opaque Content Center",
+                        "Tight AABB center of opaque pixels in the active cell (Grid or Cropped)."),
+                    false, () => SnapSelectedSocketsToOpaqueContent(bottomCenter: false));
+                menu.AddItem(new GUIContent("Snap to Opaque Content Bottom Center",
+                        "Feet of the art — bottom-center of the opaque AABB in the active cell."),
+                    false, () => SnapSelectedSocketsToOpaqueContent(bottomCenter: true));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent(
+                    "Snap to Opaque Content Center (no readable pixels)"));
+                menu.AddDisabledItem(new GUIContent(
+                    "Snap to Opaque Content Bottom Center (no readable pixels)"));
+            }
+            menu.AddSeparator(string.Empty);
+
+            menu.AddItem(new GUIContent("Copy Socket Pose"), false, CopySelectedSocketPose);
+            if (_socketPoseClipboardValid)
+            {
+                menu.AddItem(new GUIContent(
+                        $"Paste Socket Pose ({_socketPoseClipboardPosition.x:F1}, {_socketPoseClipboardPosition.y:F1})"),
+                    false, PasteSelectedSocketPose);
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Paste Socket Pose"));
+            }
+
+            if (selected != null && selected.Count >= 2)
+            {
+                menu.AddSeparator(string.Empty);
+                string primary = string.IsNullOrEmpty(primaryName)
+                    ? selected[0]
+                    : SpriteSocketKeys.CanonicalName(primaryName);
+                for (int i = 0; i < selected.Count; i++)
                 {
-                    ClearColliderSelection();
-                    DeleteSelectedPreviewObjects();
-                });
+                    string target = SpriteSocketKeys.CanonicalName(selected[i]);
+                    if (SpriteSocketKeys.NamesEqual(target, primary) && selected.Count == 2)
+                        continue;
+                    string label = SpriteSocketKeys.NamesEqual(target, primary)
+                        ? $"Snap Others to {target}"
+                        : $"Snap Selected to {target}";
+                    string captured = target;
+                    menu.AddItem(new GUIContent($"Snap to Socket/{label}"), false,
+                        () => SnapSelectedSocketsToSocket(captured));
+                }
+            }
+        }
+
+        bool IsSocketLocked(string socketName)
+        {
+            if (string.IsNullOrEmpty(socketName) || _profile == null)
+                return false;
+            _profile.EnsureSocketCatalog();
+            var item = _profile.SocketCatalog.Find(socketName);
+            return item != null && item.Locked;
+        }
+
+        void SetSocketsLocked(IEnumerable<string> socketNames, bool locked)
+        {
+            if (_profile == null || socketNames == null)
+                return;
+            _profile.EnsureSocketCatalog();
+            var names = new List<string>();
+            foreach (string raw in socketNames)
+            {
+                if (string.IsNullOrEmpty(raw))
+                    continue;
+                string name = SpriteSocketKeys.CanonicalName(raw);
+                if (!names.Exists(n => SpriteSocketKeys.NamesEqual(n, name)))
+                    names.Add(name);
+            }
+            if (names.Count == 0 && !string.IsNullOrEmpty(_selectedSocketName))
+                names.Add(SpriteSocketKeys.CanonicalName(_selectedSocketName));
+            if (names.Count == 0)
+                return;
+
+            RecordProfileUndo(locked
+                ? (names.Count == 1 ? "Lock Sprite Socket" : "Lock Sprite Sockets")
+                : (names.Count == 1 ? "Unlock Sprite Socket" : "Unlock Sprite Sockets"));
+            for (int i = 0; i < names.Count; i++)
+            {
+                var item = _profile.SocketCatalog.Ensure(names[i]);
+                item.Locked = locked;
+                if (locked)
+                    _selectedSockets.Remove(names[i]);
+            }
+            if (locked)
+            {
+                if (!string.IsNullOrEmpty(_selectedSocketName) &&
+                    IsSocketLocked(_selectedSocketName))
+                    _selectedSocketName = null;
+                SyncSocketPrimaryFromSelection();
+                _draggingSocket = false;
+                _socketHandleKind = ColliderHandleKind.None;
+                if (GUIUtility.hotControl != 0)
+                    GUIUtility.hotControl = 0;
+            }
+            SaveDirty();
+            SealUndoGroup();
+            _status = locked
+                ? (names.Count == 1 ? $"Locked socket {names[0]}" : $"Locked {names.Count} sockets")
+                : (names.Count == 1 ? $"Unlocked socket {names[0]}" : $"Unlocked {names.Count} sockets");
+            Repaint();
+        }
+
+        static GUIContent SocketLockContent(bool locked)
+        {
+            var icon = EditorGUIUtility.IconContent(locked ? "LockIcon-On" : "LockIcon");
+            string tooltip = locked
+                ? "Unlock socket — allow select and drag in the preview"
+                : "Lock socket — prevent select and drag";
+            if (icon != null && icon.image != null)
+            {
+                icon.tooltip = tooltip;
+                return icon;
+            }
+            return new GUIContent(locked ? "L" : "U", tooltip);
+        }
+
+        Rect SocketLockBadgeRect(Vector2 screenCenter)
+            => new(screenCenter.x + 8f, screenCenter.y - 18f, 14f, 14f);
+
+        void DrawSocketLockBadge(Vector2 screenCenter, bool locked)
+        {
+            Rect badge = SocketLockBadgeRect(screenCenter);
+            EditorGUI.DrawRect(badge, new Color(0.08f, 0.1f, 0.14f, 0.85f));
+            GUI.Label(badge, SocketLockContent(locked));
+        }
+
+        bool TryHandleSocketLockBadgeClick(SpriteClipDef clip, int frame, Rect cell,
+            Vector2? mouseOverride = null)
+        {
+            var evt = Event.current;
+            if (evt.type != EventType.MouseDown || evt.button != 0)
+                return false;
+            Vector2 mouse = mouseOverride ?? evt.mousePosition;
+            var names = CachedUniqueSocketNames(clip);
+            for (int i = names.Count - 1; i >= 0; i--)
+            {
+                string name = names[i];
+                bool locked = IsSocketLocked(name);
+                bool selected = IsSocketSelected(name);
+                if (!locked && !selected)
+                    continue;
+                if (!TryGetPreviewSocketPose(clip, name, frame, out var position, out _, out _, out _))
+                    continue;
+                Vector2 screen = SocketToScreen(position, cell);
+                if (!SocketLockBadgeRect(screen).Contains(mouse))
+                    continue;
+                SetSocketsLocked(new[] { name }, !locked);
+                evt.Use();
+                Repaint();
+                return true;
+            }
+            return false;
+        }
+
+        Vector2 SocketLocalFromCellUv(Vector2 uvBottomLeft)
+        {
+            if (_profile?.Sheet == null)
+                return Vector2.zero;
+            float sourceWidth = _profile.Sheet.width / (float)Mathf.Max(1, _profile.Columns);
+            float sourceHeight = _profile.Sheet.height / (float)Mathf.Max(1, _profile.Rows);
+            Vector2 pivot = _profile.Pivot;
+            return new Vector2(
+                (uvBottomLeft.x - pivot.x) * sourceWidth,
+                (uvBottomLeft.y - pivot.y) * sourceHeight);
+        }
+
+        void SnapSelectedSocketsToCellUv(Vector2 uvBottomLeft, string undoName)
+        {
+            SnapSelectedSocketsToLocalPixels(SocketLocalFromCellUv(uvBottomLeft), undoName,
+                $"Snapped socket(s) to cell UV {uvBottomLeft.x:F2}, {uvBottomLeft.y:F2}");
+        }
+
+        void SnapSelectedSocketsToCharacterColliderCenter()
+        {
+            var box = ResolveCharacterColliderForPivotSnap();
+            if (box == null)
+            {
+                PromptAddCharacterColliderForPivot(snapAfter: false);
+                return;
+            }
+            Vector2 pivotUv = ColliderCenterAsPivot(box);
+            SnapSelectedSocketsToLocalPixels(SocketLocalFromCellUv(pivotUv),
+                "Snap Socket to Character Collider",
+                $"Snapped socket(s) to Character collider #{box.Id} center");
+        }
+
+        void SnapSelectedSocketsToOpaqueContent(bool bottomCenter)
+        {
+            if (!TryGetOpaqueContentPivot(bottomCenter, out Vector2 pivotUv))
+            {
+                _status = "Opaque content snap needs a readable sheet texture";
+                Repaint();
+                return;
+            }
+            SnapSelectedSocketsToLocalPixels(SocketLocalFromCellUv(pivotUv),
+                bottomCenter
+                    ? "Snap Socket to Opaque Bottom Center"
+                    : "Snap Socket to Opaque Center",
+                bottomCenter
+                    ? "Snapped socket(s) to opaque bottom-center"
+                    : "Snapped socket(s) to opaque center");
+        }
+
+        void SnapSelectedSocketsToSocket(string targetName)
+        {
+            var clip = CurrentClip;
+            if (clip == null || string.IsNullOrEmpty(targetName))
+                return;
+            int frame = Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, clip.Frames.Length - 1));
+            if (!TryGetPreviewSocketPose(clip, targetName, frame,
+                    out var position, out var angle, out var scale, out _))
+            {
+                _status = $"Socket {targetName} has no pose to snap to";
+                Repaint();
+                return;
+            }
+            ApplyPoseToSelectedSockets(position, angle, scale, keepRotationScale: true,
+                "Snap Sockets to Socket",
+                $"Snapped selected sockets to {targetName}");
+        }
+
+        void CopySelectedSocketPose()
+        {
+            var clip = CurrentClip;
+            string name = _selectedSocketName;
+            if (clip == null || string.IsNullOrEmpty(name))
+            {
+                foreach (string selected in _selectedSockets)
+                {
+                    name = selected;
+                    break;
+                }
+            }
+            if (clip == null || string.IsNullOrEmpty(name))
+                return;
+            int frame = Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, clip.Frames.Length - 1));
+            if (!TryGetPreviewSocketPose(clip, name, frame,
+                    out var position, out var angle, out var scale, out _))
+            {
+                _status = "No socket pose to copy";
+                return;
+            }
+            _socketPoseClipboardPosition = position;
+            _socketPoseClipboardAngle = angle;
+            _socketPoseClipboardScale = scale;
+            _socketPoseClipboardValid = true;
+            _status = $"Copied socket pose ({position.x:F1}, {position.y:F1})";
+            Repaint();
+        }
+
+        void PasteSelectedSocketPose()
+        {
+            if (!_socketPoseClipboardValid)
+                return;
+            ApplyPoseToSelectedSockets(
+                _socketPoseClipboardPosition,
+                _socketPoseClipboardAngle,
+                _socketPoseClipboardScale,
+                keepRotationScale: true,
+                "Paste Socket Pose",
+                $"Pasted socket pose ({_socketPoseClipboardPosition.x:F1}, {_socketPoseClipboardPosition.y:F1})");
+        }
+
+        void SnapSelectedSocketsToLocalPixels(Vector2 targetClipPixels, string undoName, string status)
+        {
+            ApplyPoseToSelectedSockets(targetClipPixels, 0f, Vector2.one,
+                keepRotationScale: false, undoName, status);
+        }
+
+        void ApplyPoseToSelectedSockets(Vector2 targetClipPixels, float angle, Vector2 scale,
+            bool keepRotationScale, string undoName, string status)
+        {
+            var clip = CurrentClip;
+            if (clip == null || _profile == null)
+                return;
+            int frame = Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, clip.Frames.Length - 1));
+            var names = new List<string>();
+            if (_selectedSockets.Count > 0)
+            {
+                foreach (string selected in _selectedSockets)
+                    names.Add(SpriteSocketKeys.CanonicalName(selected));
+            }
+            else if (!string.IsNullOrEmpty(_selectedSocketName))
+                names.Add(SpriteSocketKeys.CanonicalName(_selectedSocketName));
+            if (names.Count == 0)
+                return;
+
+            // Drop locked sockets from the edit set.
+            names.RemoveAll(IsSocketLocked);
+            if (names.Count == 0)
+            {
+                _status = "Selected sockets are locked — unlock to edit";
+                Repaint();
+                return;
+            }
+
+            RecordProfileUndo(string.IsNullOrEmpty(undoName) ? "Edit Sprite Socket" : undoName);
+            int changed = 0;
+            for (int i = 0; i < names.Count; i++)
+            {
+                string name = names[i];
+                if (IsIndependentSocketName(name))
+                {
+                    if (ApplyIndependentSocketAbsolutePose(clip, name, targetClipPixels,
+                            angle, scale, keepRotationScale))
+                        changed++;
+                    continue;
+                }
+
+                clip.Sockets ??= new List<FrameSocketDef>();
+                var key = SpriteSocketKeys.EnsureFrameKey(clip.Sockets, name, frame);
+                key.LocalPosition = new Vector2(
+                    Mathf.Round(targetClipPixels.x), Mathf.Round(targetClipPixels.y));
+                if (keepRotationScale)
+                {
+                    key.LocalAngle = angle;
+                    key.LocalScale = scale;
+                }
+                changed++;
+            }
+            if (changed == 0)
+            {
+                _status = "No socket keys updated";
+                Repaint();
+                return;
+            }
+            SaveDirty();
+            SealUndoGroup();
+            _status = status ?? $"Updated {changed} socket{Plural(changed)}";
+            Repaint();
+        }
+
+        bool ApplyIndependentSocketAbsolutePose(SpriteClipDef clip, string name,
+            Vector2 targetClipPixels, float angle, Vector2 scale, bool keepRotationScale)
+        {
+            var track = _profile?.FindSocketMotion(name);
+            if (track?.Keys == null || track.Keys.Count == 0)
+                return false;
+            if (!TryGetPreviewSocketPose(clip, name, _selectedFrame,
+                    out var currentClip, out _, out _, out _))
+                currentClip = MotionKeyToClipPixels(clip, track, track.Keys[0].LocalPosition);
+
+            Vector2 deltaClip = targetClipPixels - currentClip;
+            if (deltaClip.sqrMagnitude <= 0.000001f && !keepRotationScale)
+                return false;
+
+            for (int k = 0; k < track.Keys.Count; k++)
+            {
+                var key = track.Keys[k];
+                if (key == null)
+                    continue;
+                Vector2 clipPos = MotionKeyToClipPixels(clip, track, key.LocalPosition) + deltaClip;
+                Vector2 reference = ClipPixelsToMotionKey(clip, track, clipPos);
+                key.LocalPosition = new Vector2(Mathf.Round(reference.x), Mathf.Round(reference.y));
+                if (keepRotationScale)
+                {
+                    // Absolute paste: set every key to the pasted rotation/scale so the
+                    // independent path keeps a consistent pose after paste.
+                    key.LocalAngle = angle;
+                    key.LocalScale = scale;
+                }
+            }
+            return true;
         }
 
         void SnapIndependentMotionCenterToPivot(IEnumerable<string> socketNames)
@@ -12124,6 +12841,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _selectionScratchNames.Clear();
                     for (int i = 0; i < names.Count; i++)
                     {
+                        if (IsSocketLocked(names[i]))
+                            continue;
                         if (box.Overlaps(_socketListRowRects[i], true))
                             _selectionScratchNames.Add(SpriteSocketKeys.CanonicalName(names[i]));
                     }
@@ -12264,14 +12983,47 @@ namespace InvertLab.Sprites.DOTS.Editor
                     int a = Mathf.Min(_socketListAnchor, index);
                     int b = Mathf.Max(_socketListAnchor, index);
                     for (int i = a; i <= b; i++)
-                        _selectedSockets.Add(SpriteSocketKeys.CanonicalName(names[i]));
+                    {
+                        string ranged = SpriteSocketKeys.CanonicalName(names[i]);
+                        if (IsSocketLocked(ranged))
+                            continue;
+                        _selectedSockets.Add(ranged);
+                    }
+                }
+                else if (!IsSocketLocked(name))
+                    _selectedSockets.Add(name);
+                if (_selectedSockets.Count == 0)
+                {
+                    _selectedSocketName = null;
+                    _status = "No unlocked sockets in range";
                 }
                 else
-                    _selectedSockets.Add(name);
-                _selectedSocketName = name;
+                {
+                    if (!_selectedSockets.Contains(name) || IsSocketLocked(name))
+                    {
+                        foreach (string selected in _selectedSockets)
+                        {
+                            name = selected;
+                            break;
+                        }
+                    }
+                    _selectedSocketName = name;
+                }
+                _selectedSockets.RemoveWhere(IsSocketLocked);
+                if (_selectedSockets.Count == 0)
+                    _selectedSocketName = null;
+                else if (string.IsNullOrEmpty(_selectedSocketName) ||
+                         !_selectedSockets.Contains(_selectedSocketName))
+                {
+                    foreach (string selected in _selectedSockets)
+                    {
+                        _selectedSocketName = selected;
+                        break;
+                    }
+                }
                 SyncSocketPrimaryFromSelection();
                 _selectedEventFrame = -1;
-            _selectedEventIndex = -1;
+                _selectedEventIndex = -1;
                 _selectedOnionFrame = -1;
                 if (_socketListAnchor < 0)
                     _socketListAnchor = index;
@@ -12450,9 +13202,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             const float rowTopH = 32f;
             const float checkW = 18f;
+            const float lockW = 28f;
             const float dupW = 72f;
             const float thumbW = 32f;
             string name = names[i];
+            bool locked = IsSocketLocked(name);
             bool selected = IsSocketSelected(name);
             SpriteSocketKeys.TryGetPose(clip.Sockets, name, _selectedFrame,
                 out _, out _, out _, out bool onFrame);
@@ -12473,7 +13227,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             var checkRect = new Rect(row.x + 4f, row.y, checkW, rowTopH);
             var chipRect = new Rect(checkRect.xMax + 2f, row.y + 10f, 12f, 12f);
             var dupRect = new Rect(row.xMax - dupW - 4f, row.y + 2f, dupW, rowTopH - 4f);
-            var thumbRect = new Rect(dupRect.x - thumbW - 4f, row.y, thumbW, rowTopH);
+            var lockRect = new Rect(dupRect.x - lockW - 4f, row.y + 2f, lockW, rowTopH - 4f);
+            var thumbRect = new Rect(lockRect.x - thumbW - 4f, row.y, thumbW, rowTopH);
             var labelRect = new Rect(chipRect.xMax + 6f, row.y,
                 Mathf.Max(8f, thumbRect.x - chipRect.xMax - 8f), rowTopH);
             var spaceLabelRect = showSpace && independentView
@@ -12487,28 +13242,38 @@ namespace InvertLab.Sprites.DOTS.Editor
             var evt = Event.current;
             if (evt.type == EventType.MouseDown && evt.button == 0 &&
                 row.Contains(evt.mousePosition) && !dupRect.Contains(evt.mousePosition) &&
+                !lockRect.Contains(evt.mousePosition) &&
                 (!showSpace || !independentView || !spaceRect.Contains(evt.mousePosition)))
             {
-                if (_socketListAnchor >= 0 &&
-                    _socketListAnchorIndependent != independentView)
-                    _socketListAnchor = -1;
-                bool onCheck = checkRect.Contains(evt.mousePosition);
-                var op = onCheck ? SelectionOp.Toggle : ReadSelectionOp(evt, orderedList: true);
-                bool canMarquee = !onCheck && SelectionOpAllowsMarquee(op);
-                if (canMarquee)
+                if (locked)
                 {
-                    _socketListMarqueeOp = op;
-                    _socketListMarqueeBaseline.Clear();
-                    foreach (string selectedName in _selectedSockets)
-                        _socketListMarqueeBaseline.Add(selectedName);
+                    _status = $"Socket {name} is locked — unlock to select";
+                    evt.Use();
+                    Repaint();
                 }
-                SelectSocketsFromListRow(names, i, op);
-                _socketListAnchorIndependent = independentView;
-                _socketListMarqueeIndependent = independentView;
-                _socketListMarqueePending = canMarquee;
-                _socketListMarqueeActive = false;
-                _socketListMarqueeStart = evt.mousePosition;
-                evt.Use();
+                else
+                {
+                    if (_socketListAnchor >= 0 &&
+                        _socketListAnchorIndependent != independentView)
+                        _socketListAnchor = -1;
+                    bool onCheck = checkRect.Contains(evt.mousePosition);
+                    var op = onCheck ? SelectionOp.Toggle : ReadSelectionOp(evt, orderedList: true);
+                    bool canMarquee = !onCheck && SelectionOpAllowsMarquee(op);
+                    if (canMarquee)
+                    {
+                        _socketListMarqueeOp = op;
+                        _socketListMarqueeBaseline.Clear();
+                        foreach (string selectedName in _selectedSockets)
+                            _socketListMarqueeBaseline.Add(selectedName);
+                    }
+                    SelectSocketsFromListRow(names, i, op);
+                    _socketListAnchorIndependent = independentView;
+                    _socketListMarqueeIndependent = independentView;
+                    _socketListMarqueePending = canMarquee;
+                    _socketListMarqueeActive = false;
+                    _socketListMarqueeStart = evt.mousePosition;
+                    evt.Use();
+                }
             }
 
             DrawSocketListCheckbox(checkRect, selected);
@@ -12537,12 +13302,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
             DrawSocketPreviewThumbnail(thumbRect, catalogItem);
-            if (GUI.Button(dupRect, new GUIContent("Duplicate",
-                    "Copy this socket's keys and catalog onto a new name."),
-                EditorStyles.miniButton))
+            if (GUI.Button(lockRect, SocketLockContent(locked), EditorStyles.miniButton))
             {
-                DuplicateSocketIdentity(clip, name);
+                SetSocketsLocked(new[] { name }, !locked);
                 GUIUtility.ExitGUI();
+            }
+            using (new EditorGUI.DisabledScope(locked))
+            {
+                if (GUI.Button(dupRect, new GUIContent("Duplicate",
+                        "Copy this socket's keys and catalog onto a new name."),
+                    EditorStyles.miniButton))
+                {
+                    DuplicateSocketIdentity(clip, name);
+                    GUIUtility.ExitGUI();
+                }
             }
 
             HandleSocketListRowContext(row, clip, names, i);
@@ -12661,11 +13434,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             if (!rowRect.Contains(evt.mousePosition))
                 return;
-            if (!IsSocketSelected(names[index]))
+            string name = names[index];
+            if (IsSocketLocked(name))
+            {
+                var lockedSelected = new List<string> { SpriteSocketKeys.CanonicalName(name) };
+                var lockedMenu = new GenericMenu();
+                PopulateSocketContextMenu(lockedMenu, clip, name, lockedSelected, 1);
+                lockedMenu.ShowAsContext();
+                evt.Use();
+                return;
+            }
+            if (!IsSocketSelected(name))
                 SelectSocketsFromListRow(names, index, SelectionOp.Replace);
             var selected = new List<string>(_selectedSockets);
             int count = selected.Count;
-            string name = names[index];
             var menu = new GenericMenu();
             PopulateSocketContextMenu(menu, clip, name, selected, count);
             menu.ShowAsContext();
@@ -12768,10 +13550,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             ClearColliderSelection();
             _selectedSockets.Clear();
             for (int i = 0; i < names.Count; i++)
-                _selectedSockets.Add(SpriteSocketKeys.CanonicalName(names[i]));
-            _selectedSocketName = names.Count > 0
-                ? SpriteSocketKeys.CanonicalName(names[0])
-                : null;
+            {
+                string n = SpriteSocketKeys.CanonicalName(names[i]);
+                if (IsSocketLocked(n))
+                    continue;
+                _selectedSockets.Add(n);
+            }
+            _selectedSocketName = null;
+            foreach (string selected in _selectedSockets)
+            {
+                _selectedSocketName = selected;
+                break;
+            }
             _socketListAnchor = names.Count > 0 ? 0 : -1;
             _socketListAnchorIndependent = independent;
             _status = $"Selected {names.Count} socket{Plural(names.Count)}";
@@ -12827,6 +13617,20 @@ namespace InvertLab.Sprites.DOTS.Editor
         void SelectPreviewSocket(string name, SelectionOp op)
         {
             name = SpriteSocketKeys.CanonicalName(name);
+            if (IsSocketLocked(name) &&
+                op is SelectionOp.Add or SelectionOp.Replace or SelectionOp.Toggle)
+            {
+                // Locked sockets stay unselectable from the preview; unlock via badge/menu/list.
+                if (op == SelectionOp.Replace)
+                {
+                    ClearColliderSelection();
+                    _selectedSockets.Clear();
+                    _selectedSocketName = null;
+                }
+                _status = $"Socket {name} is locked — unlock to select";
+                Repaint();
+                return;
+            }
             _selectedSocketMotionTrack = -1;
             _selectedSocketMotionKey = -1;
             _selectedSocketMotionKeys.Clear();
@@ -12866,6 +13670,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedOnionFrame = -1;
             _selectedSocketDrawFrame = -1;
             _selectedSocketDrawName = null;
+            _pivotSelected = false;
             _status = PreviewSelectionStatus();
         }
 
@@ -12879,9 +13684,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            _selectedSockets.RemoveWhere(name => !SocketExistsInClipOrMotion(clip, name));
+            _selectedSockets.RemoveWhere(name =>
+                !SocketExistsInClipOrMotion(clip, name) || IsSocketLocked(name));
             if (!string.IsNullOrEmpty(_selectedSocketName) &&
-                !SocketExistsInClipOrMotion(clip, _selectedSocketName))
+                (!SocketExistsInClipOrMotion(clip, _selectedSocketName) ||
+                 IsSocketLocked(_selectedSocketName)))
                 _selectedSocketName = null;
             SyncSocketPrimaryFromSelection();
             if (_selectedSockets.Count == 0)
@@ -12923,6 +13730,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                     continue;
                 DrawSocketGizmo(cell, position, angle, $"{i}:{name}",
                     SpriteSocketKeys.ColorForIndex(i), selected, !onFrame);
+                bool locked = IsSocketLocked(name);
+                if (locked || selected)
+                    DrawSocketLockBadge(SocketToScreen(position, cell), locked);
             }
 
             if (_selectedSockets.Count >= 2)
@@ -15444,15 +16254,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             return ScreenToSourcePixelDelta(screen - PivotScreen(cell), cell);
         }
 
-        string FindSocketAt(SpriteClipDef clip, int frame, Rect cell, Vector2 point)
+        string FindSocketAt(SpriteClipDef clip, int frame, Rect cell, Vector2 point,
+            bool includeLocked = false)
         {
-            if (clip?.Sockets == null)
+            if (clip == null)
                 return null;
             const float hitRadius = 14f;
-            var names = SpriteSocketKeys.UniqueNamesInOrder(clip.Sockets);
+            var names = CachedUniqueSocketNames(clip);
             for (int i = names.Count - 1; i >= 0; i--)
             {
                 string name = names[i];
+                if (!includeLocked && IsSocketLocked(name))
+                    continue;
                 if (!TryGetPreviewSocketPose(clip, name, frame, out var position, out _, out _, out _))
                     continue;
                 bool inBox = TryGetSocketTransformLayout(clip, name, frame, cell, out var layout) &&
@@ -15612,6 +16425,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Repaint();
                 return true;
             }
+
+            if (TryHandleSocketLockBadgeClick(clip, frame, cell))
+                return true;
 
             if (TryHandleSocketContextClick(clip, frame, cell))
                 return true;
@@ -15775,7 +16591,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             clip.Sockets ??= new List<FrameSocketDef>();
             foreach (string name in _selectedSockets)
             {
-                if (string.IsNullOrEmpty(name))
+                if (string.IsNullOrEmpty(name) || IsSocketLocked(name))
                     continue;
                 bool independent = SpriteSocketKeys.UsesOwnClock(_profile?.SocketCatalog, name);
                 if (!wholePath && !independent)
@@ -15788,6 +16604,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 foreach (string name in _selectedSockets)
                 {
+                    if (IsSocketLocked(name))
+                        continue;
                     var track = _profile.FindSocketMotion(name);
                     var item = _profile.SocketCatalog.Find(name);
                     if (track == null || item == null ||
@@ -15812,6 +16630,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             foreach (string name in _selectedSockets)
             {
+                if (IsSocketLocked(name))
+                    continue;
                 if (!TryGetPreviewSocketPose(clip, name, frame,
                         out var pose, out var angle, out var scale, out bool onFrame))
                     continue;
@@ -17903,6 +18723,106 @@ namespace InvertLab.Sprites.DOTS.Editor
             return count;
         }
 
+        string _cropStatusDetail = "";
+
+        void DrawCroppedLayoutStatus()
+        {
+            if (_profile == null)
+                return;
+            var def = _profile.SheetAt(_selectedSheet);
+            if (_profile.CellLayoutMode != SpriteSheetCellLayoutMode.Cropped)
+            {
+                if (SpriteSheetProfile.HasCroppedCellData(def))
+                    GUILayout.Label("Cropped rects stored (ignored in Grid mode).", _mutedStyle);
+                return;
+            }
+            if (!SpriteSheetProfile.HasCroppedCellData(def))
+            {
+                GUILayout.Label("Cropped mode: no crop rects yet — run Detect spacing & crop cells.", _mutedStyle);
+                return;
+            }
+            int cells = def.CroppedCellRects.Length;
+            int cols = Mathf.Max(1, _profile.Columns);
+            int rows = Mathf.Max(1, _profile.Rows);
+            GUILayout.Label(
+                $"Cropped: {cells} cell rects  •  grid {cols}×{rows}  •  {_cropStatusDetail}",
+                _mutedStyle);
+        }
+
+        void DetectSpacingAndCropCells(bool setMode)
+        {
+            if (_profile?.Sheet == null)
+            {
+                _status = "Assign a sheet texture before cropping cells";
+                return;
+            }
+
+            Texture2D readable = null;
+            bool destroy = false;
+            try
+            {
+                RecordProfileUndo("Detect Spacing & Crop Cells");
+                readable = _profile.Sheet.isReadable ? _profile.Sheet : DuplicateReadable(_profile.Sheet);
+                destroy = readable != _profile.Sheet;
+                var pixels = readable.GetPixels32();
+                int width = readable.width;
+                int height = readable.height;
+                int columns = Mathf.Max(1, _profile.Columns);
+                int rows = Mathf.Max(1, _profile.Rows);
+
+                SpriteSheetProfile.EstimateBandSpacing(
+                    pixels, width, height, SpriteSheetProfile.CroppedAlphaThreshold,
+                    out float avgColGutter, out float avgRowGutter,
+                    out int opaqueCols, out int opaqueRows);
+
+                var rects = SpriteSheetProfile.BuildCroppedCellRects(
+                    pixels, width, height, columns, rows,
+                    SpriteSheetProfile.CroppedAlphaThreshold);
+
+                _profile.CroppedCellRects = rects;
+                if (setMode)
+                    _profile.CellLayoutMode = SpriteSheetCellLayoutMode.Cropped;
+
+                int nonempty = 0;
+                int minW = int.MaxValue, minH = int.MaxValue, maxW = 0, maxH = 0;
+                for (int i = 0; i < rects.Length; i++)
+                {
+                    var r = rects[i];
+                    if (r.width <= 1 && r.height <= 1)
+                        continue;
+                    nonempty++;
+                    if (r.width < minW) minW = r.width;
+                    if (r.height < minH) minH = r.height;
+                    if (r.width > maxW) maxW = r.width;
+                    if (r.height > maxH) maxH = r.height;
+                }
+                if (nonempty == 0)
+                {
+                    minW = 0;
+                    minH = 0;
+                }
+
+                _cropStatusDetail =
+                    $"spacing ~{avgColGutter:0.#}px H / {avgRowGutter:0.#}px V  •  "
+                    + $"opaque bands {opaqueCols}×{opaqueRows}  •  "
+                    + $"crop size {minW}–{maxW} × {minH}–{maxH} px";
+
+                _status = setMode
+                    ? $"Cropped {nonempty}/{rects.Length} cells  •  {_cropStatusDetail}"
+                    : $"Stored crops for {nonempty}/{rects.Length} cells  •  {_cropStatusDetail}";
+                InvalidateSheetPixelCache();
+                Repaint();
+            }
+            catch (System.Exception exception)
+            {
+                _status = "Crop detect failed: " + exception.Message;
+            }
+            finally
+            {
+                if (destroy && readable != null) DestroyImmediate(readable);
+            }
+        }
+
         static Texture2D DuplicateReadable(Texture2D source)
         {
             var previous = RenderTexture.active;
@@ -19041,9 +19961,25 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (includeSockets)
                 PruneSocketSelection(clip);
             int colliderCount = _selectedColliders.Count;
-            int socketCount = includeSockets ? _selectedSockets.Count : 0;
+            var socketNames = new List<string>();
+            if (includeSockets)
+            {
+                foreach (string selected in _selectedSockets)
+                {
+                    if (!IsSocketLocked(selected))
+                        socketNames.Add(SpriteSocketKeys.CanonicalName(selected));
+                }
+            }
+            int socketCount = socketNames.Count;
             if (colliderCount == 0 && socketCount == 0)
+            {
+                if (includeSockets && _selectedSockets.Count > 0)
+                {
+                    _status = "Selected sockets are locked — unlock to delete";
+                    Repaint();
+                }
                 return;
+            }
 
             string undoName;
             if (colliderCount > 0 && socketCount > 0)
@@ -19061,7 +19997,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (socketCount > 0)
             {
                 _profile.EnsureSocketCatalog();
-                var names = new List<string>(_selectedSockets);
+                var names = socketNames;
                 for (int i = 0; i < names.Count; i++)
                 {
                     var catalogItem = _profile.SocketCatalog.Find(names[i]);
@@ -19406,17 +20342,42 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (sheet == null) return;
             columns = Mathf.Max(1, columns);
             rows = Mathf.Max(1, rows);
-            int column = cellIndex % columns;
-            int row = cellIndex / columns;
-            var uv = new Rect(
-                column / (float)columns,
-                1f - (row + 1f) / rows,
-                1f / columns,
-                1f / rows);
+            Rect uv = ResolveCellUvRect(sheet, cellIndex, columns, rows);
             Color previous = GUI.color;
             GUI.color = tint;
             GUI.DrawTextureWithTexCoords(rect, sheet, uv, true);
             GUI.color = previous;
+        }
+
+        Rect ResolveCellUvRect(Texture2D sheet, int cellIndex, int columns, int rows)
+        {
+            columns = Mathf.Max(1, columns);
+            rows = Mathf.Max(1, rows);
+            var def = _profile != null ? _profile.SheetAt(_selectedSheet) : null;
+            if (def != null &&
+                def.Texture == sheet &&
+                def.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped)
+            {
+                // Prefer the active sheet def (includes CroppedCellRects).
+                return SpriteSheetProfile.GetCellUvRect(def, cellIndex);
+            }
+            if (_profile != null &&
+                _profile.Sheet == sheet &&
+                _profile.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped &&
+                _profile.CroppedCellRects != null &&
+                _profile.CroppedCellRects.Length > 0)
+            {
+                var temp = new SpriteSheetDef
+                {
+                    Texture = sheet,
+                    Columns = columns,
+                    Rows = rows,
+                    CellLayoutMode = SpriteSheetCellLayoutMode.Cropped,
+                    CroppedCellRects = _profile.CroppedCellRects,
+                };
+                return SpriteSheetProfile.GetCellUvRect(temp, cellIndex);
+            }
+            return SpriteSheetProfile.GetUniformCellUvRect(columns, rows, cellIndex);
         }
 
         Vector2 SourcePixelsToScreenOffset(Vector2 sourcePixels, Rect cell)
@@ -19465,24 +20426,47 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
 
             Vector2 point = PivotScreen(cell);
-            bool active = _draggingPivot || _pivotSelected;
+            bool active = !_pivotLocked && (_draggingPivot || _pivotSelected);
             float radius = active ? 6.5f : 5.5f;
-            Color fill = active
-                ? new Color(0.45f, 1f, 0.48f, 1f)
-                : new Color(0.22f, 0.82f, 0.3f, 1f);
+            Color fill = _pivotLocked
+                ? new Color(0.35f, 0.55f, 0.38f, 1f)
+                : active
+                    ? new Color(0.45f, 1f, 0.48f, 1f)
+                    : new Color(0.22f, 0.82f, 0.3f, 1f);
             Color outline = new Color(0.06f, 0.32f, 0.1f, 1f);
 
             Handles.BeginGUI();
+            if (active)
+            {
+                Handles.color = new Color(0.55f, 1f, 0.6f, 0.35f);
+                Handles.DrawSolidDisc(point, Vector3.forward, radius + 4.5f);
+                Handles.color = new Color(0.2f, 0.85f, 0.35f, 0.95f);
+                Handles.DrawWireDisc(point, Vector3.forward, radius + 5.5f);
+            }
             Handles.color = outline;
             Handles.DrawSolidDisc(point, Vector3.forward, radius + 1.15f);
             Handles.color = fill;
             Handles.DrawSolidDisc(point, Vector3.forward, radius);
+            // Crosshair for selected / dragging pivot.
+            if (active)
+            {
+                Handles.color = new Color(0.05f, 0.28f, 0.08f, 0.95f);
+                Handles.DrawLine(point + new Vector2(-9f, 0f), point + new Vector2(9f, 0f));
+                Handles.DrawLine(point + new Vector2(0f, -9f), point + new Vector2(0f, 9f));
+            }
             Handles.EndGUI();
 
-            EditorGUIUtility.AddCursorRect(
-                new Rect(point.x - PivotHandleHitRadius, point.y - PivotHandleHitRadius,
-                    PivotHandleHitRadius * 2f, PivotHandleHitRadius * 2f),
-                MouseCursor.MoveArrow);
+            // Lock control lives in the inspector only (SHEET Pivot / PIVOT bar).
+            // Do not draw a lock badge here: GUI.Label would allocate an extra IMGUI
+            // control ID after MouseDown selects the pivot and break hotControl drag.
+
+            if (!_pivotLocked)
+            {
+                EditorGUIUtility.AddCursorRect(
+                    new Rect(point.x - PivotHandleHitRadius, point.y - PivotHandleHitRadius,
+                        PivotHandleHitRadius * 2f, PivotHandleHitRadius * 2f),
+                    MouseCursor.MoveArrow);
+            }
         }
 
         void DrawSheetTextureInfo()
@@ -19500,7 +20484,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             int columns = Mathf.Max(1, _profile.Columns);
             int rows = Mathf.Max(1, _profile.Rows);
             EditorGUILayout.LabelField("Cell size",
-                $"{_profile.Sheet.width / columns} × {_profile.Sheet.height / rows} px");
+                _profile.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped
+                    ? "Cropped per cell (see Detect spacing)"
+                    : $"{_profile.Sheet.width / columns} × {_profile.Sheet.height / rows} px");
         }
 
         void DrawPixelsPerUnitSize()
@@ -19515,11 +20501,26 @@ namespace InvertLab.Sprites.DOTS.Editor
             int rows = Mathf.Max(1, _profile.Rows);
             float cellW = _profile.Sheet.width / (float)columns;
             float cellH = _profile.Sheet.height / (float)rows;
+            string sizeNote = "grid";
+            if (_profile.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped)
+            {
+                var def = _profile.SheetAt(_selectedSheet);
+                var clip = CurrentClip;
+                int cellIndex = clip != null
+                    ? CellIndexOf(clip, Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, clip.Frames.Length - 1)))
+                    : 0;
+                if (SpriteSheetProfile.TryGetActiveCellPixels(def, cellIndex, out float cw, out float ch))
+                {
+                    cellW = cw;
+                    cellH = ch;
+                    sizeNote = "cropped";
+                }
+            }
             float ppu = Mathf.Max(SpriteSheetProfile.MinPixelsPerUnit, _profile.PixelsPerUnit);
             float worldW = cellW / ppu;
             float worldH = cellH / ppu;
             EditorGUILayout.LabelField("Cell in world",
-                $"{worldW:0.###} × {worldH:0.###} units");
+                $"{worldW:0.###} × {worldH:0.###} units ({sizeNote})");
             GUILayout.Label($"{cellW:0.#} px / {ppu:0.#} PPU", _mutedStyle);
             if (_profile.Sheets != null && _profile.Sheets.Count > 1)
                 GUILayout.Label("PPU is per sheet so every sheet is the same world size.", _mutedStyle);
@@ -19551,6 +20552,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             float availableHeight = Mathf.Max(40f, localCanvas.height - 52f);
             float cellAspect = (_profile.Sheet.width / (float)Mathf.Max(1, _profile.Columns)) /
                                (_profile.Sheet.height / (float)Mathf.Max(1, _profile.Rows));
+            if (_profile.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped)
+            {
+                var clip = CurrentClip;
+                if (clip != null)
+                {
+                    int cellIndex = CellIndexOf(clip, Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, clip.Frames.Length - 1)));
+                    var def = _profile.SheetAt(_selectedSheet);
+                    if (SpriteSheetProfile.TryGetActiveCellPixels(def, cellIndex, out float cw, out float ch) &&
+                        ch > 0.01f)
+                        cellAspect = cw / ch;
+                }
+            }
             float fitWidth = availableWidth;
             float fitHeight = fitWidth / Mathf.Max(0.01f, cellAspect);
             if (fitHeight > availableHeight)
@@ -19588,7 +20601,20 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         bool PivotHandleContains(Rect cell, Vector2 mouse)
-            => (mouse - PivotScreen(cell)).sqrMagnitude <= PivotHandleHitRadius * PivotHandleHitRadius;
+        {
+            if (_pivotLocked)
+                return false;
+            return (mouse - PivotScreen(cell)).sqrMagnitude <=
+                   PivotHandleHitRadius * PivotHandleHitRadius;
+        }
+
+        bool PivotHandleHitTest(Rect cell, Vector2 mouse)
+        {
+            // Geometric hit only (ignores lock). Locked pivots must not select/drag;
+            // callers gate on !_pivotLocked for edit, and skip preview unlock entirely.
+            return (mouse - PivotScreen(cell)).sqrMagnitude <=
+                   PivotHandleHitRadius * PivotHandleHitRadius;
+        }
 
         static Vector2 ScreenToPivot(Vector2 screen, Rect cell)
         {
@@ -19599,11 +20625,16 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         bool HandlePivotInput(int controlId, Rect cell)
         {
-            if (!_showPivot)
+            if (!_showPivot || _pivotLocked)
                 return false;
 
             var evt = Event.current;
             bool overHandle = PivotHandleContains(cell, evt.mousePosition);
+            // Reclaim hotControl if conditional GUI (badges/gizmos) shifted the
+            // preview control id between MouseDown and MouseDrag/MouseUp.
+            if (_draggingPivot && GUIUtility.hotControl != 0 &&
+                GUIUtility.hotControl != controlId)
+                GUIUtility.hotControl = controlId;
             bool ownsDrag = _draggingPivot && GUIUtility.hotControl == controlId;
 
             if (evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape && ownsDrag)
@@ -19614,16 +20645,22 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return true;
             }
 
+            if (IsPreviewContextClick(evt) && (overHandle || _pivotSelected))
+            {
+                if (_draggingPivot)
+                    EndPivotDrag(controlId, save: true);
+                SelectProfilePivot();
+                ShowPivotContextMenu();
+                evt.Use();
+                Repaint();
+                return true;
+            }
+
             if (evt.type == EventType.MouseDown && evt.button == 0 && overHandle)
             {
                 RecordProfileUndo("Move Sprite Pivot");
                 _draggingPivot = true;
-                _pivotSelected = true;
-                _playing = false;
-                _selectedOnionFrame = -1;
-                ClearColliderSelection();
-                _selectedEventFrame = -1;
-            _selectedEventIndex = -1;
+                SelectProfilePivot();
                 GUIUtility.hotControl = controlId;
                 GUIUtility.keyboardControl = controlId;
                 _status = $"Pivot {_profile.Pivot.x:F2}, {_profile.Pivot.y:F2}";
@@ -19641,6 +20678,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (evt.type == EventType.MouseDrag && ownsDrag)
             {
                 _profile.Pivot = ScreenToPivot(evt.mousePosition, cell);
+                // Legacy mirrors the active sheet: push through or the next
+                // OnGUI's EnsureSheets -> SyncLegacyFromSheet reverts the drag.
+                WriteActiveSheetFromLegacy();
                 _status = $"Pivot {_profile.Pivot.x:F2}, {_profile.Pivot.y:F2}";
                 evt.Use();
                 Repaint();
@@ -19665,6 +20705,451 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUIUtility.hotControl = 0;
             if (save)
                 SaveDirty();
+        }
+
+        void SelectProfilePivot()
+        {
+            if (_pivotLocked)
+                return;
+            _pivotSelected = true;
+            _playing = false;
+            _selectedOnionFrame = -1;
+            _selectedEventFrame = -1;
+            _selectedEventIndex = -1;
+            ClearColliderSelection();
+            // ClearColliderSelection also clears sockets.
+        }
+
+        void DrawSelectedPivotBar(Rect rect)
+        {
+            EditorGUI.DrawRect(rect, new Color(0.1f, 0.2f, 0.14f, 1f));
+            DrawBorder(rect, new Color(0.35f, 0.9f, 0.4f, 1f), 1f);
+            string lockNote = _pivotLocked ? "  •  LOCKED" : string.Empty;
+            GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, 18f),
+                $"PIVOT  {_profile.Pivot.x:F3}, {_profile.Pivot.y:F3}{lockNote}",
+                EditorStyles.boldLabel);
+            float x = rect.x + 8f;
+            if (GUI.Button(new Rect(x, rect.y + 26f, 120f, 22f),
+                    new GUIContent("Pivot Actions…",
+                        "Snap presets, Character collider, opaque bounds, copy/paste, lock."),
+                    EditorStyles.miniButton))
+                ShowPivotContextMenu();
+            x += 128f;
+            using (new EditorGUI.DisabledScope(_pivotLocked))
+            {
+                if (GUI.Button(new Rect(x, rect.y + 26f, 100f, 22f),
+                        new GUIContent("Snap Feet", "Bottom-center (0.5, 0). Unlock first if locked."),
+                        EditorStyles.miniButton))
+                    SetProfilePivot(new Vector2(0.5f, 0f), "Snap Pivot to Bottom Center");
+            }
+            x += 108f;
+            bool nextShow = GUI.Toggle(new Rect(x, rect.y + 26f, 92f, 22f), _showPivot,
+                new GUIContent("Show Pivot",
+                    "Same as Pivot: On/Off on the preview overlay (next to Colliders / Size / Debug)."));
+            if (nextShow != _showPivot)
+            {
+                RecordWindowUndo("Toggle Show Pivot");
+                _showPivot = nextShow;
+                if (!_showPivot)
+                {
+                    _draggingPivot = false;
+                    _pivotSelected = false;
+                }
+            }
+            x += 96f;
+            if (GUI.Button(new Rect(x, rect.y + 26f, 28f, 22f), PivotLockContent(_pivotLocked),
+                    EditorStyles.miniButton))
+                SetPivotLocked(!_pivotLocked);
+        }
+
+        void HandleWindowPivotContextClick(Rect previewRect)
+        {
+            var evt = Event.current;
+            if (!_showPivot || !IsPreviewContextClick(evt))
+                return;
+            if (_colliderCreationMode != ColliderCreationMode.None || _socketPlacementArmed)
+                return;
+
+            var canvas = new Rect(
+                previewRect.x + 10f, previewRect.y + 54f,
+                previewRect.width - 20f, previewRect.height - 66f);
+            if (!canvas.Contains(evt.mousePosition))
+                return;
+            if (_profile?.Sheet == null)
+                return;
+
+            var localCanvas = new Rect(0f, 0f, canvas.width, canvas.height);
+            if (!TryComputePreviewLayout(localCanvas, out Rect cell, out _, out _))
+                return;
+
+            Vector2 contentMouse = evt.mousePosition - canvas.position + _previewScroll;
+            if (_pivotLocked)
+                return; // Unlock only from inspector lock toggle.
+            bool overPivot = PivotHandleHitTest(cell, contentMouse);
+            if (!overPivot && !_pivotSelected)
+                return;
+            // Prefer socket pin hit when not directly on the pivot handle.
+            if (!overPivot && _showPreviewDebug)
+            {
+                var clip = CurrentClip;
+                if (clip != null)
+                {
+                    int frame = EvaluatePreview(clip, _previewTime).Frame;
+                    if (FindSocketAt(clip, frame, cell, contentMouse) != null)
+                        return;
+                }
+            }
+            if (!TryHandlePivotContextClick(cell, contentMouse))
+                return;
+        }
+
+        bool TryHandlePivotContextClick(Rect cell, Vector2? mouseOverride = null)
+        {
+            if (!_showPivot)
+                return false;
+            var evt = Event.current;
+            if (!IsPreviewContextClick(evt))
+                return false;
+
+            Vector2 mouse = mouseOverride ?? evt.mousePosition;
+            if (_pivotLocked)
+                return false; // No preview unlock; use inspector lock toggle.
+            bool overHandle = PivotHandleHitTest(cell, mouse);
+            if (!overHandle && !_pivotSelected)
+                return false;
+            // When selected, require click inside the cell (or on the handle) so we
+            // do not steal socket/collider context menus elsewhere in the canvas.
+            if (!overHandle && !cell.Contains(mouse))
+                return false;
+
+            if (_draggingPivot)
+                EndPivotDrag(GUIUtility.hotControl, save: true);
+            SelectProfilePivot();
+            ShowPivotContextMenu();
+            evt.Use();
+            Repaint();
+            return true;
+        }
+
+        void ShowPivotContextMenu()
+        {
+            if (_profile == null)
+                return;
+            var menu = new GenericMenu();
+            if (_pivotLocked)
+            {
+                menu.AddItem(new GUIContent("Unlock Pivot"), false, () => SetPivotLocked(false));
+                menu.AddSeparator(string.Empty);
+                menu.AddDisabledItem(new GUIContent("Snap/Cell Center (locked)"));
+                menu.AddDisabledItem(new GUIContent("Snap/Bottom Center — Feet (locked)"));
+                menu.AddDisabledItem(new GUIContent("Other snap / edit actions (unlock first)"));
+                menu.ShowAsContext();
+                return;
+            }
+            menu.AddItem(new GUIContent("Lock Pivot"), false, () => SetPivotLocked(true));
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Snap/Cell Center (0.5, 0.5)"), false,
+                () => SetProfilePivot(new Vector2(0.5f, 0.5f), "Snap Pivot to Cell Center"));
+            menu.AddItem(new GUIContent("Snap/Bottom Center — Feet (0.5, 0)"), false,
+                () => SetProfilePivot(new Vector2(0.5f, 0f), "Snap Pivot to Bottom Center"));
+            menu.AddItem(new GUIContent("Snap/Top Center (0.5, 1)"), false,
+                () => SetProfilePivot(new Vector2(0.5f, 1f), "Snap Pivot to Top Center"));
+            menu.AddItem(new GUIContent("Snap/Left Center (0, 0.5)"), false,
+                () => SetProfilePivot(new Vector2(0f, 0.5f), "Snap Pivot to Left Center"));
+            menu.AddItem(new GUIContent("Snap/Right Center (1, 0.5)"), false,
+                () => SetProfilePivot(new Vector2(1f, 0.5f), "Snap Pivot to Right Center"));
+            menu.AddItem(new GUIContent("Snap/Corners/Bottom Left (0, 0)"), false,
+                () => SetProfilePivot(new Vector2(0f, 0f), "Snap Pivot to Bottom Left"));
+            menu.AddItem(new GUIContent("Snap/Corners/Bottom Right (1, 0)"), false,
+                () => SetProfilePivot(new Vector2(1f, 0f), "Snap Pivot to Bottom Right"));
+            menu.AddItem(new GUIContent("Snap/Corners/Top Left (0, 1)"), false,
+                () => SetProfilePivot(new Vector2(0f, 1f), "Snap Pivot to Top Left"));
+            menu.AddItem(new GUIContent("Snap/Corners/Top Right (1, 1)"), false,
+                () => SetProfilePivot(new Vector2(1f, 1f), "Snap Pivot to Top Right"));
+            menu.AddSeparator(string.Empty);
+
+            FrameBoxDef character = ResolveCharacterColliderForPivotSnap();
+            if (character != null)
+            {
+                menu.AddItem(new GUIContent("Snap to Character Collider Center",
+                        "Uses the selected Character collider, else the first Character box visible on this clip."),
+                    false, SnapPivotToCharacterColliderCenter);
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent(
+                    "Snap to Character Collider Center (add Character collider first)"));
+            }
+            menu.AddItem(new GUIContent("Add Character Collider…",
+                    "Create a Character (body) square collider on this profile, then snap pivot to its center."),
+                false, () => PromptAddCharacterColliderForPivot(snapAfter: true));
+            menu.AddSeparator(string.Empty);
+
+            if (TryGetOpaqueContentPivot(bottomCenter: false, out _))
+            {
+                menu.AddItem(new GUIContent("Snap to Opaque Content Center",
+                        "Tight AABB center of opaque pixels in the active cell (Grid or Cropped)."),
+                    false, () => SnapPivotToOpaqueContent(bottomCenter: false));
+                menu.AddItem(new GUIContent("Snap to Opaque Content Bottom Center",
+                        "Feet of the art — bottom-center of the opaque AABB in the active cell."),
+                    false, () => SnapPivotToOpaqueContent(bottomCenter: true));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent(
+                    "Snap to Opaque Content Center (no readable pixels)"));
+                menu.AddDisabledItem(new GUIContent(
+                    "Snap to Opaque Content Bottom Center (no readable pixels)"));
+            }
+            menu.AddSeparator(string.Empty);
+
+            menu.AddItem(new GUIContent("Copy Pivot"), false, CopyProfilePivot);
+            if (_pivotClipboardValid)
+                menu.AddItem(new GUIContent(
+                        $"Paste Pivot ({_pivotClipboard.x:F2}, {_pivotClipboard.y:F2})"),
+                    false, PasteProfilePivot);
+            else
+                menu.AddDisabledItem(new GUIContent("Paste Pivot"));
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Reset to Default (0.5, 0.5)"), false,
+                () => SetProfilePivot(SpriteSheetProfile.DefaultPivot, "Reset Sprite Pivot",
+                    "Reset pivot to center"));
+            menu.ShowAsContext();
+        }
+
+        void SetProfilePivot(Vector2 pivot, string undoName, string status = null)
+        {
+            if (_profile == null)
+                return;
+            if (_pivotLocked)
+            {
+                _status = "Pivot is locked — unlock to edit";
+                Repaint();
+                return;
+            }
+            pivot = new Vector2(Mathf.Clamp01(pivot.x), Mathf.Clamp01(pivot.y));
+            if (pivot == _profile.Pivot && string.IsNullOrEmpty(status))
+            {
+                _status = $"Pivot already {_profile.Pivot.x:F3}, {_profile.Pivot.y:F3}";
+                return;
+            }
+            RecordProfileUndo(string.IsNullOrEmpty(undoName) ? "Edit Sprite Pivot" : undoName);
+            _profile.Pivot = pivot;
+            WriteActiveSheetFromLegacy();
+            _pivotSelected = true;
+            _status = status ?? $"Pivot {_profile.Pivot.x:F3}, {_profile.Pivot.y:F3}";
+            SaveDirty();
+            Repaint();
+        }
+
+        FrameBoxDef ResolveCharacterColliderForPivotSnap()
+        {
+            if (_profile?.Hitboxes == null)
+                return null;
+            foreach (var box in _selectedColliders)
+            {
+                if (box != null && box.IsCharacter)
+                    return box;
+            }
+
+            var clip = CurrentClip;
+            if (clip != null)
+            {
+                foreach (var box in BoxesFor(clip, _selectedFrame))
+                {
+                    if (box != null && box.IsCharacter)
+                        return box;
+                }
+            }
+
+            for (int i = 0; i < _profile.Hitboxes.Count; i++)
+            {
+                var box = _profile.Hitboxes[i];
+                if (box != null && box.IsCharacter)
+                    return box;
+            }
+            return null;
+        }
+
+        static Vector2 ColliderCenterAsPivot(FrameBoxDef box)
+        {
+            Rect r = box.RectUV;
+            // RectUV is top-left y-down in cell space; profile Pivot is bottom-left y-up.
+            return new Vector2(
+                r.x + r.width * 0.5f,
+                1f - (r.y + r.height * 0.5f));
+        }
+
+        void SnapPivotToCharacterColliderCenter()
+        {
+            var box = ResolveCharacterColliderForPivotSnap();
+            if (box == null)
+            {
+                PromptAddCharacterColliderForPivot(snapAfter: true);
+                return;
+            }
+            SetProfilePivot(ColliderCenterAsPivot(box), "Snap Pivot to Character Collider",
+                $"Pivot snapped to Character collider #{box.Id} center");
+        }
+
+        void PromptAddCharacterColliderForPivot(bool snapAfter)
+        {
+            if (_profile == null)
+                return;
+            bool create = EditorUtility.DisplayDialog("Add Character Collider", "No Character (body) collider was found on this profile.\n\nCreate a Character square collider now" + (snapAfter ? " and snap the pivot to its center?" : "?"), "Create", "Cancel");
+            if (!create)
+                return;
+            CreateCharacterColliderForPivot(snapAfter);
+        }
+
+        void CreateCharacterColliderForPivot(bool snapAfter)
+        {
+            EnsureProfile();
+            var clip = CurrentClip;
+            string clipName = clip != null ? clip.Name : string.Empty;
+            int frame = clip != null ? Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, clip.Frames.Length - 1)) : 0;
+
+            RecordProfileUndo(snapAfter
+                ? "Add Character Collider & Snap Pivot"
+                : "Create Sprite Collider");
+            var definition = new FrameBoxDef
+            {
+                ClipName = clipName,
+                FrameIndex = frame,
+                Id = (byte)_newHitboxId,
+                Shape = SpriteColliderShape.Square,
+                // Authoring UV is top-left y-down; ~body box in cell.
+                RectUV = new Rect(0.2f, 0.15f, 0.6f, 0.7f),
+                Lifetime = (byte)SpriteColliderLifetime.Character,
+                Physics = _newColliderPhysics,
+                IsTrigger = _newColliderIsTrigger,
+            };
+            definition.BindLifetime(clipName, frame);
+            _profile.Hitboxes.Add(definition);
+            ClearSocketSelection();
+            _selectedColliders.Clear();
+            _selectedColliders.Add(definition);
+            FocusColliderInInspector(definition);
+            if (snapAfter)
+            {
+                _profile.Pivot = ColliderCenterAsPivot(definition);
+                WriteActiveSheetFromLegacy();
+                _pivotSelected = true;
+                // Keep collider selected for filter edits; pivot stays selected flag for UI.
+                _status = $"Created Character collider #{definition.Id} and snapped pivot to its center";
+            }
+            else
+            {
+                _status = $"Created {definition.Shape} Character collider (Include/Exclude clips in details)";
+            }
+            if (!_showHitboxes)
+                _showHitboxes = true;
+            SaveDirty();
+            Repaint();
+        }
+
+        void SnapPivotToOpaqueContent(bool bottomCenter)
+        {
+            if (!TryGetOpaqueContentPivot(bottomCenter, out Vector2 pivot))
+            {
+                _status = "Opaque content snap needs a readable sheet texture";
+                Repaint();
+                return;
+            }
+            SetProfilePivot(pivot,
+                bottomCenter
+                    ? "Snap Pivot to Opaque Bottom Center"
+                    : "Snap Pivot to Opaque Center",
+                bottomCenter
+                    ? $"Pivot snapped to opaque bottom-center ({pivot.x:F3}, {pivot.y:F3})"
+                    : $"Pivot snapped to opaque center ({pivot.x:F3}, {pivot.y:F3})");
+        }
+
+        bool TryGetOpaqueContentPivot(bool bottomCenter, out Vector2 pivot)
+        {
+            pivot = SpriteSheetProfile.DefaultPivot;
+            var clip = CurrentClip;
+            var def = clip != null
+                ? (_profile.SheetForClip(clip) ?? _profile.SheetAt(_selectedSheet))
+                : _profile.SheetAt(_selectedSheet);
+            if (!TryEnsureSheetPixelCache(def) || _sheetPixels == null)
+                return false;
+            if (!TryGetActiveCellPixelRect(def, clip, out RectInt cellPx))
+                return false;
+            if (cellPx.width <= 0 || cellPx.height <= 0)
+                return false;
+
+            const byte alphaThreshold = SpriteSheetProfile.CroppedAlphaThreshold;
+            int minX = cellPx.xMax, minY = cellPx.yMax, maxX = cellPx.xMin - 1, maxY = cellPx.yMin - 1;
+            bool found = false;
+            for (int y = cellPx.yMin; y < cellPx.yMax; y++)
+            {
+                int rowOff = y * _sheetPixelsWidth;
+                for (int x = cellPx.xMin; x < cellPx.xMax; x++)
+                {
+                    if (_sheetPixels[rowOff + x].a > alphaThreshold)
+                    {
+                        found = true;
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if (x > maxX) maxX = x;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+            if (!found)
+                return false;
+
+            // GetPixels32: y=0 at texture bottom. Pivot is bottom-left in active cell.
+            float nx = ((minX + maxX + 1) * 0.5f - cellPx.xMin) / cellPx.width;
+            float nyCenter = ((minY + maxY + 1) * 0.5f - cellPx.yMin) / cellPx.height;
+            float nyBottom = (minY - cellPx.yMin) / (float)cellPx.height;
+            pivot = new Vector2(
+                Mathf.Clamp01(nx),
+                Mathf.Clamp01(bottomCenter ? nyBottom : nyCenter));
+            return true;
+        }
+
+        bool TryGetActiveCellPixelRect(SpriteSheetDef def, SpriteClipDef clip, out RectInt pixelRect)
+        {
+            pixelRect = default;
+            if (def == null || _sheetPixelsWidth <= 0 || _sheetPixelsHeight <= 0)
+                return false;
+            int cellIndex = 0;
+            if (clip != null)
+                cellIndex = CellIndexOf(clip, Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, clip.Frames.Length - 1)));
+            if (SpriteSheetProfile.TryGetCroppedCellPixelRect(def, cellIndex, out pixelRect))
+                return pixelRect.width > 0 && pixelRect.height > 0;
+
+            int columns = def.Columns > 0 ? def.Columns : Mathf.Max(1, _profile.Columns);
+            int rows = def.Rows > 0 ? def.Rows : Mathf.Max(1, _profile.Rows);
+            var uv = SpriteSheetProfile.GetUniformCellUvRect(columns, rows, cellIndex);
+            int x0 = Mathf.Clamp(Mathf.FloorToInt(uv.x * _sheetPixelsWidth), 0, _sheetPixelsWidth);
+            int y0 = Mathf.Clamp(Mathf.FloorToInt(uv.y * _sheetPixelsHeight), 0, _sheetPixelsHeight);
+            int x1 = Mathf.Clamp(Mathf.CeilToInt((uv.x + uv.width) * _sheetPixelsWidth), 0, _sheetPixelsWidth);
+            int y1 = Mathf.Clamp(Mathf.CeilToInt((uv.y + uv.height) * _sheetPixelsHeight), 0, _sheetPixelsHeight);
+            if (x1 <= x0) x1 = Mathf.Min(_sheetPixelsWidth, x0 + 1);
+            if (y1 <= y0) y1 = Mathf.Min(_sheetPixelsHeight, y0 + 1);
+            pixelRect = new RectInt(x0, y0, x1 - x0, y1 - y0);
+            return pixelRect.width > 0 && pixelRect.height > 0;
+        }
+
+        void CopyProfilePivot()
+        {
+            if (_profile == null)
+                return;
+            _pivotClipboard = _profile.Pivot;
+            _pivotClipboardValid = true;
+            _status = $"Copied pivot {_pivotClipboard.x:F3}, {_pivotClipboard.y:F3}";
+            Repaint();
+        }
+
+        void PasteProfilePivot()
+        {
+            if (!_pivotClipboardValid)
+                return;
+            SetProfilePivot(_pivotClipboard, "Paste Sprite Pivot",
+                $"Pasted pivot {_pivotClipboard.x:F3}, {_pivotClipboard.y:F3}");
         }
 
         static Rect CenteredSquareRect(Vector2 center, Vector2 edge, Rect bounds, float minimumRadius)
@@ -19954,6 +21439,37 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return icon;
             }
             return new GUIContent("?", tooltip);
+        }
+
+        static GUIContent PivotLockContent(bool locked)
+        {
+            var icon = EditorGUIUtility.IconContent(locked ? "LockIcon-On" : "LockIcon");
+            string tooltip = locked
+                ? "Unlock pivot — allow select and drag in the preview (inspector only)"
+                : "Lock pivot — prevent select and drag (inspector only; persists via EditorPrefs)";
+            if (icon != null && icon.image != null)
+            {
+                icon.tooltip = tooltip;
+                return icon;
+            }
+            return new GUIContent(locked ? "L" : "U", tooltip);
+        }
+
+        void SetPivotLocked(bool locked)
+        {
+            if (_pivotLocked == locked)
+                return;
+            _pivotLocked = locked;
+            EditorPrefs.SetBool(PivotLockedPrefsKey, locked);
+            if (locked)
+            {
+                _draggingPivot = false;
+                _pivotSelected = false;
+                if (GUIUtility.hotControl != 0)
+                    GUIUtility.hotControl = 0;
+            }
+            _status = locked ? "Pivot locked" : "Pivot unlocked";
+            Repaint();
         }
 
         static GUIContent ColliderLockContent(bool locked)

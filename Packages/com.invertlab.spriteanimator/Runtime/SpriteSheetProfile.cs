@@ -1110,6 +1110,8 @@ namespace InvertLab.Sprites.DOTS
         public bool FlipX;
         public int SortingOffset;
         public bool PreviewEnabled = true;
+        /// <summary>Editor authoring lock only. Locked sockets still preview and bake.</summary>
+        public bool Locked;
         /// <summary>
         /// 0 = lerp last key back to first (closed loop, default).
         /// 1 = hold the last key until the clip wraps (teleport).
@@ -1246,11 +1248,24 @@ namespace InvertLab.Sprites.DOTS
                 FlipX = source.FlipX,
                 SortingOffset = source.SortingOffset,
                 PreviewEnabled = source.PreviewEnabled,
+                Locked = source.Locked,
                 PathWrap = source.PathWrap,
                 MotionMode = source.MotionMode,
                 Speed = source.Speed,
             };
         }
+    }
+
+
+    /// <summary>
+    /// How sheet cells map to UVs. Grid keeps uniform Columns×Rows cells.
+    /// Cropped stores a tight opaque pixel rect per cell (spacing / gutters removed
+    /// from the sampled UV) while Columns/Rows still describe the coarse layout.
+    /// </summary>
+    public enum SpriteSheetCellLayoutMode : byte
+    {
+        Grid = 0,
+        Cropped = 1,
     }
 
     /// <summary>One texture + grid inside a profile that can hold several sheets.</summary>
@@ -1263,6 +1278,14 @@ namespace InvertLab.Sprites.DOTS
         public int Rows = SpriteSheetProfile.DefaultRows;
         public float PixelsPerUnit = SpriteSheetProfile.DefaultPixelsPerUnit;
         public Vector2 Pivot = SpriteSheetProfile.DefaultPivot;
+        /// <summary>Grid = uniform cells. Cropped = per-cell opaque rects in <see cref="CroppedCellRects"/>.</summary>
+        public SpriteSheetCellLayoutMode CellLayoutMode = SpriteSheetCellLayoutMode.Grid;
+        /// <summary>
+        /// Per-cell tight opaque rects in texture pixel space (x,y = bottom-left,
+        /// GetPixels32 convention), row-major. Kept when switching back to Grid so
+        /// Cropped can restore without re-detect. Ignored while mode is Grid.
+        /// </summary>
+        public RectInt[] CroppedCellRects;
     }
 
     /// <summary>
@@ -1287,6 +1310,10 @@ namespace InvertLab.Sprites.DOTS
         public int Rows = DefaultRows;
         public float PixelsPerUnit = DefaultPixelsPerUnit;
         public Vector2 Pivot = DefaultPivot;
+        /// <summary>Mirrored from the active <see cref="SpriteSheetDef"/> for editor legacy fields.</summary>
+        public SpriteSheetCellLayoutMode CellLayoutMode = SpriteSheetCellLayoutMode.Grid;
+        /// <summary>Mirrored from the active sheet; see <see cref="SpriteSheetDef.CroppedCellRects"/>.</summary>
+        public RectInt[] CroppedCellRects;
         public List<SpriteSheetDef> Sheets = new();
         public List<SpriteClipDef> Clips = new();
         public List<SpriteEventDef> Events = new();
@@ -1601,6 +1628,8 @@ namespace InvertLab.Sprites.DOTS
                     Rows = Mathf.Max(1, Rows),
                     PixelsPerUnit = PixelsPerUnit > 0f ? PixelsPerUnit : DefaultPixelsPerUnit,
                     Pivot = Pivot == default ? DefaultPivot : Pivot,
+                    CellLayoutMode = CellLayoutMode,
+                    CroppedCellRects = CroppedCellRects,
                 });
             }
             else if (Sheet != null && Sheets[0] != null && Sheets[0].Texture == null)
@@ -1615,6 +1644,12 @@ namespace InvertLab.Sprites.DOTS
                     first.PixelsPerUnit = PixelsPerUnit > 0f ? PixelsPerUnit : DefaultPixelsPerUnit;
                 if (first.Pivot == default)
                     first.Pivot = Pivot == default ? DefaultPivot : Pivot;
+                if (first.CellLayoutMode == SpriteSheetCellLayoutMode.Grid &&
+                    CellLayoutMode == SpriteSheetCellLayoutMode.Cropped)
+                    first.CellLayoutMode = CellLayoutMode;
+                if ((first.CroppedCellRects == null || first.CroppedCellRects.Length == 0) &&
+                    CroppedCellRects != null && CroppedCellRects.Length > 0)
+                    first.CroppedCellRects = CroppedCellRects;
                 if (string.IsNullOrEmpty(first.Name) || first.Name == "Sheet")
                     first.Name = !string.IsNullOrEmpty(Sheet.name) ? Sheet.name : "Sheet";
             }
@@ -1699,6 +1734,8 @@ namespace InvertLab.Sprites.DOTS
             Rows = Mathf.Max(1, sheet.Rows);
             PixelsPerUnit = sheet.PixelsPerUnit > 0f ? sheet.PixelsPerUnit : DefaultPixelsPerUnit;
             Pivot = sheet.Pivot;
+            CellLayoutMode = sheet.CellLayoutMode;
+            CroppedCellRects = sheet.CroppedCellRects;
         }
 
         public void WriteLegacyIntoSheet(int index)
@@ -1712,7 +1749,249 @@ namespace InvertLab.Sprites.DOTS
             sheet.Rows = Mathf.Max(1, Rows);
             sheet.PixelsPerUnit = PixelsPerUnit > 0f ? PixelsPerUnit : DefaultPixelsPerUnit;
             sheet.Pivot = Pivot;
+            sheet.CellLayoutMode = CellLayoutMode;
+            sheet.CroppedCellRects = CroppedCellRects;
         }
+
+        
+        public const byte CroppedAlphaThreshold = 8;
+
+        /// <summary>Uniform grid UV rect (Unity texcoords, y-up). Row 0 = top of sheet.</summary>
+        public static Rect GetUniformCellUvRect(int columns, int rows, int cellIndex)
+        {
+            columns = Mathf.Max(1, columns);
+            rows = Mathf.Max(1, rows);
+            int count = columns * rows;
+            cellIndex = count > 0 ? ((cellIndex % count) + count) % count : 0;
+            int column = cellIndex % columns;
+            int row = cellIndex / columns;
+            return new Rect(
+                column / (float)columns,
+                1f - (row + 1f) / rows,
+                1f / columns,
+                1f / rows);
+        }
+
+        /// <summary>Whether the sheet is Cropped and has a usable rect for <paramref name="cellIndex"/>.</summary>
+        public static bool TryGetCroppedCellPixelRect(SpriteSheetDef sheet, int cellIndex, out RectInt pixelRect)
+        {
+            pixelRect = default;
+            if (sheet == null || sheet.CellLayoutMode != SpriteSheetCellLayoutMode.Cropped)
+                return false;
+            var rects = sheet.CroppedCellRects;
+            if (rects == null || rects.Length == 0)
+                return false;
+            int columns = Mathf.Max(1, sheet.Columns);
+            int rows = Mathf.Max(1, sheet.Rows);
+            int count = columns * rows;
+            // Stale after Columns/Rows edit — fall back to uniform until Recompute.
+            if (count <= 0 || rects.Length != count)
+                return false;
+            cellIndex = ((cellIndex % count) + count) % count;
+            pixelRect = rects[cellIndex];
+            return pixelRect.width > 0 && pixelRect.height > 0;
+        }
+
+        /// <summary>
+        /// Active cell UV for preview / bake / GPU CropST. Grid = uniform; Cropped =
+        /// stored opaque rect (falls back to uniform when missing).
+        /// </summary>
+        public static Rect GetCellUvRect(SpriteSheetDef sheet, int cellIndex)
+        {
+            int columns = sheet != null && sheet.Columns > 0 ? sheet.Columns : 1;
+            int rows = sheet != null && sheet.Rows > 0 ? sheet.Rows : 1;
+            if (TryGetCroppedCellPixelRect(sheet, cellIndex, out var pixel) &&
+                sheet.Texture != null &&
+                sheet.Texture.width > 0 &&
+                sheet.Texture.height > 0)
+            {
+                float invW = 1f / sheet.Texture.width;
+                float invH = 1f / sheet.Texture.height;
+                return new Rect(
+                    pixel.x * invW,
+                    pixel.y * invH,
+                    pixel.width * invW,
+                    pixel.height * invH);
+            }
+            return GetUniformCellUvRect(columns, rows, cellIndex);
+        }
+
+        /// <summary>CropST = (uvWidth, uvHeight, uvOriginX, uvOriginY) bottom-left.</summary>
+        public static Vector4 GetCellCropST(SpriteSheetDef sheet, int cellIndex)
+        {
+            var uv = GetCellUvRect(sheet, cellIndex);
+            return new Vector4(uv.width, uv.height, uv.x, uv.y);
+        }
+
+        /// <summary>
+        /// Pixel size of the active cell. Cropped uses the opaque rect; Grid uses
+        /// texture / columns×rows. False when no texture.
+        /// </summary>
+        public static bool TryGetActiveCellPixels(SpriteSheetDef sheet, int cellIndex,
+            out float cellW, out float cellH)
+        {
+            cellW = 0f;
+            cellH = 0f;
+            if (TryGetCroppedCellPixelRect(sheet, cellIndex, out var pixel))
+            {
+                cellW = pixel.width;
+                cellH = pixel.height;
+                return true;
+            }
+            return TryGetCellPixels(sheet, out cellW, out cellH);
+        }
+
+        public static bool HasCroppedCellData(SpriteSheetDef sheet)
+        {
+            if (sheet == null || sheet.CroppedCellRects == null || sheet.CroppedCellRects.Length == 0)
+                return false;
+            int count = Mathf.Max(1, sheet.Columns) * Mathf.Max(1, sheet.Rows);
+            return sheet.CroppedCellRects.Length == count;
+        }
+
+        /// <summary>
+        /// Build per-cell tight opaque rects inside each uniform grid band.
+        /// Pixel y = 0 at texture bottom (GetPixels32). Empty cells keep a 1×1
+        /// sentinel at the coarse cell origin so length stays Columns×Rows.
+        /// </summary>
+        public static RectInt[] BuildCroppedCellRects(Color32[] pixels, int width, int height,
+            int columns, int rows, byte alphaThreshold = CroppedAlphaThreshold)
+        {
+            columns = Mathf.Max(1, columns);
+            rows = Mathf.Max(1, rows);
+            width = Mathf.Max(1, width);
+            height = Mathf.Max(1, height);
+            var result = new RectInt[columns * rows];
+            if (pixels == null || pixels.Length < width * height)
+            {
+                for (int i = 0; i < result.Length; i++)
+                {
+                    var uv = GetUniformCellUvRect(columns, rows, i);
+                    int x0 = Mathf.Clamp(Mathf.FloorToInt(uv.x * width), 0, width - 1);
+                    int y0 = Mathf.Clamp(Mathf.FloorToInt(uv.y * height), 0, height - 1);
+                    result[i] = new RectInt(x0, y0, 1, 1);
+                }
+                return result;
+            }
+
+            for (int row = 0; row < rows; row++)
+            {
+                for (int col = 0; col < columns; col++)
+                {
+                    int index = row * columns + col;
+                    var uv = GetUniformCellUvRect(columns, rows, index);
+                    int x0 = Mathf.Clamp(Mathf.FloorToInt(uv.x * width), 0, width);
+                    int y0 = Mathf.Clamp(Mathf.FloorToInt(uv.y * height), 0, height);
+                    int x1 = Mathf.Clamp(Mathf.CeilToInt((uv.x + uv.width) * width), 0, width);
+                    int y1 = Mathf.Clamp(Mathf.CeilToInt((uv.y + uv.height) * height), 0, height);
+                    if (x1 <= x0) x1 = Mathf.Min(width, x0 + 1);
+                    if (y1 <= y0) y1 = Mathf.Min(height, y0 + 1);
+
+                    int minX = x1, minY = y1, maxX = x0 - 1, maxY = y0 - 1;
+                    bool found = false;
+                    for (int y = y0; y < y1; y++)
+                    {
+                        int rowOff = y * width;
+                        for (int x = x0; x < x1; x++)
+                        {
+                            if (pixels[rowOff + x].a > alphaThreshold)
+                            {
+                                found = true;
+                                if (x < minX) minX = x;
+                                if (y < minY) minY = y;
+                                if (x > maxX) maxX = x;
+                                if (y > maxY) maxY = y;
+                            }
+                        }
+                    }
+                    result[index] = found
+                        ? new RectInt(minX, minY, maxX - minX + 1, maxY - minY + 1)
+                        : new RectInt(x0, y0, 1, 1);
+                }
+            }
+            return result;
+        }
+
+        public static void EstimateBandSpacing(Color32[] pixels, int width, int height,
+            byte alphaThreshold, out float avgColGutter, out float avgRowGutter,
+            out int opaqueColumnBands, out int opaqueRowBands)
+        {
+            avgColGutter = 0f;
+            avgRowGutter = 0f;
+            opaqueColumnBands = 0;
+            opaqueRowBands = 0;
+            if (pixels == null || width <= 0 || height <= 0 || pixels.Length < width * height)
+                return;
+
+            var colOpaque = new bool[width];
+            var rowOpaque = new bool[height];
+            for (int y = 0; y < height; y++)
+            {
+                int rowOff = y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    if (pixels[rowOff + x].a > alphaThreshold)
+                    {
+                        colOpaque[x] = true;
+                        rowOpaque[y] = true;
+                    }
+                }
+            }
+
+            MeasureGaps(colOpaque, out opaqueColumnBands, out avgColGutter);
+            MeasureGaps(rowOpaque, out opaqueRowBands, out avgRowGutter);
+        }
+
+        static void MeasureGaps(bool[] opaque, out int bandCount, out float avgGap)
+        {
+            bandCount = 0;
+            avgGap = 0f;
+            int gapSum = 0;
+            int gapCount = 0;
+            bool inside = false;
+            int gapRun = 0;
+            bool seenBand = false;
+            for (int i = 0; i < opaque.Length; i++)
+            {
+                if (opaque[i])
+                {
+                    if (!inside)
+                    {
+                        if (seenBand && gapRun > 0)
+                        {
+                            gapSum += gapRun;
+                            gapCount++;
+                        }
+                        bandCount++;
+                        inside = true;
+                        seenBand = true;
+                        gapRun = 0;
+                    }
+                }
+                else
+                {
+                    if (inside)
+                        inside = false;
+                    if (seenBand)
+                        gapRun++;
+                }
+            }
+            if (gapCount > 0)
+                avgGap = gapSum / (float)gapCount;
+        }
+
+        /// <summary>Fill a float4 CropST array (xy size, zw origin) for the instance/GPU path.</summary>
+        public static Vector4[] BuildCellCropSTArray(SpriteSheetDef sheet)
+        {
+            int columns = Mathf.Max(1, sheet != null ? sheet.Columns : 1);
+            int rows = Mathf.Max(1, sheet != null ? sheet.Rows : 1);
+            int count = columns * rows;
+            var result = new Vector4[count];
+            for (int i = 0; i < count; i++)
+                result[i] = GetCellCropST(sheet, i);
+            return result;
+        }
+
 
         /// <summary>
         /// Cell size in source pixels. PPU does not change this — it is

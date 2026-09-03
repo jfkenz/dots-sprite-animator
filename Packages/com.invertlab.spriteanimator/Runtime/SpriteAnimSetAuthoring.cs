@@ -490,10 +490,12 @@ namespace InvertLab.Sprites.DOTS
 
 
 
-            float w = 1f / cols;
-            float h = 1f / rows;
+            int cellIndex = row * cols + col;
             // Cell rect in sheet UV: scale.xy, offset.zw (bottom-left of cell).
-            var cropST = new Vector4(w, h, col * w, 1f - (row + 1) * h);
+            // Cropped mode uses tight opaque rects when present; Grid stays uniform.
+            Vector4 cropST = clipSheet != null
+                ? SpriteSheetProfile.GetCellCropST(clipSheet, cellIndex)
+                : new Vector4(1f / cols, 1f / rows, col * (1f / cols), 1f - (row + 1) * (1f / rows));
             var flip = PreviewFlipVector();
 
 
@@ -539,7 +541,7 @@ namespace InvertLab.Sprites.DOTS
             // 1x1 preview mesh is UV-baked; scale so PPU matches cell world size.
             // Mesh is bottom-center: localScale (sx,sy,1) â†’ width sx, height sy, feet at position.
             if (clipSheet != null &&
-                SpriteSheetProfile.TryGetCellPixels(clipSheet, out float cellW, out float cellH))
+                SpriteSheetProfile.TryGetActiveCellPixels(clipSheet, cellIndex, out float cellW, out float cellH))
             {
                 float ppu = SpriteSheetProfile.GetPixelsPerUnit(clipSheet);
                 float sx = cellW / ppu;
@@ -624,8 +626,9 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Rebake preview quad so cell feet sit at local y=0 (bottom-center pivot).
-        /// X stays -0.5..0.5; Y becomes 0..1. Safe for both center (Â±0.5) and
-        /// already-bottom (0..1) source verts.
+        /// X stays -0.5..0.5; Y becomes 0..1. Safe for both center (±0.5) and
+        /// already-bottom (0..1) source verts, and for pivot-mirrored verts from a
+        /// previous flip bake (normalized by position span, not sign).
         /// </summary>
         static void ApplyBottomCenterCellVertices(Mesh mesh)
         {
@@ -634,12 +637,28 @@ namespace InvertLab.Sprites.DOTS
             var verts = mesh.vertices;
             if (verts == null || verts.Length == 0)
                 return;
+
+            float minX = float.MaxValue, maxX = float.MinValue;
+            float minY = float.MaxValue, maxY = float.MinValue;
+            for (int i = 0; i < verts.Length; i++)
+            {
+                minX = Mathf.Min(minX, verts[i].x);
+                maxX = Mathf.Max(maxX, verts[i].x);
+                minY = Mathf.Min(minY, verts[i].y);
+                maxY = Mathf.Max(maxY, verts[i].y);
+            }
+            float spanX = maxX - minX;
+            float spanY = maxY - minY;
+            if (spanX <= 1e-6f || spanY <= 1e-6f)
+                return;
+
             bool changed = false;
             for (int i = 0; i < verts.Length; i++)
             {
-                float u01 = verts[i].x >= 0f ? 1f : 0f;
-                // Center layout uses Â±0.5; bottom layout uses 0 and 1. Mid threshold works for both.
-                float v01 = verts[i].y > 0.25f ? 1f : 0f;
+                // Position-span normalization: a far-off pivot can mirror the quad
+                // so both x values share a sign, so sign tests cannot find the sides.
+                float u01 = (verts[i].x - minX) / spanX > 0.5f ? 1f : 0f;
+                float v01 = (verts[i].y - minY) / spanY > 0.5f ? 1f : 0f;
                 var next = new Vector3(
                     Mathf.Lerp(-0.5f, 0.5f, u01),
                     Mathf.Lerp(0f, 1f, v01),
@@ -659,7 +678,10 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>
         /// Set mesh UVs to the cell rect. Bottom-center preview verts by position:
         /// BL(x&lt;0,y~0), BR(x&gt;0,y~0), TL(x&lt;0,y~1), TR(x&gt;0,y~1).
-        /// Flip reflects cell-local UVs around the authored pivot (default cell center).
+        /// Flip mirrors the VERTICES around the authored pivot axis (mesh x = u-0.5,
+        /// mesh y = v); UVs stay attached to their vertices — a single mirror. Also
+        /// mirroring UVs would cancel the flip, and UV-mirroring around a non-center
+        /// pivot would sample outside the cell (neighboring-frame bleed).
         /// </summary>
         static void BakePreviewCellUVs(Mesh mesh, Vector4 cropST, bool flipX, bool flipY,
             Vector2 normalizedPivot)
@@ -682,13 +704,17 @@ namespace InvertLab.Sprites.DOTS
                 float u01 = verts[i].x >= 0f ? 1f : 0f;
                 // Bottom-center mesh: y in {0,1} (also tolerates legacy ±0.5).
                 float v01 = verts[i].y >= 0.5f ? 1f : 0f;
-                float uCell = flipX ? (2f * px - u01) : u01;
-                float vCell = flipY ? (2f * py - v01) : v01;
                 uvs[i] = new Vector2(
-                    cropST.z + uCell * cropST.x,
-                    cropST.w + vCell * cropST.y);
+                    cropST.z + u01 * cropST.x,
+                    cropST.w + v01 * cropST.y);
+                verts[i] = new Vector3(
+                    flipX ? 2f * (px - 0.5f) - verts[i].x : verts[i].x,
+                    flipY ? 2f * py - verts[i].y : verts[i].y,
+                    0f);
             }
             mesh.uv = uvs;
+            mesh.vertices = verts;
+            mesh.RecalculateBounds();
         }
 
 
@@ -861,6 +887,9 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>
         /// Cyan wire of the full cell bounds (padding included), matching the
         /// animator preview teal cell outline. Drawn in bottom-center local space.
+        /// Follows the flip: with an off-center pivot the mirrored quad occupies a
+        /// different area, so the frame mirrors its center around the pivot axis
+        /// (same axis the render and colliders use) instead of staying static.
         /// </summary>
         void DrawSceneCellFrameGizmo()
         {
@@ -871,12 +900,31 @@ namespace InvertLab.Sprites.DOTS
             if (filter == null || renderer == null || !renderer.enabled)
                 return;
 
-
+            ResolveUnitySyncClip(out string clipName, out _, out var player);
+            bool flipX = player != null && player.FlipX;
+            bool flipY = player != null && player.FlipY;
+            // Unit cell with bottom-center pivot: unflipped center at (0, 0.5).
+            float centerX = 0f;
+            float centerY = 0.5f;
+            if (flipX || flipY)
+            {
+                var data = Profile?.Data;
+                if (data != null)
+                {
+                    var sheet = SpriteSocketWorld.DisplaySheet(data, clipName);
+                    Vector2 pivot = SpriteSocketWorld.ResolvePivot(data, sheet);
+                    // Pivot normalized (0-1, bottom-left) -> unit-cell local x in
+                    // -0.5..0.5, y in 0..1. Mirror the frame center around it.
+                    if (flipX)
+                        centerX = 2f * (Mathf.Clamp01(pivot.x) - 0.5f);
+                    if (flipY)
+                        centerY = 2f * Mathf.Clamp01(pivot.y) - 0.5f;
+                }
+            }
 
             Gizmos.matrix = transform.localToWorldMatrix;
             Gizmos.color = new Color(0.25f, 0.9f, 0.95f, 0.95f);
-            // Unit cell with bottom-center pivot: center at (0, 0.5), size 1x1.
-            Gizmos.DrawWireCube(new Vector3(0f, 0.5f, 0f), new Vector3(1f, 1f, 0.02f));
+            Gizmos.DrawWireCube(new Vector3(centerX, centerY, 0f), new Vector3(1f, 1f, 0.02f));
             Gizmos.matrix = Matrix4x4.identity;
         }
 
@@ -965,6 +1013,35 @@ namespace InvertLab.Sprites.DOTS
             Vector3 facingScale = player == null
                 ? Vector3.one
                 : new Vector3(player.FlipX ? -1f : 1f, player.FlipY ? -1f : 1f, 1f);
+            // Mirror gizmos around the SAME pivot axis as the real Unity 2D
+            // colliders (SpriteColliderWorld.SyncUnityColliders): root offset to
+            // 2*axis in host-local units, then negative scale. Mirroring around
+            // the mesh origin made boxes land elsewhere than the colliders
+            // whenever the pivot is off-center.
+            bool flipX = player != null && player.FlipX;
+            bool flipY = player != null && player.FlipY;
+            Matrix4x4 flipMatrix = transform.localToWorldMatrix;
+            if (flipX || flipY)
+            {
+                var displaySheet = SpriteSocketWorld.DisplaySheet(data, clipName);
+                Vector2 flipPivot = SpriteSocketWorld.ResolvePivot(data, displaySheet);
+                Vector2 axis = SpriteSocketWorld.PixelsFromPivotToMeshLocal(
+                    displaySheet, flipPivot, Vector2.zero);
+                Vector3 hostScale = transform.localScale;
+                float invSx = 1f / (Mathf.Abs(hostScale.x) > 1e-4f ? hostScale.x : 1f);
+                float invSy = 1f / (Mathf.Abs(hostScale.y) > 1e-4f ? hostScale.y : 1f);
+                Vector3 flipRoot = new Vector3(
+                    flipX ? 2f * axis.x * invSx : 0f,
+                    flipY ? 2f * axis.y * invSy : 0f,
+                    0f);
+                flipMatrix = transform.localToWorldMatrix *
+                             Matrix4x4.TRS(flipRoot, Quaternion.identity, Vector3.one) *
+                             Matrix4x4.Scale(facingScale);
+            }
+            else
+            {
+                flipMatrix = transform.localToWorldMatrix * Matrix4x4.Scale(facingScale);
+            }
             foreach (var box in SpriteColliderWorld.VisibleOn(data.Hitboxes, clipName, frame))
             {
                 if (box.Hidden || !box.UsesQuery)
@@ -977,8 +1054,7 @@ namespace InvertLab.Sprites.DOTS
                         ? new Color(0.95f, 0.72f, 0.22f, 0.9f)
                         : new Color(1f, 0.35f, 0.28f, 0.9f);
                 var rotation = Quaternion.Euler(0f, 0f, angle);
-                Gizmos.matrix = transform.localToWorldMatrix * Matrix4x4.Scale(facingScale) *
-                                Matrix4x4.TRS(offset, rotation, Vector3.one);
+                Gizmos.matrix = flipMatrix * Matrix4x4.TRS(offset, rotation, Vector3.one);
                 if (box.Shape == SpriteColliderShape.Circle)
                     Gizmos.DrawWireSphere(Vector3.zero, Mathf.Max(size.x, size.y) * 0.5f);
                 else if (box.Shape == SpriteColliderShape.Polygon)

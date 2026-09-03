@@ -1,27 +1,31 @@
 {
     "Sheet": {
-        "instanceID": 568105584918833776
+        "instanceID": 568105584918835128
     },
     "Columns": 8,
     "Rows": 8,
     "PixelsPerUnit": 50.0,
     "Pivot": {
-        "x": 0.23999999463558198,
-        "y": 0.3499999940395355
+        "x": 0.23182538151741029,
+        "y": 0.307407408952713
     },
+    "CellLayoutMode": 0,
+    "CroppedCellRects": [],
     "Sheets": [
         {
             "Name": "Bringer-of-Death-SpritSheet",
             "Texture": {
-                "instanceID": 568105584918833776
+                "instanceID": 568105584918835128
             },
             "Columns": 8,
             "Rows": 8,
             "PixelsPerUnit": 50.0,
             "Pivot": {
-                "x": 0.23999999463558198,
-                "y": 0.3499999940395355
-            }
+                "x": 0.23182538151741029,
+                "y": 0.307407408952713
+            },
+            "CellLayoutMode": 0,
+            "CroppedCellRects": []
         }
     ],
     "Clips": [
@@ -183,8 +187,8 @@
                     "Name": "HealthBarSocket",
                     "FrameIndex": 0,
                     "LocalPosition": {
-                        "x": -1.0,
-                        "y": 26.0
+                        "x": 1.0,
+                        "y": 18.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {
@@ -1522,6 +1526,7 @@
                 "FlipX": false,
                 "SortingOffset": 0,
                 "PreviewEnabled": true,
+                "Locked": false,
                 "PathWrap": 0,
                 "MotionMode": 1,
                 "Speed": 1.0
@@ -1542,8 +1547,8 @@
                 {
                     "NormalizedTime": 0.0,
                     "LocalPosition": {
-                        "x": -1.0,
-                        "y": 26.0
+                        "x": 1.0,
+                        "y": 18.0
                     },
                     "LocalAngle": 0.0,
                     "LocalScale": {

@@ -144,7 +144,7 @@ Transform:
   m_GameObject: {fileID: 85883792}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.26714286, y: 0.62956995, z: 0}
+  m_LocalPosition: {x: -0.2753175, y: 0.6299881, z: 0}
   m_LocalScale: {x: -1.0362911, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -208,7 +208,7 @@ Transform:
   m_GameObject: {fileID: 1062644983}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.26817462, y: 0.3074074, z: 0}
+  m_LocalPosition: {x: -0.26817465, y: 0.3074074, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -285,7 +285,7 @@ Transform:
   m_GameObject: {fileID: 1091280746}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.26000002, y: 0.35, z: 0}
+  m_LocalPosition: {x: -0.26817465, y: 0.3074074, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -358,13 +358,13 @@ MonoBehaviour:
   PlayOnEnable: 1
   Speed: 1
   Playing: 1
-  ClipIndex: 0
+  ClipIndex: 2
   FlipX: 1
   FlipY: 0
   CrossfadeDuration: 0
   Blend: 0
-  _time: 0.46740332
-  _frame: 3
+  _time: 0.76638114
+  _frame: 6
   _queuedClip: -1
   _queuedForce: 0
   _resumeClip: -1
@@ -458,7 +458,7 @@ MonoBehaviour:
     Sockets:
     - Name: HealthBarSocket
       FrameIndex: 0
-      LocalPosition: {x: -1, y: 26}
+      LocalPosition: {x: 1, y: 30}
       LocalAngle: 0
       LocalScale: {x: 1.0362911, y: 1}
       DrawLayer: 0
@@ -989,7 +989,7 @@ Transform:
   m_GameObject: {fileID: 1291359528}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.988, y: -1.511, z: 0}
+  m_LocalPosition: {x: 1.777, y: -1.564, z: 0}
   m_LocalScale: {x: 2.8, y: 1.86, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1040,8 +1040,8 @@ MonoBehaviour:
   FlipY: 0
   CrossfadeDuration: 0
   Blend: 0
-  _time: 0.46326765
-  _frame: 3
+  _time: 0.5841184
+  _frame: 4
   _queuedClip: -1
   _queuedForce: 0
   _resumeClip: -1
@@ -2055,7 +2055,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1524384336}
-  m_Mesh: {fileID: 0}
+  m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!4 &1524384341
 Transform:
   m_ObjectHideFlags: 0
@@ -2347,7 +2347,7 @@ Transform:
   m_GameObject: {fileID: 1941741495}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -0.5363493, y: 0, z: 0}
   m_LocalScale: {x: -1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

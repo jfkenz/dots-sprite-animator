@@ -164,6 +164,9 @@ namespace InvertLab.Sprites.DOTS
             if (!gq.IsEmpty)
             {
                 var g = em.GetComponentData<SpriteAnimGrid>(gq.GetSingletonEntity());
+                // Compact GPU clock assumes uniform CellW/CellH stride.
+                if (g.UseCellCrops != 0)
+                    return false;
                 cols = g.Cols; rows = g.Rows;
             }
 

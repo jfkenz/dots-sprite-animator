@@ -107,25 +107,30 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D"
                 Varyings OUT;
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
 
+                // Flip mirrors the QUAD around the authored pivot (_Flip.zw,
+                // default 0.5 = cell center) in object space; UVs stay attached to
+                // their vertices. A single mirror only — also mirroring UVs would
+                // cancel the flip, and UV-mirroring around a non-center pivot would
+                // sample outside the cell and bleed the neighboring frame.
+                float4 flip = PFLOAT4(_Flip);
+                float2 pivot = flip.zw;
+                if (pivot.x == 0.0h && pivot.y == 0.0h)
+                    pivot = float2(0.5h, 0.5h);
+                float3 posOS = IN.positionOS;
+                posOS.x = lerp(posOS.x, 2.0h * (pivot.x - 0.5h) - posOS.x, saturate(flip.x));
+                posOS.y = lerp(posOS.y, 2.0h * (pivot.y - 0.5h) - posOS.y, saturate(flip.y));
+
                 float4 posCS = TransformWorldToHClip(
-                    TransformObjectToWorld(IN.positionOS));
+                    TransformObjectToWorld(posOS));
 
                 // Z-order WITHOUT touching the transform: nudge clip-space Z.
                 // Small factor keeps the bias sub-depth-buffer-step.
                 posCS.z += PFLOAT(_ZOrder) * 0.0005h;
                 OUT.positionCS = posCS;
 
-                // Flip around authored pivot (_Flip.zw, default 0.5 = cell center), then crop.
-                float4 flip = PFLOAT4(_Flip);
-                float2 pivot = flip.zw;
-                if (pivot.x == 0.0h && pivot.y == 0.0h)
-                    pivot = float2(0.5h, 0.5h);
-                float2 uv = IN.uv;
-                uv.x = lerp(uv.x, 2.0h * pivot.x - uv.x, saturate(flip.x));
-                uv.y = lerp(uv.y, 2.0h * pivot.y - uv.y, saturate(flip.y));
-
+                // UVs unchanged (still the full cell, always inside it).
                 float4 st = PCROP(_CropST);
-                OUT.uv = uv * st.xy + st.zw;
+                OUT.uv = IN.uv * st.xy + st.zw;
                 return OUT;
             }
 

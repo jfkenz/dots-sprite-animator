@@ -70,19 +70,22 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Preview"
             Varyings Vert(Attributes IN)
             {
                 Varyings OUT;
-                OUT.positionCS = TransformObjectToHClip(IN.positionOS);
 
-                // When ApplyQuadPreview UV-bakes the cell, mesh UVs are already the
-                // cell rect and _CropST is (1,1,0,0); flip is also baked into UVs.
-                // Keep crop/flip here as a second line of defense for non-baked paths.
+                // Fallback flip for non-baked paths: mirror the bottom-center quad
+                // (x = u - 0.5, y = v) around the authored pivot; UVs stay attached
+                // to their vertices. A single mirror only — also mirroring UVs would
+                // cancel the flip, and UV-mirroring around a non-center pivot would
+                // sample outside the cell and bleed the neighboring frame.
                 float2 pivot = _Flip.zw;
                 if (pivot.x == 0.0 && pivot.y == 0.0)
                     pivot = float2(0.5, 0.5);
-                float2 uv = IN.uv;
-                uv.x = lerp(uv.x, 2.0 * pivot.x - uv.x, saturate(_Flip.x));
-                uv.y = lerp(uv.y, 2.0 * pivot.y - uv.y, saturate(_Flip.y));
+                float3 posOS = IN.positionOS;
+                posOS.x = lerp(posOS.x, 2.0 * (pivot.x - 0.5) - posOS.x, saturate(_Flip.x));
+                posOS.y = lerp(posOS.y, 2.0 * pivot.y - posOS.y, saturate(_Flip.y));
+                OUT.positionCS = TransformObjectToHClip(posOS);
 
-                OUT.uv = uv * _CropST.xy + _CropST.zw;
+                // UVs unchanged (still the full cell, always inside it).
+                OUT.uv = IN.uv * _CropST.xy + _CropST.zw;
                 return OUT;
             }
 

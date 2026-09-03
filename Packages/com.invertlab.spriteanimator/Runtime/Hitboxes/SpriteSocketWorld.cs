@@ -146,9 +146,9 @@ namespace InvertLab.Sprites.DOTS
                 var sheet = DisplaySheet(data, clipName);
                 if (sheet != null)
                 {
-                    Vector2 pivot = ResolvePivot(data, sheet);
-                    meshLocal = PixelsFromPivotToMeshLocal(sheet, pivot, Vector2.zero);
-                    meshLocal = MirrorAroundPivot(meshLocal, sheet, pivot, flipX, flipY);
+                    Vector2 pivotUv = ResolvePivot(data, sheet);
+                    meshLocal = PixelsFromPivotToMeshLocal(sheet, pivotUv, Vector2.zero);
+                    meshLocal = MirrorAroundPivot(meshLocal, sheet, pivotUv, flipX, flipY);
                 }
             }
 

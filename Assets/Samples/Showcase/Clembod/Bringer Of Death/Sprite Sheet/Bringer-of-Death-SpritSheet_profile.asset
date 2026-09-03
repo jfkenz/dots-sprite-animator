@@ -17,14 +17,18 @@ MonoBehaviour:
     Columns: 8
     Rows: 8
     PixelsPerUnit: 50
-    Pivot: {x: 0.24, y: 0.35}
+    Pivot: {x: 0.23182535, y: 0.3074074}
+    CellLayoutMode: 0
+    CroppedCellRects: []
     Sheets:
     - Name: Bringer-of-Death-SpritSheet
       Texture: {fileID: 2800000, guid: 1914d95466e3d4341a618c35a56d5f82, type: 3}
       Columns: 8
       Rows: 8
       PixelsPerUnit: 50
-      Pivot: {x: 0.24, y: 0.35}
+      Pivot: {x: 0.23182535, y: 0.3074074}
+      CellLayoutMode: 0
+      CroppedCellRects: []
     Clips:
     - Name: Bringer-of-Death-SpritSheet row 1
       SheetIndex: 0
@@ -92,7 +96,7 @@ MonoBehaviour:
       Sockets:
       - Name: HealthBarSocket
         FrameIndex: 0
-        LocalPosition: {x: -1, y: 26}
+        LocalPosition: {x: 1, y: 30}
         LocalAngle: 0
         LocalScale: {x: 1.0362911, y: 1}
         DrawLayer: 0
@@ -570,7 +574,7 @@ MonoBehaviour:
       FrameIndex: 4
       RectUV:
         serializedVersion: 2
-        x: 0.0060212207
+        x: 0.0060212202
         y: 0.17595555
         width: 0.9605143
         height: 0.8081746
@@ -579,7 +583,7 @@ MonoBehaviour:
       PolygonUV:
       - {x: 0.60714287, y: 0.8083067}
       - {x: 0.6160714, y: 0.41214055}
-      - {x: 0.25892857, y: 0.14057508}
+      - {x: 0.25892854, y: 0.14057508}
       - {x: 0, y: 0.092651755}
       - {x: 0.43214285, y: 0}
       - {x: 0.86071426, y: 0.20447282}
@@ -608,11 +612,11 @@ MonoBehaviour:
       Id: 1
       Shape: 2
       PolygonUV:
-      - {x: 0.17804159, y: 0.8431953}
+      - {x: 0.17804158, y: 0.8431953}
       - {x: 0.35014838, y: 0.6982249}
-      - {x: 0.22255196, y: 0.24556215}
+      - {x: 0.22255194, y: 0.24556215}
       - {x: 0, y: 0.13017753}
-      - {x: 0.0801187, y: 0}
+      - {x: 0.080118716, y: 0}
       - {x: 0.60534126, y: 0.23372783}
       - {x: 0.77744806, y: 0.4822485}
       - {x: 0.8456973, y: 0.40828404}
@@ -621,7 +625,7 @@ MonoBehaviour:
       - {x: 0.99999994, y: 0.76627225}
       - {x: 0.8308605, y: 0.94378704}
       - {x: 0.59347177, y: 1}
-      - {x: 0.37982193, y: 0.95857996}
+      - {x: 0.3798219, y: 0.95857996}
       Angle: 0
       Hidden: 0
       Locked: 0
@@ -634,7 +638,7 @@ MonoBehaviour:
       FrameIndex: -1
       RectUV:
         serializedVersion: 2
-        x: 0.10142855
+        x: 0.10142854
         y: 0.3888889
         width: 0.26079366
         height: 0.6074074
@@ -668,6 +672,7 @@ MonoBehaviour:
         FlipX: 0
         SortingOffset: 0
         PreviewEnabled: 1
+        Locked: 0
         PathWrap: 0
         MotionMode: 1
         Speed: 1
@@ -682,7 +687,7 @@ MonoBehaviour:
       AnchorSpace: 0
       Keys:
       - NormalizedTime: 0
-        LocalPosition: {x: -1, y: 26}
+        LocalPosition: {x: 1, y: 30}
         LocalAngle: 0
         LocalScale: {x: 1.0362911, y: 1}
         DrawLayer: 0

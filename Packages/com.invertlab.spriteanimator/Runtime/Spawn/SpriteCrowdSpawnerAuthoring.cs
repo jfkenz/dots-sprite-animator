@@ -147,6 +147,21 @@ namespace InvertLab.Sprites.DOTS
             em.AddComponent<SpriteCrowdEntityTag>(s_proto);
 
             bool gpu = UseGpuAnim;
+            // Compact GPU clock needs uniform CellW; Cropped per-cell UVs use the CPU instance path.
+            if (gpu)
+            {
+                var data = authoring.Profile != null ? authoring.Profile.Data : null;
+                var sheetDef = data != null ? data.SheetAt(0) : null;
+                if (sheetDef != null &&
+                    sheetDef.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped &&
+                    SpriteSheetProfile.HasCroppedCellData(sheetDef))
+                {
+                    gpu = false;
+                    Debug.LogWarning(
+                        "[Crowd Spawner] Cropped cell layout needs CPU instance CropST. Spawning CPU path.",
+                        this);
+                }
+            }
             if (gpu)
             {
                 ref var blob = ref setRef.Set.Value;
@@ -181,8 +196,7 @@ namespace InvertLab.Sprites.DOTS
 
             SpriteInstanceRenderSystem.Install(em);
             SpriteInstanceRenderSystem.SetSheet(sheet);
-            SpriteInstanceRenderSystem.SetGrid(em, cols, rows,
-                SpriteSheetProfile.GetCellAspect(sheet, cols, rows));
+            ApplyInstanceGrid(em, authoring, 0);
 
             SpriteBatchSpawner.SetPrototype(em, s_proto);
             s_ready = true;
@@ -248,6 +262,37 @@ namespace InvertLab.Sprites.DOTS
             return q.CalculateEntityCount();
         }
 
+
+        static void ApplyInstanceGrid(EntityManager em, SpriteAnimSetAuthoring authoring, int clipIndex)
+        {
+            if (authoring == null)
+            {
+                SpriteInstanceRenderSystem.SetGrid(em, 4, 4, 1f);
+                return;
+            }
+            authoring.TryGetClipSheet(clipIndex, out var tex, out int cols, out int rows, out _);
+            cols = Mathf.Max(1, cols);
+            rows = Mathf.Max(1, rows);
+            SpriteSheetDef def = null;
+            var data = authoring.Profile != null ? authoring.Profile.Data : null;
+            if (data != null)
+            {
+                data.EnsureSheets();
+                int sheetIndex = 0;
+                if (authoring.Clips != null && clipIndex >= 0 && clipIndex < authoring.Clips.Length)
+                    sheetIndex = authoring.Clips[clipIndex].SheetIndex;
+                def = data.SheetAt(sheetIndex);
+            }
+            if (def != null && def.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped &&
+                SpriteSheetProfile.HasCroppedCellData(def))
+            {
+                SpriteInstanceRenderSystem.SetGridFromSheet(em, def);
+                return;
+            }
+            SpriteInstanceRenderSystem.SetGrid(em, cols, rows,
+                SpriteSheetProfile.GetCellAspect(tex, cols, rows));
+        }
+
         public void SetAllClips(int clipIndex)
         {
             var authoring = Source != null
@@ -275,8 +320,7 @@ namespace InvertLab.Sprites.DOTS
             authoring.TryGetClipSheet(clipIndex, out var clipTex, out int clipCols, out int clipRows, out _);
             if (clipTex != null)
                 SpriteInstanceRenderSystem.SetSheet(clipTex);
-            SpriteInstanceRenderSystem.SetGrid(em, clipCols, clipRows,
-                SpriteSheetProfile.GetCellAspect(clipTex, clipCols, clipRows));
+            ApplyInstanceGrid(em, authoring, clipIndex);
 
             float scale = SizeUnits * ClipWorldHeight(authoring, clipIndex);
             ApplyCrowdScaleIfChanged(em, scale);

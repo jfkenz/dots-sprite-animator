@@ -94,30 +94,38 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                 float4 cell = _UseSharedClip > 0.5 ? _SharedCell : d.Cell;
                 float4 anim = _UseSharedClip > 0.5 ? _SharedAnim : d.Anim;
                 float2 c = QUAD[vid];
+
+                // Mirror the QUAD around the authored pivot (geometry); UVs stay
+                // attached to their vertices. A single mirror only — also mirroring
+                // UVs would cancel the flip, and UV-mirroring around a non-center
+                // pivot samples outside the cell (neighbor bleed).
+                float2 pivot = d.Flip.zw;
+                if (pivot.x == 0.0 && pivot.y == 0.0)
+                    pivot = float2(0.5, 0.5);
+                float2 posed = c;
+                posed.x = lerp(c.x, 2.0 * (pivot.x - 0.5) - c.x, saturate(d.Flip.x));
+                posed.y = lerp(c.y, 2.0 * (pivot.y - 0.5) - c.y, saturate(d.Flip.y));
+
                 float aspect = _CellAspect > 0.001 ? _CellAspect : 1.0;
 
                 float3 wpos;
                 if (_LayoutXy > 0.5)
                 {
-                    wpos.x = d.PosScale.x + c.x * d.PosScale.z * aspect;
-                    wpos.y = d.PosScale.y + c.y * d.PosScale.z;
+                    wpos.x = d.PosScale.x + posed.x * d.PosScale.z * aspect;
+                    wpos.y = d.PosScale.y + posed.y * d.PosScale.z;
                     wpos.z = d.PosScale.w;
                 }
                 else
                 {
-                    wpos.x = d.PosScale.x + c.x * d.PosScale.z * aspect;
+                    wpos.x = d.PosScale.x + posed.x * d.PosScale.z * aspect;
                     wpos.y = d.PosScale.w;
-                    wpos.z = d.PosScale.y - c.y * d.PosScale.z;
+                    wpos.z = d.PosScale.y - posed.y * d.PosScale.z;
                 }
 
                 float2 origin = FrameUvOrigin(cell, anim);
 
+                // UVs unchanged (still the full cell, always inside it).
                 float2 uv = c + 0.5;
-                float2 pivot = d.Flip.zw;
-                if (pivot.x == 0.0 && pivot.y == 0.0)
-                    pivot = float2(0.5, 0.5);
-                uv.x = lerp(uv.x, 2.0 * pivot.x - uv.x, saturate(d.Flip.x));
-                uv.y = lerp(uv.y, 2.0 * pivot.y - uv.y, saturate(d.Flip.y));
 
                 v2f o;
                 o.pos = TransformObjectToHClip(wpos);
