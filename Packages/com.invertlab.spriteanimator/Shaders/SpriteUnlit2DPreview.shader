@@ -14,7 +14,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Preview"
         _MainTex     ("Sprite Atlas", 2D) = "white" {}
         _Color       ("Tint", Color) = (1, 1, 1, 1)
         _CropST      ("Crop ST (scale.xy, offset.zw)", Vector) = (1, 1, 0, 0)
-        _Flip        ("Flip XY (0/1 each)", Vector) = (0, 0, 0, 0)
+        _Flip        ("Flip XY + Pivot UV", Vector) = (0, 0, 0.5, 0.5)
         _AlphaCutoff ("Alpha Cutoff (0 = off)", Range(0, 1)) = 0
         [HideInInspector] _Cull ("Cull", Float) = 0
     }
@@ -75,10 +75,12 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Preview"
                 // When ApplyQuadPreview UV-bakes the cell, mesh UVs are already the
                 // cell rect and _CropST is (1,1,0,0); flip is also baked into UVs.
                 // Keep crop/flip here as a second line of defense for non-baked paths.
-                float2 uv = IN.uv - 0.5;
-                uv.x = lerp(uv.x, -uv.x, saturate(_Flip.x));
-                uv.y = lerp(uv.y, -uv.y, saturate(_Flip.y));
-                uv += 0.5;
+                float2 pivot = _Flip.zw;
+                if (pivot.x == 0.0 && pivot.y == 0.0)
+                    pivot = float2(0.5, 0.5);
+                float2 uv = IN.uv;
+                uv.x = lerp(uv.x, 2.0 * pivot.x - uv.x, saturate(_Flip.x));
+                uv.y = lerp(uv.y, 2.0 * pivot.y - uv.y, saturate(_Flip.y));
 
                 OUT.uv = uv * _CropST.xy + _CropST.zw;
                 return OUT;

@@ -116,11 +116,24 @@ namespace InvertLab.Sprites.DOTS
         public FixedList128Bytes<float2> Polygon;     // absolute cell UV points for polygons
     }
 
-    /// <summary>Optional per-entity UV flip. Author from SpriteAnimPlayerAuthoring or SpriteAnims.SetFlip.</summary>
+    /// <summary>
+    /// Optional per-entity UV flip. Author from SpriteAnimPlayerAuthoring or SpriteAnims.SetFlip.
+    /// <see cref="Pivot"/> is the normalized cell-UV flip axis (profile/sheet pivot).
+    /// Default (0.5, 0.5) mirrors around cell center — legacy behavior. Move the authored
+    /// pivot onto the character so FlipX/Y mirrors in place without a visual jump.
+    /// </summary>
     public struct SpriteFlip : IComponentData
     {
         public byte X;
         public byte Y;
+        /// <summary>Normalized cell UV flip axis. (0.5,0.5) = cell center.</summary>
+        public float2 Pivot;
+
+        /// <summary>Cell-center pivot when <see cref="Pivot"/> was never authored (0,0).</summary>
+        public float2 ResolvedPivot =>
+            math.all(Pivot == float2.zero) ? new float2(0.5f, 0.5f) : Pivot;
+
+        public static SpriteFlip Identity => new SpriteFlip { Pivot = new float2(0.5f, 0.5f) };
     }
 
     /// <summary>Mirrors sprite-local gameplay geometry with the rendered instance.</summary>
@@ -128,6 +141,7 @@ namespace InvertLab.Sprites.DOTS
     {
         public static float2 LocalPosition(float2 value, in SpriteFlip flip)
         {
+            // Socket / offset positions are pivot-relative, so negate around origin.
             if (flip.X != 0) value.x = -value.x;
             if (flip.Y != 0) value.y = -value.y;
             return value;
@@ -149,14 +163,15 @@ namespace InvertLab.Sprites.DOTS
 
         public static FrameBox Box(FrameBox value, in SpriteFlip flip)
         {
-            if (flip.X != 0) value.Center.x = 1f - value.Center.x;
-            if (flip.Y != 0) value.Center.y = 1f - value.Center.y;
+            float2 pivot = flip.ResolvedPivot;
+            if (flip.X != 0) value.Center.x = 2f * pivot.x - value.Center.x;
+            if (flip.Y != 0) value.Center.y = 2f * pivot.y - value.Center.y;
             value.Angle = Angle(value.Angle, flip);
             for (int i = 0; i < value.Polygon.Length; i++)
             {
                 float2 point = value.Polygon[i];
-                if (flip.X != 0) point.x = 1f - point.x;
-                if (flip.Y != 0) point.y = 1f - point.y;
+                if (flip.X != 0) point.x = 2f * pivot.x - point.x;
+                if (flip.Y != 0) point.y = 2f * pivot.y - point.y;
                 value.Polygon[i] = point;
             }
             return value;

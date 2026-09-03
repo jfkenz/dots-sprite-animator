@@ -502,12 +502,17 @@ namespace InvertLab.Sprites.DOTS
             // crop shader still cannot show the full sheet. Then _CropST = (1,1,0,0).
             // Bottom-center cell pivot (feet at transform): X -0.5..0.5, Y 0..1.
             ApplyBottomCenterCellVertices(previewMesh);
-            BakePreviewCellUVs(previewMesh, cropST, flip.x > 0.5f, flip.y > 0.5f);
+            Vector2 flipPivot = SpriteSheetProfile.DefaultPivot;
+            if (clipSheet != null)
+                flipPivot = SpriteSocketWorld.ResolvePivot(Profile?.Data, clipSheet);
+            else if (Profile?.Data != null)
+                flipPivot = SpriteSocketWorld.ResolvePivot(Profile.Data, null);
+            BakePreviewCellUVs(previewMesh, cropST, flip.x > 0.5f, flip.y > 0.5f, flipPivot);
 
 
 
             var identityCrop = new Vector4(1f, 1f, 0f, 0f);
-            var identityFlip = Vector4.zero;
+            var identityFlip = new Vector4(0f, 0f, 0.5f, 0.5f);
 
 
 
@@ -653,33 +658,35 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Set mesh UVs to the cell rect. Bottom-center preview verts by position:
-        /// BL(x&lt;0,y~0), BR(x&gt;0,y~0), TL(x&lt;0,y~1), TR(x&gt;0,y~1)
-        /// â†’ (z,w), (z+x,w), (z,w+y), (z+x,w+y). Flip swaps cell edges first.
+        /// BL(x&lt;0,y~0), BR(x&gt;0,y~0), TL(x&lt;0,y~1), TR(x&gt;0,y~1).
+        /// Flip reflects cell-local UVs around the authored pivot (default cell center).
         /// </summary>
-        static void BakePreviewCellUVs(Mesh mesh, Vector4 cropST, bool flipX, bool flipY)
+        static void BakePreviewCellUVs(Mesh mesh, Vector4 cropST, bool flipX, bool flipY,
+            Vector2 normalizedPivot)
         {
             var verts = mesh.vertices;
             if (verts == null || verts.Length == 0)
                 return;
 
-
-
-            float u0 = flipX ? cropST.z + cropST.x : cropST.z;
-            float u1 = flipX ? cropST.z : cropST.z + cropST.x;
-            float v0 = flipY ? cropST.w + cropST.y : cropST.w;
-            float v1 = flipY ? cropST.w : cropST.w + cropST.y;
-
-
+            float px = Mathf.Clamp01(normalizedPivot.x);
+            float py = Mathf.Clamp01(normalizedPivot.y);
+            if (normalizedPivot == default)
+            {
+                px = SpriteSheetProfile.DefaultPivot.x;
+                py = SpriteSheetProfile.DefaultPivot.y;
+            }
 
             var uvs = new Vector2[verts.Length];
             for (int i = 0; i < verts.Length; i++)
             {
                 float u01 = verts[i].x >= 0f ? 1f : 0f;
-                // Bottom-center mesh: y in {0,1} (also tolerates legacy Â±0.5).
+                // Bottom-center mesh: y in {0,1} (also tolerates legacy ±0.5).
                 float v01 = verts[i].y >= 0.5f ? 1f : 0f;
+                float uCell = flipX ? (2f * px - u01) : u01;
+                float vCell = flipY ? (2f * py - v01) : v01;
                 uvs[i] = new Vector2(
-                    Mathf.Lerp(u0, u1, u01),
-                    Mathf.Lerp(v0, v1, v01));
+                    cropST.z + uCell * cropST.x,
+                    cropST.w + vCell * cropST.y);
             }
             mesh.uv = uvs;
         }
@@ -776,9 +783,11 @@ namespace InvertLab.Sprites.DOTS
                 return;
             }
             ResolveUnitySyncClip(out string clipName, out int frame, out var player);
+            var displaySheet = SpriteSocketWorld.DisplaySheet(data, clipName);
             SpriteColliderWorld.SyncUnityColliders(
                 transform, data.Hitboxes, clipName, frame, BakeFrameColliders,
-                player != null && player.FlipX, player != null && player.FlipY);
+                player != null && player.FlipX, player != null && player.FlipY,
+                displaySheet, SpriteSocketWorld.ResolvePivot(data, displaySheet));
         }
 
 
@@ -919,8 +928,9 @@ namespace InvertLab.Sprites.DOTS
             var sheet = SpriteSocketWorld.DisplaySheet(data, clipName);
             Vector2 pivot = data.Pivot == default ? SpriteSheetProfile.DefaultPivot : data.Pivot;
             Vector2 meshLocal = SpriteSocketWorld.PixelsFromPivotToMeshLocal(sheet, pivot, Vector2.zero);
-            meshLocal = SpriteSocketWorld.MirrorAroundCellCenter(
+            meshLocal = SpriteSocketWorld.MirrorAroundPivot(
                 meshLocal, sheet,
+                SpriteSocketWorld.ResolvePivot(data, sheet),
                 player != null && player.FlipX,
                 player != null && player.FlipY);
             Vector3 hostScale = transform.localScale;
@@ -1051,8 +1061,9 @@ namespace InvertLab.Sprites.DOTS
             for (int i = 0; i < _socketGizmoScratch.Count; i++)
             {
                 var pose = _socketGizmoScratch[i];
-                Vector2 meshLocal = SpriteSocketWorld.MirrorAroundCellCenter(
-                    pose.Position, displaySheet, flipX, flipY);
+                Vector2 meshLocal = SpriteSocketWorld.MirrorAroundPivot(
+                    pose.Position, displaySheet,
+                    SpriteSocketWorld.ResolvePivot(data, displaySheet), flipX, flipY);
                 var local = new Vector3(meshLocal.x * invSx, meshLocal.y * invSy, 0f);
                 DrawSocketDisc(transform.TransformPoint(local), pose.Name, radius);
             }
@@ -1512,7 +1523,19 @@ namespace InvertLab.Sprites.DOTS
                 AddComponent(entity, new SpriteTint { Value = new float4(
                     authoring.Tint.r, authoring.Tint.g, authoring.Tint.b, authoring.Tint.a) });
                 AddComponent(entity, new SpriteAnimEnabled());
-                AddComponent(entity, new SpriteFlip { X = flipX, Y = flipY });
+                float2 bakePivot = new float2(0.5f, 0.5f);
+                if (profile != null)
+                {
+                    string pivotClipName = null;
+                    if (playerAuthoring != null && authoring.Clips != null &&
+                        playerAuthoring.ClipIndex >= 0 &&
+                        playerAuthoring.ClipIndex < authoring.Clips.Length)
+                        pivotClipName = authoring.Clips[playerAuthoring.ClipIndex].Name;
+                    var pivotSheet = SpriteSocketWorld.DisplaySheet(profile, pivotClipName);
+                    var resolved = SpriteSocketWorld.ResolvePivot(profile, pivotSheet);
+                    bakePivot = new float2(resolved.x, resolved.y);
+                }
+                AddComponent(entity, new SpriteFlip { X = flipX, Y = flipY, Pivot = bakePivot });
                 AddBuffer<SpriteAnimEventBuffer>(entity);
                 AddComponent(entity, new SpriteAnimEventsPending());
                 AddBuffer<SpriteSocketBuffer>(entity);

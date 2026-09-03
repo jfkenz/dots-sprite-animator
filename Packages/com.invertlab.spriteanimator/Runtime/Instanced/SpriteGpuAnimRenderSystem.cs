@@ -112,7 +112,7 @@ namespace InvertLab.Sprites.DOTS
                         : new float4(lt.Position.x, lt.Position.z, lt.Scale, lt.Position.y),
                     Cell = new float4(a.CellW, a.CellH, a.SlotOriginX, a.SlotOriginY),
                     Anim = new float4(a.StartTime, a.Rate, a.N, a.WrapLoop),
-                    Flip = new float4(math.select(0f, 1f, flip.X != 0), math.select(0f, 1f, flip.Y != 0), 0f, 0f),
+                    Flip = new float4(math.select(0f, 1f, flip.X != 0), math.select(0f, 1f, flip.Y != 0), flip.ResolvedPivot.x, flip.ResolvedPivot.y),
                     Color = tint.Value,
                 };
             }

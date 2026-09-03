@@ -10,7 +10,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D"
         _MainTex     ("Sprite Atlas", 2D) = "white" {}
         _Color       ("Tint", Color) = (1, 1, 1, 1)
         _CropST      ("Crop ST (scale.xy, offset.zw)", Vector) = (1, 1, 0, 0)
-        _Flip        ("Flip XY (0/1 each)", Vector) = (0, 0, 0, 0)
+        _Flip        ("Flip XY + Pivot UV", Vector) = (0, 0, 0.5, 0.5)
         _ZOrder      ("Z Order (depth bias)", Float) = 0
         _AlphaCutoff ("Alpha Cutoff (0 = off)", Range(0, 1)) = 0
         [HideInInspector] _Cull ("Cull", Float) = 0
@@ -115,12 +115,14 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D"
                 posCS.z += PFLOAT(_ZOrder) * 0.0005h;
                 OUT.positionCS = posCS;
 
-                // Flip around the quad center, then crop the atlas cell.
-                float2 uv = IN.uv - 0.5h;
+                // Flip around authored pivot (_Flip.zw, default 0.5 = cell center), then crop.
                 float4 flip = PFLOAT4(_Flip);
-                uv.x = lerp(uv.x, -uv.x, saturate(flip.x));
-                uv.y = lerp(uv.y, -uv.y, saturate(flip.y));
-                uv += 0.5h;
+                float2 pivot = flip.zw;
+                if (pivot.x == 0.0h && pivot.y == 0.0h)
+                    pivot = float2(0.5h, 0.5h);
+                float2 uv = IN.uv;
+                uv.x = lerp(uv.x, 2.0h * pivot.x - uv.x, saturate(flip.x));
+                uv.y = lerp(uv.y, 2.0h * pivot.y - uv.y, saturate(flip.y));
 
                 float4 st = PCROP(_CropST);
                 OUT.uv = uv * st.xy + st.zw;

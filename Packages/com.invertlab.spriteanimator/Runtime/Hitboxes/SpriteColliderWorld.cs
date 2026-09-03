@@ -61,7 +61,8 @@ namespace InvertLab.Sprites.DOTS
         static readonly HashSet<string> KeepScratch = new(System.StringComparer.Ordinal);
 
         public static void SyncUnityColliders(Transform host, IList<FrameBoxDef> boxes,
-            string clipName, int frame, bool includeFrameBoxes, bool flipX = false, bool flipY = false)
+            string clipName, int frame, bool includeFrameBoxes, bool flipX = false, bool flipY = false,
+            SpriteSheetDef sheet = null, Vector2 normalizedPivot = default)
         {
             if (host == null)
                 return;
@@ -108,7 +109,20 @@ namespace InvertLab.Sprites.DOTS
                 go.transform.localScale = Vector3.one;
                 root = go.transform;
             }
-            root.localPosition = Vector3.zero;
+            // Negative scale mirrors around root origin. Offset root to 2*pivot so the
+            // flip axis matches UV / socket flip around the authored profile pivot
+            // (default 0.5,0.5 => cell center / mesh x=0, y=0.5).
+            Vector2 pivot = normalizedPivot == default
+                ? SpriteSocketWorld.ResolvePivot(null, sheet)
+                : new Vector2(Mathf.Clamp01(normalizedPivot.x), Mathf.Clamp01(normalizedPivot.y));
+            Vector2 axisWorld = SpriteSocketWorld.PixelsFromPivotToMeshLocal(sheet, pivot, Vector2.zero);
+            Vector3 hostScale = host.localScale;
+            float invSx = 1f / (Mathf.Abs(hostScale.x) > 1e-4f ? hostScale.x : 1f);
+            float invSy = 1f / (Mathf.Abs(hostScale.y) > 1e-4f ? hostScale.y : 1f);
+            root.localPosition = new Vector3(
+                flipX ? 2f * axisWorld.x * invSx : 0f,
+                flipY ? 2f * axisWorld.y * invSy : 0f,
+                0f);
             root.localRotation = Quaternion.identity;
             root.localScale = new Vector3(flipX ? -1f : 1f, flipY ? -1f : 1f, 1f);
 

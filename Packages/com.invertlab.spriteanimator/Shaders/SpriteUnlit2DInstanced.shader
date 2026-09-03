@@ -40,7 +40,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                                // XY: xy=world xy, z=scale, w=depth z
                 float4 CropST;     // xy = cell scale, zw = cell origin (uv, bottom-left)
                 float4 FrameTRS;   // xy = frame scale, z = rotation radians
-                float4 Flip;       // x/y = uv flip flags
+                float4 Flip;       // xy = flip flags, zw = normalized pivot
                 float4 Color;      // rgba tint
             };
 
@@ -93,8 +93,11 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                 }
 
                 float2 uv = quad + 0.5;
-                uv.x = lerp(uv.x, 1.0 - uv.x, saturate(d.Flip.x));
-                uv.y = lerp(uv.y, 1.0 - uv.y, saturate(d.Flip.y));
+                float2 pivot = d.Flip.zw;
+                if (pivot.x == 0.0 && pivot.y == 0.0)
+                    pivot = float2(0.5, 0.5);
+                uv.x = lerp(uv.x, 2.0 * pivot.x - uv.x, saturate(d.Flip.x));
+                uv.y = lerp(uv.y, 2.0 * pivot.y - uv.y, saturate(d.Flip.y));
 
                 v2f o;
                 o.pos = TransformObjectToHClip(wpos); // identity object->world; data already world

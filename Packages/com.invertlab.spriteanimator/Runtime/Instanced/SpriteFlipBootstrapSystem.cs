@@ -20,7 +20,7 @@ namespace InvertLab.Sprites.DOTS
 
             var em = state.EntityManager;
             for (int i = 0; i < entities.Length; i++)
-                em.AddComponentData(entities[i], new SpriteFlip());
+                em.AddComponentData(entities[i], SpriteFlip.Identity);
         }
     }
 }

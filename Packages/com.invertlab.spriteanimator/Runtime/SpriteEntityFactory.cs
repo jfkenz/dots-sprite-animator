@@ -106,6 +106,7 @@ namespace InvertLab.Sprites.DOTS
             {
                 X = (byte)(flipX ? 1 : 0),
                 Y = (byte)(flipY ? 1 : 0),
+                Pivot = new float2(0.5f, 0.5f),
             });
             // NOTE: no event storage by default — SpriteAnimEventBuffer +
             // SpriteAnimEventsPending are opt-in (see SpriteAnimEvents).

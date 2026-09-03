@@ -1268,11 +1268,12 @@ namespace InvertLab.Sprites.DOTS
         {
             var previous = em.HasComponent<SpriteFlip>(e)
                 ? em.GetComponentData<SpriteFlip>(e)
-                : default;
+                : SpriteFlip.Identity;
             var flip = new SpriteFlip
             {
                 X = (byte)(flipX ? 1 : 0),
                 Y = (byte)(flipY ? 1 : 0),
+                Pivot = previous.ResolvedPivot,
             };
             if (em.HasComponent<SpriteFlip>(e))
                 em.SetComponentData(e, flip);

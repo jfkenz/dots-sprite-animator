@@ -67,7 +67,7 @@ namespace InvertLab.Sprites.DOTS
                 root = go.transform;
             }
 
-            // Flip is applied per-pose around the cell center (same as UV flip),
+            // Flip is applied per-pose around profile/sheet pivot (same as UV flip),
             // not via negative root scale (which would mirror FlipY around feet).
             root.localPosition = Vector3.zero;
             root.localRotation = Quaternion.identity;
@@ -95,7 +95,8 @@ namespace InvertLab.Sprites.DOTS
                 }
 
                 Pose pose = kv.Value;
-                Vector2 meshLocal = MirrorAroundCellCenter(pose.Position, displaySheet, flipX, flipY);
+                Vector2 meshLocal = MirrorAroundPivot(pose.Position, displaySheet,
+                    ResolvePivot(data, displaySheet), flipX, flipY);
                 float angle = FlipAngle(pose.Angle, flipX, flipY);
                 Vector2 scale = FlipScale(pose.Scale, flipX, flipY);
                 child.localPosition = new Vector3(meshLocal.x * invSx, meshLocal.y * invSy, 0f);
@@ -123,7 +124,7 @@ namespace InvertLab.Sprites.DOTS
         /// Creates or updates an empty <c>Pivot</c> child at the authored
         /// <see cref="SpriteSheetProfile.Pivot"/> in mesh-local space (same as
         /// <see cref="PixelsFromPivotToMeshLocal"/> with a zero pixel offset).
-        /// When flipped, mirrors around the cell center like preview UVs.
+        /// When flipped, mirrors around the authored pivot like preview UVs.
         /// </summary>
         public static void SyncPivotMarker(Transform host, SpriteSheetProfile data = null,
             string clipName = null, bool flipX = false, bool flipY = false)
@@ -145,8 +146,9 @@ namespace InvertLab.Sprites.DOTS
                 var sheet = DisplaySheet(data, clipName);
                 if (sheet != null)
                 {
-                    meshLocal = PixelsFromPivotToMeshLocal(sheet, ProfilePivot(data), Vector2.zero);
-                    meshLocal = MirrorAroundCellCenter(meshLocal, sheet, flipX, flipY);
+                    Vector2 pivot = ResolvePivot(data, sheet);
+                    meshLocal = PixelsFromPivotToMeshLocal(sheet, pivot, Vector2.zero);
+                    meshLocal = MirrorAroundPivot(meshLocal, sheet, pivot, flipX, flipY);
                 }
             }
 
@@ -171,7 +173,7 @@ namespace InvertLab.Sprites.DOTS
         /// Fills results with mesh-local unit poses (world units from bottom-center)
         /// for independent motions and frame sockets (independent wins on name clash).
         /// Used by Scene gizmos when SpriteSockets children are not present.
-        /// Results are unflipped; callers apply <see cref="MirrorAroundCellCenter"/>.
+        /// Results are unflipped; callers apply <see cref="MirrorAroundPivot"/>.
         /// </summary>
         public static void CollectLocalPoses(SpriteSheetProfile data, string clipName, int frame,
             float independentTimeSeconds, List<LocalPose> results)
@@ -231,26 +233,35 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>
-        /// Mirrors mesh-local world units around the cell center, matching UV FlipX/FlipY
-        /// on the bottom-center preview quad (center at x=0, y = cellHeight/2).
+        /// Mirrors mesh-local world units around the authored sheet/profile pivot,
+        /// matching UV FlipX/FlipY. Default pivot (0.5, 0.5) is cell center
+        /// (x=0, y = cellHeight/2 on the bottom-center preview quad).
         /// </summary>
-        public static Vector2 MirrorAroundCellCenter(
-            Vector2 meshLocalUnits, SpriteSheetDef sheet, bool flipX, bool flipY)
+        public static Vector2 MirrorAroundPivot(
+            Vector2 meshLocalUnits, SpriteSheetDef sheet, Vector2 normalizedPivot,
+            bool flipX, bool flipY)
         {
             if (!flipX && !flipY)
                 return meshLocalUnits;
 
-            float ppu = Mathf.Max(0.01f, SpriteSheetProfile.GetPixelsPerUnit(sheet));
-            float worldH = 1f;
-            if (SpriteSheetProfile.TryGetCellPixels(sheet, out _, out float cellH))
-                worldH = cellH / ppu;
-
+            Vector2 axis = PixelsFromPivotToMeshLocal(sheet, normalizedPivot, Vector2.zero);
             if (flipX)
-                meshLocalUnits.x = -meshLocalUnits.x;
+                meshLocalUnits.x = 2f * axis.x - meshLocalUnits.x;
             if (flipY)
-                meshLocalUnits.y = worldH - meshLocalUnits.y;
+                meshLocalUnits.y = 2f * axis.y - meshLocalUnits.y;
             return meshLocalUnits;
         }
+
+        /// <summary>Legacy name — mirrors around <paramref name="sheet"/> pivot (or cell center).</summary>
+        public static Vector2 MirrorAroundCellCenter(
+            Vector2 meshLocalUnits, SpriteSheetDef sheet, bool flipX, bool flipY)
+            => MirrorAroundPivot(meshLocalUnits, sheet, ResolvePivot(null, sheet), flipX, flipY);
+
+        /// <summary>Legacy overload with explicit profile for pivot resolution.</summary>
+        public static Vector2 MirrorAroundCellCenter(
+            Vector2 meshLocalUnits, SpriteSheetDef sheet, bool flipX, bool flipY,
+            SpriteSheetProfile profile)
+            => MirrorAroundPivot(meshLocalUnits, sheet, ResolvePivot(profile, sheet), flipX, flipY);
 
         public static SpriteSheetDef DisplaySheet(SpriteSheetProfile data, string clipName)
         {
@@ -287,13 +298,19 @@ namespace InvertLab.Sprites.DOTS
         }
 
         static Vector2 ProfilePivot(SpriteSheetProfile data)
+            => ResolvePivot(data, null);
+
+        /// <summary>
+        /// Normalized cell UV pivot used as the FlipX/FlipY axis.
+        /// Prefers sheet.Pivot, then profile.Pivot, then cell center (0.5, 0.5).
+        /// </summary>
+        public static Vector2 ResolvePivot(SpriteSheetProfile data, SpriteSheetDef sheet)
         {
-            if (data == null)
-                return SpriteSheetProfile.DefaultPivot;
-            Vector2 pivot = data.Pivot;
-            if (pivot == default)
-                pivot = SpriteSheetProfile.DefaultPivot;
-            return pivot;
+            if (sheet != null && sheet.Pivot != default)
+                return new Vector2(Mathf.Clamp01(sheet.Pivot.x), Mathf.Clamp01(sheet.Pivot.y));
+            if (data != null && data.Pivot != default)
+                return new Vector2(Mathf.Clamp01(data.Pivot.x), Mathf.Clamp01(data.Pivot.y));
+            return SpriteSheetProfile.DefaultPivot;
         }
 
         static void CollectIndependentPoses(SpriteSheetProfile data, float independentTimeSeconds,

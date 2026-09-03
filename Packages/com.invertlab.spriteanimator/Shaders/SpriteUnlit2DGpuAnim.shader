@@ -40,7 +40,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                                // XY: xy=world xy, z=scale, w=depth z
                 float4 Cell;     // xy = cell size uv, zw = first-cell origin uv
                 float4 Anim;     // x = start time, y = rate fps, z = frames, w = wrap(1/0)
-                float4 Flip;     // x/y = uv flip flags
+                float4 Flip;     // xy = flip flags, zw = normalized pivot
                 float4 Color;    // rgba tint
             };
 
@@ -113,8 +113,11 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                 float2 origin = FrameUvOrigin(cell, anim);
 
                 float2 uv = c + 0.5;
-                uv.x = lerp(uv.x, 1.0 - uv.x, saturate(d.Flip.x));
-                uv.y = lerp(uv.y, 1.0 - uv.y, saturate(d.Flip.y));
+                float2 pivot = d.Flip.zw;
+                if (pivot.x == 0.0 && pivot.y == 0.0)
+                    pivot = float2(0.5, 0.5);
+                uv.x = lerp(uv.x, 2.0 * pivot.x - uv.x, saturate(d.Flip.x));
+                uv.y = lerp(uv.y, 2.0 * pivot.y - uv.y, saturate(d.Flip.y));
 
                 v2f o;
                 o.pos = TransformObjectToHClip(wpos);

@@ -3582,7 +3582,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 bool nextShowPivot = GUILayout.Toggle(_showPivot,
                     new GUIContent("Show Pivot",
-                        "Draw the sheet pivot as a green dot in the preview. Drag it to move."),
+                        "Draw the sheet pivot as a green dot in the preview. Drag it to move. FlipX/FlipY mirror around this pivot so off-center art does not jump."),
                     GUILayout.Width(92f));
                 if (nextShowPivot != _showPivot)
                 {

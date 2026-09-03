@@ -30,7 +30,7 @@ namespace InvertLab.Sprites.DOTS
         public float4 PosScale;  // XZ: xy=world xz, z=scale, w=height y; XY: xy=world xy, z=scale, w=depth z
         public float4 CropST;    // xy = cell size, zw = cell origin (uv bottom-left)
         public float4 FrameTRS;  // xy = frame scale, z = rotation radians, w = reserved
-        public float4 Flip;      // x/y = uv flip flags
+        public float4 Flip;      // xy = flip flags, zw = normalized pivot
         public float4 Color;     // rgba tint
     }
 
@@ -219,7 +219,7 @@ namespace InvertLab.Sprites.DOTS
                                         col * (1f / Cols),
                                         (Rows - 1 - row) * (1f / Rows)),
                     FrameTRS = new float4(frame.Scale.x, frame.Scale.y, math.radians(rotation), 0f),
-                    Flip = new float4(flip.X, flip.Y, 0f, 0f),
+                    Flip = new float4(flip.X, flip.Y, flip.ResolvedPivot.x, flip.ResolvedPivot.y),
                     Color = tint.Value,
                 };
             }
