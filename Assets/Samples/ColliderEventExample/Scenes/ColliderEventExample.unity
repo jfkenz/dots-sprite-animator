@@ -336,6 +336,7 @@ GameObject:
   - component: {fileID: 1291359530}
   - component: {fileID: 1291359529}
   - component: {fileID: 1876501002}
+  - component: {fileID: 1876501003}
   m_Layer: 0
   m_Name: enemy
   m_TagString: Untagged
@@ -363,7 +364,7 @@ MonoBehaviour:
   FlipY: 0
   CrossfadeDuration: 0
   Blend: 0
-  _time: 0.76638114
+  _time: 0.84717405
   _frame: 6
   _queuedClip: -1
   _queuedForce: 0
@@ -979,7 +980,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1291359528}
-  m_Mesh: {fileID: 0}
+  m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!4 &1291359533
 Transform:
   m_ObjectHideFlags: 0
@@ -1013,6 +1014,7 @@ GameObject:
   - component: {fileID: 1524384337}
   - component: {fileID: 1876501001}
   - component: {fileID: 1876501004}
+  - component: {fileID: 1876501005}
   m_Layer: 0
   m_Name: player
   m_TagString: Untagged
@@ -1040,8 +1042,8 @@ MonoBehaviour:
   FlipY: 0
   CrossfadeDuration: 0
   Blend: 0
-  _time: 0.5841184
-  _frame: 4
+  _time: 0.6416393
+  _frame: 5
   _queuedClip: -1
   _queuedForce: 0
   _resumeClip: -1
@@ -2055,7 +2057,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1524384336}
-  m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 0}
 --- !u!4 &1524384341
 Transform:
   m_ObjectHideFlags: 0
@@ -2065,7 +2067,7 @@ Transform:
   m_GameObject: {fileID: 1524384336}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.051, y: -1.518, z: 0}
+  m_LocalPosition: {x: 1.039, y: -1.518, z: 0}
   m_LocalScale: {x: 1.38, y: 0.88, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2307,6 +2309,21 @@ MonoBehaviour:
   HurtClipIndex: 2
   DeathEventId: 0
   DeathEventName: Death
+--- !u!114 &1876501003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1291359528}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c1f0e2a3b9d4c7e8f5a1b2c3d4e5f60, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.SpriteSortAuthoring
+  SortLayer: 0
+  OrderInLayer: 0
+  ZOffset: 0
 --- !u!114 &1876501004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2322,6 +2339,21 @@ MonoBehaviour:
   BakeUnityColliders: 1
   BakeFrameColliders: 1
   BakeUnitySockets: 1
+--- !u!114 &1876501005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1524384336}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c1f0e2a3b9d4c7e8f5a1b2c3d4e5f60, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.SpriteSortAuthoring
+  SortLayer: 0
+  OrderInLayer: 0
+  ZOffset: 0
 --- !u!1 &1941741495
 GameObject:
   m_ObjectHideFlags: 0

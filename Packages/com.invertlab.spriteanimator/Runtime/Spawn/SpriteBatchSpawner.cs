@@ -21,8 +21,13 @@ namespace InvertLab.Sprites.DOTS
     /// </summary>
     public static class SpriteBatchSpawner
     {
-        /// <summary>True = grid/scatter on XY (2D camera). False = XZ (soldier top-down).</summary>
-        public static bool LayoutXy;
+        /// <summary>
+        /// True (default) = flat quads on XY facing a 2D camera; depth = world z
+        /// (what SpriteSortDepth writes). False = XZ billboard mode (soldier
+        /// top-down); depth rides on gameplay-owned y and sort authoring is
+        /// ignored. Set from bootstrap code when needed.
+        /// </summary>
+        public static bool LayoutXy = true;
 
         /// <summary>Point the spawner at a prototype entity (call once).</summary>
         public static void SetPrototype(EntityManager em, Entity proto)

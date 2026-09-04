@@ -11,11 +11,14 @@ namespace InvertLab.Sprites.DOTS
     /// edit mode and Play mode, matching <see cref="SpriteAnims.Play"/>.
     /// </summary>
     [ExecuteAlways]
-    [AddComponentMenu("DOTS Sprite Animator/Sprite Anim Player")]
+    [AddComponentMenu("DOTS Sprite Animator/SpriteAnimPlayerAuthoring")]
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(SpriteAnimSetAuthoring))]
     public class SpriteAnimPlayerAuthoring : MonoBehaviour
     {
+#if UNITY_EDITOR
+        void Reset() => SpriteAuthoringBundle.Ensure(gameObject);
+#endif
+
         [Tooltip("Play this clip when the component enables.")]
         public bool PlayOnEnable = true;
 
@@ -855,5 +858,35 @@ namespace InvertLab.Sprites.DOTS
             return SpriteAnimWrap.Once;
         }
     }
-}
 
+#if UNITY_EDITOR
+    static class SpriteAuthoringBundle
+    {
+        static bool _adding;
+
+        public static void Ensure(GameObject gameObject)
+        {
+            if (_adding || gameObject == null || Application.isPlaying)
+                return;
+
+            _adding = true;
+            try
+            {
+                AddIfMissing<SpriteAnimSetAuthoring>(gameObject);
+                AddIfMissing<SpriteAnimPlayerAuthoring>(gameObject);
+                AddIfMissing<SpriteSortAuthoring>(gameObject);
+            }
+            finally
+            {
+                _adding = false;
+            }
+        }
+
+        static void AddIfMissing<T>(GameObject gameObject) where T : Component
+        {
+            if (gameObject.GetComponent<T>() == null)
+                Undo.AddComponent<T>(gameObject);
+        }
+    }
+#endif
+}

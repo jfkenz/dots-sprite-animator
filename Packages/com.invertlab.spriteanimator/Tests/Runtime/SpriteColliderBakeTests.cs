@@ -358,5 +358,43 @@ namespace InvertLab.Sprites.DOTS.Tests
                 Object.DestroyImmediate(host);
             }
         }
+
+        [Test]
+        public void SpriteSortDepthUsesCompactStableSteps()
+        {
+            Assert.AreEqual(-1f, SpriteSortDepth.FromLayerOrder(1, 0, 0f), 0.000001f);
+            Assert.AreEqual(-0.00001f, SpriteSortDepth.FromLayerOrder(0, 1, 0f), 0.000001f);
+            // all inputs share one direction: higher = on top = smaller world z
+            Assert.AreEqual(-0.25f, SpriteSortDepth.FromLayerOrder(0, 0, 0.25f), 0.000001f);
+        }
+
+        [Test]
+        public void SpriteSortWarnsBeforeOrderOverlapsAnotherLayer()
+        {
+            Assert.IsTrue(SpriteSortDepth.StaysInsideLayer(10000, 0f));
+            Assert.IsFalse(SpriteSortDepth.StaysInsideLayer(50000, 0f));
+        }
+
+        [TestCase(typeof(SpriteAnimSetAuthoring))]
+        [TestCase(typeof(SpriteAnimPlayerAuthoring))]
+        [TestCase(typeof(SpriteSortAuthoring))]
+        public void AddingAnySpriteAuthoringAddsBundleWithoutRemovalLock(System.Type firstType)
+        {
+            var host = new GameObject("SpriteAuthoringBundleTest");
+            try
+            {
+                host.AddComponent(firstType);
+                Assert.NotNull(host.GetComponent<SpriteAnimSetAuthoring>());
+                Assert.NotNull(host.GetComponent<SpriteAnimPlayerAuthoring>());
+                Assert.NotNull(host.GetComponent<SpriteSortAuthoring>());
+
+                Object.DestroyImmediate(host.GetComponent<SpriteSortAuthoring>());
+                Assert.Null(host.GetComponent<SpriteSortAuthoring>());
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
     }
 }

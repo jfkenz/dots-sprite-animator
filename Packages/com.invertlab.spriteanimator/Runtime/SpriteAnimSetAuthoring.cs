@@ -31,6 +31,10 @@ namespace InvertLab.Sprites.DOTS
     [DisallowMultipleComponent]
     public class SpriteAnimSetAuthoring : MonoBehaviour
     {
+#if UNITY_EDITOR
+        void Reset() => SpriteAuthoringBundle.Ensure(gameObject);
+#endif
+
         [Tooltip("Optional profile authored in Window > DOTS Sprite Animator. When set, it overrides Sheet, grid, and Clips below.")]
         public ScriptableSpriteSheetProfile Profile;
 

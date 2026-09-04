@@ -24,7 +24,9 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
         {
             Name "Unlit"
             Cull Off
-            ZWrite Off
+            // ZWrite On: PosScale.w (world z in XY layout) becomes the real
+            // per-instance depth, so SpriteSortDepth controls compositing.
+            ZWrite On
             Blend SrcAlpha OneMinusSrcAlpha
 
             HLSLPROGRAM

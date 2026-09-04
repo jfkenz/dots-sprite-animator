@@ -208,7 +208,7 @@ namespace InvertLab.Sprites.DOTS
             SpriteRenderResources.Material.SetBuffer("_InstanceData", res);
 
             var bounds = layoutXy != 0
-                ? new Bounds(Vector3.zero, new Vector3(4000f, 4000f, 200f))
+                ? new Bounds(Vector3.zero, new Vector3(4000f, 4000f, 4000f))
                 : new Bounds(Vector3.zero, new Vector3(4000f, 200f, 4000f));
             Graphics.DrawMeshInstancedProcedural(
                 SpriteRenderResources.Quad, 0, SpriteRenderResources.Material, bounds, count,
