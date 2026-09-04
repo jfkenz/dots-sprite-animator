@@ -420,6 +420,19 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void SpriteTintTweenEvaluateShapes()
+        {
+            Assert.AreEqual(0f, SpriteTintFx.Evaluate(0f, 1f, 0), 0.0001f);
+            Assert.AreEqual(1f, SpriteTintFx.Evaluate(1f, 1f, 0), 0.0001f);
+            Assert.AreEqual(1f, SpriteTintFx.Evaluate(2f, 1f, 0), 0.0001f, "clamps past end");
+            // pingpong folds 0..1..0
+            Assert.AreEqual(0.5f, SpriteTintFx.Evaluate(0.25f, 1f, 2), 0.0001f);
+            Assert.AreEqual(0.5f, SpriteTintFx.Evaluate(0.75f, 1f, 2), 0.0001f);
+            // zero duration snaps to the end
+            Assert.AreEqual(1f, SpriteTintFx.Evaluate(0f, 0f, 0), 0.0001f);
+        }
+
+        [Test]
         public void SpriteSheetRegistryDedupesByTexture()
         {
             if (Shader.Find(SpriteShaderLibrary.InstancedShader) == null)

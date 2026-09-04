@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -7,6 +9,20 @@ namespace InvertLab.Sprites.DOTS.Editor
     [CanEditMultipleObjects]
     public sealed class SpriteSortAuthoringEditor : UnityEditor.Editor
     {
+        static SpriteSortLayerList _layerListCache;
+
+        static SpriteSortLayerList FindLayerList()
+        {
+            if (_layerListCache != null)
+                return _layerListCache;
+            string[] guids = AssetDatabase.FindAssets("t:SpriteSortLayerList");
+            if (guids == null || guids.Length == 0)
+                return null;
+            _layerListCache = AssetDatabase.LoadAssetAtPath<SpriteSortLayerList>(
+                AssetDatabase.GUIDToAssetPath(guids[0]));
+            return _layerListCache;
+        }
+
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -47,7 +63,47 @@ namespace InvertLab.Sprites.DOTS.Editor
                     EditorStyles.miniLabel);
             }
 
-            bool changed = DrawDefaultInspector();
+            bool changed = false;
+
+            // Sort Layer: named dropdown driven by the project's
+            // SpriteSortLayerList asset (falls back to a raw int + create
+            // button when none exists)
+            var sortLayerProp = serializedObject.FindProperty("SortLayer");
+            var layerList = FindLayerList();
+            if (layerList != null && layerList.Layers.Count > 0)
+            {
+                var options = new string[layerList.Layers.Count + 1];
+                var values = new int[layerList.Layers.Count];
+                for (int i = 0; i < layerList.Layers.Count; i++)
+                {
+                    var entry = layerList.Layers[i];
+                    options[i] = $"{entry.Name}  ({entry.Index})";
+                    values[i] = entry.Index;
+                }
+                int current = sortLayerProp.intValue;
+                int selected = Array.IndexOf(values, current);
+                options[options.Length - 1] = $"Custom  ({current})";
+                EditorGUI.BeginChangeCheck();
+                int choice = EditorGUILayout.Popup("Sort Layer",
+                    selected >= 0 ? selected : options.Length - 1, options);
+                if (EditorGUI.EndChangeCheck() && choice < values.Length)
+                    sortLayerProp.intValue = values[choice];
+                changed = true; // popup draws applied state below
+            }
+            else
+            {
+                changed = EditorGUILayout.PropertyField(sortLayerProp);
+                if (GUILayout.Button(new GUIContent(
+                        "Create Sort Layers Asset",
+                        "Create the project's named sorting layers (Assets/SpriteSortLayers.asset).")))
+                {
+                    var asset = CreateInstance<SpriteSortLayerList>();
+                    AssetDatabase.CreateAsset(asset, "Assets/" +
+                        SpriteSortLayerList.DefaultAssetName + ".asset");
+                    Selection.activeObject = asset;
+                }
+            }
+
             changed |= serializedObject.ApplyModifiedProperties();
             if (changed)
             {
@@ -64,7 +120,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             var camera = Camera.main;
             if (camera == null)
-                camera = Object.FindAnyObjectByType<Camera>();
+                camera = UnityEngine.Object.FindAnyObjectByType<Camera>();
             var status = SpriteSortAuthoring.CheckDepth(sort.BakedDepth, camera, out var message);
             if (status == SpriteSortAuthoring.DepthStatus.Invisible)
                 EditorGUILayout.HelpBox(message, MessageType.Error);
