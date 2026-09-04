@@ -1634,50 +1634,81 @@ namespace InvertLab.Sprites.DOTS
                 }
                 AddComponent(entity, new SpriteFlip { X = flipX, Y = flipY, Pivot = bakePivot });
 
-                // ---- per-sheet batching: emit a sheet definition entity and
-                // bind the sprite to it, so multiple sets with different
-                // atlases render as separate per-sheet draw batches ----
+                // ---- per-sheet batching: one sheet-definition entity per
+                // distinct clip sheet, so multi-atlas profiles render each
+                // clip from its own texture. The sprite binds to its initial
+                // clip's sheet; SpriteClipSheetSystem swaps the binding when
+                // the clip changes. ----
                 {
-                    int bCols = Mathf.Max(1, useProfile
-                        ? (bakeSheetDef != null ? bakeSheetDef.Columns : authoring.Columns)
-                        : authoring.Columns);
-                    int bRows = Mathf.Max(1, useProfile
-                        ? (bakeSheetDef != null ? bakeSheetDef.Rows : authoring.Rows)
-                        : authoring.Rows);
-                    float bAspect = SpriteSheetProfile.GetCellAspect(sheet, bCols, bRows);
-                    float4[] bCrops = null;
-                    byte bUseCrops = 0;
-                    if (useProfile && bakeSheetDef != null &&
-                        bakeSheetDef.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped &&
-                        SpriteSheetProfile.HasCroppedCellData(bakeSheetDef))
+                    var sheetEntityByIndex = new Dictionary<int, Entity>();
+                    var clipSheetEntities = new Entity[clipCount];
+                    for (int i = 0; i < clipCount; i++)
                     {
-                        var cropVecs = SpriteSheetProfile.BuildCellCropSTArray(bakeSheetDef);
-                        if (cropVecs != null && cropVecs.Length == bCols * bRows)
+                        int sheetIdx = 0;
+                        SpriteSheetDef clipDef = null;
+                        if (useProfile)
                         {
-                            bCrops = new float4[cropVecs.Length];
-                            for (int c = 0; c < cropVecs.Length; c++)
-                                bCrops[c] = new float4(cropVecs[c].x, cropVecs[c].y,
-                                                       cropVecs[c].z, cropVecs[c].w);
-                            bUseCrops = 1;
+                            var profileClip = profile.Clips[i];
+                            profileClip.EnsureFrameData();
+                            sheetIdx = Mathf.Clamp(profileClip.SheetIndex, 0,
+                                Mathf.Max(0, profile.Sheets.Count - 1));
+                            clipDef = profile.SheetAt(sheetIdx);
                         }
+
+                        if (!sheetEntityByIndex.TryGetValue(sheetIdx, out var sheetEntity))
+                        {
+                            Texture2D sTex = clipDef != null && clipDef.Texture != null
+                                ? clipDef.Texture : sheet;
+                            int sCols = Mathf.Max(1, useProfile && clipDef != null
+                                ? clipDef.Columns : authoring.Columns);
+                            int sRows = Mathf.Max(1, useProfile && clipDef != null
+                                ? clipDef.Rows : authoring.Rows);
+                            float sAspect = SpriteSheetProfile.GetCellAspect(sTex, sCols, sRows);
+                            float4[] sCrops = null;
+                            byte sUseCrops = 0;
+                            if (useProfile && clipDef != null &&
+                                clipDef.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped &&
+                                SpriteSheetProfile.HasCroppedCellData(clipDef))
+                            {
+                                var cropVecs = SpriteSheetProfile.BuildCellCropSTArray(clipDef);
+                                if (cropVecs != null && cropVecs.Length == sCols * sRows)
+                                {
+                                    sCrops = new float4[cropVecs.Length];
+                                    for (int c = 0; c < cropVecs.Length; c++)
+                                        sCrops[c] = new float4(cropVecs[c].x, cropVecs[c].y,
+                                                               cropVecs[c].z, cropVecs[c].w);
+                                    sUseCrops = 1;
+                                }
+                            }
+
+                            sheetEntity = CreateAdditionalEntity(TransformUsageFlags.None);
+                            AddComponent(sheetEntity, new SpriteSheetDefinition
+                            {
+                                Cols = sCols,
+                                Rows = sRows,
+                                CellAspect = sAspect > 0.01f ? sAspect : 1f,
+                                UseCellCrops = sUseCrops,
+                            });
+                            AddComponentObject(sheetEntity, new SpriteSheetAsset { Texture = sTex });
+                            DependsOn(sTex);
+                            if (sUseCrops != 0)
+                            {
+                                var cropBuffer = AddBuffer<SpriteAnimCellCrop>(sheetEntity);
+                                foreach (var crop in sCrops)
+                                    cropBuffer.Add(new SpriteAnimCellCrop { Value = crop });
+                            }
+                            sheetEntityByIndex[sheetIdx] = sheetEntity;
+                        }
+
+                        clipSheetEntities[i] = sheetEntity;
                     }
 
-                    var sheetEntity = CreateAdditionalEntity(TransformUsageFlags.None);
-                    AddComponent(sheetEntity, new SpriteSheetDefinition
-                    {
-                        Cols = bCols,
-                        Rows = bRows,
-                        CellAspect = bAspect > 0.01f ? bAspect : 1f,
-                        UseCellCrops = bUseCrops,
-                    });
-                    AddComponentObject(sheetEntity, new SpriteSheetAsset { Texture = sheet });
-                    if (bUseCrops != 0)
-                    {
-                        var cropBuffer = AddBuffer<SpriteAnimCellCrop>(sheetEntity);
-                        foreach (var crop in bCrops)
-                            cropBuffer.Add(new SpriteAnimCellCrop { Value = crop });
-                    }
-                    AddComponent(entity, new SpriteSheetBinding { Sheet = sheetEntity });
+                    var initialSheet = clipSheetEntities[
+                        Mathf.Clamp(initialClip, 0, clipCount - 1)];
+                    AddComponent(entity, new SpriteSheetBinding { Sheet = initialSheet });
+                    var clipSheets = AddBuffer<SpriteClipSheetBindingEntry>(entity);
+                    foreach (var clipSheet in clipSheetEntities)
+                        clipSheets.Add(new SpriteClipSheetBindingEntry { Sheet = clipSheet });
                 }
 
                 AddBuffer<SpriteAnimEventBuffer>(entity);

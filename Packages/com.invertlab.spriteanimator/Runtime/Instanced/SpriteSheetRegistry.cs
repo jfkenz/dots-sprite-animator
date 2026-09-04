@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -28,6 +29,14 @@ namespace InvertLab.Sprites.DOTS
     /// missing component) = legacy default sheet (SpriteRenderResources.Sheet).
     /// </summary>
     public struct SpriteSheetBinding : IComponentData
+    {
+        public Entity Sheet;
+    }
+
+    /// <summary>Per-clip sheet entity (index = clip index). Written by the
+    /// set baker; <see cref="SpriteClipSheetSystem"/> mirrors the active
+    /// clip's entry into <see cref="SpriteSheetBinding"/> on clip change.</summary>
+    public struct SpriteClipSheetBindingEntry : IBufferElementData
     {
         public Entity Sheet;
     }
@@ -115,7 +124,7 @@ namespace InvertLab.Sprites.DOTS
             if (ByTextureId.TryGetValue(key, out int existing))
                 return existing;
 
-            var shader = Shader.Find(SpriteShaderLibrary.InstancedShader);
+            var shader = Shader.Find(SpriteShaderLibrary.ActiveInstancedShader);
             if (shader == null)
                 return -1;
 
@@ -146,6 +155,50 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>Test hook: drop every record without waiting for domain reload.</summary>
         public static void ClearForTests() => Reset();
+
+        /// <summary>
+        /// Drop every record's material (shader toggle) — recreated on the
+        /// next draw with the currently active shader.
+        /// </summary>
+        public static void ResetMaterials()
+        {
+            foreach (var record in Records)
+            {
+                if (record.Material != null)
+                    Object.Destroy(record.Material);
+                record.Material = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Swaps a sprite's sheet binding when its current clip is authored on a
+    /// different sheet (multi-atlas profiles). Cheap per-frame compare; only
+    /// writes on actual clip-driven changes. Entities without the per-clip
+    /// buffer (static sprites, single-sheet sets) never match the query.
+    /// </summary>
+    [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [BurstCompile]
+    public partial struct SpriteClipSheetSystem : ISystem
+    {
+        [BurstCompile]
+        public void OnUpdate(ref SystemState state)
+        {
+            foreach (var (binding, buffer, player) in
+                     SystemAPI.Query<RefRW<SpriteSheetBinding>,
+                                     DynamicBuffer<SpriteClipSheetBindingEntry>,
+                                     RefRO<SpriteAnimPlayer>>())
+            {
+                if (buffer.Length == 0)
+                    continue;
+                int clip = player.ValueRO.ClipIndex;
+                if ((uint)clip >= (uint)buffer.Length)
+                    continue;
+                var target = buffer[clip].Sheet;
+                if (binding.ValueRO.Sheet != target)
+                    binding.ValueRW.Sheet = target;
+            }
+        }
     }
 
     /// <summary>

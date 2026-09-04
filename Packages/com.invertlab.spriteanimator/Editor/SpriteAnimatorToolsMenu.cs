@@ -9,6 +9,35 @@ namespace InvertLab.Sprites.DOTS.Editor
         const string QuickStartPath = "Packages/com.invertlab.spriteanimator/Documentation~/QuickStart.md";
         const string ReadmePath = "Packages/com.invertlab.spriteanimator/README.md";
 
+        internal const string UseLitPrefsKey = "InvertLab.SpriteAnimator.UseLit";
+
+        [MenuItem("Tools/DOTS Sprite Animator/Use 2D Lit Sprites", priority = 19)]
+        static void ToggleUseLit()
+        {
+            SpriteShaderLibrary.UseLit = !SpriteShaderLibrary.UseLit;
+            EditorPrefs.SetBool(UseLitPrefsKey, SpriteShaderLibrary.UseLit);
+
+            // drop every cached material so the next draw recreates them
+            // with the lit (or unlit) shader
+            SpriteRenderResources.Material = null;
+            SpriteSheetRegistry.ResetMaterials();
+            SpriteGpuAnimResources.Material = null;
+            SpriteGpuAnimResources.MarkDirty();
+        }
+
+        [MenuItem("Tools/DOTS Sprite Animator/Use 2D Lit Sprites", validate = true, priority = 19)]
+        static bool ValidateUseLit()
+        {
+            Menu.SetChecked("Tools/DOTS Sprite Animator/Use 2D Lit Sprites",
+                SpriteShaderLibrary.UseLit);
+            return true;
+        }
+
+        [InitializeOnLoadMethod]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void RestoreUseLitPref()
+            => SpriteShaderLibrary.UseLit = EditorPrefs.GetBool(UseLitPrefsKey);
+
         [MenuItem("Tools/DOTS Sprite Animator/Validate Installation")]
         public static void ValidateInstallation()
         {

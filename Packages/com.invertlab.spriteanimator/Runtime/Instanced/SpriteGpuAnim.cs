@@ -118,7 +118,7 @@ namespace InvertLab.Sprites.DOTS
 
         public static void EnsureObjects(Texture2D sheet)
         {
-            Material ??= new Material(Shader.Find(SpriteShaderLibrary.GpuAnimShader));
+            Material ??= new Material(Shader.Find(SpriteShaderLibrary.ActiveGpuAnimShader));
             Material.mainTexture = sheet;
             // same as CPU path: high cutoff makes distant/tiny sprites vanish
             Material.SetFloat("_Cutoff", 0.02f);
