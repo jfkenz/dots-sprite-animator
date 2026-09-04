@@ -1268,8 +1268,22 @@ namespace InvertLab.Sprites.DOTS
         Cropped = 1,
     }
 
-    /// <summary>One texture + grid inside a profile that can hold several sheets.</summary>
+    /// <summary>One cell's pivot override, normalized inside the cell.</summary>
     [Serializable]
+    public struct SpriteCellPivot
+    {
+        public int CellIndex;
+        public float X;
+        public float Y;
+
+        public SpriteCellPivot(int cellIndex, float x, float y)
+        {
+            CellIndex = cellIndex;
+            X = x;
+            Y = y;
+        }
+    }
+
     public class SpriteSheetDef
     {
         public string Name = "Sheet";
@@ -1286,6 +1300,10 @@ namespace InvertLab.Sprites.DOTS
         /// Cropped can restore without re-detect. Ignored while mode is Grid.
         /// </summary>
         public RectInt[] CroppedCellRects;
+
+        /// <summary>Per-cell pivot overrides (normalized 0-1 inside the cell). Sparse:
+        /// cells without an entry use the sheet <see cref="Pivot"/>.</summary>
+        public List<SpriteCellPivot> CellPivots;
     }
 
     /// <summary>
@@ -1314,6 +1332,9 @@ namespace InvertLab.Sprites.DOTS
         public SpriteSheetCellLayoutMode CellLayoutMode = SpriteSheetCellLayoutMode.Grid;
         /// <summary>Mirrored from the active sheet; see <see cref="SpriteSheetDef.CroppedCellRects"/>.</summary>
         public RectInt[] CroppedCellRects;
+
+        /// <summary>Mirrored from the active sheet; see <see cref="SpriteSheetDef.CellPivots"/>.</summary>
+        public List<SpriteCellPivot> CellPivots;
         public List<SpriteSheetDef> Sheets = new();
         public List<SpriteClipDef> Clips = new();
         public List<SpriteEventDef> Events = new();
@@ -1630,6 +1651,7 @@ namespace InvertLab.Sprites.DOTS
                     Pivot = Pivot == default ? DefaultPivot : Pivot,
                     CellLayoutMode = CellLayoutMode,
                     CroppedCellRects = CroppedCellRects,
+                    CellPivots = CellPivots,
                 });
             }
             else if (Sheet != null && Sheets[0] != null && Sheets[0].Texture == null)
@@ -1650,6 +1672,9 @@ namespace InvertLab.Sprites.DOTS
                 if ((first.CroppedCellRects == null || first.CroppedCellRects.Length == 0) &&
                     CroppedCellRects != null && CroppedCellRects.Length > 0)
                     first.CroppedCellRects = CroppedCellRects;
+                if ((first.CellPivots == null || first.CellPivots.Count == 0) &&
+                    CellPivots != null && CellPivots.Count > 0)
+                    first.CellPivots = CellPivots;
                 if (string.IsNullOrEmpty(first.Name) || first.Name == "Sheet")
                     first.Name = !string.IsNullOrEmpty(Sheet.name) ? Sheet.name : "Sheet";
             }
@@ -1736,6 +1761,7 @@ namespace InvertLab.Sprites.DOTS
             Pivot = sheet.Pivot;
             CellLayoutMode = sheet.CellLayoutMode;
             CroppedCellRects = sheet.CroppedCellRects;
+            CellPivots = sheet.CellPivots;
         }
 
         public void WriteLegacyIntoSheet(int index)
@@ -1751,8 +1777,59 @@ namespace InvertLab.Sprites.DOTS
             sheet.Pivot = Pivot;
             sheet.CellLayoutMode = CellLayoutMode;
             sheet.CroppedCellRects = CroppedCellRects;
+            sheet.CellPivots = CellPivots;
         }
 
+
+        /// <summary>Per-cell pivot override lookup (sparse list on the sheet).</summary>
+        public static bool TryGetCellPivot(SpriteSheetDef sheet, int cellIndex, out Vector2 pivot)
+        {
+            pivot = default;
+            if (sheet?.CellPivots == null || cellIndex < 0)
+                return false;
+            for (int i = 0; i < sheet.CellPivots.Count; i++)
+            {
+                if (sheet.CellPivots[i].CellIndex != cellIndex)
+                    continue;
+                pivot = new Vector2(sheet.CellPivots[i].X, sheet.CellPivots[i].Y);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Insert or update a per-cell pivot override on the sheet.</summary>
+        public static void SetCellPivot(SpriteSheetDef sheet, int cellIndex, Vector2 pivot)
+        {
+            if (sheet == null || cellIndex < 0)
+                return;
+            sheet.CellPivots ??= new List<SpriteCellPivot>();
+            for (int i = 0; i < sheet.CellPivots.Count; i++)
+            {
+                if (sheet.CellPivots[i].CellIndex == cellIndex)
+                {
+                    sheet.CellPivots[i] = new SpriteCellPivot(cellIndex,
+                        Mathf.Clamp01(pivot.x), Mathf.Clamp01(pivot.y));
+                    return;
+                }
+            }
+            sheet.CellPivots.Add(new SpriteCellPivot(cellIndex,
+                Mathf.Clamp01(pivot.x), Mathf.Clamp01(pivot.y)));
+        }
+
+        /// <summary>Remove a per-cell pivot override (falls back to the sheet pivot).</summary>
+        public static void ClearCellPivot(SpriteSheetDef sheet, int cellIndex)
+        {
+            if (sheet?.CellPivots == null)
+                return;
+            for (int i = 0; i < sheet.CellPivots.Count; i++)
+            {
+                if (sheet.CellPivots[i].CellIndex == cellIndex)
+                {
+                    sheet.CellPivots.RemoveAt(i);
+                    return;
+                }
+            }
+        }
         
         public const byte CroppedAlphaThreshold = 8;
 

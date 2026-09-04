@@ -8,7 +8,7 @@ using InvertLab.Sprites.DOTS;
 namespace InvertLab.Sprites.DOTS.Editor
 {
     /// <summary>Unified authoring studio for sheets, clips, events, timing, and hitboxes.</summary>
-    public sealed class SpriteSheetToolWindow : EditorWindow
+    public sealed class SpriteSheetToolWindow : EditorWindow, ISpriteSheetSliceHost
     {
         enum TimelineDragMode
         {
@@ -18749,6 +18749,117 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _mutedStyle);
         }
 
+        internal Texture2D SliceTargetTexture => _profile?.Sheet;
+
+        internal ScriptableSpriteSheetProfile SliceProfileAsset => ProfileAsset;
+
+        internal int SliceActiveSheetIndex => _selectedSheet;
+
+        internal void SliceStepSheet(int delta)
+        {
+            if (_profile?.Sheets == null || _profile.Sheets.Count == 0)
+                return;
+            _selectedSheet = Mathf.Clamp(_selectedSheet + delta, 0, _profile.Sheets.Count - 1);
+            _profile.SyncLegacyFromSheet(_selectedSheet);
+            RematchSheetsWorldSize(_selectedSheet);
+            Repaint();
+        }
+
+        internal void SliceNotifyProfileEdited()
+        {
+            EditorUtility.SetDirty(ProfileAsset);
+            Repaint();
+        }
+
+        internal void SliceReloadLegacyFromActiveSheet()
+        {
+            _profile.SyncLegacyFromSheet(_selectedSheet);
+            Repaint();
+        }
+
+        /// <summary>Derived cell size for pixel-unit pivots (Automatic: none yet).</summary>
+        internal bool TryGetSliceCellMetrics(SpriteSheetSliceRequest request,
+            out int texW, out int texH, out int cellW, out int cellH)
+        {
+            var tex = _profile?.Sheet;
+            if (tex == null)
+            {
+                texW = texH = cellW = cellH = 0;
+                return false;
+            }
+            texW = tex.width;
+            texH = tex.height;
+            if (request.Type == SpriteSheetSliceType.GridByCellSize)
+            {
+                cellW = request.CellSize.x;
+                cellH = request.CellSize.y;
+                return true;
+            }
+            cellW = Mathf.Max(1, (texW - request.Offset.x -
+                                  request.Padding.x * (request.Columns - 1)) / request.Columns);
+            cellH = Mathf.Max(1, (texH - request.Offset.y -
+                                  request.Padding.y * (request.Rows - 1)) / request.Rows);
+            return true;
+        }
+
+        /// <summary>
+        /// Unity Sprite Editor-style slice: computes cell rects for the
+        /// requested mode and writes grid + CroppedCellRects + pivot into the
+        /// active sheet (Cropped layout, like Detect spacing & crop cells).
+        /// </summary>
+        internal void RunSheetSlice(SpriteSheetSliceRequest request)
+        {
+            if (_profile?.Sheet == null)
+            {
+                _status = "Assign a sheet texture before slicing";
+                return;
+            }
+
+            Texture2D owned = null;
+            try
+            {
+                var pixels = SpriteSheetSlicing.GetPixels32(_profile.Sheet, out owned);
+                int texW = _profile.Sheet.width;
+                int texH = _profile.Sheet.height;
+
+                var (rects, cols, rows, empty) =
+                    SpriteSheetSlicing.SliceGrid(pixels, texW, texH, request);
+
+                RecordProfileUndo("Slice Sheet");
+                _profile.Columns = cols;
+                _profile.Rows = rows;
+                _profile.CroppedCellRects = rects; // dormant in Grid layout
+                _profile.CellLayoutMode = SpriteSheetCellLayoutMode.Grid;
+                _profile.Pivot = new Vector2(
+                    Mathf.Clamp01(request.PivotNormalized.x),
+                    Mathf.Clamp01(request.PivotNormalized.y));
+                WriteActiveSheetFromLegacy();
+                RematchSheetsWorldSize(_selectedSheet);
+
+                string typeLabel = request.Type == SpriteSheetSliceType.GridByCellSize
+                    ? request.CellSize.x + "x" + request.CellSize.y + "px"
+                    : cols + "x" + rows;
+                _status = empty > 0
+                    ? "Sliced (" + typeLabel + "): " + rects.Length + " cells, " + empty + " empty"
+                    : "Sliced (" + typeLabel + "): " + rects.Length + " cells, layout Grid";
+                Repaint();
+            }
+            finally
+            {
+                if (owned != null)
+                    DestroyImmediate(owned);
+            }
+        }
+
+        Texture2D ISpriteSheetSliceHost.SliceTargetTexture => SliceTargetTexture;
+
+        bool ISpriteSheetSliceHost.TryGetSliceCellMetrics(SpriteSheetSliceRequest request,
+            out int texW, out int texH, out int cellW, out int cellH)
+            => TryGetSliceCellMetrics(request, out texW, out texH, out cellW, out cellH);
+
+        void ISpriteSheetSliceHost.RunSheetSlice(SpriteSheetSliceRequest request)
+            => RunSheetSlice(request);
+
         void DetectSpacingAndCropCells(bool setMode)
         {
             if (_profile?.Sheet == null)
@@ -20478,7 +20589,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            EditorGUILayout.LabelField("File name", SheetTextureFileName(_profile.Sheet));
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("File name", SheetTextureFileName(_profile.Sheet));
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button(new GUIContent("Cells",
+                        "Open the cell editor: click a cell, drag its pivot, edit its rect."),
+                        EditorStyles.miniButton, GUILayout.Width(52f)))
+                {
+                    SpriteCellEditorWindow.Show(this);
+                }
+            }
             EditorGUILayout.LabelField("Size",
                 $"{_profile.Sheet.width} × {_profile.Sheet.height}");
             int columns = Mathf.Max(1, _profile.Columns);

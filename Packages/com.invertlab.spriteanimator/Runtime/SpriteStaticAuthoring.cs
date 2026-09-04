@@ -83,6 +83,15 @@ namespace InvertLab.Sprites.DOTS
                 var sheetDef = data.SheetAt(Mathf.Max(0, SheetIndex));
                 if (sheetDef != null)
                 {
+                    // per-cell override wins over the sheet pivot
+                    int slot = Mathf.Clamp(Row, 0, Mathf.Max(1, sheetDef.Rows) - 1)
+                               * Mathf.Max(1, sheetDef.Columns)
+                               + Mathf.Clamp(Column, 0, Mathf.Max(1, sheetDef.Columns) - 1);
+                    if (SpriteSheetProfile.TryGetCellPivot(sheetDef, slot, out var cellPivot))
+                    {
+                        pivot = cellPivot;
+                        return true;
+                    }
                     pivot = SpriteSocketWorld.ResolvePivot(data, sheetDef);
                     return true;
                 }

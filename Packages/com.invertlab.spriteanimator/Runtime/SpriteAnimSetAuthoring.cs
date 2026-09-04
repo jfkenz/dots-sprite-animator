@@ -1378,6 +1378,23 @@ namespace InvertLab.Sprites.DOTS
                                 ? authorClip.FrameOffsets[f]
                                 : Vector2.zero;
                         frameOffsets[f] = new float2(offset.x, offset.y);
+                        // per-cell pivot override: shift the frame so the
+                        // cell pivot sits on the entity origin
+                        if (clipSheet != null &&
+                            SpriteSheetProfile.TryGetCellPivot(clipSheet, slots[f],
+                                out var cellPivot))
+                        {
+                            var pivotTexture = clipSheet.Texture;
+                            float cellWpx = pivotTexture != null
+                                ? pivotTexture.width / (float)cols : 0f;
+                            float cellHpx = pivotTexture != null
+                                ? pivotTexture.height / (float)rows : 0f;
+                            frameOffsets[f] += new float2(
+                                (0.5f - Mathf.Clamp01(cellPivot.x)) * cellWpx /
+                                Mathf.Max(0.01f, bakePpu),
+                                (0.5f - Mathf.Clamp01(cellPivot.y)) * cellHpx /
+                                Mathf.Max(0.01f, bakePpu));
+                        }
                         Vector2 scale = frameScales != null && f < frameScales.Length
                             ? frameScales[f]
                             : Vector2.one;
