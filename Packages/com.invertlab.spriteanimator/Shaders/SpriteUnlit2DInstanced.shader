@@ -38,11 +38,12 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
 
             struct SpriteInstanceData
             {
-                float4 PosScale;   // XZ: xy=world xz, z=scale, w=height y
-                               // XY: xy=world xy, z=scale, w=depth z
+                float4 PosScale;   // XY: xy=world xy, z=1, w=depth z
+                               // XZ: xy=world xz, z=scale, w=height y
                 float4 CropST;     // xy = cell scale, zw = cell origin (uv, bottom-left)
                 float4 FrameTRS;   // xy = frame scale, z = rotation radians
                 float4 Flip;       // xy = flip flags, zw = normalized pivot
+                float4 Transform2; // xy = entity scale (world), z = entity rotation radians
                 float4 Color;      // rgba tint
             };
 
@@ -94,9 +95,17 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                 float3 wpos;
                 if (_LayoutXy > 0.5)
                 {
-                    // 2D camera: local x -> world x, local y -> world y
-                    wpos.x = d.PosScale.x + rotated.x * d.PosScale.z;
-                    wpos.y = d.PosScale.y + rotated.y * d.PosScale.z;
+                    // 2D camera: local x -> world x, local y -> world y.
+                    // Entity scale + rotation come from LocalToWorld (fresh
+                    // every frame), applied after the frame transform.
+                    float2 scaled = rotated * d.Transform2.xy;
+                    float cs2 = cos(d.Transform2.z);
+                    float sn2 = sin(d.Transform2.z);
+                    float2 entityRotated = float2(
+                        scaled.x * cs2 - scaled.y * sn2,
+                        scaled.x * sn2 + scaled.y * cs2);
+                    wpos.x = d.PosScale.x + entityRotated.x;
+                    wpos.y = d.PosScale.y + entityRotated.y;
                     wpos.z = d.PosScale.w;
                 }
                 else

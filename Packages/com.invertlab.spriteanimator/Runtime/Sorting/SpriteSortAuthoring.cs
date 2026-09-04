@@ -23,12 +23,19 @@ namespace InvertLab.Sprites.DOTS
         public int SortLayer;
 
         [Tooltip("Order within the layer, like SpriteRenderer's Order in Layer. " +
-                 "One order step = 0.00001 world units of z.")]
+                 "One order step = 0.001 world units of z (the smallest safe depth step).")]
         public int OrderInLayer;
 
-        [Tooltip("Manual depth nudge in world units. Positive = closer to the camera " +
-                 "(on top), negative = behind. Same direction as Layer/Order.")]
-        public float DepthOffset;
+        [Tooltip("Manual depth nudge in thousandths of a z unit: 1 = 0.001 z, " +
+                 "1000 = one full layer. Positive = closer to the camera (on top), " +
+                 "same direction as Layer/Order.")]
+        [HideInInspector]
+        public int DepthOffset;
+
+        [Tooltip("ON (default): depth is authored once — pin z at startup and skip " +
+                 "the periodic re-pin entirely (zero per-tick cost). Turn OFF only " +
+                 "when gameplay will write SpriteSortDepth on this entity at runtime.")]
+        public bool Static = true;
 
         /// <summary>World z this authoring bakes (what the inspector shows).</summary>
         public float BakedDepth => SpriteSortDepth.FromLayerOrder(SortLayer, OrderInLayer, DepthOffset);
@@ -36,12 +43,11 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>
         /// Called by Unity when the component is added (or reset): adopt the
         /// GameObject's current z so the sprite does not jump, then layer/order
-        /// edits move it from there. Sign is negated because DepthOffset is
-        /// "higher = on top" while world z is "lower = on top".
+        /// edits move it from there. Scene z converts to thousandths (0.736 → −736).
         /// </summary>
         void Reset()
         {
-            DepthOffset = -transform.position.z;
+            DepthOffset = Mathf.RoundToInt(-transform.position.z * 1000f);
 #if UNITY_EDITOR
             SpriteAuthoringBundle.Ensure(gameObject);
 #endif
@@ -55,6 +61,7 @@ namespace InvertLab.Sprites.DOTS
         /// Editor-only: compare a baked depth against a camera's clip slab
         /// [camera.z + nearClipPlane, camera.z + farClipPlane]. A sprite whose
         /// depth lands outside that slab is clipped — it will NOT render.
+        /// The message carries the exact numbers and the exact fix.
         /// </summary>
         public static DepthStatus CheckDepth(float depth, Camera camera, out string message)
         {
@@ -63,25 +70,35 @@ namespace InvertLab.Sprites.DOTS
                 return DepthStatus.Ok;
 
             float camZ = camera.transform.position.z;
-            float nearEdge = camZ + camera.nearClipPlane;
-            float farEdge = camZ + camera.farClipPlane;
+            float near = camera.nearClipPlane;
+            float far = camera.farClipPlane;
+            float nearEdge = camZ + near;
+            float farEdge = camZ + far;
 
             if (depth < nearEdge || depth > farEdge)
             {
                 message = depth < nearEdge
-                    ? $"baked depth {depth:0.####} is behind the camera's near plane " +
-                      $"({nearEdge:0.###}; camera z {camZ:0.###}) — this sprite will NOT render. " +
-                      "Raise Depth Offset / Sort Layer."
-                    : $"baked depth {depth:0.####} is beyond the camera's far plane " +
-                      $"({farEdge:0.#}) — this sprite will NOT render. " +
-                      "Lower Depth Offset / Sort Layer or widen the camera's far clip.";
+                    ? $"baked z {depth:0.####} is {nearEdge - depth:0.####} units BEHIND the near plane " +
+                      $"— this sprite will NOT render.\n" +
+                      $"Camera '{camera.name}': z {camZ:0.###}, near {near:0.##}, far {far:0.#} " +
+                      $"→ visible z range {nearEdge:0.###} … {farEdge:0.#}.\n" +
+                      $"Fix: raise Depth Offset / Sort Layer by at least {(nearEdge - depth) + 0.001f:0.###} " +
+                      $"(positive = toward the camera), or move the camera further back in −z."
+                    : $"baked z {depth:0.####} is {depth - farEdge:0.####} units BEYOND the far plane " +
+                      $"— this sprite will NOT render.\n" +
+                      $"Camera '{camera.name}': z {camZ:0.###}, near {near:0.##}, far {far:0.#} " +
+                      $"→ visible z range {nearEdge:0.###} … {farEdge:0.#}.\n" +
+                      $"Fix: lower Depth Offset / Sort Layer by at least {(depth - farEdge) + 0.001f:0.###}, " +
+                      $"or raise the camera's Far clip plane above {(depth - camZ):0.#}.";
                 return DepthStatus.Invisible;
             }
 
             if (depth < nearEdge + 1f)
             {
-                message = $"baked depth {depth:0.####} is only {(depth - nearEdge):0.##} units " +
-                          "in front of the near plane — z-fighting risk. Nudge it further back.";
+                message = $"baked z {depth:0.####} sits only {depth - nearEdge:0.##} units in front of " +
+                          $"the near plane ({nearEdge:0.###}) — z-fighting risk zone (keep ≥ 1 unit).\n" +
+                          $"Sprites stacked this close to the camera can flicker against each other. " +
+                          $"Nudge depth back toward {nearEdge + 1f:0.###} or raise the near clip.";
                 return DepthStatus.Risky;
             }
 
@@ -94,11 +111,15 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         void OnValidate()
         {
-            if (!SpriteSortDepth.StaysInsideLayer(OrderInLayer, DepthOffset))
+            if (!SpriteSortDepth.StaysInsideLayer(OrderInLayer))
             {
+                float drift = Mathf.Abs(OrderInLayer * SpriteSortDepth.OrderStep);
                 Debug.LogWarning(
-                    $"[SpriteSortAuthoring] '{name}': Order In Layer plus Depth Offset crosses " +
-                    "half a sorting layer and may overlap a neighbouring layer.", this);
+                    $"[SpriteSortAuthoring] '{name}': Order In Layer {OrderInLayer} drifts " +
+                    $"{drift:0.####} of z — past half a sorting layer (0.5) and can land on the " +
+                    $"same depth as sprites in a neighbouring Sort Layer. Keep orders under " +
+                    $"{Mathf.FloorToInt(SpriteSortDepth.LayerStep * 0.5f / SpriteSortDepth.OrderStep)} " +
+                    "or give this sprite its own Sort Layer.", this);
             }
 
             var camera = Camera.main;
@@ -106,7 +127,9 @@ namespace InvertLab.Sprites.DOTS
                 camera = FindAnyObjectByType<Camera>();
             var status = CheckDepth(BakedDepth, camera, out var message);
             if (status == DepthStatus.Invisible)
-                Debug.LogWarning($"[SpriteSortAuthoring] '{name}': {message}", this);
+                Debug.LogWarning(
+                    $"[SpriteSortAuthoring] '{name}' (Layer {SortLayer}, Order {OrderInLayer}, " +
+                    $"Offset {DepthOffset}): {message}", this);
         }
 #endif
 
@@ -121,6 +144,11 @@ namespace InvertLab.Sprites.DOTS
                 {
                     Value = authoring.BakedDepth,
                 });
+                // one-shot startup pin for every sort sprite; Static (default)
+                // additionally opts the entity out of the periodic re-pin
+                AddComponent<SpriteSortPinPending>(entity);
+                if (authoring.Static)
+                    AddComponent<SpriteSortStatic>(entity);
             }
         }
     }

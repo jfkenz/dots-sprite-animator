@@ -35,24 +35,27 @@ namespace InvertLab.Sprites.DOTS
     /// <summary>Packed per-instance GPU data. Mirrors the shader struct exactly.</summary>
     public struct SpriteInstanceData
     {
-        public float4 PosScale;  // XZ: xy=world xz, z=scale, w=height y; XY: xy=world xy, z=scale, w=depth z
-        public float4 CropST;    // xy = cell size, zw = cell origin (uv bottom-left)
-        public float4 FrameTRS;  // xy = frame scale, z = rotation radians, w = reserved
-        public float4 Flip;      // xy = flip flags, zw = normalized pivot
-        public float4 Color;     // rgba tint
+        public float4 PosScale;   // XY: xy=world xy, z=1, w=depth z | XZ: xy=world xz, z=scale, w=height y
+        public float4 CropST;     // xy = cell size, zw = cell origin (uv bottom-left)
+        public float4 FrameTRS;   // xy = frame scale, z = rotation radians, w = reserved
+        public float4 Flip;       // xy = flip flags, zw = normalized pivot
+        public float4 Transform2; // xy = entity scale (world), z = entity rotation radians, w = reserved
+        public float4 Color;      // rgba tint
     }
 
     /// <summary>
-    /// Managed GPU resources live OUTSIDE the ISystem struct — a system struct
-    /// holding managed fields would become a managed type and never instantiate.
+    /// Managed scratch + legacy defaults. Multi-sheet GPU buffers live in
+    /// SpriteSheetRegistry records; these statics hold the shared quad, the
+    /// legacy default sheet (SetSheet path), and the pack scratch arrays.
     /// </summary>
     public static class SpriteRenderResources
     {
-        public const int Stride = 80; // 5 * float4
+        public const int Stride = 96; // 6 * float4
 
-        public static ComputeBuffer Buffer;
-        public static NativeArray<SpriteInstanceData> Staging;
-        public static Material Material;
+        public static NativeArray<SpriteInstanceData> Staging;  // pack target (indexed by entity)
+        public static NativeArray<SpriteInstanceData> Sorted;   // scatter target (grouped by record)
+        public static NativeArray<int> RecordIds;               // record index per packed instance
+        public static Material Material;                        // legacy default-sheet material
         public static Mesh Quad;
         public static Texture2D Sheet;
         public static int Capacity;
@@ -60,57 +63,61 @@ namespace InvertLab.Sprites.DOTS
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Reset()
         {
-            Buffer?.Dispose();
-            Buffer = null;
             if (Staging.IsCreated) Staging.Dispose();
+            if (Sorted.IsCreated) Sorted.Dispose();
+            if (RecordIds.IsCreated) RecordIds.Dispose();
             if (Material != null) Object.Destroy(Material);
             if (Quad != null) Object.Destroy(Quad);
+            Staging = default;
+            Sorted = default;
+            RecordIds = default;
             Material = null;
             Quad = null;
             Sheet = null;
             Capacity = 0;
         }
 
+        /// <summary>Grow the pack scratch to hold at least <paramref name="need"/> instances.</summary>
         public static void EnsureCapacity(int need)
         {
-            if (Buffer != null && need <= Capacity && Staging.IsCreated && Staging.Length >= need)
+            if (Staging.IsCreated && need <= Capacity && RecordIds.IsCreated)
                 return;
             int cap = math.max(4096, Capacity);
             while (cap < need) cap *= 2;
-            Buffer?.Dispose();
-            Buffer = new ComputeBuffer(cap, Stride);
-            Capacity = cap;
             if (Staging.IsCreated) Staging.Dispose();
+            if (Sorted.IsCreated) Sorted.Dispose();
+            if (RecordIds.IsCreated) RecordIds.Dispose();
             Staging = new NativeArray<SpriteInstanceData>(cap, Allocator.Persistent,
                 NativeArrayOptions.UninitializedMemory);
+            Sorted = new NativeArray<SpriteInstanceData>(cap, Allocator.Persistent,
+                NativeArrayOptions.UninitializedMemory);
+            RecordIds = new NativeArray<int>(cap, Allocator.Persistent,
+                NativeArrayOptions.UninitializedMemory);
+            Capacity = cap;
         }
 
-        public static void EnsureObjects(Texture2D sheet)
+        /// <summary>Shared procedural quad (created once, reused by every record).</summary>
+        public static void EnsureQuad()
         {
-            Sheet = sheet;
-            Material ??= new Material(Shader.Find(SpriteShaderLibrary.InstancedShader));
-            Material.mainTexture = sheet;
-            // tiny on-screen sprites average mostly-transparent texels; a 0.5
-            // cutout erases whole crowds at wide zoom. Keep it permissive.
-            Material.SetFloat("_Cutoff", 0.02f);
-            if (Quad == null)
-            {
-                // geometry comes from SV_VertexID in the shader; the mesh only
-                // needs a valid 6-vertex triangle list for the procedural draw.
-                Quad = new Mesh { name = "InstancedSpriteQuad" };
-                Quad.vertices = new Vector3[6];
-                Quad.uv = new Vector2[6];
-                Quad.SetIndices(new[] { 0, 1, 2, 3, 4, 5 }, MeshTopology.Triangles, 0);
-                Quad.RecalculateBounds();
-            }
+            if (Quad != null)
+                return;
+            Quad = new Mesh { name = "InstancedSpriteQuad" };
+            Quad.vertices = new Vector3[6];
+            Quad.uv = new Vector2[6];
+            Quad.SetIndices(new[] { 0, 1, 2, 3, 4, 5 }, MeshTopology.Triangles, 0);
+            Quad.RecalculateBounds();
         }
     }
 
     /// <summary>
-    /// NSprites-style renderer: ONE ComputeBuffer, ONE DrawMeshInstancedProcedural
-    /// per frame — all animation states, any crowd size, one draw call.
-    /// Fieldless unmanaged ISystem (managed resources live in SpriteRenderResources);
-    /// packing runs in Burst via PackJob; the draw tail is managed code.
+    /// NSprites-style renderer: ALL CPU-ticked sprites in per-sheet instanced
+    /// batches — one ComputeBuffer + one DrawMeshInstancedProcedural per
+    /// distinct sheet texture. Sprites bound to a baked sheet entity
+    /// (SpriteSheetBinding → SpriteSheetRegistry record) group onto their
+    /// sheet; unbound sprites draw on the legacy default sheet
+    /// (SpriteRenderResources.Sheet). Packing runs in Burst; the draw tail is
+    /// managed code. Reads LocalToWorld, so entity rotation, non-uniform
+    /// scale, and parenting all render correctly.
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup), OrderLast = true)]
     public partial struct SpriteInstanceRenderSystem : ISystem
@@ -124,7 +131,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>How many times OnUpdate entered (diagnostics).</summary>
         public static int Ticks;
 
-        /// <summary>Hand the renderer the sheet texture (call once after Install).</summary>
+        /// <summary>Hand the renderer the legacy default sheet (call once after Install).</summary>
         public static void SetSheet(Texture2D sheet) => SpriteRenderResources.Sheet = sheet;
 
         public void OnUpdate(ref SystemState state)
@@ -153,114 +160,277 @@ namespace InvertLab.Sprites.DOTS
                 return; // draw next frame
             }
 
-            if (SpriteRenderResources.Sheet == null) return;
-            SpriteRenderResources.EnsureObjects(SpriteRenderResources.Sheet);
-
-            var q = SystemAPI.QueryBuilder()
-                .WithAll<LocalTransform, SpriteAnimFrame, SpriteTint, SpriteFlip, SpriteAnimEnabled>()
-                .WithNone<SpriteGpuDriven>() // GPU-driven sprites draw via SpriteGpuAnimRenderSystem
-                .Build();
-            int count = q.CalculateEntityCount(); // enable-bit aware: culled sprites excluded
-            Active = false;
-            if (count == 0) return;
-
-            SpriteRenderResources.EnsureCapacity(count);
-
-            byte layoutXy = SpriteBatchSpawner.LayoutXy ? (byte)1 : (byte)0;
-            SpriteRenderResources.Material.SetFloat("_LayoutXy", layoutXy);
-            float cellAspect = grid.CellAspect > 0.01f ? grid.CellAspect : 1f;
-            SpriteRenderResources.Material.SetFloat("_CellAspect", cellAspect);
-            var gridEntity = SystemAPI.GetSingletonEntity<SpriteAnimGrid>();
-            NativeArray<float4> cellCrops = default;
-            byte useCrops = 0;
-            bool ownsCrops = false;
-            if (grid.UseCellCrops != 0 && em.HasBuffer<SpriteAnimCellCrop>(gridEntity))
+            // ---- seed the legacy default-sheet record (SetSheet path) ----
+            int legacyId = -1;
+            if (SpriteRenderResources.Sheet != null)
             {
-                var buf = em.GetBuffer<SpriteAnimCellCrop>(gridEntity, true);
-                if (buf.Length > 0)
+                legacyId = SpriteSheetRegistry.GetOrAdd(SpriteRenderResources.Sheet);
+                if (legacyId >= 0)
                 {
-                    cellCrops = new NativeArray<float4>(buf.Length, Allocator.TempJob);
-                    ownsCrops = true;
-                    for (int c = 0; c < buf.Length; c++)
-                        cellCrops[c] = buf[c].Value;
-                    useCrops = 1;
+                    var legacy = SpriteSheetRegistry.Records[legacyId];
+                    legacy.Cols = grid.Cols;
+                    legacy.Rows = grid.Rows;
+                    legacy.CellAspect = grid.CellAspect > 0.01f ? grid.CellAspect : 1f;
+                    byte useCrops = 0;
+                    float4[] crops = null;
+                    if (grid.UseCellCrops != 0)
+                    {
+                        var gridEntity = SystemAPI.GetSingletonEntity<SpriteAnimGrid>();
+                        if (em.HasBuffer<SpriteAnimCellCrop>(gridEntity))
+                        {
+                            var buf = em.GetBuffer<SpriteAnimCellCrop>(gridEntity);
+                            if (buf.Length > 0)
+                            {
+                                crops = new float4[buf.Length];
+                                for (int c = 0; c < buf.Length; c++)
+                                    crops[c] = buf[c].Value;
+                                useCrops = 1;
+                            }
+                        }
+                    }
+                    legacy.UseCellCrops = useCrops;
+                    if (useCrops != 0)
+                        legacy.SetCrops(crops);
                 }
             }
-            if (!ownsCrops)
-                cellCrops = new NativeArray<float4>(0, Allocator.TempJob);
 
-            var job = new PackJob
+            int recordCount = SpriteSheetRegistry.Records.Count;
+            if (recordCount == 0) return;
+            SpriteRenderResources.EnsureQuad();
+
+            var q = SystemAPI.QueryBuilder()
+                .WithAll<LocalTransform, LocalToWorld, SpriteAnimFrame, SpriteTint, SpriteFlip, SpriteAnimEnabled>()
+                .WithNone<SpriteGpuDriven>() // GPU-driven sprites draw via SpriteGpuAnimRenderSystem
+                .Build();
+            int total = q.CalculateEntityCount(); // enable-bit aware: culled sprites excluded
+            Active = false;
+            if (total == 0) return;
+
+            SpriteRenderResources.EnsureCapacity(total);
+
+            // per-record grid tables for the pack job
+            var gridCR = new NativeArray<int2>(recordCount, Allocator.TempJob);
+            var useCropsArr = new NativeArray<byte>(recordCount, Allocator.TempJob);
+            var cropOffsets = new NativeArray<int>(recordCount, Allocator.TempJob);
+            int cropTotal = 0;
+            for (int r = 0; r < recordCount; r++)
             {
-                Cols = grid.Cols,
-                Rows = grid.Rows,
-                LayoutXy = layoutXy,
-                UseCellCrops = useCrops,
-                CellCrops = cellCrops,
-                Data = SpriteRenderResources.Staging,
+                var rec = SpriteSheetRegistry.Records[r];
+                gridCR[r] = new int2(rec.Cols, rec.Rows);
+                useCropsArr[r] = rec.UseCellCrops;
+                cropOffsets[r] = cropTotal;
+                cropTotal += rec.UseCellCrops != 0 && rec.Crops.IsCreated ? rec.Crops.Length : 0;
+            }
+            var allCrops = new NativeArray<float4>(math.max(1, cropTotal), Allocator.TempJob);
+            for (int r = 0; r < recordCount; r++)
+            {
+                var rec = SpriteSheetRegistry.Records[r];
+                if (rec.UseCellCrops != 0 && rec.Crops.IsCreated)
+                    for (int c = 0; c < rec.Crops.Length; c++)
+                        allCrops[cropOffsets[r] + c] = rec.Crops[c];
+            }
+
+            var counts = new NativeArray<int>(recordCount, Allocator.TempJob);
+            var cursors = new NativeArray<int>(recordCount, Allocator.TempJob);
+
+            var pack = new PackJob
+            {
+                LegacyRecordId = legacyId,
+                LayoutXy = (byte)(SpriteBatchSpawner.LayoutXy ? 1 : 0),
+                Bindings = SystemAPI.GetComponentLookup<SpriteSheetBinding>(true),
+                Registered = SystemAPI.GetComponentLookup<SpriteSheetRegistered>(true),
+                GridCR = gridCR,
+                UseCropsArr = useCropsArr,
+                CropOffsets = cropOffsets,
+                AllCrops = allCrops,
+                Staging = SpriteRenderResources.Staging,
+                RecordIds = SpriteRenderResources.RecordIds,
             };
-            state.Dependency = job.ScheduleParallel(q, state.Dependency);
+            state.Dependency = pack.ScheduleParallel(q, state.Dependency);
             state.Dependency.Complete();
-            if (cellCrops.IsCreated)
-                cellCrops.Dispose();
 
-            var res = SpriteRenderResources.Buffer;
-            res.SetData(SpriteRenderResources.Staging, 0, 0, count);
-            SpriteRenderResources.Material.SetBuffer("_InstanceData", res);
+            // group instances by record: count → prefix offsets → scatter
+            new CountJob { RecordIds = SpriteRenderResources.RecordIds, Counts = counts, Total = total }
+                .Schedule().Complete();
 
-            var bounds = layoutXy != 0
+            int running = 0;
+            for (int r = 0; r < recordCount; r++)
+            {
+                cursors[r] = running;
+                running += counts[r];
+            }
+
+            new ScatterJob
+            {
+                RecordIds = SpriteRenderResources.RecordIds,
+                Cursors = cursors,
+                Source = SpriteRenderResources.Staging,
+                Target = SpriteRenderResources.Sorted,
+                Total = total,
+            }.Schedule().Complete();
+
+            // ---- draw one batch per record ----
+            bool layoutXy = SpriteBatchSpawner.LayoutXy;
+            var bounds = layoutXy
                 ? new Bounds(Vector3.zero, new Vector3(4000f, 4000f, 4000f))
                 : new Bounds(Vector3.zero, new Vector3(4000f, 200f, 4000f));
-            Graphics.DrawMeshInstancedProcedural(
-                SpriteRenderResources.Quad, 0, SpriteRenderResources.Material, bounds, count,
-                null, UnityEngine.Rendering.ShadowCastingMode.Off, false, 0);
-
+            for (int r = 0; r < recordCount; r++)
+            {
+                var rec = SpriteSheetRegistry.Records[r];
+                rec.Count = counts[r];
+                if (rec.Count == 0)
+                    continue;
+                rec.EnsureCapacity(rec.Count);
+                rec.Buffer.SetData(SpriteRenderResources.Sorted, cursors[r], 0, rec.Count);
+                rec.Material.SetFloat("_LayoutXy", layoutXy ? 1f : 0f);
+                rec.Material.SetFloat("_CellAspect", rec.CellAspect > 0.01f ? rec.CellAspect : 1f);
+                rec.Material.SetBuffer("_InstanceData", rec.Buffer);
+                Graphics.DrawMeshInstancedProcedural(
+                    SpriteRenderResources.Quad, 0, rec.Material, bounds, rec.Count,
+                    null, UnityEngine.Rendering.ShadowCastingMode.Off, false, 0);
+            }
             Active = true;
+
+            gridCR.Dispose();
+            useCropsArr.Dispose();
+            cropOffsets.Dispose();
+            allCrops.Dispose();
+            counts.Dispose();
+            cursors.Dispose();
         }
 
         [BurstCompile]
         partial struct PackJob : IJobEntity
         {
-            public int Cols;
-            public int Rows;
+            public int LegacyRecordId;
             public byte LayoutXy;
-            public byte UseCellCrops;
-            [ReadOnly] public NativeArray<float4> CellCrops;
-            [WriteOnly] public NativeArray<SpriteInstanceData> Data;
+            [ReadOnly] public ComponentLookup<SpriteSheetBinding> Bindings;
+            [ReadOnly] public ComponentLookup<SpriteSheetRegistered> Registered;
+            [ReadOnly] public NativeArray<int2> GridCR;
+            [ReadOnly] public NativeArray<byte> UseCropsArr;
+            [ReadOnly] public NativeArray<int> CropOffsets;
+            [ReadOnly] public NativeArray<float4> AllCrops;
+            [WriteOnly] public NativeArray<SpriteInstanceData> Staging;
+            [WriteOnly] public NativeArray<int> RecordIds;
 
             void Execute([EntityIndexInQuery] int i,
-                         in LocalTransform lt,
+                         Entity entity,
+                         in LocalToWorld ltw,
                          in SpriteAnimFrame frame,
                          in SpriteFlip flip,
                          in SpriteTint tint)
             {
+                // resolve the sprite's sheet record (default = legacy sheet)
+                int record = LegacyRecordId;
+                if (Bindings.HasComponent(entity))
+                {
+                    var binding = Bindings[entity];
+                    if (binding.Sheet != Entity.Null && Registered.HasComponent(binding.Sheet))
+                        record = Registered[binding.Sheet].RegistryId;
+                }
+                RecordIds[i] = record;
+                if (record < 0 || record >= GridCR.Length)
+                    return; // unregistered sheet: skip this frame
+
                 int slot = frame.Slot;
-                int col = slot % Cols;
-                int row = slot / Cols;
+                int2 cr = GridCR[record];
+                int cols = math.max(1, cr.x);
+                int rows = math.max(1, cr.y);
+                int col = slot % cols;
+                int row = slot / cols;
+
                 float2 offset = SpriteFlipUtility.LocalPosition(frame.Offset, flip);
-                float rotation = SpriteFlipUtility.Angle(frame.Rotation, flip);
+                float frameRotation = SpriteFlipUtility.Angle(frame.Rotation, flip);
 
                 float4 cropST;
-                if (UseCellCrops != 0 && slot >= 0 && slot < CellCrops.Length)
-                    cropST = CellCrops[slot];
-                else
-                    cropST = new float4(1f / Cols, 1f / Rows,
-                                        col * (1f / Cols),
-                                        (Rows - 1 - row) * (1f / Rows));
-
-                Data[i] = new SpriteInstanceData
+                if (UseCropsArr[record] != 0 && slot >= 0)
                 {
-                    PosScale = LayoutXy != 0
-                        ? new float4(lt.Position.x + offset.x,
-                                     lt.Position.y + offset.y,
-                                     lt.Scale, lt.Position.z)
-                        : new float4(lt.Position.x + offset.x,
-                                     lt.Position.z + offset.y,
-                                     lt.Scale, lt.Position.y),
+                    int cropIndex = CropOffsets[record] + slot;
+                    if (cropIndex < AllCrops.Length)
+                        cropST = AllCrops[cropIndex];
+                    else
+                        cropST = new float4(1f / cols, 1f / rows,
+                                            col * (1f / cols),
+                                            (rows - 1 - row) * (1f / rows));
+                }
+                else
+                {
+                    cropST = new float4(1f / cols, 1f / rows,
+                                        col * (1f / cols),
+                                        (rows - 1 - row) * (1f / rows));
+                }
+
+                // entity transform from the world matrix (fresh LocalToWorld
+                // covers gameplay movement, rotation, squash/stretch, parents)
+                float3 worldPos = ltw.Value.c3.xyz;
+                float3 xAxis = ltw.Value.c0.xyz;
+                float entityRot = math.atan2(xAxis.y, xAxis.x);
+                float entityScaleX = math.length(xAxis);
+                float entityScaleY = math.length(ltw.Value.c1.xyz);
+
+                float4 posScale;
+                float4 transform2;
+                if (LayoutXy != 0)
+                {
+                    posScale = new float4(worldPos.x + offset.x, worldPos.y + offset.y, 1f, worldPos.z);
+                    transform2 = new float4(entityScaleX, entityScaleY, entityRot, 0f);
+                }
+                else
+                {
+                    // flat-lay: z is a ground-plane axis; keep uniform scale and
+                    // skip entity rotation (XZ sprites face up, not the camera)
+                    posScale = new float4(worldPos.x + offset.x, worldPos.z + offset.y,
+                                          entityScaleX, worldPos.y);
+                    transform2 = new float4(1f, 1f, 0f, 0f);
+                }
+
+                Staging[i] = new SpriteInstanceData
+                {
+                    PosScale = posScale,
                     CropST = cropST,
-                    FrameTRS = new float4(frame.Scale.x, frame.Scale.y, math.radians(rotation), 0f),
+                    FrameTRS = new float4(frame.Scale.x, frame.Scale.y, math.radians(frameRotation), 0f),
                     Flip = new float4(flip.X, flip.Y, flip.ResolvedPivot.x, flip.ResolvedPivot.y),
+                    Transform2 = transform2,
                     Color = tint.Value,
                 };
+            }
+        }
+
+        [BurstCompile]
+        struct CountJob : IJob
+        {
+            [ReadOnly] public NativeArray<int> RecordIds;
+            public NativeArray<int> Counts;
+            public int Total;
+
+            public void Execute()
+            {
+                for (int i = 0; i < Total; i++)
+                {
+                    int record = RecordIds[i];
+                    if ((uint)record < (uint)Counts.Length)
+                        Counts[record]++;
+                }
+            }
+        }
+
+        [BurstCompile]
+        struct ScatterJob : IJob
+        {
+            [ReadOnly] public NativeArray<int> RecordIds;
+            public NativeArray<int> Cursors;
+            [ReadOnly] public NativeArray<SpriteInstanceData> Source;
+            [WriteOnly] public NativeArray<SpriteInstanceData> Target;
+            public int Total;
+
+            public void Execute()
+            {
+                for (int i = 0; i < Total; i++)
+                {
+                    int record = RecordIds[i];
+                    if ((uint)record < (uint)Cursors.Length)
+                        Target[Cursors[record]++] = Source[i];
+                }
             }
         }
 

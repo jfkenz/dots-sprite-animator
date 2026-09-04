@@ -362,17 +362,87 @@ namespace InvertLab.Sprites.DOTS.Tests
         [Test]
         public void SpriteSortDepthUsesCompactStableSteps()
         {
-            Assert.AreEqual(-1f, SpriteSortDepth.FromLayerOrder(1, 0, 0f), 0.000001f);
-            Assert.AreEqual(-0.00001f, SpriteSortDepth.FromLayerOrder(0, 1, 0f), 0.000001f);
-            // all inputs share one direction: higher = on top = smaller world z
-            Assert.AreEqual(-0.25f, SpriteSortDepth.FromLayerOrder(0, 0, 0.25f), 0.000001f);
+            Assert.AreEqual(-1f, SpriteSortDepth.FromLayerOrder(1, 0, 0), 0.000001f);
+            Assert.AreEqual(-0.001f, SpriteSortDepth.FromLayerOrder(0, 1, 0), 0.000001f);
+            // one integer on the whole number line: offset milli = order milli
+            Assert.AreEqual(-0.25f, SpriteSortDepth.FromLayerOrder(0, 0, 250), 0.000001f);
+            Assert.AreEqual(-2.59f, SpriteSortDepth.FromLayerOrder(2, 340, 250), 0.000001f);
         }
 
         [Test]
         public void SpriteSortWarnsBeforeOrderOverlapsAnotherLayer()
         {
-            Assert.IsTrue(SpriteSortDepth.StaysInsideLayer(10000, 0f));
-            Assert.IsFalse(SpriteSortDepth.StaysInsideLayer(50000, 0f));
+            Assert.IsTrue(SpriteSortDepth.StaysInsideLayer(400));
+            Assert.IsFalse(SpriteSortDepth.StaysInsideLayer(600));
+        }
+
+        [Test]
+        public void SpriteSortIndexFlattensGridLike3DArray()
+        {
+            Assert.AreEqual(0f, SpriteSortDepth.FromIndex(0), 0.000001f);
+            Assert.AreEqual(-1f, SpriteSortDepth.FromIndex(1000), 0.000001f);
+            Assert.AreEqual(-2.34f, SpriteSortDepth.FromIndex(2340), 0.000001f);
+            Assert.AreEqual(0.001f, SpriteSortDepth.FromIndex(-1), 0.000001f);
+
+            SpriteSortDepth.DecomposeIndex(2340, out int layer, out int order);
+            Assert.AreEqual(2, layer);
+            Assert.AreEqual(340, order);
+
+            // negative indices use floor semantics: -1 = layer -1, order 999
+            SpriteSortDepth.DecomposeIndex(-1, out int negLayer, out int negOrder);
+            Assert.AreEqual(-1, negLayer);
+            Assert.AreEqual(999, negOrder);
+
+            // total index folds offset in: layer 2, order 340, offset 125
+            Assert.AreEqual(2465, SpriteSortDepth.ToIndex(2, 340, 125));
+            Assert.AreEqual(2340, SpriteSortDepth.ToIndex(2, 340));
+            Assert.AreEqual(-1, SpriteSortDepth.ToIndex(negLayer, negOrder));
+        }
+
+        [Test]
+        public void SpriteStaticAuthoringNeedsProfileToResolve()
+        {
+            var host = new GameObject("StaticAuthoringResolve");
+            try
+            {
+                var authoring = host.AddComponent<SpriteStaticAuthoring>();
+                authoring.Row = 3;
+                authoring.Column = 5;
+
+                // no profile -> nothing resolves, slot guards to 0
+                Assert.IsFalse(authoring.ResolveSheet(out _, out _, out _, out _));
+                Assert.AreEqual(0, authoring.CellSlot);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void SpriteSheetRegistryDedupesByTexture()
+        {
+            if (Shader.Find(SpriteShaderLibrary.InstancedShader) == null)
+                Assert.Ignore("instanced shader not available in test context");
+
+            var textureA = new Texture2D(8, 8);
+            var textureB = new Texture2D(16, 16);
+            try
+            {
+                int a1 = SpriteSheetRegistry.GetOrAdd(textureA);
+                int a2 = SpriteSheetRegistry.GetOrAdd(textureA);
+                int b = SpriteSheetRegistry.GetOrAdd(textureB);
+
+                Assert.AreEqual(a1, a2, "same texture must reuse one record");
+                Assert.AreNotEqual(a1, b, "different textures need separate records");
+                Assert.GreaterOrEqual(a1, 0);
+            }
+            finally
+            {
+                Object.DestroyImmediate(textureA);
+                Object.DestroyImmediate(textureB);
+                SpriteSheetRegistry.ClearForTests();
+            }
         }
 
         [TestCase(typeof(SpriteAnimSetAuthoring))]

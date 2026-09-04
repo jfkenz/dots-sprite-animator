@@ -87,6 +87,11 @@ namespace InvertLab.Sprites.DOTS
                 Rotation = quaternion.identity,
                 Scale = sizeUnits,
             });
+            // the render packer reads LocalToWorld (rotation/scale/parent support)
+            em.AddComponentData(e, new LocalToWorld
+            {
+                Value = float4x4.TRS(position, quaternion.identity, new float3(sizeUnits)),
+            });
             em.AddComponentData(e, setRef);
             em.AddComponentData(e, player);
             em.AddComponentData(e, new SpriteAnimFrame

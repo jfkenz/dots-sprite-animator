@@ -18,6 +18,8 @@ MonoBehaviour:
     Rows: 1
     PixelsPerUnit: 99.99999
     Pivot: {x: 0.5, y: 0.5}
+    CellLayoutMode: 0
+    CroppedCellRects: []
     Sheets:
     - Name: examplebot
       Texture: {fileID: 2800000, guid: 31f94212fc870a54f873fbe73724930b, type: 3}
@@ -25,19 +27,31 @@ MonoBehaviour:
       Rows: 1
       PixelsPerUnit: 99.99999
       Pivot: {x: 0.5, y: 0.5}
+      CellLayoutMode: 0
+      CroppedCellRects: []
     - Name: Sheet 2
       Texture: {fileID: 0}
       Columns: 4
       Rows: 4
       PixelsPerUnit: 100
       Pivot: {x: 0.5, y: 0.5}
+      CellLayoutMode: 0
+      CroppedCellRects: []
     Clips:
     - Name: Clip 1
       SheetIndex: 0
       Row: 0
       Frames: 00000000010000000200000003000000040000000500000006000000
+      FrameRows: ffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       FrameRate: 8
       WrapMode: 0
+      Interrupt: 0
+      CancelAfter: 0
+      Priority: 0
+      OnCompleteClipIndex: -1
+      ComboWindowStartFrame: 0
+      ComboWindowEndFrame: -1
+      ComboWindowPriorityBoost: 0
       FrameDurationScales:
       - 1
       - 1
@@ -83,6 +97,7 @@ MonoBehaviour:
       FacingGroup: 
       Facing: 255
       Sockets: []
+      EventMarkers: []
     Events:
     - Id: 1
       Name: Footstep
@@ -90,9 +105,37 @@ MonoBehaviour:
     - Id: 2
       Name: Attack
       Color: {r: 1, g: 0.35, b: 0.3, a: 1}
-    Hitboxes: []
+    Hitboxes:
+    - ClipName: Clip 1
+      FrameIndex: -1
+      RectUV:
+        serializedVersion: 2
+        x: 0.07757917
+        y: 0.1586889
+        width: 0.71519846
+        height: 0.5669314
+      Id: 1
+      Shape: 1
+      PolygonUV: []
+      Angle: 0
+      Hidden: 0
+      Locked: 0
+      Lifetime: 1
+      Physics: 0
+      IsTrigger: 1
+      CharacterIncludeClips: []
+      CharacterExcludeClips: []
     SocketCatalog:
       Items: []
+    SocketMotions: []
+    SocketInventories: []
+    IndependentTimelineInitialized: 1
+    IndependentTimelineUsesSeconds: 1
+    IndependentMotionDurationSeconds: 1
+    IndependentMotionFrameRate: 12
+    IndependentMotionFrameCount: 13
+    IndependentMotionSpeed: 1
+    IndependentMotionLoop: 1
     OnionSettingsInitialized: 1
     OnionSkinEnabled: 0
     OnionPastFrames: 3

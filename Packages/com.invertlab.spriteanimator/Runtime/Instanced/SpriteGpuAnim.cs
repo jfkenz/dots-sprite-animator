@@ -151,6 +151,12 @@ namespace InvertLab.Sprites.DOTS
                 !em.HasComponent<SpriteAnimSetRef>(e))
                 return false;
 
+            // the GPU path draws on the single default sheet only; sprites
+            // bound to a per-sheet record stay on the CPU batcher
+            if (em.HasComponent<SpriteSheetBinding>(e) &&
+                em.GetComponentData<SpriteSheetBinding>(e).Sheet != Entity.Null)
+                return false;
+
             var p = em.GetComponentData<SpriteAnimPlayer>(e);
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             int ci = math.clamp(p.ClipIndex, 0, set.Clips.Length - 1);

@@ -140,6 +140,12 @@ namespace InvertLab.Sprites.DOTS
                 float3.zero,
                 quaternion.identity,
                 protoScale));
+            // render packer consumes LocalToWorld; transform group keeps it in
+            // sync from the LocalTransform the PlaceJob writes
+            em.AddComponentData(s_proto, new LocalToWorld
+            {
+                Value = float4x4.Scale(protoScale),
+            });
             em.AddComponentData(s_proto, setRef);
             em.AddComponentData(s_proto, new SpriteAnimFrame { Slot = 0, Scale = new float2(1f, 1f) });
             em.AddComponentData(s_proto, new SpriteTint { Value = new float4(1, 1, 1, 1) });

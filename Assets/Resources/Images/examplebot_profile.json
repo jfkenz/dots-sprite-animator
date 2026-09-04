@@ -1,6 +1,6 @@
 {
     "Sheet": {
-        "instanceID": 568105584918837072
+        "instanceID": 568105584918835146
     },
     "Columns": 7,
     "Rows": 1,
@@ -9,11 +9,13 @@
         "x": 0.5,
         "y": 0.5
     },
+    "CellLayoutMode": 0,
+    "CroppedCellRects": [],
     "Sheets": [
         {
             "Name": "examplebot",
             "Texture": {
-                "instanceID": 568105584918837072
+                "instanceID": 568105584918835146
             },
             "Columns": 7,
             "Rows": 1,
@@ -21,7 +23,9 @@
             "Pivot": {
                 "x": 0.5,
                 "y": 0.5
-            }
+            },
+            "CellLayoutMode": 0,
+            "CroppedCellRects": []
         },
         {
             "Name": "Sheet 2",
@@ -34,7 +38,9 @@
             "Pivot": {
                 "x": 0.5,
                 "y": 0.5
-            }
+            },
+            "CellLayoutMode": 0,
+            "CroppedCellRects": []
         }
     ],
     "Clips": [
@@ -51,8 +57,24 @@
                 5,
                 6
             ],
+            "FrameRows": [
+                -1,
+                -1,
+                -1,
+                -1,
+                -1,
+                -1,
+                -1
+            ],
             "FrameRate": 8.0,
             "WrapMode": 0,
+            "Interrupt": 0,
+            "CancelAfter": 0.0,
+            "Priority": 0,
+            "OnCompleteClipIndex": -1,
+            "ComboWindowStartFrame": 0,
+            "ComboWindowEndFrame": -1,
+            "ComboWindowPriorityBoost": 0,
             "FrameDurationScales": [
                 1.0,
                 1.0,
@@ -160,7 +182,8 @@
             ],
             "FacingGroup": "",
             "Facing": 255,
-            "Sockets": []
+            "Sockets": [],
+            "EventMarkers": []
         }
     ],
     "Events": [
@@ -185,10 +208,42 @@
             }
         }
     ],
-    "Hitboxes": [],
+    "Hitboxes": [
+        {
+            "ClipName": "Clip 1",
+            "FrameIndex": -1,
+            "RectUV": {
+                "serializedVersion": "2",
+                "x": 0.07757917046546936,
+                "y": 0.15868890285491944,
+                "width": 0.7151984572410584,
+                "height": 0.566931426525116
+            },
+            "Id": 1,
+            "Shape": 1,
+            "PolygonUV": [],
+            "Angle": 0.0,
+            "Hidden": false,
+            "Locked": false,
+            "Lifetime": 1,
+            "Physics": 0,
+            "IsTrigger": true,
+            "CharacterIncludeClips": [],
+            "CharacterExcludeClips": []
+        }
+    ],
     "SocketCatalog": {
         "Items": []
     },
+    "SocketMotions": [],
+    "SocketInventories": [],
+    "IndependentTimelineInitialized": true,
+    "IndependentTimelineUsesSeconds": true,
+    "IndependentMotionDurationSeconds": 1.0,
+    "IndependentMotionFrameRate": 12.0,
+    "IndependentMotionFrameCount": 13,
+    "IndependentMotionSpeed": 1.0,
+    "IndependentMotionLoop": true,
     "OnionSettingsInitialized": true,
     "OnionSkinEnabled": false,
     "OnionPastFrames": 3,

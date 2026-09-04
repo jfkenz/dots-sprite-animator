@@ -107,6 +107,7 @@ namespace InvertLab.Sprites.DOTS
             {
                 Entities = instances,
                 Transforms = GetComponentLookup<LocalTransform>(false),
+                WorldTransforms = GetComponentLookup<LocalToWorld>(false),
                 Players = GetComponentLookup<SpriteAnimPlayer>(false),
                 GpuAnims = GetComponentLookup<SpriteGpuAnim>(false),
                 Center = center,
@@ -128,6 +129,7 @@ namespace InvertLab.Sprites.DOTS
         {
             [ReadOnly] public NativeArray<Entity> Entities;
             [NativeDisableParallelForRestriction] public ComponentLookup<LocalTransform> Transforms;
+            [NativeDisableParallelForRestriction] public ComponentLookup<LocalToWorld> WorldTransforms;
             [NativeDisableParallelForRestriction] public ComponentLookup<SpriteAnimPlayer> Players;
             [NativeDisableParallelForRestriction] public ComponentLookup<SpriteGpuAnim> GpuAnims;
             public float3 Center;
@@ -174,6 +176,13 @@ namespace InvertLab.Sprites.DOTS
                 lt.Position = p;
                 lt.Scale = Scale;
                 Transforms[e] = lt;
+                // write the world matrix too so the same-frame render batch
+                // packs the final position (transform group syncs later frames)
+                if (WorldTransforms.HasComponent(e))
+                    WorldTransforms[e] = new LocalToWorld
+                    {
+                        Value = float4x4.TRS(p, quaternion.identity, new float3(Scale)),
+                    };
 
                 if (RandomizeClocks == 0)
                     return;

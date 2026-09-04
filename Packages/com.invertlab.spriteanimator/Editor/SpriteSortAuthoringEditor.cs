@@ -10,6 +10,43 @@ namespace InvertLab.Sprites.DOTS.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
+
+            // Total index entry: 1 = 0.001 z everywhere. total = layer×1000 +
+            // order + offset. DelayedIntField commits once on Enter/focus-loss;
+            // the write is applied immediately so nothing later can drop it.
+            var layerProp = serializedObject.FindProperty("SortLayer");
+            var orderProp = serializedObject.FindProperty("OrderInLayer");
+            var offsetProp = serializedObject.FindProperty("DepthOffset");
+            if (targets.Length == 1)
+            {
+                int current = SpriteSortDepth.ToIndex(
+                    layerProp.intValue, orderProp.intValue, offsetProp.intValue);
+                EditorGUI.BeginChangeCheck();
+                int index = EditorGUILayout.DelayedIntField(new GUIContent("Sort Index",
+                    $"Total depth coordinate where 1 = 0.001 z (higher = on top). " +
+                    $"Index = Layer × {SpriteSortDepth.OrdersPerLayer} + Order + Offset; " +
+                    "editing it fills Layer/Order below and clears Offset."),
+                    current);
+                if (EditorGUI.EndChangeCheck() && index != current)
+                {
+                    SpriteSortDepth.DecomposeIndex(index, out int layer, out int order);
+                    layerProp.intValue = layer;
+                    orderProp.intValue = order;
+                    offsetProp.intValue = 0;
+                    serializedObject.ApplyModifiedProperties();
+                    serializedObject.Update();
+                    // the immediate apply consumes the change, so the shared
+                    // sync below would skip this edit — sync here instead
+                    SyncTransformZ((SpriteSortAuthoring)target);
+                }
+                float labelZ = SpriteSortDepth.FromLayerOrder(
+                    layerProp.intValue, orderProp.intValue, offsetProp.intValue);
+                EditorGUILayout.LabelField(" ",
+                    $"= Layer {layerProp.intValue} · Order {orderProp.intValue} · " +
+                    $"Offset {offsetProp.intValue}  →  z {labelZ:0.###}",
+                    EditorStyles.miniLabel);
+            }
+
             bool changed = DrawDefaultInspector();
             changed |= serializedObject.ApplyModifiedProperties();
             if (changed)
@@ -33,12 +70,25 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUILayout.HelpBox(message, MessageType.Error);
             else if (status == SpriteSortAuthoring.DepthStatus.Risky)
                 EditorGUILayout.HelpBox(message, MessageType.Warning);
+            else if (camera != null)
+            {
+                float nearEdge = camera.transform.position.z + camera.nearClipPlane;
+                float farEdge = camera.transform.position.z + camera.farClipPlane;
+                float z = sort.BakedDepth;
+                EditorGUILayout.HelpBox(
+                    $"Camera '{camera.name}' z {camera.transform.position.z:0.###}, near " +
+                    $"{camera.nearClipPlane:0.##}, far {camera.farClipPlane:0.#} → visible z " +
+                    $"{nearEdge:0.###} … {farEdge:0.#}.\n" +
+                    $"Baked z {z:0.###}: {z - nearEdge:0.##} from the front edge, " +
+                    $"{farEdge - z:0.#} from the back edge.\n" +
+                    "All fields: higher = on top. Editing them also writes the GameObject's " +
+                    "world z (undo-able).", MessageType.Info);
+            }
             else
                 EditorGUILayout.HelpBox(
-                    "All fields: higher = on top. Editing them also writes the GameObject's " +
-                    "world z (undo-able). Baked z is what the entity uses; lower world z = closer " +
-                    "to the default 2D camera (z −10, looking +z).",
-                    MessageType.None);
+                    "No camera in scene — clip range cannot be checked.\n" +
+                    "All fields: higher = on top; editing them also writes the GameObject's " +
+                    "world z (undo-able).", MessageType.Info);
         }
 
         static void SyncTransformZ(SpriteSortAuthoring sort)
