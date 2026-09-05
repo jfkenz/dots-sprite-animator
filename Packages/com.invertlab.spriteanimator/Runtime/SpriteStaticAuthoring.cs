@@ -407,7 +407,10 @@ namespace InvertLab.Sprites.DOTS
         static void SanitizePreview(MeshFilter filter)
         {
             var mesh = filter.sharedMesh;
-            if (mesh == null || (mesh.hideFlags & HideFlags.DontSave) != 0)
+            // only swap an existing DontSave preview mesh — a null mesh needs
+            // nothing, and touching builtin resources here polluted edit-mode
+            // test runs (GUILayout errors from the runner context)
+            if (mesh != null && (mesh.hideFlags & HideFlags.DontSave) != 0)
                 filter.sharedMesh = Resources.GetBuiltinResource<Mesh>("New-Quad.fbx");
         }
 #endif

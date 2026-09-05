@@ -62,6 +62,30 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void OnGUI()
         {
+            // a destroyed host (domain reload / closed tool window) would
+            // throw mid-layout and permanently desync GUILayout state
+            if (_host == null)
+            {
+                EditorGUILayout.HelpBox("Host window closed — close and reopen the Cell " +
+                    "Editor from the Sprite Animator window.", MessageType.Warning);
+                return;
+            }
+
+            try
+            {
+                OnGUIInner();
+            }
+            catch (System.Exception ex)
+            {
+                // an exception inside a GUILayout scope leaves the layout
+                // stack imbalanced; recover instead of erroring every frame
+                Debug.LogException(ex);
+                GUIUtility.ExitGUI();
+            }
+        }
+
+        void OnGUIInner()
+        {
             var data = Data;
             var sheet = Sheet;
             var texture = sheet?.Texture ?? data?.Sheet;
@@ -88,14 +112,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             // ---- toolbar ----
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
-                if (EditorGUILayout.DropdownButton(
-                        new GUIContent("Slice ▾",
-                            "Unity Sprite Editor-style slicing: Automatic, Grid By Cell Size, " +
-                            "Grid By Cell Count. Writes into this sheet."),
-                        FocusType.Passive, EditorStyles.toolbarButton, GUILayout.Width(64f)))
+                if (GUILayout.Button(new GUIContent("Slice ▾",
+                        "Unity Sprite Editor-style slicing: Grid By Cell Count, " +
+                        "Grid By Cell Size. Writes into this sheet."),
+                        EditorStyles.toolbarButton, GUILayout.Width(64f)))
                 {
-                    PopupWindow.Show(GUILayoutUtility.GetLastRect(),
-                        new SpriteSheetSlicePopup(this));
+                    var popupRect = GUILayoutUtility.GetLastRect();
+                    PopupWindow.Show(popupRect, new SpriteSheetSlicePopup(this));
                 }
                 GUILayout.Space(6f);
                 if (GUILayout.Button("◀", EditorStyles.toolbarButton, GUILayout.Width(26f)))
@@ -132,8 +155,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             float drawW = texture.width * _zoom;
             float drawH = texture.height * _zoom;
 
-            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandWidth(true),
-                GUILayout.ExpandHeight(true));
+            using (var scrollScope = new EditorGUILayout.ScrollViewScope(_scroll,
+                GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+            {
+            _scroll = scrollScope.scrollPosition;
             var canvas = GUILayoutUtility.GetRect(drawW, drawH, GUILayout.ExpandWidth(false),
                 GUILayout.ExpandHeight(false));
             var evt = Event.current;
@@ -164,15 +189,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                 var handle = new Vector2(
                     world.x + pivot.x * world.width,
                     world.y + (1f - pivot.y) * world.height);
-                var handle3 = new Vector3(handle.x, handle.y, 0f);
-                Handles.BeginGUI();
-                Handles.color = PivotDot;
-                Handles.DrawSolidDisc(handle3, Vector3.forward, 6f);
-                Handles.color = Color.white;
-                Handles.DrawWireDisc(handle3, Vector3.forward, 6f);
-                Handles.DrawLine(handle3 + new Vector3(-10f, 0f, 0f), handle3 + new Vector3(10f, 0f, 0f));
-                Handles.DrawLine(handle3 + new Vector3(0f, -10f, 0f), handle3 + new Vector3(0f, 10f, 0f));
-                Handles.EndGUI();
+                if (evt.type == EventType.Repaint)
+                {
+                    var handle3 = new Vector3(handle.x, handle.y, 0f);
+                    Handles.BeginGUI();
+                    Handles.color = PivotDot;
+                    Handles.DrawSolidDisc(handle3, Vector3.forward, 6f);
+                    Handles.color = Color.white;
+                    Handles.DrawWireDisc(handle3, Vector3.forward, 6f);
+                    Handles.DrawLine(handle3 + new Vector3(-10f, 0f, 0f), handle3 + new Vector3(10f, 0f, 0f));
+                    Handles.DrawLine(handle3 + new Vector3(0f, -10f, 0f), handle3 + new Vector3(0f, 10f, 0f));
+                    Handles.EndGUI();
+                }
 
                 float handleDist = Vector2.Distance(handle, evt.mousePosition);
                 if (handleDist < 12f)
@@ -219,7 +247,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Repaint();
             }
 
-            GUI.EndScrollView();
+            }
         }
 
         static Texture2D _panelBackground;

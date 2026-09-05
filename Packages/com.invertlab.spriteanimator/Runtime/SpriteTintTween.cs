@@ -1,4 +1,5 @@
 using Unity.Burst;
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
@@ -100,59 +101,69 @@ namespace InvertLab.Sprites.DOTS
     }
 
     /// <summary>
-    /// Advances tint tweens and writes <see cref="SpriteTint"/>. Runs in the
-    /// plain simulation bucket (before the OrderLast render packers). When any
-    /// tweened sprite is GPU-driven the instance buffer is marked dirty — GPU
-    /// crowds only re-upload on change, so static tints stay free.
+    /// Advances tint tweens and writes <see cref="SpriteTint"/>. Managed
+    /// OnUpdate: the tween advance runs as Burst jobs; the GPU re-upload
+    /// decision reads the job result in managed code (Burst cannot write
+    /// managed statics).
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
-    [BurstCompile]
     public partial struct SpriteTintTweenSystem : ISystem
     {
-        [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
             float dt = SystemAPI.Time.DeltaTime;
-            bool anyGpu = false;
+            var gpuFlag = new NativeReference<int>(Allocator.TempJob);
 
-            foreach (var (tint, tween, enabled) in
-                     SystemAPI.Query<RefRW<SpriteTint>, RefRW<SpriteTintTween>,
-                                     EnabledRefRW<SpriteTintTween>>())
+            state.Dependency = new AdvanceTweenJob { Dt = dt }
+                .ScheduleParallel(state.Dependency);
+            state.Dependency = new GpuDirtyJob { GpuFlag = gpuFlag }
+                .Schedule(state.Dependency);
+            state.Dependency.Complete();
+
+            if (gpuFlag.Value != 0)
+                SpriteGpuAnimResources.MarkDirty();
+            gpuFlag.Dispose();
+        }
+
+        /// <summary>Advances every enabled tween, CPU- and GPU-driven alike
+        /// (GPU sprites need the fresh tint when the buffer re-uploads).</summary>
+        [BurstCompile]
+        partial struct AdvanceTweenJob : IJobEntity
+        {
+            public float Dt;
+
+            void Execute(ref SpriteTint tint, ref SpriteTintTween tween,
+                         EnabledRefRW<SpriteTintTween> enabled)
             {
                 if (!enabled.ValueRO)
-                    continue;
+                    return;
 
-                tween.ValueRW.Time += dt;
-                float t = SpriteTintFx.Evaluate(
-                    tween.ValueRO.Time, tween.ValueRO.Duration, tween.ValueRO.Wrap);
-                tint.ValueRW.Value = math.lerp(tween.ValueRO.From, tween.ValueRO.To, t);
+                tween.Time += Dt;
+                float t = SpriteTintFx.Evaluate(tween.Time, tween.Duration, tween.Wrap);
+                tint.Value = math.lerp(tween.From, tween.To, t);
 
-                bool finished = tween.ValueRO.Time >= tween.ValueRO.Duration;
-                if (finished && tween.ValueRO.Wrap != 1 && tween.ValueRO.Wrap != 2)
-                {
+                if (tween.Time < tween.Duration)
+                    return;
+                if (tween.Wrap == 1 || tween.Wrap == 2)
+                    tween.Time = 0f; // loop / pingpong restart
+                else
                     enabled.ValueRW = false;
-                }
-                else if (finished)
-                {
-                    // loop / pingpong: fold the clock, keep going
-                    tween.ValueRW.Time = 0f;
-                }
             }
+        }
 
-            // GPU re-upload only when a tweened sprite is actually GPU-driven
-            foreach (var (tween, enabled, gpu) in
-                     SystemAPI.Query<RefRO<SpriteTintTween>, EnabledRefRO<SpriteTintTween>,
-                                     RefRO<SpriteGpuDriven>>())
+        /// <summary>Single-threaded: flags the managed dirty write when any
+        /// enabled tween sits on a GPU-driven sprite.</summary>
+        [BurstCompile]
+        [WithAll(typeof(SpriteGpuDriven))]
+        partial struct GpuDirtyJob : IJobEntity
+        {
+            public NativeReference<int> GpuFlag;
+
+            void Execute(EnabledRefRO<SpriteTintTween> enabled)
             {
                 if (enabled.ValueRO)
-                {
-                    anyGpu = true;
-                    break;
-                }
+                    GpuFlag.Value = 1;
             }
-
-            if (anyGpu)
-                SpriteGpuAnimResources.MarkDirty();
         }
     }
 }
