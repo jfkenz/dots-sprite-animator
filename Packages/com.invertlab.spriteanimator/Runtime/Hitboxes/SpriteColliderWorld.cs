@@ -62,7 +62,8 @@ namespace InvertLab.Sprites.DOTS
 
         public static void SyncUnityColliders(Transform host, IList<FrameBoxDef> boxes,
             string clipName, int frame, bool includeFrameBoxes, bool flipX = false, bool flipY = false,
-            SpriteSheetDef sheet = null, Vector2 normalizedPivot = default)
+            SpriteSheetDef sheet = null, Vector2 normalizedPivot = default,
+            byte lifetimeMask = 7)
         {
             if (host == null)
                 return;
@@ -78,6 +79,9 @@ namespace InvertLab.Sprites.DOTS
             {
                 var box = boxes[i];
                 if (box == null || !box.UsesUnity2D || box.Hidden)
+                    continue;
+                // lifetime scope filter (frame=1, character=2, clip=4)
+                if (((1 << Mathf.Clamp(box.Lifetime, 0, 2)) & lifetimeMask) == 0)
                     continue;
                 if (box.IsCharacter)
                 {

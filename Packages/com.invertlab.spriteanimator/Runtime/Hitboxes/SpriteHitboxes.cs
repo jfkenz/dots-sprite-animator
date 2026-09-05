@@ -59,7 +59,7 @@ namespace InvertLab.Sprites.DOTS
             public float   Angle;    // degrees, y-up runtime UV
             public byte    Id;
             public SpriteColliderShape Shape;
-            public FixedList128Bytes<float2> Polygon;
+            public FixedList512Bytes<float2> Polygon; // room for 30+ point polygons
         }
 
         /// <summary>
@@ -200,7 +200,7 @@ namespace InvertLab.Sprites.DOTS
                 Vector2[] polygon = hb.PolygonUV != null && hb.PolygonUV.Length >= 3
                     ? hb.PolygonUV
                     : FrameBoxDef.CreateRegularPolygon();
-                for (int point = 0; point < polygon.Length && point < 12; point++)
+                for (int point = 0; point < polygon.Length && point < 32; point++)
                 {
                     Vector2 local = polygon[point];
                     input.Polygon.Add(new float2(

@@ -118,6 +118,10 @@ namespace InvertLab.Sprites.DOTS
         [Tooltip("Spawn Unity 2D Box/Circle/Polygon colliders on this object from the profile.")]
         public bool BakeUnityColliders;
 
+        /// <summary>Lifetime filter (frame=1, character=2, clip=4) driven by
+        /// SpriteColliderAuthoring; all lifetimes by default.</summary>
+        [HideInInspector] public byte ColliderLifetimeMask = 7;
+
 
 
         [Tooltip("Also spawn this-frame slash colliders. Off = Character and This Clip body colliders only.")]
@@ -235,9 +239,28 @@ namespace InvertLab.Sprites.DOTS
 
         void OnValidate()
         {
+#if UNITY_EDITOR
+            // static and animated authoring are mutually exclusive — both
+            // bakers would add duplicate components to the same entity
+            var staticAuthoring = GetComponent<SpriteStaticAuthoring>();
+            if (staticAuthoring != null)
+            {
+                Debug.LogError(
+                    $"[{nameof(SpriteAnimSetAuthoring)}] '{name}': animated and static sprite " +
+                    "authoring cannot coexist on one GameObject — removing the static authoring.",
+                    staticAuthoring);
+                var colliderAuthoring = GetComponent<SpriteColliderAuthoring>();
+                EditorApplication.delayCall += () =>
+                {
+                    if (colliderAuthoring != null)
+                        Undo.DestroyObjectImmediate(colliderAuthoring);
+                    if (staticAuthoring != null)
+                        Undo.DestroyObjectImmediate(staticAuthoring);
+                };
+            }
+
             if (Profile != null)
                 ApplyFromProfile();
-#if UNITY_EDITOR
             RefreshQuadPreview();
             if (BakeUnityColliders || BakeUnitySockets)
                 ScheduleUnityColliderSync();
@@ -817,7 +840,8 @@ namespace InvertLab.Sprites.DOTS
             SpriteColliderWorld.SyncUnityColliders(
                 transform, data.Hitboxes, clipName, frame, BakeFrameColliders,
                 player != null && player.FlipX, player != null && player.FlipY,
-                displaySheet, SpriteSocketWorld.ResolvePivot(data, displaySheet));
+                displaySheet, SpriteSocketWorld.ResolvePivot(data, displaySheet),
+                ColliderLifetimeMask);
         }
 
 

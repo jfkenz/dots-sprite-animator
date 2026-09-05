@@ -17,7 +17,6 @@ namespace InvertLab.Sprites.DOTS
     /// </summary>
     [AddComponentMenu("DOTS Sprite Animator/Sprite Static Authoring")]
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(SpriteSortAuthoring))]
     public class SpriteStaticAuthoring : MonoBehaviour
     {
         [Tooltip("Profile authored in Window > DOTS Sprite Animator. The sheet texture " +
@@ -175,6 +174,9 @@ namespace InvertLab.Sprites.DOTS
                 UnityEditor.Undo.AddComponent<MeshFilter>(gameObject);
             if (GetComponent<MeshRenderer>() == null)
                 UnityEditor.Undo.AddComponent<MeshRenderer>(gameObject);
+            // attached by now, so the bundle takes the static branch (adds
+            // only the sort authoring — never the animated stack)
+            SpriteAuthoringBundle.Ensure(gameObject);
             UpdatePreview();
             SyncUnityBoxCollider();
         }
@@ -226,6 +228,34 @@ namespace InvertLab.Sprites.DOTS
 
         void OnValidate()
         {
+#if UNITY_EDITOR
+            // static and animated authoring are mutually exclusive — both
+            // bakers would add duplicate components to the same entity
+            var set = GetComponent<SpriteAnimSetAuthoring>();
+            var player = GetComponent<SpriteAnimPlayerAuthoring>();
+            var colliderAuthoring = GetComponent<SpriteColliderAuthoring>();
+            if (set != null || player != null || colliderAuthoring != null)
+            {
+                Debug.LogError(
+                    $"[{nameof(SpriteStaticAuthoring)}] '{name}': cannot coexist with animated " +
+                    $"authoring (set={(set != null)} player={(player != null)} " +
+                    $"collider={(colliderAuthoring != null)}) — removing the animated components.",
+                    set != null ? (Object)set : (Object)player);
+                UnityEditor.EditorApplication.delayCall += () =>
+                {
+                    if (this == null)
+                        return;
+                    if (colliderAuthoring != null)
+                        UnityEditor.Undo.DestroyObjectImmediate(colliderAuthoring);
+                    if (player != null)
+                        UnityEditor.Undo.DestroyObjectImmediate(player);
+                    if (set != null)
+                        UnityEditor.Undo.DestroyObjectImmediate(set);
+                };
+                return; // animated stack is going away; skip preview work
+            }
+#endif
+
             if (Profile == null)
                 Debug.LogWarning(
                     $"[SpriteStaticAuthoring] '{name}': assign a Profile (Window > DOTS Sprite " +

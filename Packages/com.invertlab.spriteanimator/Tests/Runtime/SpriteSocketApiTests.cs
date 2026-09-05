@@ -747,10 +747,13 @@ namespace InvertLab.Sprites.DOTS.Tests
                 Rows = 1,
                 PixelsPerUnit = 50f,
             };
+            // no texture -> unit cell: the (0.5, 0.5) pivot sits 0.5 cells
+            // above the bottom-center mesh origin, so its offset contributes
+            // 0.5 world units on y before the pixel offset
             var local = SpriteSocketWorld.PixelsFromPivotToMeshLocal(
                 sheet, new UnityEngine.Vector2(0.5f, 0.5f), new UnityEngine.Vector2(10f, -20f));
             Assert.AreEqual(10f / 50f, local.x, 0.0001f);
-            Assert.AreEqual(-20f / 50f, local.y, 0.0001f);
+            Assert.AreEqual(0.5f + -20f / 50f, local.y, 0.0001f);
         }
 
 

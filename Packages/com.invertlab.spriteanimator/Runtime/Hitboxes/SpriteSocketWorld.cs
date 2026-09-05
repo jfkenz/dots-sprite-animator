@@ -221,8 +221,14 @@ namespace InvertLab.Sprites.DOTS
                 Mathf.Clamp01(profilePivot.x),
                 Mathf.Clamp01(profilePivot.y));
 
+            // unknown texture: fall back to a one-world-unit cell (ppu pixels)
+            // so the pivot offset still applies — mirroring around (0,0) was
+            // the old degenerate behavior the cell-center mirror test caught
             if (!SpriteSheetProfile.TryGetCellPixels(sheet, out float cellW, out float cellH))
-                return pivotPixels / ppu;
+            {
+                cellW = ppu;
+                cellH = ppu;
+            }
 
             // Mesh origin is bottom-center (0.5, 0) in normalized cell space.
             // Profile pivot is also normalized (x left→right, y bottom→top).

@@ -871,9 +871,9 @@ namespace InvertLab.Sprites.DOTS
 
             // static-sprite context: keep only the sort authoring — dragging
             // the animation stack (Set + Player) onto a static prop is never
-            // intended. If an anim set is already present, behave normally.
-            if (gameObject.GetComponent<SpriteStaticAuthoring>() != null &&
-                gameObject.GetComponent<SpriteAnimSetAuthoring>() == null)
+            // intended. (During RequireComponent races the static authoring
+            // may briefly be absent; mutual exclusion cleans that up after.)
+            if (gameObject.GetComponent<SpriteStaticAuthoring>() != null)
             {
                 AddIfMissing<SpriteSortAuthoring>(gameObject);
                 return;
@@ -885,6 +885,7 @@ namespace InvertLab.Sprites.DOTS
                 AddIfMissing<SpriteAnimSetAuthoring>(gameObject);
                 AddIfMissing<SpriteAnimPlayerAuthoring>(gameObject);
                 AddIfMissing<SpriteSortAuthoring>(gameObject);
+                AddIfMissing<SpriteColliderAuthoring>(gameObject);
             }
             finally
             {

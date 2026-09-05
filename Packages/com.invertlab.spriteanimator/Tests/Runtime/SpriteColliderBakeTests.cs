@@ -420,6 +420,44 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void SpriteColliderScopeResolvesLifetimeMask()
+        {
+            var data = new SpriteSheetProfile();
+            data.Hitboxes.Add(new FrameBoxDef { Lifetime = 1 }); // character
+            data.Hitboxes.Add(new FrameBoxDef { Lifetime = 0 }); // frame
+
+            var host = new GameObject("ColliderAuthoringMask");
+            try
+            {
+                var authoring = host.AddComponent<SpriteColliderAuthoring>();
+
+                // Auto detects exactly the lifetimes present
+                authoring.Scope = SpriteColliderScope.Auto;
+                Assert.AreEqual(
+                    SpriteColliderAuthoring.LifetimeCharacter |
+                    SpriteColliderAuthoring.LifetimeFrame,
+                    authoring.ResolveLifetimeMask(data));
+
+                // explicit scopes map to their bit
+                authoring.Scope = SpriteColliderScope.Character;
+                Assert.AreEqual(SpriteColliderAuthoring.LifetimeCharacter,
+                    authoring.ResolveLifetimeMask(data));
+                authoring.Scope = SpriteColliderScope.All;
+                Assert.AreEqual(SpriteColliderAuthoring.LifetimeAll,
+                    authoring.ResolveLifetimeMask(data));
+
+                // no boxes at all -> Auto falls back to everything
+                data.Hitboxes.Clear();
+                Assert.AreEqual(SpriteColliderAuthoring.LifetimeAll,
+                    authoring.ResolveLifetimeMask(data));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void SpriteTintTweenEvaluateShapes()
         {
             Assert.AreEqual(0f, SpriteTintFx.Evaluate(0f, 1f, 0), 0.0001f);
