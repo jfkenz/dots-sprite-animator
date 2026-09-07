@@ -276,14 +276,41 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (clip != null)
                 eligible = SpriteGpuEligibility.IsGpuEligible(clip, out reason);
 
+            bool multiSheet = false;
+            bool cropped = false;
+            if (data != null && data.Clips != null && data.Clips.Count > 0)
+            {
+                int firstSheet = data.Clips[0].SheetIndex;
+                for (int i = 0; i < data.Clips.Count; i++)
+                {
+                    if (data.Clips[i].SheetIndex != firstSheet)
+                        multiSheet = true;
+                    var sheet = data.SheetAt(data.Clips[i].SheetIndex);
+                    if (sheet != null &&
+                        sheet.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped &&
+                        SpriteSheetProfile.HasCroppedCellData(sheet))
+                        cropped = true;
+                }
+            }
+
             string pathNote;
             MessageType boxType = MessageType.None;
             switch (authoring.PlaybackPath)
             {
                 case SpritePlaybackPath.PreferGpu:
-                    if (eligible)
+                    if (multiSheet)
                     {
-                        pathNote = "Prefer Gpu: this clip is eligible. At Play it converts to the GPU clock.";
+                        pathNote = "Prefer Gpu: multiple sheets need the CPU instance path. Stays on CPU.";
+                        boxType = MessageType.Warning;
+                    }
+                    else if (cropped)
+                    {
+                        pathNote = "Prefer Gpu: Cropped cell layout needs CPU CropST. Stays on CPU.";
+                        boxType = MessageType.Warning;
+                    }
+                    else if (eligible)
+                    {
+                        pathNote = "Prefer Gpu: eligible. At Play it promotes the sheet to the GPU clock (legacy SetSheet).";
                         boxType = MessageType.Info;
                     }
                     else

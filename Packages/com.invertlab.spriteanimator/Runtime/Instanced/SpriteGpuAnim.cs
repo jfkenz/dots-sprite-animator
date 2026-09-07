@@ -151,10 +151,9 @@ namespace InvertLab.Sprites.DOTS
                 !em.HasComponent<SpriteAnimSetRef>(e))
                 return false;
 
-            // the GPU path draws on the single default sheet only; sprites
-            // bound to a per-sheet record stay on the CPU batcher
-            if (em.HasComponent<SpriteSheetBinding>(e) &&
-                em.GetComponentData<SpriteSheetBinding>(e).Sheet != Entity.Null)
+            // GPU clock draws the legacy default sheet only. Promote a bound
+            // single sheet onto SetSheet/SetGrid, then clear the binding.
+            if (!TryPromoteBoundSheetToLegacy(em, e))
                 return false;
 
             var p = em.GetComponentData<SpriteAnimPlayer>(e);
@@ -270,6 +269,51 @@ namespace InvertLab.Sprites.DOTS
             int n = ents.Length;
             ents.Dispose();
             return n;
+        }
+
+
+        /// <summary>
+        /// GPU draw uses SpriteRenderResources.Sheet. Clear a bound sheet onto
+        /// that legacy path when the sheet is uniform (no cell crops).
+        /// </summary>
+        public static bool TryPromoteBoundSheetToLegacy(EntityManager em, Entity e)
+        {
+            if (!em.HasComponent<SpriteSheetBinding>(e))
+                return true;
+            var binding = em.GetComponentData<SpriteSheetBinding>(e);
+            if (binding.Sheet == Entity.Null)
+                return true;
+
+            Entity sheet = binding.Sheet;
+            if (!em.Exists(sheet) || !em.HasComponent<SpriteSheetDefinition>(sheet))
+                return false;
+
+            var def = em.GetComponentData<SpriteSheetDefinition>(sheet);
+            if (def.UseCellCrops != 0)
+                return false;
+
+            if (!em.HasComponent<SpriteSheetAsset>(sheet))
+                return false;
+            var asset = em.GetComponentObject<SpriteSheetAsset>(sheet);
+            if (asset == null || asset.Texture == null)
+                return false;
+
+            if (em.HasBuffer<SpriteClipSheetBindingEntry>(e))
+            {
+                var buf = em.GetBuffer<SpriteClipSheetBindingEntry>(e);
+                for (int i = 0; i < buf.Length; i++)
+                {
+                    if (buf[i].Sheet != Entity.Null && buf[i].Sheet != sheet)
+                        return false;
+                }
+            }
+
+            SpriteInstanceRenderSystem.Install(em);
+            SpriteInstanceRenderSystem.SetSheet(asset.Texture);
+            SpriteInstanceRenderSystem.SetGrid(em, def.Cols, def.Rows,
+                def.CellAspect > 0.01f ? def.CellAspect : 1f, null);
+            em.SetComponentData(e, new SpriteSheetBinding { Sheet = Entity.Null });
+            return true;
         }
 
         /// <summary>Build GPU clock state for a clip. False if the clip needs CPU.</summary>
