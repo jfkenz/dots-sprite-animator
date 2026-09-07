@@ -1,4 +1,4 @@
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 
 
@@ -15,6 +15,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         SerializedProperty _clips;
         SerializedProperty _initialClipIndex;
         SerializedProperty _sizeUnits;
+        SerializedProperty _playbackPath;
         SerializedProperty _tint;
         SerializedProperty _showSpriteInScene;
         SerializedProperty _bakeUnityColliders;
@@ -36,6 +37,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _clips = serializedObject.FindProperty("Clips");
             _initialClipIndex = serializedObject.FindProperty("InitialClipIndex");
             _sizeUnits = serializedObject.FindProperty("SizeUnits");
+            _playbackPath = serializedObject.FindProperty("PlaybackPath");
             _tint = serializedObject.FindProperty("Tint");
             _showSpriteInScene = serializedObject.FindProperty("ShowSpriteInScene");
             _bakeUnityColliders = serializedObject.FindProperty("BakeUnityColliders");
@@ -98,7 +100,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 EditorGUILayout.HelpBox(
                     authoring.Sheet != null
-                        ? "Sheet, Columns, Rows, and Clips load from this Profile. Baker uses the Profile at bake. Tint, Size Units, Initial Clip Index, and Show Sprite stay on this component. Show Sprite draws the current clip frame (cropped) on this Quad. Uncheck to hide this Quad without affecting Play mode. Does not draw the full sheet."
+                        ? "Sheet, Columns, Rows, and Clips load from this Profile. Baker uses the Profile at bake. Tint, Size Units, Playback Path, Initial Clip Index, and Show Sprite stay on this component. Show Sprite draws the current clip frame (cropped) on this Quad. Uncheck to hide this Quad without affecting Play mode. Does not draw the full sheet."
                         : "Profile is assigned but has no Texture. Open Window > DOTS Sprite Animator, assign the sheet, Save Profile, then click Reload From Profile.",
                     authoring.Sheet != null ? MessageType.Info : MessageType.Warning);
             }
@@ -117,6 +119,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             EditorGUILayout.PropertyField(_initialClipIndex);
             EditorGUILayout.PropertyField(_sizeUnits);
+            EditorGUILayout.PropertyField(_playbackPath, new GUIContent("Playback Path", "Auto keeps CPU playback. Prefer Gpu converts after bake when the clip is eligible. Force Cpu stays on the CPU clock."));
+            DrawPlaybackPathHelp(authoring);
             EditorGUILayout.PropertyField(_tint);
 
 
@@ -254,6 +258,51 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
 
+
+        static void DrawPlaybackPathHelp(SpriteAnimSetAuthoring authoring)
+        {
+            int clipIndex = authoring.InitialClipIndex;
+            var player = authoring.GetComponent<SpriteAnimPlayerAuthoring>();
+            if (player != null)
+                clipIndex = player.ClipIndex;
+
+            SpriteClipDef clip = null;
+            var data = authoring.Profile != null ? authoring.Profile.Data : null;
+            if (data != null && data.Clips != null && clipIndex >= 0 && clipIndex < data.Clips.Count)
+                clip = data.Clips[clipIndex];
+
+            bool eligible = false;
+            string reason = "Assign a profile to check GPU eligibility for the current clip.";
+            if (clip != null)
+                eligible = SpriteGpuEligibility.IsGpuEligible(clip, out reason);
+
+            string pathNote;
+            MessageType boxType = MessageType.None;
+            switch (authoring.PlaybackPath)
+            {
+                case SpritePlaybackPath.PreferGpu:
+                    if (eligible)
+                    {
+                        pathNote = "Prefer Gpu: this clip is eligible. At Play it converts to the GPU clock.";
+                        boxType = MessageType.Info;
+                    }
+                    else
+                    {
+                        pathNote = "Prefer Gpu: this clip stays on CPU. " + reason;
+                        boxType = MessageType.Warning;
+                    }
+                    break;
+                case SpritePlaybackPath.ForceCpu:
+                    pathNote = "Force Cpu: stays on the CPU clock even if the clip is GPU-eligible.";
+                    break;
+                default:
+                    pathNote = eligible
+                        ? "Auto: CPU default. This clip is GPU-eligible - switch to Prefer Gpu to convert at Play."
+                        : "Auto: CPU default. " + reason;
+                    break;
+            }
+            EditorGUILayout.HelpBox(pathNote, boxType);
+        }
 
         static void RecordPreviewTargets(SpriteAnimSetAuthoring authoring, string undoName)
         {

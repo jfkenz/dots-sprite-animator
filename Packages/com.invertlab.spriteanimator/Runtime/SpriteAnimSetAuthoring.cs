@@ -104,6 +104,11 @@ namespace InvertLab.Sprites.DOTS
 
 
 
+        [Tooltip("Auto: CPU default. Prefer Gpu: convert after bake when the clip is GPU-eligible (no sockets, events, frame reorder, or per-frame TRS). Force Cpu: never use the GPU clock.")]
+        public SpritePlaybackPath PlaybackPath = SpritePlaybackPath.Auto;
+
+
+
         [Tooltip("Optional tint")]
         public Color Tint = Color.white;
 
@@ -1624,6 +1629,7 @@ namespace InvertLab.Sprites.DOTS
                     player.ClipIndex = initialClip;
                 }
                 AddComponent(entity, player);
+                AddComponent(entity, new SpritePlaybackPreference { Path = authoring.PlaybackPath });
                 ref var initialDef = ref setRef.Set.Value.Clips[initialClip];
                 int initialFrame = initialDef.WrapMode == SpriteAnimWrap.ReverseLoop
                     || initialDef.WrapMode == SpriteAnimWrap.ReverseOnce

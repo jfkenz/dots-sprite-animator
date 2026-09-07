@@ -455,4 +455,25 @@ namespace InvertLab.Sprites.DOTS
             return true;
         }
     }
+
+    /// <summary>
+    /// Authoring preference for how this sprite should play after bake.
+    /// Auto keeps the CPU default. PreferGpu converts once when the clip is eligible.
+    /// ForceCpu stays on (or returns to) the CPU clock.
+    /// </summary>
+    public enum SpritePlaybackPath : byte
+    {
+        Auto = 0,
+        PreferGpu = 1,
+        ForceCpu = 2,
+    }
+
+    /// <summary>Baked playback preference from SpriteAnimSetAuthoring.PlaybackPath.</summary>
+    public struct SpritePlaybackPreference : IComponentData
+    {
+        public SpritePlaybackPath Path;
+    }
+
+    /// <summary>One-shot: preference has been applied (or attempted) this entity lifetime.</summary>
+    public struct SpritePlaybackApplied : IComponentData { }
 }

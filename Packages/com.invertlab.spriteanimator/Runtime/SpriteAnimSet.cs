@@ -642,6 +642,25 @@ namespace InvertLab.Sprites.DOTS
     {
         public static ulong Fnv(string s) => SpriteAnimSetBuilder.Fnv(s);
 
+        /// <summary>
+        /// Switch to the GPU clock when the current clip is eligible.
+        /// Returns false if the clip needs CPU (sockets, events, reorder, per-frame TRS)
+        /// or the entity is already GPU-driven.
+        /// </summary>
+        public static bool TryToGpu(EntityManager em, Entity e, float now)
+            => SpriteGpuAnimSwitch.ToGpu(em, e, now);
+
+        public static bool TryToGpu(EntityManager em, Entity e)
+            => SpriteGpuAnimSwitch.ToGpu(em, e, Time.unscaledTime);
+
+        /// <summary>Restore CPU playback from parked GPU state.</summary>
+        public static bool ToCpu(EntityManager em, Entity e)
+            => SpriteGpuAnimSwitch.ToCpu(em, e);
+
+        public static bool IsGpuDriven(EntityManager em, Entity e)
+            => em.HasComponent<SpriteGpuDriven>(e);
+
+
         /// <summary>Switch an entity to the named clip (restarts at t=0).</summary>
         public static bool Play(EntityManager em, Entity e, string clipName, bool force = false,
                                 float crossfadeSeconds = 0f)
