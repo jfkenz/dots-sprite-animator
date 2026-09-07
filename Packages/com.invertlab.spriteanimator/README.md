@@ -1,10 +1,14 @@
-# DOTS Sprite Animator
+﻿# DOTS Sprite Animator
 
 Portable Unity 6000.0 package for DOTS-first 2D flipbook animation authoring and runtime playback.
 
 Current package version: **0.8.0**. Full guide: Documentation~/Documentation.md / Documentation~/DOTS-Sprite-Animator-User-Guide-v0.8.0.pdf.
 
 Published by **Invert Lab**.
+
+## Mental model
+
+See `Documentation~/Architecture.md` (Profile -> Play -> optional colliders) and `Documentation~/Samples.md`.
 
 ## Scope
 
@@ -23,7 +27,7 @@ Published by **Invert Lab**.
 
 ## Toolbar highlights
 
-- **New Profile** / **Load Profile…** / **Save Profile**
+- **New Profile** / **Load Profileâ€¦** / **Save Profile**
 - Step-frame transport `|<  <  >  >|`
 - Play/Pause, Stop, Loop, playback speed
 - Undo/Redo text buttons (Windows-safe)
@@ -70,3 +74,4 @@ See:
 
 - `Documentation~/QuickStart.md`
 - `Documentation~/AnimationEvents.md`
+

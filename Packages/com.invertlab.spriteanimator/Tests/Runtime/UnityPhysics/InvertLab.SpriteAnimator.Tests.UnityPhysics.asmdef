@@ -1,20 +1,21 @@
 ﻿{
-  "name": "InvertLab.SpriteAnimator.Tests",
+  "name": "InvertLab.SpriteAnimator.Tests.UnityPhysics",
   "rootNamespace": "InvertLab.Sprites.DOTS.Tests",
   "references": [
     "InvertLab.SpriteAnimator.Runtime",
+    "InvertLab.SpriteAnimator.UnityPhysics",
+    "InvertLab.SpriteAnimator.Tests",
     "Unity.Collections",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
+    "Unity.Physics",
     "Unity.Entities",
     "Unity.Mathematics",
     "Unity.Transforms"
   ],
-  "includePlatforms": [
-    "Editor"
-  ],
+  "includePlatforms": [ "Editor" ],
   "autoReferenced": false,
-  "defineConstraints": [],
+  "defineConstraints": [ "INVERTLAB_UNITY_PHYSICS" ],
   "versionDefines": [
     {
       "name": "com.unity.physics",

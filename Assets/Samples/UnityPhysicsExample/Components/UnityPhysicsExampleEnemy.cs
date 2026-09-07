@@ -104,28 +104,15 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public bool EnsurePhysicsHurtbox()
         {
-            var world = World.DefaultGameObjectInjectionWorld;
-            if (world == null || !world.IsCreated)
+            // Package API: creates kinematic Character body when outside SubScene.
+            var entity = SpriteUnityPhysicsHurtbox.Ensure(transform, _set, BakedEntity);
+            if (entity == Entity.Null)
                 return false;
-            var em = world.EntityManager;
-
-            if (BakedEntity == Entity.Null || !em.Exists(BakedEntity))
+            if (BakedEntity != entity)
             {
-                BakedEntity = Entity.Null;
-                _ownedEntity = false;
-                TryRegisterBakedHurtbox(em);
+                BakedEntity = entity;
+                _ownedEntity = true;
             }
-
-            if (BakedEntity == Entity.Null)
-                CreateRuntimeHurtbox(em);
-
-            if (BakedEntity == Entity.Null || !em.Exists(BakedEntity))
-                return false;
-
-            if (!em.HasComponent<PhysicsCollider>(BakedEntity))
-                return ApplyBodyCollider(em, BakedEntity);
-
-            // already has collider — treat as attached for UI / AnyColliderAttached
             return true;
         }
 
@@ -154,21 +141,6 @@ namespace InvertLab.Sprites.DOTS
             }
         }
 
-        void CreateRuntimeHurtbox(EntityManager em)
-        {
-            var entity = em.CreateEntity();
-            em.AddComponentData(entity, LocalTransform.FromPositionRotationScale(
-                transform.position, quaternion.identity, 1f));
-            em.AddComponentData(entity, new LocalToWorld
-            {
-                Value = float4x4.TRS(transform.position, quaternion.identity, new float3(1f)),
-            });
-            em.AddComponentData(entity, new SpriteHurtbox());
-            em.AddSharedComponent(entity, new PhysicsWorldIndex { Value = 0 });
-            BakedEntity = entity;
-            _ownedEntity = true;
-            ApplyBodyCollider(em, entity);
-        }
 
         /// <summary>
         /// Convert the profile character body box into a Unity Physics collider
@@ -176,58 +148,10 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public bool TryAttachUnityPhysicsCollider()
         {
-            return EnsurePhysicsHurtbox() && ApplyBodyCollider(
-                World.DefaultGameObjectInjectionWorld.EntityManager, BakedEntity);
+            return EnsurePhysicsHurtbox();
         }
 
-        bool ApplyBodyCollider(EntityManager em, Entity entity)
-        {
-            if (entity == Entity.Null || !em.Exists(entity))
-                return false;
 
-            var set = _set != null ? _set : GetComponent<SpriteAnimSetAuthoring>();
-            var data = set != null && set.Profile != null ? set.Profile.Data : null;
-            if (data == null)
-                return false;
-
-            var bodies = new System.Collections.Generic.List<FrameBoxDef>();
-            SpriteUnityPhysicsShape.CollectCharacterBodyBoxes(data, bodies);
-            var pivot = data.Pivot;
-            float sizeUnits = set != null ? set.SizeUnits : 1f;
-            var blob = SpriteUnityPhysicsShape.CreateBodyCollider(
-                bodies, pivot, sizeUnits, false, false);
-
-            if (em.HasComponent<PhysicsCollider>(entity))
-                em.SetComponentData(entity, new PhysicsCollider { Value = blob });
-            else
-                em.AddComponentData(entity, new PhysicsCollider { Value = blob });
-
-            EnsureKinematicBody(em, entity, blob);
-            SyncHurtboxTransform();
-            return true;
-        }
-
-        static void EnsureKinematicBody(
-            EntityManager em, Entity entity,
-            BlobAssetReference<Unity.Physics.Collider> blob)
-        {
-            var mass = PhysicsMass.CreateKinematic(blob.Value.MassProperties);
-            if (em.HasComponent<PhysicsMass>(entity))
-                em.SetComponentData(entity, mass);
-            else
-                em.AddComponentData(entity, mass);
-
-            if (!em.HasComponent<PhysicsVelocity>(entity))
-                em.AddComponentData(entity, new PhysicsVelocity());
-
-            var gravity = new PhysicsGravityFactor { Value = 0f };
-            if (em.HasComponent<PhysicsGravityFactor>(entity))
-                em.SetComponentData(entity, gravity);
-            else
-                em.AddComponentData(entity, gravity);
-
-            em.SetSharedComponent(entity, new PhysicsWorldIndex { Value = 0 });
-        }
 
         void SyncHurtboxTransform()
         {
@@ -236,37 +160,15 @@ namespace InvertLab.Sprites.DOTS
             var world = World.DefaultGameObjectInjectionWorld;
             if (world == null || !world.IsCreated)
                 return;
-            var em = world.EntityManager;
-            if (!em.Exists(BakedEntity))
-                return;
-
-            var pos = (float3)transform.position;
-            if (em.HasComponent<LocalTransform>(BakedEntity))
-            {
-                var lt = em.GetComponentData<LocalTransform>(BakedEntity);
-                lt.Position = pos;
-                em.SetComponentData(BakedEntity, lt);
-            }
-            if (em.HasComponent<LocalToWorld>(BakedEntity))
-            {
-                em.SetComponentData(BakedEntity, new LocalToWorld
-                {
-                    Value = float4x4.TRS(pos, quaternion.identity, new float3(1f)),
-                });
-            }
+            SpriteUnityPhysicsHurtbox.SyncTransform(
+                world.EntityManager, BakedEntity, transform.position);
         }
 
         void DestroyOwnedEntity()
         {
             if (!_ownedEntity || BakedEntity == Entity.Null)
                 return;
-            var world = World.DefaultGameObjectInjectionWorld;
-            if (world != null && world.IsCreated)
-            {
-                var em = world.EntityManager;
-                if (em.Exists(BakedEntity))
-                    em.DestroyEntity(BakedEntity);
-            }
+            SpriteUnityPhysicsHurtbox.Destroy(BakedEntity);
             BakedEntity = Entity.Null;
             _ownedEntity = false;
         }

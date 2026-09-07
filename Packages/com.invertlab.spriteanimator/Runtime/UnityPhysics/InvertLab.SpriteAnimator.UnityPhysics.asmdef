@@ -1,15 +1,15 @@
 ﻿{
-    "name": "InvertLab.SpriteAnimator.Runtime",
+    "name": "InvertLab.SpriteAnimator.UnityPhysics",
     "rootNamespace": "InvertLab.Sprites.DOTS",
     "references": [
+        "InvertLab.SpriteAnimator.Runtime",
+        "Unity.Physics",
         "Unity.Entities",
         "Unity.Entities.Hybrid",
-        "Unity.Entities.Graphics",
         "Unity.Transforms",
         "Unity.Mathematics",
-        "Unity.Burst",
         "Unity.Collections",
-        "Unity.Jobs"
+        "Unity.Burst"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -17,7 +17,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "INVERTLAB_UNITY_PHYSICS"
+    ],
     "versionDefines": [
         {
             "name": "com.unity.physics",

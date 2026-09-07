@@ -1,4 +1,4 @@
-{
+﻿{
     "name": "InvertLab.SpriteAnimator.Editor",
     "rootNamespace": "InvertLab.Sprites.DOTS.Editor",
     "references": [
@@ -19,6 +19,12 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.physics",
+            "expression": "1.0.0",
+            "define": "INVERTLAB_UNITY_PHYSICS"
+        }
+    ],
     "noEngineReferences": false
 }
