@@ -17,18 +17,266 @@ MonoBehaviour:
     Columns: 8
     Rows: 8
     PixelsPerUnit: 50
-    Pivot: {x: 0.23182535, y: 0.3074074}
+    Pivot: {x: 0.23571429, y: 0.30107528}
     CellLayoutMode: 0
-    CroppedCellRects: []
-    Sheets:
-    - Name: Bringer-of-Death-SpritSheet
-      Texture: {fileID: 2800000, guid: 1914d95466e3d4341a618c35a56d5f82, type: 3}
-      Columns: 8
-      Rows: 8
-      PixelsPerUnit: 50
-      Pivot: {x: 0.23182535, y: 0.3074074}
-      CellLayoutMode: 0
-      CroppedCellRects: []
+    CroppedCellRects:
+    - x: 14
+      y: 652
+      width: 40
+      height: 54
+    - x: 154
+      y: 652
+      width: 40
+      height: 55
+    - x: 294
+      y: 652
+      width: 41
+      height: 56
+    - x: 435
+      y: 652
+      width: 41
+      height: 56
+    - x: 573
+      y: 652
+      width: 45
+      height: 54
+    - x: 712
+      y: 652
+      width: 47
+      height: 52
+    - x: 852
+      y: 652
+      width: 45
+      height: 53
+    - x: 993
+      y: 652
+      width: 43
+      height: 54
+    - x: 11
+      y: 559
+      width: 54
+      height: 54
+    - x: 149
+      y: 559
+      width: 56
+      height: 52
+    - x: 290
+      y: 559
+      width: 56
+      height: 54
+    - x: 431
+      y: 559
+      width: 54
+      height: 55
+    - x: 575
+      y: 559
+      width: 48
+      height: 54
+    - x: 716
+      y: 559
+      width: 46
+      height: 52
+    - x: 855
+      y: 559
+      width: 45
+      height: 54
+    - x: 994
+      y: 559
+      width: 50
+      height: 55
+    - x: 12
+      y: 466
+      width: 44
+      height: 54
+    - x: 142
+      y: 466
+      width: 60
+      height: 54
+    - x: 286
+      y: 466
+      width: 61
+      height: 69
+    - x: 423
+      y: 466
+      width: 62
+      height: 69
+    - x: 562
+      y: 466
+      width: 133
+      height: 76
+    - x: 700
+      y: 466
+      width: 140
+      height: 83
+    - x: 850
+      y: 466
+      width: 127
+      height: 85
+    - x: 990
+      y: 466
+      width: 126
+      height: 85
+    - x: 22
+      y: 373
+      width: 112
+      height: 82
+    - x: 157
+      y: 373
+      width: 37
+      height: 53
+    - x: 293
+      y: 373
+      width: 47
+      height: 50
+    - x: 433
+      y: 373
+      width: 41
+      height: 53
+    - x: 573
+      y: 373
+      width: 39
+      height: 55
+    - x: 715
+      y: 373
+      width: 40
+      height: 53
+    - x: 853
+      y: 373
+      width: 45
+      height: 54
+    - x: 991
+      y: 373
+      width: 48
+      height: 54
+    - x: 10
+      y: 280
+      width: 49
+      height: 56
+    - x: 147
+      y: 280
+      width: 51
+      height: 58
+    - x: 285
+      y: 280
+      width: 50
+      height: 60
+    - x: 426
+      y: 285
+      width: 48
+      height: 59
+    - x: 567
+      y: 293
+      width: 48
+      height: 52
+    - x: 712
+      y: 298
+      width: 40
+      height: 49
+    - x: 851
+      y: 307
+      width: 33
+      height: 40
+    - x: 994
+      y: 280
+      width: 48
+      height: 52
+    - x: 14
+      y: 187
+      width: 48
+      height: 51
+    - x: 155
+      y: 187
+      width: 46
+      height: 50
+    - x: 295
+      y: 187
+      width: 48
+      height: 50
+    - x: 435
+      y: 187
+      width: 50
+      height: 49
+    - x: 575
+      y: 187
+      width: 51
+      height: 92
+    - x: 715
+      y: 187
+      width: 51
+      height: 92
+    - x: 855
+      y: 187
+      width: 52
+      height: 91
+    - x: 995
+      y: 187
+      width: 53
+      height: 91
+    - x: 56
+      y: 132
+      width: 32
+      height: 19
+    - x: 196
+      y: 132
+      width: 32
+      height: 19
+    - x: 334
+      y: 133
+      width: 35
+      height: 16
+    - x: 474
+      y: 133
+      width: 35
+      height: 16
+    - x: 617
+      y: 128
+      width: 29
+      height: 23
+    - x: 757
+      y: 115
+      width: 31
+      height: 36
+    - x: 897
+      y: 98
+      width: 31
+      height: 53
+    - x: 1037
+      y: 94
+      width: 31
+      height: 57
+    - x: 56
+      y: 1
+      width: 33
+      height: 57
+    - x: 196
+      y: 1
+      width: 34
+      height: 57
+    - x: 334
+      y: 1
+      width: 35
+      height: 55
+    - x: 474
+      y: 1
+      width: 36
+      height: 55
+    - x: 617
+      y: 1
+      width: 34
+      height: 57
+    - x: 757
+      y: 40
+      width: 29
+      height: 18
+    - x: 897
+      y: 39
+      width: 31
+      height: 19
+    - x: 1037
+      y: 39
+      width: 31
+      height: 19
+    CellPivots: []
     Clips:
     - Name: Bringer-of-Death-SpritSheet row 1
       SheetIndex: 0
@@ -638,10 +886,10 @@ MonoBehaviour:
       FrameIndex: -1
       RectUV:
         serializedVersion: 2
-        x: 0.10142854
-        y: 0.3888889
-        width: 0.26079366
-        height: 0.6074074
+        x: 0.09657222
+        y: 0.41956136
+        width: 0.2954461
+        height: 0.5764769
       Id: 1
       Shape: 0
       PolygonUV: []

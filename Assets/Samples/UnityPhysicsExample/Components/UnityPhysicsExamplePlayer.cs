@@ -1,3 +1,7 @@
+﻿using Unity.Collections;
+using Unity.Entities;
+using Unity.Mathematics;
+using Unity.Physics;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
@@ -5,14 +9,19 @@ using UnityEngine.InputSystem.Controls;
 namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
-    /// Pure variant of ColliderExamplePlayer: movement on the transform, and
-    /// attack hits detected purely with SpriteHitboxQuery bounds overlap
-    /// against enemy hurtboxes — no Rigidbody2D, no Collider2D, no triggers.
+    /// Caches the physics world singleton so MonoBehaviour gameplay can run
+    /// Unity Physics overlap queries.
+    /// </summary>
+    /// <summary>
+    /// Unity Physics variant of the example player: transform movement and
+    /// J attacks â€” the slash window is computed with SpriteHitboxQuery and
+    /// enemies are detected with a Unity Physics OverlapAabb query against
+    /// their baked hurtbox colliders.
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(SpriteAnimPlayerAuthoring))]
     [RequireComponent(typeof(SpriteAnimSetAuthoring))]
-    public sealed class PureColliderExamplePlayer : MonoBehaviour
+    public sealed class UnityPhysicsExamplePlayer : MonoBehaviour
     {
         [Min(0.1f)] public float MoveSpeed = 3f;
 
@@ -27,19 +36,24 @@ namespace InvertLab.Sprites.DOTS
         [Min(0)] public int AttackClipIndex = 13;
 
         [Min(1)] public int AttackDamage = 1;
-        [Tooltip("Extra reach added to the attack box on the facing side, in world units. " +
-                 "The slash collider covers only the authored box; this pads it so 'near' is enough.")]
+        [Tooltip("Extra reach added to the attack box on the facing side.")]
         [Min(0f)] public float AttackReachPadding = 0.3f;
-        [Tooltip("Show the A/D/J help box in the corner.")]
-        public bool ShowHelpOverlay = false;
         [Tooltip("On-screen readout of the attack query while attacking.")]
         public bool ShowQueryDebug = true;
+        [Tooltip("Show the A/D/J help box in the corner.")]
+        public bool ShowHelpOverlay = false;
 
         SpriteAnimPlayerAuthoring _player;
         SpriteAnimSetAuthoring _set;
         bool _attacking;
         bool _facingLeft;
         int _attackId;
+        string _hitLog = "";
+        string hitLog
+        {
+            get => _hitLog;
+            set => _hitLog = value;
+        }
         string _debugInfo = "";
         GUIStyle _helpStyle;
 
@@ -47,6 +61,23 @@ namespace InvertLab.Sprites.DOTS
         {
             _player = GetComponent<SpriteAnimPlayerAuthoring>();
             _set = GetComponent<SpriteAnimSetAuthoring>();
+            UnityPhysicsOverlapBridge.EntityHit += OnBridgeEntityHit;
+        }
+
+        void OnDestroy()
+        {
+            UnityPhysicsOverlapBridge.EntityHit -= OnBridgeEntityHit;
+        }
+
+        void OnBridgeEntityHit(Entity entity, int attackId, int damage)
+        {
+            var enemy = FindEnemyByEntity(entity);
+            if (enemy == null)
+                return;
+            if (enemy.LastHitAttackId == attackId)
+                return;
+            _hitLog = "\n" + enemy.name + ": HIT";
+            enemy.ReceiveHit(damage, attackId);
         }
 
         void Update()
@@ -78,10 +109,9 @@ namespace InvertLab.Sprites.DOTS
                 if (_player.ClipIndex != WalkClipIndex)
                     _player.Play(WalkClipIndex);
             }
-            else
+            else if (_player.ClipIndex != IdleClipIndex || !_player.Playing)
             {
-                if (_player.ClipIndex != IdleClipIndex)
-                    _player.Play(IdleClipIndex);
+                _player.Play(IdleClipIndex);
             }
 
             if (IsPressed(AttackKey))
@@ -129,92 +159,57 @@ namespace InvertLab.Sprites.DOTS
             }
 
             string hitLog = "";
-            var enemies = FindObjectsByType<PureColliderExampleEnemy>(FindObjectsSortMode.None);
-            for (int i = 0; i < enemies.Length; i++)
+            if (gotBounds && UnityPhysicsOverlapBridge.Ready)
             {
-                var enemy = enemies[i];
-                if (enemy == null || enemy.gameObject == gameObject)
-                    continue;
-                bool hasHurt = enemy.TryGetHurtBounds(out var hurt);
-                bool overlap = hasHurt && SpriteHitboxQuery.Overlaps(attackBounds, hurt);
-                hitLog += "\n" + enemy.name + ": hurt=" +
-                          (hasHurt ? hurt.ToString() : "none") + " overlap=" + overlap;
-                if (overlap && enemy.LastHitAttackId != _attackId)
-                    enemy.ReceiveHit(AttackDamage, _attackId);
-            }
-
-            string noMatch = "";
-            if (!gotBounds)
-            {
-                var data = _set.Profile != null ? _set.Profile.Data : null;
-                if (data != null && data.Hitboxes != null)
+                // executed inside the bridge system update, against the live
+                // physics world (never the stale editor-loop copy)
+                UnityPhysicsOverlapBridge.Queue(new Aabb
                 {
-                    var names = new System.Collections.Generic.List<string>();
-                    var framesOnClip = new System.Collections.Generic.List<int>();
-                    foreach (var b in data.Hitboxes)
-                    {
-                        if (b == null || names.Contains(b.ClipName)) continue;
-                        names.Add(b.ClipName);
-                    }
-                    foreach (var b in data.Hitboxes)
-                    {
-                        if (b == null || b.ClipName != clipName) continue;
-                        if (!framesOnClip.Contains(b.FrameIndex))
-                            framesOnClip.Add(b.FrameIndex);
-                    }
-                    noMatch = " | baked box clips: [" + string.Join(", ", names) + "]" +
-                              (framesOnClip.Count > 0
-                                  ? " | frames with boxes on this clip: [" +
-                                    string.Join(",", framesOnClip) + "]"
-                                  : " | NO boxes baked under this clip name");
-                }
+                    Min = new float3(attackBounds.xMin, attackBounds.yMin, -0.5f),
+                    Max = new float3(attackBounds.xMax, attackBounds.yMax, 0.5f),
+                }, _attackId, AttackDamage);
+                hitLog = "\nattack queued (result on next frame)";
+            }
+            else if (!gotBounds)
+            {
+                hitLog = "\nbounds=NONE (no slash boxes on this frame)";
             }
 
+            int enemyBodies = 0;
+            foreach (var e in FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsSortMode.None))
+            {
+                if (e != null && e.HasColliderAttached)
+                    enemyBodies++;
+            }
             _debugInfo = "clip='" + (clipName ?? "NULL") + "' frame=" + _player.Frame +
                          " flip=" + _facingLeft + "\nbounds=" +
-                         (gotBounds ? attackBounds.ToString() : "NONE") + noMatch + hitLog;
+                         (gotBounds ? attackBounds.ToString() : "NONE") +
+                         "\nphysics ready=" + UnityPhysicsOverlapBridge.Ready +
+                         " bodies=" + UnityPhysicsOverlapBridge.BodyCount +
+                         " enemyHurtboxes=" + enemyBodies + hitLog;
         }
 
-        void OnGUI()
+        UnityPhysicsExampleEnemy FindEnemyByEntity(Entity entity)
         {
-            if (ShowQueryDebug && _attacking && !string.IsNullOrEmpty(_debugInfo))
+            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsSortMode.None);
+            for (int i = 0; i < enemies.Length; i++)
             {
-                var style = new GUIStyle(GUI.skin.label) { fontSize = 13 };
-                GUI.Label(new Rect(12f, 60f, 900f, 120f), _debugInfo, style);
+                if (enemies[i] != null && enemies[i].BakedEntity == entity)
+                    return enemies[i];
             }
-            if (!ShowHelpOverlay)
-                return;
-            _helpStyle ??= new GUIStyle(GUI.skin.label) { fontSize = 14 };
-            GUI.Label(new Rect(12f, 12f, 320f, 40f),
-                "A / D move   •   J attack (pure query)", _helpStyle);
+            return null;
         }
 
         string ClipName(int index)
         {
-            // authoring clips (non-profile sets) first...
             if (_set != null && _set.Clips != null &&
                 index >= 0 && index < _set.Clips.Length)
                 return _set.Clips[index].Name;
-            // ...then profile clips (profile-driven sets keep their clips there)
             var data = _set != null && _set.Profile != null ? _set.Profile.Data : null;
             if (data != null && data.Clips != null &&
                 index >= 0 && index < data.Clips.Count)
                 return data.Clips[index].Name;
             return null;
-        }
-
-        void OnDrawGizmos()
-        {
-            if (!_attacking)
-                return;
-            string clipName = ClipName(AttackClipIndex);
-            if (SpriteHitboxQuery.TryGetBounds(_set, clipName, _player.Frame,
-                    SpriteHitboxQuery.FrameBoxes | SpriteHitboxQuery.ClipBoxes,
-                    _facingLeft, out var attackBounds))
-            {
-                Gizmos.color = new Color(1f, 0.4f, 0.1f, 0.9f);
-                Gizmos.DrawWireCube(attackBounds.center, attackBounds.size);
-            }
         }
 
         void PlayLocomotion(float axis)
@@ -261,6 +256,20 @@ namespace InvertLab.Sprites.DOTS
                 case KeyCode.Space: return kb.spaceKey;
                 default: return null;
             }
+        }
+
+        void OnGUI()
+        {
+            if (ShowQueryDebug && _attacking && !string.IsNullOrEmpty(_debugInfo))
+            {
+                var style = new GUIStyle(GUI.skin.label) { fontSize = 13 };
+                GUI.Label(new Rect(12f, 60f, 900f, 120f), _debugInfo, style);
+            }
+            if (!ShowHelpOverlay)
+                return;
+            _helpStyle ??= new GUIStyle(GUI.skin.label) { fontSize = 14 };
+            GUI.Label(new Rect(12f, 12f, 320f, 40f),
+                "A / D move   â€¢   J attack (Unity Physics)", _helpStyle);
         }
     }
 }

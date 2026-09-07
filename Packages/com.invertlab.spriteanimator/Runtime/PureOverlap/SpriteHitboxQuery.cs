@@ -25,7 +25,7 @@ namespace InvertLab.Sprites.DOTS
         /// the profile/sheet resolves to nothing or no box is visible.
         /// </summary>
         public static bool TryGetBounds(SpriteAnimSetAuthoring set, string clipName, int frame,
-            byte lifetimeMask, bool flipX, out Rect bounds)
+            byte lifetimeMask, bool flipX, out Rect bounds, bool flipY = false)
         {
             bounds = default;
             var data = set != null ? set.Profile != null ? set.Profile.Data : null : null;
@@ -35,18 +35,19 @@ namespace InvertLab.Sprites.DOTS
             var sheet = SpriteSocketWorld.DisplaySheet(data, clipName);
             if (sheet == null)
                 return false;
-            if (!SpriteSheetProfile.TryGetCellPixels(sheet, out float cellW, out float cellH))
-            {
-                cellW = 100f;
-                cellH = 100f;
-            }
-            float ppu = SpriteSheetProfile.GetPixelsPerUnit(sheet);
-            var cell = new Vector2(cellW / ppu, cellH / ppu);
-            if (cell.x <= 0f || cell.y <= 0f)
-                return false;
 
+            // EXACT parity with SpriteColliderWorld's Unity 2D spawn:
+            // normalized cell space IS world space (cell = 1x1 at any ppu),
+            // offset is the raw child localPosition, and flips mirror the
+            // whole subtree around the pivot axis (root shift 2*axis + scale -1).
             var pivot = SpriteSocketWorld.ResolvePivot(data, sheet);
+            var axis = SpriteSocketWorld.PixelsFromPivotToMeshLocal(sheet, pivot, Vector2.zero);
             var origin = set.transform.position;
+            float rootX = flipX ? 2f * axis.x : 0f;
+            float rootY = flipY ? 2f * axis.y : 0f;
+            // the sprite render anchors the cell at the pivot via baked frame
+            // offsets — the query must live in the same shifted space
+            var pivotShift = new Vector2(0.5f - pivot.x, 0.5f - pivot.y);
             bool any = false;
 
             foreach (var box in SpriteColliderWorld.VisibleOn(data.Hitboxes, clipName, frame))
@@ -58,23 +59,21 @@ namespace InvertLab.Sprites.DOTS
                 if (!SpriteColliderWorld.TryLocalFromUv(box, out var offset,
                         out var size, out _))
                     continue;
+                // degenerate boxes (zero-area placeholder/stale rects) can
+                // never hit — skipping them keeps gotBounds honest so the
+                // no-box diagnostic fires instead of a phantom 0-size bounds
+                if (size.x < 0.001f || size.y < 0.001f)
+                    continue;
 
-                // cell center relative to the entity origin (pivot places the cell)
-                var cellCenter = new Vector2(
-                    (0.5f - pivot.x) * cell.x,
-                    (0.5f - pivot.y) * cell.y);
-                // box center relative to the cell center (flip mirrors x)
-                var boxOffset = new Vector2(
-                    (flipX ? -offset.x : offset.x) * cell.x,
-                    offset.y * cell.y);
-                var half = new Vector2(size.x * cell.x, size.y * cell.y) * 0.5f;
+                // child local position under the (possibly mirrored) root,
+                // shifted by the pivot offset the sprite render applies
+                var center = new Vector2(
+                    origin.x + pivotShift.x + rootX + (flipX ? -offset.x : offset.x),
+                    origin.y + pivotShift.y + rootY + (flipY ? -offset.y : offset.y));
+                var half = new Vector2(size.x, size.y) * 0.5f;
 
-                var min = new Vector2(
-                    origin.x + cellCenter.x + boxOffset.x - half.x,
-                    origin.y + cellCenter.y + boxOffset.y - half.y);
-                var max = new Vector2(
-                    origin.x + cellCenter.x + boxOffset.x + half.x,
-                    origin.y + cellCenter.y + boxOffset.y + half.y);
+                var min = new Vector2(center.x - half.x, center.y - half.y);
+                var max = new Vector2(center.x + half.x, center.y + half.y);
 
                 if (!any)
                 {

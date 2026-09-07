@@ -4,15 +4,16 @@
   "references": [
     "InvertLab.SpriteAnimator.Runtime",
     "Unity.Collections",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
+
+    "Unity.Physics",
     "Unity.Entities",
     "Unity.Mathematics",
     "Unity.Transforms"
   ],
   "includePlatforms": [
     "Editor"
-  ],
-  "optionalUnityReferences": [
-    "TestAssemblies"
   ],
   "autoReferenced": false
 }
