@@ -76,12 +76,9 @@ SpriteGpuAnimSwitch.ToGpu(...) only accepts eligible clips.
 
 ## 6) Samples
 
-Under Assets/Samples/: ColliderEventExample, EventsExample, PlaybackApiExample, CrowdGpuExample, Sockets, Showcase/Clembod.
+Samples are **optional**. Import from Package Manager → DOTS Sprite Animator → Samples.
 
-Open via **Tools > DOTS Sprite Animator > Build * Sample** / **Open Crowd GPU Sample** where applicable.
-
-Full guide: Documentation~/Documentation.md and Documentation~/DOTS-Sprite-Animator-User-Guide-v0.8.0.pdf.
-
+See Samples.md. Do not expect `Assets/Samples` until you import.
 ## Architecture
 
 See **Architecture.md** for the Profile -> Play -> optional collider diagram.
@@ -91,3 +88,4 @@ See **Samples.md** for which sample to open for each feature.
 ## Optional: Unity Physics
 
 Install com.unity.physics only if you need Method = UnityPhysics. Core animation and Query/Unity2D do not require it.
+

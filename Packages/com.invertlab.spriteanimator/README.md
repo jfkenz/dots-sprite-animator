@@ -19,6 +19,10 @@ See `Documentation~/Architecture.md` (Profile -> Play -> optional colliders) and
 - No gameplay-framework dependencies (no NZCore, Rukhanka, Trove, or project-only assemblies).
 - Supported dependencies: Entities, Entities Graphics, and URP.
 
+## Samples
+
+Optional — not imported until you choose them in Package Manager (**Samples** tab). See `Documentation~/Samples.md`.
+
 ## Open the tools
 
 - `Window > DOTS Sprite Animator`
@@ -74,4 +78,5 @@ See:
 
 - `Documentation~/QuickStart.md`
 - `Documentation~/AnimationEvents.md`
+
 

@@ -1,21 +1,31 @@
 ﻿# Samples map
 
-Each sample proves one thing. Prefer these over ad-hoc scenes.
+Samples ship inside the package as **optional** ``Samples~`` folders. They are **not** downloaded into your project until you import them.
 
-| Sample | Proves | Open |
+## How to import
+
+1. Window → Package Manager
+2. Select **DOTS Sprite Animator** (In Project / My Registries / embedded)
+3. Open the **Samples** tab
+4. Import only what you need
+
+Imported path (Unity default):
+
+``Assets/Samples/DOTS Sprite Animator/<version>/<Sample display name>/``
+
+## What each sample proves
+
+| Sample (Package Manager name) | Proves | Needs |
 |---|---|---|
-| **PlaybackApiExample** | Play / one-shot / facing API | `Assets/Samples/PlaybackApiExample` |
-| **EventsExample** | Frame events | `Assets/Samples/EventsExample` |
-| **Sockets** | Socket attach points | `Assets/Samples/Sockets` |
-| **CrowdGpuExample** | GPU / crowd scale | `Assets/Samples/CrowdGpuExample` |
-| **ColliderQueryExample** | Query method + AABB hits (no Physics package) | `Assets/Samples/ColliderQueryExample` |
-| **ColliderEventExample** | Unity 2D collider children + events | `Assets/Samples/ColliderEventExample` (use `ColliderEventExample 2` / hybrid scenes) |
-| **UnityPhysicsExample** | Method = UnityPhysics; frame AABB × Character body; Bake or runtime Ensure | Scripts under `Assets/Samples/UnityPhysicsExample`; scene `ColliderUnityPhysicEventExample 1` |
+| Playback API | Play / one-shot / facing | — |
+| Events | Frame events | — |
+| Sockets | Socket attach points | — |
+| Crowd GPU | GPU / crowd scale | — |
+| Collider Query | Query + AABB hits | — |
+| Collider Unity 2D Events | Unity 2D collider children | — |
+| Unity Physics | Character Physics body + frame AABB OverlapAabb | `com.unity.physics` |
+| Showcase (Clembod) | Art/profiles demo | credit Clembod |
 
-## Unity Physics scene note
+## Unity Physics note
 
-Player/enemy often live in the **open scene** (not the SubScene). SubScene bakers do not run on them — use **Bake Colliders** for edit preview and/or `SpriteUnityPhysicsHurtbox.Ensure` at Play.
-
-## Showcase
-
-`Assets/Samples/Showcase` — art/profile demos (Clembod), not the minimal integration path.
+Scripts live in the **Unity Physics** sample; related scenes may be under **Collider Unity 2D Events** until fully split. Open-scene actors use ``SpriteUnityPhysicsHurtbox.Ensure`` (not SubScene bake).

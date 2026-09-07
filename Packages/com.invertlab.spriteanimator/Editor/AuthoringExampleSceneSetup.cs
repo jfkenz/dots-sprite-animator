@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using InvertLab.Sprites.DOTS;
@@ -16,7 +16,7 @@ namespace InvertLab.Sprites.DOTS.Editor
     public static class AuthoringExampleSceneSetup
     {
         const string ScenePath = "Assets/Scenes/authoringScene.unity";
-        const string ProfilePath = "Assets/Samples/Showcase/Sword Character Prototype_All Frames_profile.asset";
+        const string ProfileNameHint = "Sword Character Prototype_All Frames_profile";
         const string SpriteGoName = "Authoring Sprite";
         const string DemoGoName = "Authoring Crowd Demo";
         const string SessionFlag = "InvertLab.Sprites.DOTS.AuthoringExampleSceneSetup.Attempted";
@@ -75,10 +75,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 created.Add("SpriteAnimPlayerAuthoring");
             }
 
-            var profile = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(ProfilePath);
+            var profile = FindSampleProfile(ProfileNameHint);
             if (profile == null)
             {
-                Debug.LogWarning("[AuthoringExampleSceneSetup] profile not found at " + ProfilePath);
+                Debug.LogWarning("[AuthoringExampleSceneSetup] Showcase profile not found. Import the Showcase sample from Package Manager (Samples tab), then re-run.");
             }
             else
             {
@@ -115,7 +115,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     Debug.LogWarning(
                         "[AuthoringExampleSceneSetup] AuthoringCrowdDemo type not found. " +
-                        "Add Assets/Samples/CrowdGpuExample/Components/AuthoringCrowdDemo.cs and re-run the menu.");
+                        "Import the Crowd GPU sample from Package Manager, then re-run the menu.");
                 }
             }
 
@@ -131,7 +131,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
 
-            Debug.Log("[AuthoringExampleSceneSetup] " + ScenePath + " — " +
+            Debug.Log("[AuthoringExampleSceneSetup] " + ScenePath + " â€” " +
                       (created.Count > 0 ? string.Join(", ", created) : "already set up") +
                       (profile != null ? " | profile: " + profile.name : ""));
         }
@@ -188,6 +188,28 @@ namespace InvertLab.Sprites.DOTS.Editor
             return go;
         }
 
+
+        static ScriptableSpriteSheetProfile FindSampleProfile(string nameHint)
+        {
+            string[] guids = AssetDatabase.FindAssets("t:ScriptableSpriteSheetProfile " + nameHint);
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (string.IsNullOrEmpty(path)) continue;
+                var asset = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(path);
+                if (asset != null) return asset;
+            }
+            guids = AssetDatabase.FindAssets("t:ScriptableSpriteSheetProfile");
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (path == null || path.IndexOf(nameHint, System.StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+                var asset = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(path);
+                if (asset != null) return asset;
+            }
+            return null;
+        }
         static Type FindAuthoringCrowdDemoType()
         {
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
