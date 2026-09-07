@@ -30,8 +30,10 @@ InitTestScene*.unity*
 .DS_Store
 Thumbs.db
 
-# graft's local graph cache — regenerable, not committed (run `graft build`).
+# graft local graph cache - regenerable, not committed (run graft build).
 graft/
 
-# Local-only notes
-Packages/com.invertlab.spriteanimator/Documentation~/Roadmap.md
+# Cursor reads .cursor; we keep a junction to DevTools~/cursor (do not commit the junction).
+.cursor/
+
+# DevTools~ is tracked: AI rules, internal roadmap, patches. Outside the UPM package / Asset Store export.

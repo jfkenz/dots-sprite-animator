@@ -6,15 +6,9 @@ using Unity.Transforms;
 namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
-    /// Shared contracts between the animation brain, the instanced renderer,
-    /// the culling system and tooling. Components ONLY live here so parallel
-    /// workstreams never touch each other's files.
-    ///
-    /// Ownership map (do not cross):
-    ///   SpriteAnimPlayerSystem/SpriteAnimSet ....... animation brain
-    ///   Instanced/* ................................ GPU-instancing renderer
-    ///   Culling/*, Spawn/*, Sorting/* .............. world utilities
-    ///   Editor/*, SpriteSheetProfile ............... tooling
+    /// Shared animation/render/tooling components.
+    /// SpriteAnimPlayerSystem and SpriteAnimSet own playback.
+    /// Instanced/* owns GPU instancing. Culling, Spawn, and Sorting are world utilities.
     /// </summary>
 
     /// <summary>Current atlas cell plus per-frame visual offset. Written every animation tick.</summary>
