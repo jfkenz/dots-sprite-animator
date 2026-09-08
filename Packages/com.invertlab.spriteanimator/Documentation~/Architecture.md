@@ -1,4 +1,4 @@
-﻿# Architecture (mental model)
+# Architecture (mental model)
 
 Publisher: **Invert Lab**. Package: `com.invertlab.spriteanimator`.
 
@@ -72,3 +72,22 @@ API: `SpriteAnims.TryToGpu` / `ToCpu` / `IsGpuDriven`.
 Optional `Samples~` — import via Package Manager Samples tab. See Samples.md.
 
 - PublicAPI.md
+
+## Runtime folder layout (ECS tidy)
+
+Under Packages/com.invertlab.spriteanimator/Runtime:
+
+| Folder | Contents |
+|--------|----------|
+| Authoring/ | MonoBehaviour bakers (*Authoring) |
+| Components/ | IComponentData / buffers / related runtime data |
+| Systems/ | ISystem / SystemBase playback & events |
+| Profile/ | Sheet profile ScriptableObject + authoring data helpers |
+| Utility/ | Factories, shaders, playback helpers |
+| Feature areas | Instanced/, Hitboxes/, Sorting/{Authoring,Components,Systems}/, Spawn/, Culling/, PureOverlap/, UnityPhysics/ |
+
+### Naming convention
+
+- Authoring: FooAuthoring (suffix)
+- Systems: FooSystem (suffix)
+- Data: prefer Foo for IComponentData; use FooData only if Foo collides with a MonoBehaviour; avoid FooComponent
