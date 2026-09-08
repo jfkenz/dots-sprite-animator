@@ -259,3 +259,7 @@ Showcase art © Clembod (personal/commercial use OK; do not redistribute/resell 
 ---
 
 *© Invert Lab. DOTS Sprite Animator 0.8.1.*
+
+## System run order
+
+See SystemRunOrder.md for Unity Simulation/FixedStep Physics ordering and custom system hooks.

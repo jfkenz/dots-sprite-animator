@@ -12,6 +12,11 @@ namespace InvertLab.Sprites.DOTS
     /// frame by the physics systems, so querying it from the editor update
     /// loop can miss).
     /// </summary>
+    /// <summary>
+    /// Runs in Unity Physics' AfterPhysicsSystemGroup (inside FixedStep),
+    /// after ExportPhysicsWorld, so OverlapAabb sees the rebuilt world.
+    /// </summary>
+    [UpdateInGroup(typeof(Unity.Physics.Systems.AfterPhysicsSystemGroup))]
     public sealed partial class UnityPhysicsOverlapBridge : SystemBase
     {
         public static bool Ready;

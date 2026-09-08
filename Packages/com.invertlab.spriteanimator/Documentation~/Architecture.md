@@ -61,6 +61,12 @@ The GPU path is a **simple flipbook** (shader clock on one legacy sheet):
 Use PreferGpu for dense crowds / simple loops. Keep heroes and VFX on CPU when you need events or sockets.
 API: `SpriteAnims.TryToGpu` / `ToCpu` / `IsGpuDriven`.
 
+## System run order
+
+Full Unity group map (Simulation + FixedStep Physics) and where to hook your systems:
+
+- **SystemRunOrder.md**
+
 ## See also
 
 - QuickStart.md
