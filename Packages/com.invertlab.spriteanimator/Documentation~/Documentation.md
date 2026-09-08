@@ -2,12 +2,12 @@
 
 **Product:** Invert Lab DOTS Sprite Animator  
 **Package id:** com.invertlab.spriteanimator  
-**Version:** 0.8.0  
+**Version:** 0.8.1  
 **Publisher:** Invert Lab  
 **Namespace:** InvertLab.Sprites.DOTS  
 **Unity:** 6000.0+ (Entities, Entities Graphics, URP)
 
-This guide covers the shipped 0.8.0 feature set: playback control, combat helpers, wrap modes, editor UX, sockets, events, crowd/GPU overview, and samples.
+This guide covers the shipped 0.8.1 feature set: playback control, combat helpers, wrap modes, editor UX, sockets, events, crowd/GPU overview, and samples.
 
 ---
 
@@ -206,15 +206,15 @@ Two playback paths:
 | Path | Use when |
 | --- | --- |
 | **CPU** (SpriteAnimPlayerSystem) | Events, sockets, custom holds, reorder, TRS tween, ping-pong / reverse / ReverseOnce, combat helpers needing precise markers. |
-| **GPU clock** | Simple uniform sequential **Loop** / **Once** clips. Inspector badge **GPU clock OK**. |
+| **GPU clock** | Simple flipbook only: uniform sequential **Loop** / **Once**, single sheet, no crops/sockets/events. Inspector badge **GPU clock OK**. |
 
-SpriteGpuAnimSwitch.ToGpu(...) refuses non-eligible clips.
+`SpriteGpuAnimSwitch.ToGpu` / `SpriteAnims.TryToGpu` refuse non-eligible clips. Authoring `PlaybackPath` PreferGpu converts once when eligible; multi-sheet and Cropped layouts stay on CPU.
 
 For crowds:
 
 - SpriteCrowdSpawnerAuthoring (and sample AuthoringCrowdDemo) primes instance scale / material so GPU sprites render at the intended size.
 - Use GPU-eligible idle/walk clips for density; keep hero / VFX on CPU when you need events or sockets.
-- Sample: Assets/Samples/CrowdGpuExample — open via **Tools > DOTS Sprite Animator > Open Crowd GPU Sample**.
+- Sample: import **Crowd GPU** from Package Manager Samples, then open via **Tools > DOTS Sprite Animator > Open Crowd GPU Sample**.
 
 Preview / edit mesh uses SpriteUnlit2DPreview (separate from instanced runtime shaders).
 
@@ -222,7 +222,7 @@ Preview / edit mesh uses SpriteUnlit2DPreview (separate from instanced runtime s
 
 ## 10. Samples
 
-Shipped under Assets/Samples/:
+Import from Package Manager → Samples (lands under Assets/Samples/DOTS Sprite Animator/…):
 
 | Folder | What it shows | How to open |
 | --- | --- | --- |
@@ -258,4 +258,4 @@ Showcase art © Clembod (personal/commercial use OK; do not redistribute/resell 
 
 ---
 
-*© Invert Lab. DOTS Sprite Animator 0.8.0.*
+*© Invert Lab. DOTS Sprite Animator 0.8.1.*

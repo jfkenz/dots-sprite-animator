@@ -2,9 +2,11 @@
 
 Portable Unity 6000.0 package for DOTS-first 2D flipbook animation authoring and runtime playback.
 
-Current package version: **0.8.0**. Full guide: Documentation~/Documentation.md / Documentation~/DOTS-Sprite-Animator-User-Guide-v0.8.0.pdf.
+Current package version: **0.8.1**. Full guide: Documentation~/Documentation.md / Documentation~/DOTS-Sprite-Animator-User-Guide-v0.8.0.pdf.
 
 Published by **Invert Lab**.
+
+License: see `LICENSE.md` (Unity Asset Store EULA).
 
 ## Mental model
 

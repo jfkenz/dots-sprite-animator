@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.1] - 2026-09-08
+
+- Samples moved into optional UPM `Samples~` (Package Manager Samples tab). Project no longer ships a baked `Assets/Samples` copy.
+- Optional Unity Physics assembly `InvertLab.SpriteAnimator.UnityPhysics` (`INVERTLAB_UNITY_PHYSICS`). Core Runtime no longer hard-references `com.unity.physics`.
+- Authoring `PlaybackPath`: Auto / PreferGpu / ForceCpu. PreferGpu promotes a single uniform sheet to the legacy GPU clock when eligible; multi-sheet and Cropped layouts stay on CPU.
+- Public helpers: `SpriteAnims.TryToGpu` / `ToCpu` / `IsGpuDriven`.
+- Install validation reports optional `com.unity.physics` as info (not required).
+- Package `LICENSE.md` points at the Unity Asset Store EULA.
+- Docs: GPU path honesty (simple flipbook limits) + PlaybackPath notes.
+
 ## [0.8.0] - 2026-09-02
 
 - Scene sockets: convert pivot-relative pixel poses to bottom-center mesh local so independent/frame sockets (e.g. HealthBarSocket) match the animator preview after the cell pivot change. Formula: meshLocal = ((pivot - (0.5,0)) * cellSize + pixels) / PPU.

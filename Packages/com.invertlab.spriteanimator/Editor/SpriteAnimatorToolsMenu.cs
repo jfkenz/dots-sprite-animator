@@ -57,6 +57,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 message.AppendLine(shaderMessage);
             }
 
+            // Optional: never fails validation.
+            NoteOptionalPackage("com.unity.physics", message,
+                "needed only for Method = UnityPhysics / Unity Physics sample");
+
             string title = ok
                 ? "DOTS Sprite Animator — Validation Succeeded"
                 : "DOTS Sprite Animator — Validation Failed";
@@ -81,6 +85,23 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             string fallback = $"file://{Application.dataPath}/../Packages/com.invertlab.spriteanimator/README.md";
             Application.OpenURL(fallback);
+        }
+
+
+        static void NoteOptionalPackage(string id, StringBuilder message, string why)
+        {
+            var packages = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages();
+            if (packages != null)
+            {
+                for (int i = 0; i < packages.Length; i++)
+                {
+                    if (packages[i].name != id)
+                        continue;
+                    message.AppendLine($"[OPTIONAL OK] {id} ({packages[i].version}) — {why}");
+                    return;
+                }
+            }
+            message.AppendLine($"[OPTIONAL] {id} not installed — {why}. Core animation and Query/Unity2D work without it.");
         }
 
         static bool RequirePackage(string id, StringBuilder message)

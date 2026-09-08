@@ -43,6 +43,24 @@ Attack frame AABB  --OverlapAabb-->  Character PhysicsCollider (hurtbox)
 1. **Bake now** — Method = UnityPhysics → **Bake Colliders** → `UnityPhysicsColliders` children (Box/Sphere/Convex preview).
 2. **Skip bake** — on Play, call `SpriteUnityPhysicsHurtbox.Ensure(transform, animSet)` (open-scene sprites are not SubScene-baked).
 
+
+## PlaybackPath / GPU flipbook limits
+
+`SpriteAnimSetAuthoring.PlaybackPath`:
+
+- **Auto** — CPU default.
+- **PreferGpu** — convert once after spawn when the clip is GPU-eligible.
+- **ForceCpu** — never use the GPU clock.
+
+The GPU path is a **simple flipbook** (shader clock on one legacy sheet):
+
+- Single sheet only (multi-sheet characters stay on CPU).
+- Uniform grid cells (Cropped / per-cell CropST stays on CPU).
+- No sockets, animation events, frame reorder, custom holds, or per-frame TRS.
+
+Use PreferGpu for dense crowds / simple loops. Keep heroes and VFX on CPU when you need events or sockets.
+API: `SpriteAnims.TryToGpu` / `ToCpu` / `IsGpuDriven`.
+
 ## See also
 
 - QuickStart.md

@@ -1,7 +1,7 @@
-﻿{
+{
   "name": "com.invertlab.spriteanimator",
   "displayName": "DOTS Sprite Animator",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "unity": "6000.0",
   "description": "Portable DOTS-first 2D flipbook sprite animation with timeline authoring, events, sockets, and Query/Unity2D colliders. Unity Physics (Character body + OverlapAabb) is optional via com.unity.physics.",
   "author": {
@@ -60,5 +60,7 @@
       "description": "Art/profile showcase sheets. Credit Clembod; for demos, not minimal integration.",
       "path": "Samples~/Showcase"
     }
-  ]
+  ],
+  "license": "See LICENSE.md file",
+  "licensesUrl": "https://unity.com/legal/as-terms"
 }

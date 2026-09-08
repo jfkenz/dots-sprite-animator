@@ -1,6 +1,6 @@
 ﻿# DOTS Sprite Animator Quick Start
 
-Publisher: **Invert Lab**. Package version **0.8.0**.
+Publisher: **Invert Lab**. Package version **0.8.1**.
 
 ## 1) Install
 
@@ -67,12 +67,28 @@ player.Hitstop(0.12f);
 
 ## 5) GPU vs CPU path
 
-Clip badge in inspector:
+The **GPU clock** is a simple flipbook path: the shader picks the frame from a global clock. It is **not** a full feature substitute for the CPU player.
 
-- **GPU clock OK**: simple uniform loop/once clips
-- **CPU only**: events, custom holds, reorder, offsets, sockets, TRS tween, ping-pong/reverse/ReverseOnce
+Clip / inspector eligibility:
 
-SpriteGpuAnimSwitch.ToGpu(...) only accepts eligible clips.
+- **GPU clock OK**: simple uniform sequential **Loop** / **Once** clips
+- **CPU only**: events, custom holds, reorder, offsets, sockets, TRS tween, ping-pong / reverse / ReverseOnce
+
+`SpriteGpuAnimSwitch.ToGpu` / `SpriteAnims.TryToGpu` only accept eligible clips.
+
+### Playback Path (SpriteAnimSetAuthoring)
+
+| Mode | Behavior |
+| --- | --- |
+| **Auto** | CPU default (same as before). |
+| **PreferGpu** | After bake, convert once when eligible. Promotes a single uniform sheet onto the legacy GPU `SetSheet` path. |
+| **ForceCpu** | Stay on (or return to) the CPU clock. |
+
+PreferGpu stays on CPU when:
+
+- the clip is not GPU-eligible
+- the profile uses **multiple sheets**
+- the sheet uses **Cropped** cell layout (needs CPU CropST)
 
 ## 6) Samples
 
