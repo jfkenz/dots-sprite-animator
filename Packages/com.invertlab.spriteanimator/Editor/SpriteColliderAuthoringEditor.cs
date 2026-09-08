@@ -128,7 +128,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (GUILayout.Button(new GUIContent("Bake Colliders",
                         "Character body -> Box / Sphere / Convex under UnityPhysicsColliders.")))
                 {
-                    foreach (Object t in targets)
+                    foreach (UnityEngine.Object t in targets)
                     {
                         var a = t as SpriteColliderAuthoring;
                         if (a == null) continue;
@@ -149,7 +149,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 if (GUILayout.Button(new GUIContent("Clear", "Remove UnityPhysicsColliders.")))
                 {
-                    foreach (Object t in targets)
+                    foreach (UnityEngine.Object t in targets)
                     {
                         var a = t as SpriteColliderAuthoring;
                         if (a == null) continue;
