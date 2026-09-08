@@ -84,7 +84,7 @@ Under Packages/com.invertlab.spriteanimator/Runtime:
 | Systems/ | ISystem / SystemBase playback & events |
 | Profile/ | Sheet profile ScriptableObject + authoring data helpers |
 | Utility/ | Factories, shaders, playback helpers |
-| Feature areas | Instanced/, Hitboxes/, Sorting/{Authoring,Components,Systems}/, Spawn/, Culling/, PureOverlap/, UnityPhysics/ |
+| Feature areas | Nested the same way: Instanced/{Components,Systems}/, Hitboxes/{Components,Systems,Utility}/, Sorting/{Authoring,Components,Systems}/, Spawn/{Authoring,Systems}/, Culling/Systems/, PureOverlap/Utility/, UnityPhysics/{Authoring,Components,Baking}/ |
 
 ### Naming convention
 
