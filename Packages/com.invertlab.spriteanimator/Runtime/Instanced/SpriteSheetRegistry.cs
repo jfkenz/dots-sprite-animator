@@ -211,10 +211,11 @@ namespace InvertLab.Sprites.DOTS
     {
         protected override void OnUpdate()
         {
-            var sheets = EntityManager.CreateEntityQuery(
+            using var sheetQ = EntityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<SpriteSheetDefinition>(),
                 ComponentType.ReadOnly<SpriteSheetAsset>(),
-                ComponentType.Exclude<SpriteSheetRegistered>()).ToEntityArray(Allocator.Temp);
+                ComponentType.Exclude<SpriteSheetRegistered>());
+            var sheets = sheetQ.ToEntityArray(Allocator.Temp);
             if (sheets.Length == 0)
             {
                 sheets.Dispose();

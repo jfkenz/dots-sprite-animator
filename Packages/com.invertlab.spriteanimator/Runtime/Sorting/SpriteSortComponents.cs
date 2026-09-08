@@ -142,12 +142,12 @@ namespace InvertLab.Sprites.DOTS
                     state.EntityManager.RemoveComponent<SpriteSortPinPending>(entity);
                 }
                 entities.Dispose();
-                if (state.EntityManager.CreateEntityQuery(
+                using (var gpuSortQ = state.EntityManager.CreateEntityQuery(
                         ComponentType.ReadOnly<SpriteGpuDriven>(),
-                        ComponentType.ReadOnly<SpriteSortDepth>())
-                    .CalculateEntityCount() > 0)
+                        ComponentType.ReadOnly<SpriteSortDepth>()))
                 {
-                    SpriteGpuAnimResources.MarkDirty();
+                    if (gpuSortQ.CalculateEntityCount() > 0)
+                        SpriteGpuAnimResources.MarkDirty();
                 }
             }
 

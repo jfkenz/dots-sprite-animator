@@ -1284,6 +1284,7 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 
+    [System.Serializable]
     public class SpriteSheetDef
     {
         public string Name = "Sheet";

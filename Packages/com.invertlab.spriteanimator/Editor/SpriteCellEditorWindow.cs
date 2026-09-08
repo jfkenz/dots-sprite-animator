@@ -120,13 +120,27 @@ namespace InvertLab.Sprites.DOTS.Editor
                     var popupRect = GUILayoutUtility.GetLastRect();
                     PopupWindow.Show(popupRect, new SpriteSheetSlicePopup(this));
                 }
-                GUILayout.Space(6f);
-                if (GUILayout.Button("◀", EditorStyles.toolbarButton, GUILayout.Width(26f)))
-                    _host.SliceStepSheet(-1);
-                GUILayout.Label($"sheet {_host.SliceActiveSheetIndex + 1}/{data.Sheets.Count}",
-                    EditorStyles.miniLabel, GUILayout.Width(70f));
-                if (GUILayout.Button("▶", EditorStyles.toolbarButton, GUILayout.Width(26f)))
-                    _host.SliceStepSheet(1);
+                // Sheet prev/next only when multiple sheets exist — never create sheets here.
+                int sheetCount = data.Sheets != null ? data.Sheets.Count : 0;
+                if (sheetCount > 1)
+                {
+                    GUILayout.Space(6f);
+                    int sheetIndex = Mathf.Clamp(_host.SliceActiveSheetIndex, 0, sheetCount - 1);
+                    using (new EditorGUI.DisabledScope(sheetIndex <= 0))
+                    {
+                        if (GUILayout.Button(new GUIContent("◀", "Previous sheet"),
+                                EditorStyles.toolbarButton, GUILayout.Width(26f)))
+                            _host.SliceStepSheet(-1);
+                    }
+                    GUILayout.Label($"sheet {sheetIndex + 1}/{sheetCount}",
+                        EditorStyles.miniLabel, GUILayout.Width(70f));
+                    using (new EditorGUI.DisabledScope(sheetIndex >= sheetCount - 1))
+                    {
+                        if (GUILayout.Button(new GUIContent("▶", "Next sheet"),
+                                EditorStyles.toolbarButton, GUILayout.Width(26f)))
+                            _host.SliceStepSheet(1);
+                    }
+                }
 
                 GUILayout.Label(texture.name, EditorStyles.miniLabel);
                 GUILayout.FlexibleSpace();
@@ -478,14 +492,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             var asset = _host.SliceProfileAsset;
             if (asset == null)
                 return;
-            foreach (var authoring in Object.FindObjectsByType<SpriteStaticAuthoring>(
-                         FindObjectsSortMode.None))
+            foreach (var authoring in Object.FindObjectsByType<SpriteStaticAuthoring>())
             {
                 if (authoring.Profile == asset)
                     authoring.UpdatePreview();
             }
-            foreach (var set in Object.FindObjectsByType<SpriteAnimSetAuthoring>(
-                         FindObjectsSortMode.None))
+            foreach (var set in Object.FindObjectsByType<SpriteAnimSetAuthoring>())
             {
                 if (set.Profile == asset)
                     set.ApplyQuadPreview();

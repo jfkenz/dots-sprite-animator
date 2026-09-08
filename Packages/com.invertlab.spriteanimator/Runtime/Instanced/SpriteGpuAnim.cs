@@ -145,6 +145,16 @@ namespace InvertLab.Sprites.DOTS
         /// PARKED inside SpriteGpuAnim and the heavy components are REMOVED
         /// so simulation work no longer advances that entity on CPU.
         /// </summary>
+        static bool TryGetAnimGrid(EntityManager em, out SpriteAnimGrid grid)
+        {
+            grid = default;
+            using var q = em.CreateEntityQuery(ComponentType.ReadOnly<SpriteAnimGrid>());
+            if (q.CalculateEntityCount() == 0)
+                return false;
+            grid = q.GetSingleton<SpriteAnimGrid>();
+            return true;
+        }
+
         public static bool ToGpu(EntityManager em, Entity e, float now)
         {
             if (!em.HasComponent<SpriteAnimPlayer>(e) ||
@@ -165,10 +175,8 @@ namespace InvertLab.Sprites.DOTS
                 return false;
 
             int cols = 4, rows = 4;
-            var gq = em.CreateEntityQuery(typeof(SpriteAnimGrid));
-            if (!gq.IsEmpty)
+            if (TryGetAnimGrid(em, out var g))
             {
-                var g = em.GetComponentData<SpriteAnimGrid>(gq.GetSingletonEntity());
                 // Compact GPU clock assumes uniform CellW/CellH stride.
                 if (g.UseCellCrops != 0)
                     return false;
@@ -247,7 +255,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Batch-convert every sprite entity. Returns converted count.</summary>
         public static int AllToGpu(EntityManager em, float now)
         {
-            var q = em.CreateEntityQuery(
+            using var q = em.CreateEntityQuery(
                 ComponentType.ReadOnly<SpriteAnimPlayer>(),
                 ComponentType.ReadOnly<SpriteAnimSetRef>(),
                 ComponentType.Exclude<SpriteGpuDriven>());
@@ -262,7 +270,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Batch-convert back to CPU animation. Returns switched count.</summary>
         public static int AllToCpu(EntityManager em)
         {
-            var q = em.CreateEntityQuery(typeof(SpriteGpuDriven));
+            using var q = em.CreateEntityQuery(typeof(SpriteGpuDriven));
             var ents = q.ToEntityArray(Allocator.Temp);
             for (int i = 0; i < ents.Length; i++)
                 ToCpu(em, ents[i]);
@@ -357,10 +365,8 @@ namespace InvertLab.Sprites.DOTS
                 return;
             int cols = 4, rows = 4;
             var em = world.EntityManager;
-            var gq = em.CreateEntityQuery(typeof(SpriteAnimGrid));
-            if (!gq.IsEmpty)
+            if (TryGetAnimGrid(em, out var g))
             {
-                var g = em.GetComponentData<SpriteAnimGrid>(gq.GetSingletonEntity());
                 cols = g.Cols;
                 rows = g.Rows;
             }

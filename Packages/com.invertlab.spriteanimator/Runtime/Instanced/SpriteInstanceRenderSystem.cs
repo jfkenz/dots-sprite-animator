@@ -437,7 +437,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Create the grid singleton if missing (idempotent).</summary>
         public static void Install(EntityManager em)
         {
-            var q = em.CreateEntityQuery(typeof(SpriteAnimGrid));
+            using var q = em.CreateEntityQuery(ComponentType.ReadOnly<SpriteAnimGrid>());
             if (q.CalculateEntityCount() > 0) return;
             var e = em.CreateEntity();
             em.AddComponentData(e, new SpriteAnimGrid { Cols = 4, Rows = 4, CellAspect = 1f, UseCellCrops = 0 });
@@ -458,7 +458,7 @@ namespace InvertLab.Sprites.DOTS
             Vector4[] cellCropSTs)
         {
             Install(em);
-            var q = em.CreateEntityQuery(typeof(SpriteAnimGrid));
+            using var q = em.CreateEntityQuery(ComponentType.ReadOnly<SpriteAnimGrid>());
             var entity = q.GetSingletonEntity();
             cols = Mathf.Max(1, cols);
             rows = Mathf.Max(1, rows);

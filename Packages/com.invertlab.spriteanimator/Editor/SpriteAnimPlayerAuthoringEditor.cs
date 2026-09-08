@@ -161,7 +161,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (!Application.isPlaying)
                 return;
-            var spawner = Object.FindFirstObjectByType<SpriteCrowdSpawnerAuthoring>();
+            var spawner = Object.FindAnyObjectByType<SpriteCrowdSpawnerAuthoring>();
             if (spawner != null)
                 spawner.SetAllClips(clipIndex);
         }

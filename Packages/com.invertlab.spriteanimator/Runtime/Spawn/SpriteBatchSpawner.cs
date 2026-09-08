@@ -32,7 +32,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Point the spawner at a prototype entity (call once).</summary>
         public static void SetPrototype(EntityManager em, Entity proto)
         {
-            var q = em.CreateEntityQuery(typeof(SpriteSpawnPrototype));
+            using var q = em.CreateEntityQuery(typeof(SpriteSpawnPrototype));
             if (q.CalculateEntityCount() > 0)
                 em.SetComponentData(q.GetSingletonEntity(), new SpriteSpawnPrototype { Value = proto });
             else
@@ -45,7 +45,7 @@ namespace InvertLab.Sprites.DOTS
         static bool TryGetProto(EntityManager em, out Entity proto)
         {
             proto = default;
-            var q = em.CreateEntityQuery(typeof(SpriteSpawnPrototype));
+            using var q = em.CreateEntityQuery(typeof(SpriteSpawnPrototype));
             if (q.CalculateEntityCount() == 0) return false;
             var value = em.GetComponentData<SpriteSpawnPrototype>(q.GetSingletonEntity()).Value;
             if (value == Entity.Null) return false;

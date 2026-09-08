@@ -6,11 +6,10 @@ namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
     /// Applies SpritePlaybackPreference after spawn.
-    /// PreferGpu promotes the baked SpriteSheetBinding onto the legacy GPU sheet
-    /// (SetSheet / SetGrid), then converts once when the clip is eligible.
+    /// PreferGpu uses SpriteGpuAnimSwitch.ToGpu (which promotes a bound sheet
+    /// onto the legacy GPU SetSheet path when eligible).
     /// ForceCpu restores CPU playback; Auto leaves the CPU default.
-    /// Marks SpritePlaybackApplied only when finished or permanently impossible,
-    /// so PreferGpu can retry if the sheet asset is not ready yet.
+    /// Marks SpritePlaybackApplied only when finished or permanently impossible.
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateBefore(typeof(SpriteAnimPlayerSystem))]
@@ -60,16 +59,27 @@ namespace InvertLab.Sprites.DOTS
             if (!em.HasComponent<SpriteAnimPlayer>(e) || !em.HasComponent<SpriteAnimSetRef>(e))
                 return false; // not baked yet — retry
 
-            if (HasMultipleClipSheets(em, e))
-                return true; // permanent: GPU path is single-sheet
-
-            if (!TryPrepareLegacySheet(em, e, out bool permanentFail))
-                return permanentFail; // crops / missing asset: done or retry
-
+            // ToGpu promotes SpriteSheetBinding when possible. If promote fails
+            // (crops / multi-sheet / missing asset), decide permanent vs retry.
             if (SpriteGpuAnimSwitch.ToGpu(em, e, now))
                 return true;
 
-            // Failed while still on CPU: finish only when the clip can never go GPU.
+            if (em.HasComponent<SpriteGpuDriven>(e))
+                return true;
+
+            // Still on CPU: permanent fail if clip ineligible, multi-sheet, or cropped.
+            if (HasMultipleClipSheets(em, e) || HasCroppedBoundSheet(em, e))
+                return true;
+
+            // Bound sheet asset not ready yet — retry next frame.
+            if (em.HasComponent<SpriteSheetBinding>(e))
+            {
+                var binding = em.GetComponentData<SpriteSheetBinding>(e);
+                if (binding.Sheet != Entity.Null &&
+                    (!em.Exists(binding.Sheet) || !em.HasComponent<SpriteSheetAsset>(binding.Sheet)))
+                    return false;
+            }
+
             var player = em.GetComponentData<SpriteAnimPlayer>(e);
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             int ci = player.ClipIndex;
@@ -101,53 +111,16 @@ namespace InvertLab.Sprites.DOTS
             return false;
         }
 
-        /// <summary>
-        /// GPU clock draws SpriteRenderResources.Sheet only. Bound sheets must be
-        /// promoted to that legacy path (clear binding) before ToGpu.
-        /// </summary>
-        static bool TryPrepareLegacySheet(EntityManager em, Entity e, out bool permanentFail)
+        static bool HasCroppedBoundSheet(EntityManager em, Entity e)
         {
-            permanentFail = false;
             if (!em.HasComponent<SpriteSheetBinding>(e))
-                return true;
-
+                return false;
             var binding = em.GetComponentData<SpriteSheetBinding>(e);
-            if (binding.Sheet == Entity.Null)
-                return true;
-
-            Entity sheet = binding.Sheet;
-            if (!em.Exists(sheet) || !em.HasComponent<SpriteSheetDefinition>(sheet))
-            {
-                permanentFail = false;
+            if (binding.Sheet == Entity.Null || !em.Exists(binding.Sheet))
                 return false;
-            }
-
-            var def = em.GetComponentData<SpriteSheetDefinition>(sheet);
-            if (def.UseCellCrops != 0)
-            {
-                permanentFail = true;
+            if (!em.HasComponent<SpriteSheetDefinition>(binding.Sheet))
                 return false;
-            }
-
-            if (!em.HasComponent<SpriteSheetAsset>(sheet))
-            {
-                permanentFail = false;
-                return false;
-            }
-
-            var asset = em.GetComponentObject<SpriteSheetAsset>(sheet);
-            if (asset == null || asset.Texture == null)
-            {
-                permanentFail = false;
-                return false;
-            }
-
-            SpriteInstanceRenderSystem.Install(em);
-            SpriteInstanceRenderSystem.SetSheet(asset.Texture);
-            SpriteInstanceRenderSystem.SetGrid(em, def.Cols, def.Rows,
-                def.CellAspect > 0.01f ? def.CellAspect : 1f, null);
-            em.SetComponentData(e, new SpriteSheetBinding { Sheet = Entity.Null });
-            return true;
+            return em.GetComponentData<SpriteSheetDefinition>(binding.Sheet).UseCellCrops != 0;
         }
     }
 }

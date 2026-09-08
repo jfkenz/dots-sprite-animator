@@ -145,6 +145,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float DefaultPreviewSpeed = 1f;
         const float PivotHandleHitRadius = 14f;
         const string PivotLockedPrefsKey = "InvertLab.SpriteAnimator.PivotLocked";
+        const string AutoSaveEnabledPrefsKey = "InvertLab.SpriteAnimator.AutoSaveEnabled";
+        const string AutoSaveMinutesPrefsKey = "InvertLab.SpriteAnimator.AutoSaveMinutes";
+        const int AutoSaveMinutesDefault = 10;
+        const int AutoSaveMinutesMin = 1;
+        const int AutoSaveMinutesMax = 120;
         const float ColliderHandleSize = 8f;
         const float ColliderRotateHandleDistance = 26f;
         const float ColliderMinScreenHalf = 6f;
@@ -353,6 +358,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         Vector2 _socketPoseClipboardScale = Vector2.one;
         bool _socketPoseClipboardValid;
         double _lastEditorTime;
+        bool _autoSaveEnabled = true;
+        int _autoSaveIntervalMinutes = AutoSaveMinutesDefault;
+        double _autoSaveNextDue;
+        string _autoSaveLastStatus = "";
+        Rect _settingsButtonRect;
         double _lastSpaceToggleTime = -1d;
         float _previewTime;
 
@@ -547,6 +557,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             wantsMouseMove = true;
             wantsMouseEnterLeaveWindow = true;
             _pivotLocked = EditorPrefs.GetBool(PivotLockedPrefsKey, false);
+            LoadAutoSavePrefs();
             EditorApplication.update += TickPreview;
             Undo.undoRedoPerformed -= OnUndoRedo;
             Undo.undoRedoPerformed += OnUndoRedo;
@@ -572,6 +583,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             double now = EditorApplication.timeSinceStartup;
             float delta = Mathf.Min(0.1f, (float)(now - _lastEditorTime));
             _lastEditorTime = now;
+            TickAutoSave(now);
             bool changed = false;
             if (_playing && CurrentClip != null)
             {
@@ -1040,7 +1052,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             x += 44f;
 
-            float checkX = rect.xMax - 266f;
+            // Right cluster: Settings, Check, Help, Save Profile
+            float checkX = rect.xMax - 338f;
             const float undoW = 46f;
             const float redoW = 46f;
             const float listW = 50f;
@@ -1064,7 +1077,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _showHistoryPanel = !_showHistoryPanel;
             x = listX + listW + 8f;
 
-            var validateRect = new Rect(checkX, 10f, 52f, 28f);
+            _settingsButtonRect = new Rect(checkX, 10f, 66f, 28f);
+            if (GUI.Button(_settingsButtonRect,
+                new GUIContent("Settings", "Auto-save and tool preferences."),
+                _transportStyle))
+                ShowSettingsPopup();
+
+            var validateRect = new Rect(rect.xMax - 266f, 10f, 52f, 28f);
             if (GUI.Button(validateRect, new GUIContent("Check", "Validate package dependencies and shader setup."), _transportStyle))
                 SpriteAnimatorToolsMenu.ValidateInstallation();
 
@@ -1188,6 +1207,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         void ApplySheetTexture(Texture2D texture)
         {
             EnsureProfile();
+            RecordProfileUndo(texture == null ? "Clear Sheet Texture" : "Assign Sheet Texture");
             _profile.EnsureSheets(_selectedSheet);
             _profile.Sheet = texture;
             WriteActiveSheetFromLegacy();
@@ -1404,9 +1424,16 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 var headerRect = new Rect(cardRect.x + cardPad, cardRect.y + cardPad,
                     cardRect.width - cardPad * 2f, headerH);
+                float sheetDelW = ClipRowDeleteWidth;
                 float countW = expanded ? 0f : 58f;
+                float trailingW = sheetDelW + 2f + countW;
                 var nameRect = new Rect(headerRect.x, headerRect.y,
-                    Mathf.Max(20f, headerRect.width - countW), headerH);
+                    Mathf.Max(20f, headerRect.width - trailingW), headerH);
+                var sheetDeleteRect = new Rect(headerRect.xMax - sheetDelW, headerRect.y + 4f,
+                    sheetDelW, 16f);
+                var countRect = expanded
+                    ? Rect.zero
+                    : new Rect(sheetDeleteRect.x - 2f - countW, headerRect.y + 4f, countW, 16f);
 
                 bool renaming = s == _renamingSheet;
                 if (renaming)
@@ -1434,12 +1461,45 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 if (!expanded)
                 {
-                    GUI.Label(new Rect(headerRect.xMax - countW, headerRect.y + 4f, countW, 16f),
+                    GUI.Label(countRect,
                         $"{clipsOnSheet} clip{(clipsOnSheet == 1 ? "" : "s")}", _mutedStyle);
                 }
 
+                // Sheet delete X — same affordance as nested clip rows.
+                bool canDeleteSheet = sheetCount > 1;
+                using (new EditorGUI.DisabledScope(!canDeleteSheet || renaming))
+                {
+                    Color prevSheetGui = GUI.color;
+                    bool sheetDelHover = sheetDeleteRect.Contains(input.mousePosition);
+                    if (canDeleteSheet && sheetDelHover && !renaming)
+                        GUI.color = new Color(1f, 0.42f, 0.42f, 1f);
+                    if (GUI.Button(sheetDeleteRect,
+                        new GUIContent("✕",
+                            canDeleteSheet
+                                ? "Delete this sheet and its clips (Undo supported)."
+                                : "Keep at least one sheet."),
+                        EditorStyles.miniButton))
+                    {
+                        CancelAllRenames();
+                        if (canDeleteSheet)
+                        {
+                            string delName = string.IsNullOrWhiteSpace(def?.Name)
+                                ? $"Sheet {s + 1}"
+                                : def.Name;
+                            int clipN = clipsOnSheet;
+                            string msg = clipN > 0
+                                ? $"Delete sheet '{delName}' and its {clipN} clip{(clipN == 1 ? "" : "s")}?"
+                                : $"Delete sheet '{delName}'?";
+                            if (EditorUtility.DisplayDialog("Delete Sheet", msg, "Delete", "Cancel"))
+                                DeleteSheetAt(s);
+                        }
+                    }
+                    GUI.color = prevSheetGui;
+                }
+
                 if (!renaming && input.type == EventType.MouseDown && input.button == 0 &&
-                    headerRect.Contains(input.mousePosition))
+                    headerRect.Contains(input.mousePosition) &&
+                    !sheetDeleteRect.Contains(input.mousePosition))
                 {
                     SelectSheetRow(s);
                     if (nameRect.Contains(input.mousePosition) && input.clickCount >= 2)
@@ -1659,14 +1719,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             float rowH = 26f;
             var top = new Rect(bar.x, bar.y, bar.width, rowH);
             var bottom = new Rect(bar.x, bar.y + rowH + 4f, bar.width, rowH);
-            float w1 = 52f, w2 = 70f, w3 = 52f;
-            float need = w1 + w2 + w3 + gap * 2f;
+            float w1 = 48f, w2 = 64f, w3 = 48f, w4 = 56f;
+            float need = w1 + w2 + w3 + w4 + gap * 3f;
             if (need > top.width && top.width > 40f)
             {
                 float scale = top.width / need;
                 w1 *= scale;
                 w2 *= scale;
                 w3 *= scale;
+                w4 *= scale;
             }
             float x = top.x;
             if (GUI.Button(new Rect(x, top.y, w1, top.height), "+ Clip", _transportStyle))
@@ -1690,6 +1751,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     CancelAllRenames();
                     DeleteSelectedClips();
                 }
+            }
+            x += w3 + gap;
+            if (GUI.Button(new Rect(x, top.y, w4, top.height),
+                new GUIContent("Action", "Sheet actions: duplicate sheet, add event marker, delete sheet."),
+                _transportStyle))
+            {
+                CommitAllRenames();
+                ShowSheetActionMenu();
             }
 
             int cols = Mathf.Max(1, _profile.Columns);
@@ -2042,6 +2111,189 @@ namespace InvertLab.Sprites.DOTS.Editor
             InvalidateSheetPixelCache();
             ClearClipSelection();
             _status = $"Added {_profile.Sheets[index].Name}";
+            SaveDirty();
+            Repaint();
+        }
+
+        void ShowSheetActionMenu()
+        {
+            var menu = new GenericMenu();
+            int sheet = _selectedSheet;
+            bool multiSheet = _profile?.Sheets != null && _profile.Sheets.Count > 1;
+            menu.AddItem(new GUIContent("Duplicate Sheet"), false, () =>
+            {
+                CommitAllRenames();
+                DuplicateSheetAt(sheet);
+            });
+            if (CurrentClip != null)
+            {
+                menu.AddItem(new GUIContent("Add Event Marker On Current Frame"), false, () =>
+                {
+                    CommitAllRenames();
+                    AddEventMarkerOnSelectedFrame();
+                });
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Add Event Marker On Current Frame"));
+            }
+            if (multiSheet)
+            {
+                menu.AddSeparator("");
+                menu.AddItem(new GUIContent("Delete Sheet"), false, () =>
+                {
+                    CancelAllRenames();
+                    if (_profile?.Sheets == null || sheet < 0 || sheet >= _profile.Sheets.Count)
+                        return;
+                    var def = _profile.Sheets[sheet];
+                    string delName = string.IsNullOrWhiteSpace(def?.Name)
+                        ? $"Sheet {sheet + 1}"
+                        : def.Name;
+                    int clipN = 0;
+                    if (_profile.Clips != null)
+                    {
+                        for (int i = 0; i < _profile.Clips.Count; i++)
+                        {
+                            if (_profile.Clips[i] != null && _profile.Clips[i].SheetIndex == sheet)
+                                clipN++;
+                        }
+                    }
+                    string msg = clipN > 0
+                        ? $"Delete sheet '{delName}' and its {clipN} clip{(clipN == 1 ? "" : "s")}?"
+                        : $"Delete sheet '{delName}'?";
+                    if (EditorUtility.DisplayDialog("Delete Sheet", msg, "Delete", "Cancel"))
+                        DeleteSheetAt(sheet);
+                });
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Delete Sheet"));
+            }
+            menu.ShowAsContext();
+        }
+
+        void DuplicateSheetAt(int index)
+        {
+            if (_profile?.Sheets == null || index < 0 || index >= _profile.Sheets.Count)
+                return;
+            var src = _profile.Sheets[index];
+            if (src == null)
+                return;
+
+            RecordProfileUndo("Duplicate Sprite Sheet");
+            var copy = new SpriteSheetDef
+            {
+                Name = UniqueSheetName(string.IsNullOrWhiteSpace(src.Name) ? "Sheet" : src.Name),
+                Texture = src.Texture,
+                Columns = src.Columns,
+                Rows = src.Rows,
+                PixelsPerUnit = src.PixelsPerUnit,
+                Pivot = src.Pivot,
+                CellLayoutMode = src.CellLayoutMode,
+                CroppedCellRects = src.CroppedCellRects != null
+                    ? (RectInt[])src.CroppedCellRects.Clone()
+                    : null,
+                CellPivots = src.CellPivots != null
+                    ? new List<SpriteCellPivot>(src.CellPivots)
+                    : null,
+            };
+            _profile.Sheets.Add(copy);
+            int newIndex = _profile.Sheets.Count - 1;
+            if (_profile.Clips != null)
+            {
+                var extras = new List<SpriteClipDef>();
+                for (int i = 0; i < _profile.Clips.Count; i++)
+                {
+                    var clip = _profile.Clips[i];
+                    if (clip == null || clip.SheetIndex != index)
+                        continue;
+                    extras.Add(CloneClipForSheet(clip, newIndex));
+                }
+                foreach (var c in extras)
+                    _profile.Clips.Add(c);
+            }
+            _collapsedSheets.Remove(newIndex);
+            _selectedSheet = newIndex;
+            _profile.SyncLegacyFromSheet(_selectedSheet);
+            InvalidateSheetPixelCache();
+            int first = FirstClipIndexOfSheet(_selectedSheet);
+            if (first >= 0)
+            {
+                _selectedClip = first;
+                SelectOnlyFrame(0);
+            }
+            else
+                ClearClipSelection();
+            _status = $"Duplicated sheet as {copy.Name}";
+            SaveDirty();
+            Repaint();
+        }
+
+        static SpriteClipDef CloneClipForSheet(SpriteClipDef src, int sheetIndex)
+        {
+            src.EnsureFrameData();
+            var clone = new SpriteClipDef
+            {
+                Name = src.Name,
+                SheetIndex = sheetIndex,
+                Row = src.Row,
+                Frames = src.Frames != null ? (int[])src.Frames.Clone() : new[] { 0 },
+                FrameRows = src.FrameRows != null ? (int[])src.FrameRows.Clone() : null,
+                FrameRate = src.FrameRate,
+                WrapMode = src.WrapMode,
+                Interrupt = src.Interrupt,
+                CancelAfter = src.CancelAfter,
+                Priority = src.Priority,
+                OnCompleteClipIndex = src.OnCompleteClipIndex,
+                ComboWindowStartFrame = src.ComboWindowStartFrame,
+                ComboWindowEndFrame = src.ComboWindowEndFrame,
+                ComboWindowPriorityBoost = src.ComboWindowPriorityBoost,
+                FrameDurationScales = src.FrameDurationScales != null
+                    ? (float[])src.FrameDurationScales.Clone() : null,
+                EventIds = src.EventIds != null ? (byte[])src.EventIds.Clone() : null,
+                EventNormalizedTimes = src.EventNormalizedTimes != null
+                    ? (float[])src.EventNormalizedTimes.Clone() : null,
+                OnionOffsets = src.OnionOffsets != null
+                    ? (Vector2[])src.OnionOffsets.Clone() : null,
+                FrameScales = src.FrameScales != null
+                    ? (Vector2[])src.FrameScales.Clone() : null,
+                FrameRotations = src.FrameRotations != null
+                    ? (float[])src.FrameRotations.Clone() : null,
+                FrameTweenModes = src.FrameTweenModes != null
+                    ? (byte[])src.FrameTweenModes.Clone() : null,
+                FacingGroup = src.FacingGroup,
+                Facing = src.Facing,
+                Sockets = src.Sockets != null
+                    ? new List<FrameSocketDef>(src.Sockets) : new List<FrameSocketDef>(),
+                EventMarkers = src.EventMarkers != null
+                    ? new List<SpriteClipEventMarker>(src.EventMarkers)
+                    : new List<SpriteClipEventMarker>(),
+            };
+            clone.EnsureFrameData();
+            return clone;
+        }
+
+        void AddEventMarkerOnSelectedFrame()
+        {
+            var clip = CurrentClip;
+            if (clip == null)
+            {
+                _status = "Select a clip before adding an event marker.";
+                Repaint();
+                return;
+            }
+            clip.EnsureFrameData();
+            int frame = Mathf.Clamp(_selectedFrame, 0, Mathf.Max(0, clip.Frames.Length - 1));
+            RecordProfileUndo("Add Event Marker");
+            byte eventId = 0;
+            if (_profile.Events != null && _profile.Events.Count > 0)
+                eventId = _profile.Events[0].Id;
+            float normalized = 0f;
+            if (clip.EventNormalizedTimes != null &&
+                frame < clip.EventNormalizedTimes.Length)
+                normalized = clip.EventNormalizedTimes[frame];
+            clip.AddEventMarker(frame, eventId, normalized);
+            _status = $"Added event marker on frame {frame}";
             SaveDirty();
             Repaint();
         }
@@ -3284,7 +3536,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 else if (_showHitboxes && Event.current.type == EventType.MouseDown &&
                          Event.current.button == 0 &&
-                         HitSelectedColliderHandle(cell, Event.current.mousePosition) != ColliderHandleKind.None)
+                         ShouldBeginSelectedColliderTransform(cell, clip, state.Frame,
+                             Event.current.mousePosition))
                     HandleColliderTransformInput(previewControlId, cell, clip, state.Frame);
                 else if (_showPreviewDebug && Event.current.type == EventType.MouseDown &&
                          Event.current.button == 0 &&
@@ -3754,7 +4007,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 AutoDetect();
                 WriteActiveSheetFromLegacy();
-                RematchSheetsWorldSize(_selectedSheet);
+                if (_profile.SheetsWorldHeightsDiffer())
+                {
+                    // AutoDetect already recorded when the grid changed; this covers
+                    // rematch-only (detect failed / no grid change) under the same group.
+                    RecordProfileUndo("Match Sheets World Size");
+                    RematchSheetsWorldSize(_selectedSheet);
+                    SaveDirty();
+                }
+                else
+                    RematchSheetsWorldSize(_selectedSheet);
             }
 
             EditorGUI.BeginChangeCheck();
@@ -4131,9 +4393,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         if (GUILayout.Button("All Past"))
+                        {
+                            RecordProfileUndo("Onion Skin All Past");
                             _profile.OnionPastFrames = Mathf.Max(0, clip.Frames.Length - 1);
+                            SaveDirty();
+                        }
                         if (GUILayout.Button("All Future"))
+                        {
+                            RecordProfileUndo("Onion Skin All Future");
                             _profile.OnionFutureFrames = Mathf.Max(0, clip.Frames.Length - 1);
+                            SaveDirty();
+                        }
                     }
                     _profile.ShowOnionLayerNumbers = EditorGUILayout.Toggle(
                         "Show Layer Numbers", _profile.ShowOnionLayerNumbers);
@@ -7860,7 +8130,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            if (evt.type == EventType.MouseDown && evt.button == 0 && cell.Contains(evt.mousePosition))
+            if (evt.type == EventType.MouseDown && evt.button == 0)
             {
                 FrameBoxDef existing = FindColliderAt(clip, frame, cell, evt.mousePosition);
                 if (existing != null)
@@ -7965,7 +8235,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             if (evt.type == EventType.MouseDown && evt.button == 0 &&
-                _polygonDraftUV.Count == 0 && cell.Contains(evt.mousePosition))
+                _polygonDraftUV.Count == 0)
             {
                 FrameBoxDef existing = FindColliderAt(clip, frame, cell, evt.mousePosition);
                 if (existing != null)
@@ -7990,9 +8260,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (evt.type == EventType.MouseMove)
             {
                 bool wasHovering = _polygonHasHover;
-                _polygonHasHover = cell.Contains(evt.mousePosition);
-                if (_polygonHasHover)
-                    _polygonHoverUV = ScreenPointToCellUV(evt.mousePosition, cell);
+                _polygonHasHover = true;
+                _polygonHoverUV = ScreenPointToCellUV(evt.mousePosition, cell);
                 if (wasHovering || _polygonHasHover)
                     Repaint();
             }
@@ -8008,7 +8277,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            if (evt.type != EventType.MouseDown || evt.button != 0 || !cell.Contains(evt.mousePosition))
+            if (evt.type != EventType.MouseDown || evt.button != 0)
                 return;
 
             _playing = false;
@@ -8181,9 +8450,10 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         static Vector2 ScreenPointToCellUV(Vector2 point, Rect cell)
         {
+            // Unclamped: polygon verts / hitboxes may sit outside the cell UV.
             return new Vector2(
-                Mathf.Clamp01((point.x - cell.x) / Mathf.Max(1f, cell.width)),
-                Mathf.Clamp01((point.y - cell.y) / Mathf.Max(1f, cell.height)));
+                (point.x - cell.x) / Mathf.Max(1f, cell.width),
+                (point.y - cell.y) / Mathf.Max(1f, cell.height));
         }
 
         static Vector2 CellUVToScreenPoint(Vector2 pointUV, Rect cell)
@@ -8780,12 +9050,21 @@ namespace InvertLab.Sprites.DOTS.Editor
         FrameBoxDef FindColliderAt(SpriteClipDef clip, int frame, Rect cell, Vector2 point)
         {
             FrameBoxDef found = null;
+            float bestArea = float.MaxValue;
             foreach (var box in BoxesFor(clip, frame))
             {
                 if (box.Hidden || box.Locked)
                     continue;
-                if (ColliderContains(box, cell, point))
+                if (!ColliderContains(box, cell, point))
+                    continue;
+                // Prefer the tightest hit so a circle overlapping a larger selected
+                // square can be clicked without unselecting first.
+                float area = Mathf.Abs(box.RectUV.width * box.RectUV.height);
+                if (found == null || area <= bestArea)
+                {
                     found = box;
+                    bestArea = area;
+                }
             }
             return found;
         }
@@ -10338,8 +10617,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             var definition = _profile.Events.Find(e => e.Id == eventId);
             if (definition == null)
             {
+                RecordProfileUndo("Create Event Definition");
                 definition = new SpriteEventDef { Id = eventId, Name = $"Event {eventId}" };
                 _profile.Events.Add(definition);
+                SaveDirty();
             }
             bool renamingEvent = _renamingEventId != 0 && _renamingEventId == definition.Id;
             if (renamingEvent)
@@ -18695,9 +18976,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 int rowCount = CountBands(rows);
                 if (columnCount > 0 && rowCount > 0)
                 {
+                    RecordProfileUndo("Auto-detect Transparent Grid");
                     _profile.Columns = columnCount;
                     _profile.Rows = rowCount;
+                    WriteActiveSheetFromLegacy();
                     _status = $"Detected {columnCount} × {rowCount} grid";
+                    SaveDirty();
                 }
                 else _status = "No transparent gaps detected; set grid manually";
             }
@@ -18761,7 +19045,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             _selectedSheet = Mathf.Clamp(_selectedSheet + delta, 0, _profile.Sheets.Count - 1);
             _profile.SyncLegacyFromSheet(_selectedSheet);
-            RematchSheetsWorldSize(_selectedSheet);
+            if (_profile.SheetsWorldHeightsDiffer())
+            {
+                RecordProfileUndo("Match Sheets World Size");
+                RematchSheetsWorldSize(_selectedSheet);
+                SaveDirty();
+            }
             Repaint();
         }
 
@@ -18949,6 +19238,78 @@ namespace InvertLab.Sprites.DOTS.Editor
             return copy;
         }
 
+        internal bool AutoSaveEnabled => _autoSaveEnabled;
+        internal int AutoSaveIntervalMinutes => _autoSaveIntervalMinutes;
+        internal string AutoSaveLastStatus => _autoSaveLastStatus;
+
+        void ShowSettingsPopup()
+        {
+            PopupWindow.Show(_settingsButtonRect, new SpriteSheetToolSettingsPopup(this));
+        }
+
+        void LoadAutoSavePrefs()
+        {
+            _autoSaveEnabled = EditorPrefs.GetBool(AutoSaveEnabledPrefsKey, true);
+            _autoSaveIntervalMinutes = Mathf.Clamp(
+                EditorPrefs.GetInt(AutoSaveMinutesPrefsKey, AutoSaveMinutesDefault),
+                AutoSaveMinutesMin, AutoSaveMinutesMax);
+            ScheduleNextAutoSave(EditorApplication.timeSinceStartup);
+        }
+
+        internal void SetAutoSavePrefs(bool enabled, int minutes)
+        {
+            _autoSaveEnabled = enabled;
+            _autoSaveIntervalMinutes = Mathf.Clamp(minutes, AutoSaveMinutesMin, AutoSaveMinutesMax);
+            EditorPrefs.SetBool(AutoSaveEnabledPrefsKey, _autoSaveEnabled);
+            EditorPrefs.SetInt(AutoSaveMinutesPrefsKey, _autoSaveIntervalMinutes);
+            ScheduleNextAutoSave(EditorApplication.timeSinceStartup);
+            Repaint();
+        }
+
+        void ScheduleNextAutoSave(double now)
+        {
+            _autoSaveNextDue = now + _autoSaveIntervalMinutes * 60.0;
+        }
+
+        void NoteProfileSaved(bool auto)
+        {
+            ScheduleNextAutoSave(EditorApplication.timeSinceStartup);
+            if (auto)
+            {
+                _autoSaveLastStatus = System.DateTime.Now.ToString("HH:mm");
+                _status = "Auto-saved profile at " + _autoSaveLastStatus;
+            }
+        }
+
+        void TickAutoSave(double now)
+        {
+            if (!_autoSaveEnabled)
+                return;
+            if (now < _autoSaveNextDue)
+                return;
+            // Always reschedule so a skipped tick does not spin every frame.
+            ScheduleNextAutoSave(now);
+            TryAutoSaveProfile();
+        }
+
+        void TryAutoSaveProfile()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+                return;
+            if (EditorUtility.scriptCompilationFailed)
+                return;
+            if (IsRenamingAnything())
+                return;
+            if (!CanSaveProfile())
+                return;
+            // Require a bound asset that Unity considers dirty — do not create
+            // a new .asset from autosave alone.
+            if (_asset == null || !EditorUtility.IsDirty(_asset))
+                return;
+
+            SaveProfile(quiet: true);
+        }
+
         void SaveDirty()
         {
             if (_asset != null)
@@ -18988,13 +19349,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             return _profile.Sheet;
         }
 
-        void SaveProfile()
+        void SaveProfile(bool quiet = false)
         {
             Texture2D saveTex = ResolveSaveTexture();
             if (saveTex == null)
             {
                 _status = "Assign a sprite sheet before saving";
-                ShowNotification(new GUIContent(_status));
+                if (!quiet)
+                    ShowNotification(new GUIContent(_status));
                 return;
             }
 
@@ -19029,10 +19391,18 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             var clip = CurrentClip;
             int frames = clip?.Frames?.Length ?? 0;
-            _status = clip != null
-                ? $"Saved {_asset.name}  •  {clip.Name}: {frames} frames"
-                : $"Saved {_asset.name}";
-            ShowNotification(new GUIContent("Profile saved"));
+            if (quiet)
+            {
+                NoteProfileSaved(auto: true);
+            }
+            else
+            {
+                _status = clip != null
+                    ? $"Saved {_asset.name}  •  {clip.Name}: {frames} frames"
+                    : $"Saved {_asset.name}";
+                ShowNotification(new GUIContent("Profile saved"));
+                NoteProfileSaved(auto: false);
+            }
             SpriteSheetProfileRecents.Remember(_asset);
         }
 
@@ -19100,7 +19470,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 var selected = _profile.SheetAt(_selectedSheet);
                 if (selected?.Texture == null)
                     source = 0;
+                RecordDiscreteUndo("Match Sheets World Size");
                 RematchSheetsWorldSize(source);
+                SealUndoGroup();
                 SaveDirty();
             }
             InvalidateSheetPixelCache();
@@ -21275,15 +21647,12 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         static Rect CenteredSquareRect(Vector2 center, Vector2 edge, Rect bounds, float minimumRadius)
         {
-            center = new Vector2(
-                Mathf.Clamp(center.x, bounds.xMin, bounds.xMax),
-                Mathf.Clamp(center.y, bounds.yMin, bounds.yMax));
+            // Free create: do not clamp to the cell frame. Hitboxes/hurtboxes often
+            // extend past the sprite cell; transform/move already allowed that —
+            // create must match so the click center is not pulled inward (offset).
+            _ = bounds;
             float radius = Mathf.Max(Mathf.Abs(edge.x - center.x), Mathf.Abs(edge.y - center.y));
             radius = Mathf.Max(radius, minimumRadius);
-            float availableRadius = Mathf.Min(
-                Mathf.Min(center.x - bounds.xMin, bounds.xMax - center.x),
-                Mathf.Min(center.y - bounds.yMin, bounds.yMax - center.y));
-            radius = Mathf.Clamp(radius, 0f, Mathf.Max(0f, availableRadius));
             return new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f);
         }
 
@@ -21632,6 +22001,29 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _ => center,
             };
             return RotateAround(local, center, box.Angle);
+        }
+
+        static bool IsColliderKnobHandle(ColliderHandleKind kind)
+            => kind != ColliderHandleKind.None && kind != ColliderHandleKind.Body;
+
+        /// <summary>
+        /// True when the click should start transforming the current selection.
+        /// Scale/rotate knobs always win. Body drag only if nothing else is under
+        /// the cursor (so picking another overlapping collider works in one click).
+        /// </summary>
+        bool ShouldBeginSelectedColliderTransform(Rect cell, SpriteClipDef clip, int frame, Vector2 mouse)
+        {
+            var kind = HitSelectedColliderHandle(cell, mouse);
+            if (kind == ColliderHandleKind.None)
+                return false;
+            if (IsColliderKnobHandle(kind))
+                return true;
+
+            // Body hit on the selection — defer if another collider is on top / tighter.
+            FrameBoxDef under = FindColliderAt(clip, frame, cell, mouse);
+            if (under == null)
+                return true;
+            return _selectedColliders.Contains(under);
         }
 
         ColliderHandleKind HitSelectedColliderHandle(Rect cell, Vector2 mouse)

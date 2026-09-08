@@ -75,7 +75,7 @@ namespace InvertLab.Sprites.DOTS
 
             var authoring = Source != null
                 ? Source
-                : Object.FindFirstObjectByType<SpriteAnimSetAuthoring>();
+                : Object.FindAnyObjectByType<SpriteAnimSetAuthoring>();
             if (authoring == null)
             {
                 Debug.LogError("[Crowd Spawner] assign Source (Sprite Anim Set Authoring)", this);
@@ -217,7 +217,7 @@ namespace InvertLab.Sprites.DOTS
                 return 0;
             var em = World.DefaultGameObjectInjectionWorld.EntityManager;
             float spawnScale = SizeUnits * ClipWorldHeight(
-                Source != null ? Source : Object.FindFirstObjectByType<SpriteAnimSetAuthoring>(), 0);
+                Source != null ? Source : Object.FindAnyObjectByType<SpriteAnimSetAuthoring>(), 0);
             int spawned = SpriteBatchSpawner.SpawnNow(
                 em,
                 float3.zero,
@@ -241,7 +241,7 @@ namespace InvertLab.Sprites.DOTS
             if (world == null || !world.IsCreated)
                 return 0;
             var em = world.EntityManager;
-            var q = em.CreateEntityQuery(ComponentType.ReadOnly<SpriteCrowdEntityTag>());
+            using var q = em.CreateEntityQuery(ComponentType.ReadOnly<SpriteCrowdEntityTag>());
             var ents = q.ToEntityArray(Allocator.Temp);
             int killed = 0;
             var ecb = new EntityCommandBuffer(Allocator.Temp);
@@ -263,7 +263,7 @@ namespace InvertLab.Sprites.DOTS
             var world = World.DefaultGameObjectInjectionWorld;
             if (world == null || !world.IsCreated)
                 return 0;
-            var q = world.EntityManager.CreateEntityQuery(
+            using var q = world.EntityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<SpriteCrowdEntityTag>());
             return q.CalculateEntityCount();
         }
@@ -303,7 +303,7 @@ namespace InvertLab.Sprites.DOTS
         {
             var authoring = Source != null
                 ? Source
-                : Object.FindFirstObjectByType<SpriteAnimSetAuthoring>();
+                : Object.FindAnyObjectByType<SpriteAnimSetAuthoring>();
             if (authoring == null || authoring.Clips == null ||
                 clipIndex < 0 || clipIndex >= authoring.Clips.Length)
                 return;
@@ -331,7 +331,7 @@ namespace InvertLab.Sprites.DOTS
             float scale = SizeUnits * ClipWorldHeight(authoring, clipIndex);
             ApplyCrowdScaleIfChanged(em, scale);
 
-            var gpuQ = em.CreateEntityQuery(
+            using var gpuQ = em.CreateEntityQuery(
                 ComponentType.ReadOnly<SpriteCrowdEntityTag>(),
                 ComponentType.ReadOnly<SpriteGpuDriven>());
             if (gpuQ.CalculateEntityCount() > 0)
@@ -352,7 +352,7 @@ namespace InvertLab.Sprites.DOTS
                 return;
             }
 
-            var q = em.CreateEntityQuery(
+            using var q = em.CreateEntityQuery(
                 new ComponentType[] {
                     ComponentType.ReadOnly<SpriteCrowdEntityTag>(),
                     ComponentType.ReadWrite<SpriteAnimPlayer>(),
@@ -397,7 +397,7 @@ namespace InvertLab.Sprites.DOTS
                 return;
             s_appliedScale = scale;
             s_hasAppliedScale = true;
-            var q = em.CreateEntityQuery(
+            using var q = em.CreateEntityQuery(
                 ComponentType.ReadOnly<SpriteCrowdEntityTag>(),
                 ComponentType.ReadWrite<LocalTransform>());
             var ents = q.ToEntityArray(Allocator.Temp);
@@ -415,7 +415,7 @@ namespace InvertLab.Sprites.DOTS
         {
             var authoring = Source != null
                 ? Source
-                : Object.FindFirstObjectByType<SpriteAnimSetAuthoring>();
+                : Object.FindAnyObjectByType<SpriteAnimSetAuthoring>();
             if (authoring == null)
                 return;
             var mr = authoring.GetComponent<MeshRenderer>();

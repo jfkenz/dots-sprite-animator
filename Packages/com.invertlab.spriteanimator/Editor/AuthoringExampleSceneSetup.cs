@@ -119,7 +119,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
 
-            var crowd = UnityEngine.Object.FindFirstObjectByType<SpriteCrowdSpawnerAuthoring>();
+            var crowd = UnityEngine.Object.FindAnyObjectByType<SpriteCrowdSpawnerAuthoring>();
             if (crowd != null && crowd.Source == null && set != null)
             {
                 Undo.RecordObject(crowd, "Setup Authoring Example Scene");
@@ -234,7 +234,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             var type = FindAuthoringCrowdDemoType();
             if (type == null)
                 return null;
-            return UnityEngine.Object.FindObjectOfType(type) as Component;
+            return UnityEngine.Object.FindAnyObjectByType(type) as Component;
         }
     }
 }

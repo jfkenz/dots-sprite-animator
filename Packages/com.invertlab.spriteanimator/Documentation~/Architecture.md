@@ -71,3 +71,4 @@ API: `SpriteAnims.TryToGpu` / `ToCpu` / `IsGpuDriven`.
 
 Optional `Samples~` — import via Package Manager Samples tab. See Samples.md.
 
+- PublicAPI.md

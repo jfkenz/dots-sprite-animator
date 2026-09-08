@@ -120,7 +120,7 @@ namespace InvertLab.Sprites.DOTS
 
 
 
-        [Tooltip("Spawn Unity 2D Box/Circle/Polygon colliders on this object from the profile.")]
+        [Tooltip("Spawn Unity 2D Box/Circle/PolygonCollider2D children from profile boxes. Driven by SpriteColliderAuthoring Method (Unity2D/Both). Off for Query and UnityPhysics.")]
         public bool BakeUnityColliders;
 
         /// <summary>Lifetime filter (frame=1, character=2, clip=4) driven by
@@ -129,7 +129,7 @@ namespace InvertLab.Sprites.DOTS
 
 
 
-        [Tooltip("Also spawn this-frame slash colliders. Off = Character and This Clip body colliders only.")]
+        [Tooltip("When Unity 2D bake is on: also spawn this-frame slash/hit windows. Off = Character + This Clip bodies only.")]
         public bool BakeFrameColliders;
 
 
@@ -321,7 +321,7 @@ namespace InvertLab.Sprites.DOTS
             // DontSave preview mesh/material do not serialize; leaving them assigned
             // writes null MeshFilter/MeshRenderer refs into SubScenes and can NRE
             // Entities Graphics on section load. Swap to builtin Quad for the save.
-            var sets = Object.FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var sets = Object.FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Include);
             for (int i = 0; i < sets.Length; i++)
             {
                 var set = sets[i];
@@ -333,7 +333,7 @@ namespace InvertLab.Sprites.DOTS
 
         static void OnEditorSceneSaved(Scene scene)
         {
-            var sets = Object.FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var sets = Object.FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Include);
             for (int i = 0; i < sets.Length; i++)
             {
                 var set = sets[i];

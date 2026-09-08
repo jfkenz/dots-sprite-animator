@@ -115,12 +115,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUILayout.LabelField("Baked on object",
                 baked ? "yes (UnityPhysicsColliders child)" : "no");
 
-            EditorGUILayout.HelpBox(
+                        EditorGUILayout.HelpBox(
                 "Two workflows:\n" +
                 "1) BAKE NOW - Bake Colliders adds Box/Sphere/Convex under UnityPhysicsColliders " +
-                "(Character lifetime only).\n" +
+                "(Character lifetime only). Preview children are for edit-mode; Play uses DOTS Physics.\n" +
                 "2) SKIP BAKE - on Play, SpriteUnityPhysicsHurtbox.Ensure recreates the DOTS body.\n\n" +
-                "Frame boxes stay AABB query (SpriteHitboxQuery) — not baked.",
+                "Frame / Clip boxes stay AABB query (SpriteHitboxQuery + optional OverlapAabb). " +
+                "They are not baked as Physics colliders.\n" +
+                "Collision filters: tune Unity Physics CollisionFilter on the baked body in gameplay " +
+                "(package default is broad).",
                 MessageType.Info);
 
             using (new EditorGUILayout.HorizontalScope())
