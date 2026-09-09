@@ -1,4 +1,4 @@
-﻿using Unity.Collections;
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Physics;
@@ -176,7 +176,7 @@ namespace InvertLab.Sprites.DOTS
             }
 
             int enemyBodies = 0;
-            foreach (var e in FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsSortMode.None))
+            foreach (var e in FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude))
             {
                 if (e != null && e.HasColliderAttached)
                     enemyBodies++;
@@ -191,7 +191,7 @@ namespace InvertLab.Sprites.DOTS
 
         UnityPhysicsExampleEnemy FindEnemyByEntity(Entity entity)
         {
-            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsSortMode.None);
+            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude);
             for (int i = 0; i < enemies.Length; i++)
             {
                 if (enemies[i] != null && enemies[i].BakedEntity == entity)

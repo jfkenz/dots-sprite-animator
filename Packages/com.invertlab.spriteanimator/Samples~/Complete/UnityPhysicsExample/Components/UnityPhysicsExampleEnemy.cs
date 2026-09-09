@@ -1,4 +1,4 @@
-﻿using Unity.Collections;
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Physics;
@@ -202,7 +202,7 @@ namespace InvertLab.Sprites.DOTS
 
         public static bool AnyColliderAttached()
         {
-            foreach (var enemy in FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsSortMode.None))
+            foreach (var enemy in FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude))
             {
                 if (enemy != null && enemy.HasColliderAttached)
                     return true;

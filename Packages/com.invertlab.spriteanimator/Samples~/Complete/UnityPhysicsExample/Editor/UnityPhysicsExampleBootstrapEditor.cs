@@ -1,4 +1,4 @@
-﻿using UnityEditor;
+using UnityEditor;
 using UnityEngine;
 
 namespace InvertLab.Sprites.DOTS
@@ -23,7 +23,7 @@ namespace InvertLab.Sprites.DOTS
                 "View bodies: Window → Analysis → Physics Debugger.",
                 MessageType.Info);
 
-            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsSortMode.None);
+            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude);
             int attached = 0;
             foreach (var e in enemies)
             {

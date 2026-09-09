@@ -13,7 +13,7 @@ namespace InvertLab.Sprites.DOTS
     {
         void Awake()
         {
-            var authors = FindObjectsByType<SpriteColliderAuthoring>(FindObjectsSortMode.None);
+            var authors = FindObjectsByType<SpriteColliderAuthoring>(FindObjectsInactive.Exclude);
             for (int i = 0; i < authors.Length; i++)
             {
                 if (authors[i] == null)
@@ -26,7 +26,7 @@ namespace InvertLab.Sprites.DOTS
             }
 
             // belt-and-suspenders: no Unity 2D collider spawning anywhere
-            var sets = FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsSortMode.None);
+            var sets = FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Exclude);
             for (int i = 0; i < sets.Length; i++)
             {
                 if (sets[i] == null)

@@ -129,7 +129,7 @@ namespace InvertLab.Sprites.DOTS
             }
 
             string hitLog = "";
-            var enemies = FindObjectsByType<PureColliderExampleEnemy>(FindObjectsSortMode.None);
+            var enemies = FindObjectsByType<PureColliderExampleEnemy>(FindObjectsInactive.Exclude);
             for (int i = 0; i < enemies.Length; i++)
             {
                 var enemy = enemies[i];

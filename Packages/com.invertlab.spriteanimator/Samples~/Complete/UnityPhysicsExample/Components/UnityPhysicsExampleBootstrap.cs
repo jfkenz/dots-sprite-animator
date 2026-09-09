@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace InvertLab.Sprites.DOTS
 {
@@ -41,7 +41,7 @@ namespace InvertLab.Sprites.DOTS
 
         void ApplyColliderMethod()
         {
-            var authors = FindObjectsByType<SpriteColliderAuthoring>(FindObjectsSortMode.None);
+            var authors = FindObjectsByType<SpriteColliderAuthoring>(FindObjectsInactive.Exclude);
             for (int i = 0; i < authors.Length; i++)
             {
                 if (authors[i] == null)
@@ -58,7 +58,7 @@ namespace InvertLab.Sprites.DOTS
 
         void ApplyBakeFlags()
         {
-            var sets = FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsSortMode.None);
+            var sets = FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Exclude);
             for (int i = 0; i < sets.Length; i++)
             {
                 var set = sets[i];
@@ -72,7 +72,7 @@ namespace InvertLab.Sprites.DOTS
 
         void ApplyEnemyDefaults()
         {
-            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsSortMode.None);
+            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude);
             for (int i = 0; i < enemies.Length; i++)
             {
                 var enemy = enemies[i];
@@ -85,7 +85,7 @@ namespace InvertLab.Sprites.DOTS
 
         void EnsureEnemyHurtboxes()
         {
-            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsSortMode.None);
+            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude);
             for (int i = 0; i < enemies.Length; i++)
                 enemies[i]?.EnsurePhysicsHurtbox();
         }

@@ -27,7 +27,7 @@ namespace InvertLab.Sprites.DOTS
 
         void ApplyBakeFlags()
         {
-            var sets = FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsSortMode.None);
+            var sets = FindObjectsByType<SpriteAnimSetAuthoring>(FindObjectsInactive.Exclude);
             for (int i = 0; i < sets.Length; i++)
             {
                 var set = sets[i];
@@ -46,7 +46,7 @@ namespace InvertLab.Sprites.DOTS
 
         void ApplyEnemyDefaults()
         {
-            var enemies = FindObjectsByType<ColliderExampleEnemy>(FindObjectsSortMode.None);
+            var enemies = FindObjectsByType<ColliderExampleEnemy>(FindObjectsInactive.Exclude);
             for (int i = 0; i < enemies.Length; i++)
             {
                 var enemy = enemies[i];
