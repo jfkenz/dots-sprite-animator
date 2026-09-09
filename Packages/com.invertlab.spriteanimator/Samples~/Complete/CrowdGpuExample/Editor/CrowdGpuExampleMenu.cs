@@ -5,12 +5,12 @@ using UnityEngine;
 namespace InvertLab.Sprites.DOTS.Editor
 {
     /// <summary>
-    /// Opens the relocated Crowd GPU sample scene under Assets/Samples/CrowdGpuExample.
+    /// Opens the relocated Crowd GPU sample scene under Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/CrowdGpuExample.
     /// </summary>
     public static class CrowdGpuExampleMenu
     {
         public const string ScenePath =
-            "Assets/Samples/CrowdGpuExample/Scenes/CrowdGpuExample.unity";
+            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/CrowdGpuExample/Scenes/CrowdGpuExample.unity";
 
         [MenuItem("Tools/DOTS Sprite Animator/Open Crowd GPU Sample")]
         public static void Open()

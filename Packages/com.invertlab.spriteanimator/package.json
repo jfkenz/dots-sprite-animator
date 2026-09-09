@@ -21,44 +21,9 @@
   ],
   "samples": [
     {
-      "displayName": "Playback API",
-      "description": "Play / one-shot / facing API integration.",
-      "path": "Samples~/PlaybackApiExample"
-    },
-    {
-      "displayName": "Events",
-      "description": "Frame animation events sample.",
-      "path": "Samples~/EventsExample"
-    },
-    {
-      "displayName": "Sockets",
-      "description": "Socket attach points and sync.",
-      "path": "Samples~/Sockets"
-    },
-    {
-      "displayName": "Crowd GPU",
-      "description": "GPU / crowd scale path.",
-      "path": "Samples~/CrowdGpuExample"
-    },
-    {
-      "displayName": "Collider Query",
-      "description": "Query method + AABB hits (no Unity Physics package required).",
-      "path": "Samples~/ColliderQueryExample"
-    },
-    {
-      "displayName": "Collider Unity 2D Events",
-      "description": "Unity 2D collider children + hit events.",
-      "path": "Samples~/ColliderEventExample"
-    },
-    {
-      "displayName": "Unity Physics",
-      "description": "Optional com.unity.physics: Character body bake + frame AABB OverlapAabb. Requires Unity Physics package.",
-      "path": "Samples~/UnityPhysicsExample"
-    },
-    {
-      "displayName": "Showcase (Clembod)",
-      "description": "Art/profile showcase sheets. Credit Clembod; for demos, not minimal integration.",
-      "path": "Samples~/Showcase"
+      "displayName": "Complete",
+      "description": "All integration samples: Playback API, Events, Sockets, Crowd GPU, Collider Query, Collider Unity 2D Events, Unity Physics, and Showcase (Clembod). Import once to get everything.",
+      "path": "Samples~/Complete"
     }
   ],
   "license": "See LICENSE.md file",

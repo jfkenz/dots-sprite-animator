@@ -1,31 +1,34 @@
-﻿# Samples map
+# Samples map
 
-Samples ship inside the package as **optional** ``Samples~`` folders. They are **not** downloaded into your project until you import them.
+Samples ship inside the package as an optional `Samples~` folder. They are **not** in your project until you import them.
 
 ## How to import
 
 1. Window → Package Manager
-2. Select **DOTS Sprite Animator** (In Project / My Registries / embedded)
+2. Select **DOTS Sprite Animator**
 3. Open the **Samples** tab
-4. Import only what you need
+4. Import **Complete** (one click — all examples)
 
 Imported path (Unity default):
 
-``Assets/Samples/DOTS Sprite Animator/<version>/<Sample display name>/``
+`Assets/Samples/DOTS Sprite Animator/<version>/Complete/`
 
-## What each sample proves
+On some embedded installs the `<version>` segment may be omitted:
+`Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/`
 
-| Sample (Package Manager name) | Proves | Needs |
+## What’s inside Complete
+
+| Folder | Proves | Needs |
 |---|---|---|
-| Playback API | Play / one-shot / facing | — |
-| Events | Frame events | — |
+| PlaybackApiExample | Play / one-shot / facing | — |
+| EventsExample | Frame events | — |
 | Sockets | Socket attach points | — |
-| Crowd GPU | GPU / crowd scale | — |
-| Collider Query | Query + AABB hits | — |
-| Collider Unity 2D Events | Unity 2D collider children | — |
-| Unity Physics | Character Physics body + frame AABB OverlapAabb | `com.unity.physics` |
-| Showcase (Clembod) | Art/profiles demo | credit Clembod |
+| CrowdGpuExample | GPU / crowd scale | — |
+| ColliderQueryExample | Query + AABB hits | — |
+| ColliderEventExample | Unity 2D collider children | — |
+| UnityPhysicsExample | Character Physics body + frame AABB OverlapAabb | com.unity.physics |
+| Showcase | Art/profiles demo (Clembod) | credit Clembod |
 
 ## Unity Physics note
 
-Scripts live in the **Unity Physics** sample; related scenes may be under **Collider Unity 2D Events** until fully split. Open-scene actors use ``SpriteUnityPhysicsHurtbox.Ensure`` (not SubScene bake).
+Scripts live under **UnityPhysicsExample**; related event scenes may be under **ColliderEventExample**. Open-scene actors use `SpriteUnityPhysicsHurtbox.Ensure` (not SubScene bake).

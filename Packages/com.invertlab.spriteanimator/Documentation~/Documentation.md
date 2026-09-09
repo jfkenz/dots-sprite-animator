@@ -214,7 +214,7 @@ For crowds:
 
 - SpriteCrowdSpawnerAuthoring (and sample AuthoringCrowdDemo) primes instance scale / material so GPU sprites render at the intended size.
 - Use GPU-eligible idle/walk clips for density; keep hero / VFX on CPU when you need events or sockets.
-- Sample: import **Crowd GPU** from Package Manager Samples, then open via **Tools > DOTS Sprite Animator > Open Crowd GPU Sample**.
+- Sample: import **Complete** from Package Manager Samples, then open Crowd GPU via **Tools > DOTS Sprite Animator > Open Crowd GPU Sample**.
 
 Preview / edit mesh uses SpriteUnlit2DPreview (separate from instanced runtime shaders).
 
@@ -222,7 +222,7 @@ Preview / edit mesh uses SpriteUnlit2DPreview (separate from instanced runtime s
 
 ## 10. Samples
 
-Import from Package Manager → Samples (lands under Assets/Samples/DOTS Sprite Animator/…):
+Import **Complete** from Package Manager → Samples (lands under Assets/Samples/DOTS Sprite Animator/…/Complete/):
 
 | Folder | What it shows | How to open |
 | --- | --- | --- |

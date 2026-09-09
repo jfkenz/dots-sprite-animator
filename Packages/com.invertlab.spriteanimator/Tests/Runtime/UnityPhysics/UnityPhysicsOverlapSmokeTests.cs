@@ -18,7 +18,7 @@ namespace InvertLab.Sprites.DOTS
     public sealed class UnityPhysicsOverlapSmokeTests
     {
         const string ProfilePath =
-            "Assets/Samples/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset";
+            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset";
         const string SlashClipName = "Bringer-of-Death-SpritSheet row 3";
 
         [Test]

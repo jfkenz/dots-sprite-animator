@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using InvertLab.Sprites.DOTS;
@@ -78,7 +78,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             var profile = FindSampleProfile(ProfileNameHint);
             if (profile == null)
             {
-                Debug.LogWarning("[AuthoringExampleSceneSetup] Showcase profile not found. Import the Showcase sample from Package Manager (Samples tab), then re-run.");
+                Debug.LogWarning("[AuthoringExampleSceneSetup] Showcase profile not found. Import the Complete sample from Package Manager (Samples tab), then re-run.");
             }
             else
             {
@@ -115,7 +115,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     Debug.LogWarning(
                         "[AuthoringExampleSceneSetup] AuthoringCrowdDemo type not found. " +
-                        "Import the Crowd GPU sample from Package Manager, then re-run the menu.");
+                        "Import the Complete sample from Package Manager, then re-run the menu.");
                 }
             }
 

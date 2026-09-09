@@ -10,13 +10,13 @@ namespace InvertLab.Sprites.DOTS.Editor
 {
     public static class SocketsExampleBuilder
     {
-        const string Root = "Assets/Samples/Sockets";
+        const string Root = "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Sockets";
         const string ProfilePath = Root + "/SocketsProfile.asset";
         const string SwordMaterialPath = Root + "/SocketsSword.mat";
         const string ScenePath = Root + "/SocketsExample.unity";
         const string SubScenePath = Root + "/SocketsExample_SubScene.unity";
         const string CharacterPath =
-            "Assets/Samples/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect.png";
+            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect.png";
 
         [MenuItem("Tools/DOTS Sprite Animator/Build Sockets Sample")]
         public static void Build()

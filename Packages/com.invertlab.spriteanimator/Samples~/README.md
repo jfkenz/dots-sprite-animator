@@ -1,11 +1,20 @@
-﻿# Samples (optional)
+# Samples
 
-These folders live under ``Samples~`` so Unity does **not** import them with the package.
+One Package Manager sample: **Complete**.
 
-**Import:** Package Manager → **DOTS Sprite Animator** → **Samples** → Import.
+Package Manager → DOTS Sprite Animator → Samples → **Complete** → Import.
 
-Unity copies them into:
+Imports into:
+Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/
 
-``Assets/Samples/DOTS Sprite Animator/<version>/<Sample Name>/``
+Contains:
+- PlaybackApiExample
+- EventsExample
+- Sockets
+- CrowdGpuExample
+- ColliderQueryExample
+- ColliderEventExample
+- UnityPhysicsExample
+- Showcase (Clembod)
 
-See ``Documentation~/Samples.md``.
+See Documentation~/Samples.md.

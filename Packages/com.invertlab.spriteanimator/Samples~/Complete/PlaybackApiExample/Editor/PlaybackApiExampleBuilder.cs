@@ -7,19 +7,19 @@ using UnityEngine.SceneManagement;
 namespace InvertLab.Sprites.DOTS.Editor
 {
     /// <summary>
-    /// Builds Assets/Samples/EventsExample/Scenes/EventsExample.unity with a
-    /// Warrior-profile character plus Bootstrap / Listener / Driver.
+    /// Builds Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/PlaybackApiExample/Scenes/PlaybackApiExample.unity with a
+    /// Warrior-profile character plus Bootstrap / Driver for GO playback APIs.
     /// </summary>
-    public static class EventsExampleBuilder
+    public static class PlaybackApiExampleBuilder
     {
-        const string Root = "Assets/Samples/EventsExample";
-        const string ScenePath = Root + "/Scenes/EventsExample.unity";
+        const string Root = "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/PlaybackApiExample";
+        const string ScenePath = Root + "/Scenes/PlaybackApiExample.unity";
         const string ProfilePath =
-            "Assets/Samples/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect_profile.asset";
+            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect_profile.asset";
         const string BringerProfilePath =
-            "Assets/Samples/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset";
+            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset";
 
-        [MenuItem("Tools/DOTS Sprite Animator/Build Events Sample")]
+        [MenuItem("Tools/DOTS Sprite Animator/Build Playback API Sample")]
         public static void Build()
         {
             var profile = LoadProfile();
@@ -30,6 +30,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             Directory.CreateDirectory(Root + "/Scenes");
             Directory.CreateDirectory(Root + "/Components");
             Directory.CreateDirectory(Root + "/Systems");
+            Directory.CreateDirectory(Root + "/Editor");
 
             EnsureReadme();
             BuildScene(profile);
@@ -40,9 +41,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
             Debug.Log(
-                "[Events Sample] Built " + ScenePath +
-                ". Enter Play. Walk (A/D) fires Footstep; Attack (J) fires Attack. " +
-                "Author markers: event id 1 = Footstep, id 2 = Attack (Window > DOTS Sprite Animator).");
+                "[Playback API Sample] Built " + ScenePath +
+                ". Enter Play. Keys: 1 Walk · 2 PlayOneShot Attack · 3 Queue · 4 Priority · 5 Hitstop · 6 Hold · 0 Idle.");
         }
 
         static ScriptableSpriteSheetProfile LoadProfile()
@@ -60,7 +60,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             File.WriteAllText(
                 readmePath,
-                "Reserved for Burst ECS event consumers.\n");
+                "Reserved for Burst ECS playback consumers.\n");
             AssetDatabase.ImportAsset(readmePath);
         }
 
@@ -95,13 +95,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             catch
             {
-                go = new GameObject("Events Character");
+                go = new GameObject("Playback Character");
                 go.AddComponent<MeshFilter>().sharedMesh =
                     Resources.GetBuiltinResource<Mesh>("Quad.fbx");
                 go.AddComponent<MeshRenderer>();
             }
 
-            go.name = "Events Character";
+            go.name = "Playback Character";
             go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
 
             var collider = go.GetComponent<Collider>();
@@ -124,18 +124,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             player.Playing = true;
             player.PlayOnEnable = true;
 
-            var bootstrap = go.AddComponent<EventExampleBootstrap>();
+            var bootstrap = go.AddComponent<PlaybackApiExampleBootstrap>();
             bootstrap.PreferredProfile = profile;
             bootstrap.IdleClipIndex = 0;
             bootstrap.WalkClipIndex = 1;
             bootstrap.AttackClipIndex = Mathf.Min(13, (profile.Data?.Clips?.Count ?? 1) - 1);
+            bootstrap.LocomotionPriority = 0;
+            bootstrap.AttackPriority = 10;
 
-            go.AddComponent<EventExampleListener>();
-            var driver = go.AddComponent<EventExampleDriver>();
+            var driver = go.AddComponent<PlaybackApiExampleDriver>();
             driver.IdleClipIndex = bootstrap.IdleClipIndex;
             driver.WalkClipIndex = bootstrap.WalkClipIndex;
             driver.AttackClipIndex = bootstrap.AttackClipIndex;
-            driver.AutoCycle = false;
 
             // World scale from sheet height when available.
             var data = profile.Data;
