@@ -178,7 +178,6 @@ namespace InvertLab.Sprites.DOTS
                     em.AddComponentData(s_proto, gpuAnim);
                     em.AddComponentData(s_proto, new SpriteGpuDriven());
                     SpriteGpuAnimResources.SetSharedClip(gpuAnim);
-                    Debug.Log("[Crowd Spawner] GPU + Burst (shader clock). Uncheck Use Gpu Anim for CPU playback.", this);
                 }
                 else
                 {
@@ -230,8 +229,6 @@ namespace InvertLab.Sprites.DOTS
             // prime the static without walking LocalTransform / MarkDirty.
             if (spawned > 0)
                 PrimeAppliedScale(spawnScale);
-            Debug.Log("[Crowd Spawner] +" + spawned + (grid ? " (grid)" : " (random)") +
-                      " | total " + CountAll(), this);
             return spawned;
         }
 
@@ -366,7 +363,6 @@ namespace InvertLab.Sprites.DOTS
                     changed++;
             }
             ents.Dispose();
-            Debug.Log("[Crowd Spawner] clip " + clipIndex + " '" + clipName + "' -> " + changed);
         }
 
         static float ClipWorldHeight(SpriteAnimSetAuthoring authoring, int clipIndex)

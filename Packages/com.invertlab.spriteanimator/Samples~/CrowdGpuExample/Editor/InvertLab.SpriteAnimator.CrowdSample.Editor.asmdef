@@ -1,8 +1,8 @@
 {
-  "name": "DotsSpriteAnimator.CrowdSample.Editor",
+  "name": "InvertLab.SpriteAnimator.CrowdSample.Editor",
   "rootNamespace": "InvertLab.Sprites.DOTS.Editor",
   "references": [
-    "DotsSpriteAnimator.CrowdSample"
+    "InvertLab.SpriteAnimator.CrowdSample"
   ],
   "includePlatforms": [
     "Editor"
