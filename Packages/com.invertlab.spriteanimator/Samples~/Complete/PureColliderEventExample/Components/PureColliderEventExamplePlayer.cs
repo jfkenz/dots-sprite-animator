@@ -12,7 +12,7 @@ namespace InvertLab.Sprites.DOTS
     [DisallowMultipleComponent]
     [RequireComponent(typeof(SpriteAnimPlayerAuthoring))]
     [RequireComponent(typeof(SpriteAnimSetAuthoring))]
-    public sealed class PureColliderExamplePlayer : MonoBehaviour
+    public sealed class PureColliderEventExamplePlayer : MonoBehaviour
     {
         [Min(0.1f)] public float MoveSpeed = 3f;
 
@@ -29,7 +29,7 @@ namespace InvertLab.Sprites.DOTS
         [Min(1)] public int AttackDamage = 1;
         [Tooltip("Extra reach added to the attack box on the facing side, in world units. " +
                  "The slash collider covers only the authored box; this pads it so 'near' is enough.")]
-        [Min(0f)] public float AttackReachPadding = 0.3f;
+        [Min(0f)] public float AttackReachPadding = 0f;
         [Tooltip("Show the A/D/J help box in the corner.")]
         public bool ShowHelpOverlay = false;
         [Tooltip("On-screen readout of the attack query while attacking.")]
@@ -119,7 +119,7 @@ namespace InvertLab.Sprites.DOTS
                 return;
             string clipName = ClipName(AttackClipIndex);
             bool gotBounds = SpriteHitboxQuery.TryGetBounds(_set, clipName, _player.Frame,
-                SpriteHitboxQuery.FrameBoxes | SpriteHitboxQuery.ClipBoxes,
+                SpriteHitboxQuery.FrameBoxes,
                 _facingLeft, out var attackBounds);
 
             if (gotBounds && AttackReachPadding > 0f)
@@ -129,16 +129,20 @@ namespace InvertLab.Sprites.DOTS
             }
 
             string hitLog = "";
-            var enemies = FindObjectsByType<PureColliderExampleEnemy>(FindObjectsInactive.Exclude);
+            var enemies = FindObjectsByType<PureColliderEventExampleEnemy>(FindObjectsInactive.Exclude);
             for (int i = 0; i < enemies.Length; i++)
             {
                 var enemy = enemies[i];
                 if (enemy == null || enemy.gameObject == gameObject)
                     continue;
                 bool hasHurt = enemy.TryGetHurtBounds(out var hurt);
-                bool overlap = hasHurt && SpriteHitboxQuery.Overlaps(attackBounds, hurt);
+                // Precise polygon-vs-hurtbox (not fat AABB) so a small gap around
+                // the red slash does not count as a hit.
+                bool overlap = hasHurt && SpriteHitboxQuery.OverlapsHurtPrecise(
+                    _set, clipName, _player.Frame, SpriteHitboxQuery.FrameBoxes,
+                    _facingLeft, hurt);
                 hitLog += "\n" + enemy.name + ": hurt=" +
-                          (hasHurt ? hurt.ToString() : "none") + " overlap=" + overlap;
+                          (hasHurt ? hurt.ToString() : "none") + " poly=" + overlap;
                 if (overlap && enemy.LastHitAttackId != _attackId)
                     enemy.ReceiveHit(AttackDamage, _attackId);
             }
@@ -209,7 +213,7 @@ namespace InvertLab.Sprites.DOTS
                 return;
             string clipName = ClipName(AttackClipIndex);
             if (SpriteHitboxQuery.TryGetBounds(_set, clipName, _player.Frame,
-                    SpriteHitboxQuery.FrameBoxes | SpriteHitboxQuery.ClipBoxes,
+                    SpriteHitboxQuery.FrameBoxes,
                     _facingLeft, out var attackBounds))
             {
                 Gizmos.color = new Color(1f, 0.4f, 0.1f, 0.9f);

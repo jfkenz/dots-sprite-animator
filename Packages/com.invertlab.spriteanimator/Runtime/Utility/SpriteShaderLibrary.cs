@@ -28,14 +28,17 @@ namespace InvertLab.Sprites.DOTS
             var instanced = Shader.Find(InstancedShader);
             var gpuAnim = Shader.Find(GpuAnimShader);
             var preview = Shader.Find(PreviewShader);
-            if (unlit != null && instanced != null && gpuAnim != null && preview != null)
+            var instancedLit = Shader.Find(InstancedShaderLit);
+            var gpuAnimLit = Shader.Find(GpuAnimShaderLit);
+            if (unlit != null && instanced != null && gpuAnim != null && preview != null &&
+                instancedLit != null && gpuAnimLit != null)
             {
                 message = "All DOTS Sprite Animator shaders found.";
                 return true;
             }
 
             message =
-                $"Missing shaders. Unlit={unlit != null}, Instanced={instanced != null}, GPUAnim={gpuAnim != null}, Preview={preview != null}";
+                $"Missing shaders. Unlit={unlit != null}, Instanced={instanced != null}, GPUAnim={gpuAnim != null}, Preview={preview != null}, InstancedLit={instancedLit != null}, GPUAnimLit={gpuAnimLit != null}";
             return false;
         }
     }

@@ -10,7 +10,7 @@ namespace InvertLab.Sprites.DOTS
     [DisallowMultipleComponent]
     [RequireComponent(typeof(SpriteAnimPlayerAuthoring))]
     [RequireComponent(typeof(SpriteAnimSetAuthoring))]
-    public sealed class PureColliderExampleEnemy : MonoBehaviour
+    public sealed class PureColliderEventExampleEnemy : MonoBehaviour
     {
         [Min(1)] public int MaxHealth = 5;
         public float HealthBarWorldOffsetY = 1.15f;

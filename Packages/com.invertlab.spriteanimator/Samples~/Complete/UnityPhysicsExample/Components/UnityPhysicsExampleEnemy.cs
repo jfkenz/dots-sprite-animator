@@ -87,6 +87,13 @@ namespace InvertLab.Sprites.DOTS
                 Respawn();
         }
 
+        void FixedUpdate()
+        {
+            // Sync before Unity Physics builds the world so OverlapAabb
+            // sees the enemy where the GameObject actually is.
+            SyncHurtboxTransform();
+        }
+
         void LateUpdate()
         {
             SyncHurtboxTransform();
@@ -217,9 +224,27 @@ namespace InvertLab.Sprites.DOTS
                 bounds = default;
                 return false;
             }
+
+            string clipName = CurrentClipName();
+            bool flipX = _player != null && _player.FlipX;
+            if (SpriteHitboxQuery.TryGetBounds(_set, clipName, _player != null ? _player.Frame : 0,
+                    SpriteHitboxQuery.CharacterBoxes | SpriteHitboxQuery.ClipBoxes,
+                    flipX, out bounds))
+                return true;
+
             var world = transform.position;
             bounds = Rect.MinMaxRect(world.x - 0.5f, world.y, world.x + 0.5f, world.y + 1f);
             return true;
+        }
+
+        string CurrentClipName()
+        {
+            if (_player == null || _set == null || _set.Clips == null)
+                return null;
+            int i = _player.ClipIndex;
+            if (i >= 0 && i < _set.Clips.Length)
+                return _set.Clips[i].Name;
+            return null;
         }
 
         public void ReceiveHit(int damage, int attackId)

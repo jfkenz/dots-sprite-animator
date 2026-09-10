@@ -119,8 +119,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
-        const string PackageVersion = "0.8.0";
-        const float ToolbarHeight = 48f;
+        const string PackageVersion = "0.8.1";
+        const float ToolbarHeight = 108f;
         const float DefaultTimelineHeight = 244f;
         const float MinTimelineHeight = 120f;
         const float MinWorkAreaHeight = 230f;
@@ -174,15 +174,15 @@ namespace InvertLab.Sprites.DOTS.Editor
         const float ClipRowDeleteWidth = 18f;
         const float ClipRowFoldWidth = 14f;
 
-        static readonly Color WindowColor = new(0.075f, 0.086f, 0.105f);
+        static readonly Color WindowColor = new(0.067f, 0.078f, 0.094f);
         static readonly Color PanelColor = new(0.105f, 0.12f, 0.145f);
         static readonly Color PanelAltColor = new(0.13f, 0.15f, 0.18f);
-        static readonly Color BorderColor = new(0.22f, 0.25f, 0.3f);
-        static readonly Color AccentColor = new(0.18f, 0.66f, 0.92f);
+        static readonly Color BorderColor = new(0.19f, 0.225f, 0.265f);
+        static readonly Color AccentColor = new(0.28f, 0.76f, 0.79f);
         static readonly Color SocketDrawBehindColor = new(0.62f, 0.42f, 0.98f);
         static readonly Color SocketDrawFrontColor = new(1f, 0.76f, 0.22f);
         static readonly Color EventColor = new(1f, 0.61f, 0.2f);
-        static readonly Color TextMuted = new(0.58f, 0.64f, 0.72f);
+        static readonly Color TextMuted = new(0.66f, 0.72f, 0.79f);
 
         [SerializeField] SpriteSheetProfile _profile;
         [SerializeField] float _clipPanelWidth = DefaultClipPanelWidth;
@@ -520,6 +520,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         GUIStyle _clipStyle;
         GUIStyle _clipSelectedStyle;
         GUIStyle _transportStyle;
+        GUIStyle _primaryStyle;
+        GUIStyle _panelStyle;
+        GUIStyle _saveStatusStyle;
         GUIStyle _frameLabelStyle;
         GUIStyle _onionBadgeStyle;
         GUIStyle _socketLabelStyle;
@@ -575,6 +578,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (texture != null)
                     DestroyImmediate(texture);
             _styleTextures.Clear();
+            _titleStyle = null;
+            _socketLabelStyle = null;
+            _socketBalloonStyle = null;
             InvalidateSheetPixelCache();
         }
 
@@ -991,31 +997,34 @@ namespace InvertLab.Sprites.DOTS.Editor
             x += 102f;
             HandleToolbarProfileDragDrop(rect);
 
+            // Keep transport separate from file actions, even at the minimum window width.
+            x = 14f;
+
             using (new EditorGUI.DisabledScope(!hasClip))
             {
-                if (GUI.Button(new Rect(x, 10f, 28f, 28f), new GUIContent("|<", "Jump to first frame."), _transportStyle))
+                if (GUI.Button(new Rect(x, 52f, 28f, 28f), new GUIContent("|<", "Jump to first frame."), _transportStyle))
                     StepToBoundary(clip, forward: false);
                 x += 32f;
-                if (GUI.Button(new Rect(x, 10f, 24f, 28f), new GUIContent("<", "Step one frame backward."), _transportStyle))
+                if (GUI.Button(new Rect(x, 52f, 24f, 28f), new GUIContent("<", "Step one frame backward."), _transportStyle))
                     StepFrame(clip, -1);
                 x += 28f;
-                if (GUI.Button(new Rect(x, 10f, 24f, 28f), new GUIContent(">", "Step one frame forward."), _transportStyle))
+                if (GUI.Button(new Rect(x, 52f, 24f, 28f), new GUIContent(">", "Step one frame forward."), _transportStyle))
                     StepFrame(clip, +1);
                 x += 28f;
-                if (GUI.Button(new Rect(x, 10f, 28f, 28f), new GUIContent(">|", "Jump to last frame."), _transportStyle))
+                if (GUI.Button(new Rect(x, 52f, 28f, 28f), new GUIContent(">|", "Jump to last frame."), _transportStyle))
                     StepToBoundary(clip, forward: true);
                 x += 34f;
             }
 
             using (new EditorGUI.DisabledScope(!hasClip))
             {
-                if (GUI.Button(new Rect(x, 10f, 70f, 28f),
+                if (GUI.Button(new Rect(x, 52f, 70f, 28f),
                     new GUIContent(_playing ? "Pause" : "Play", _playing
                         ? "Pause frame playback."
                         : _spacePlaysBothClocks
                             ? "Play frame playback. Space starts both clocks when Space: Both is on."
                             : "Play frame playback (Space, this tab only)."),
-                    _transportStyle))
+                    _primaryStyle))
                 {
                     bool starting = !_playing;
                     _playing = !_playing;
@@ -1027,7 +1036,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
             x += 76f;
-            if (GUI.Button(new Rect(x, 10f, 58f, 28f),
+            if (GUI.Button(new Rect(x, 52f, 58f, 28f),
                 new GUIContent("Stop", "Stop playback and return to time 0."), _transportStyle))
             {
                 _playing = false;
@@ -1035,18 +1044,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Repaint();
             }
             x += 66f;
-            _previewLoop = GUI.Toggle(new Rect(x, 14f, 58f, 22f),
+            _previewLoop = GUI.Toggle(new Rect(x, 55f, 58f, 22f),
                 _previewLoop, new GUIContent("Loop", "Loop preview playback."));
             x += 64f;
-            GUI.Label(new Rect(x, 15f, 40f, 20f), "Speed", _mutedStyle);
+            GUI.Label(new Rect(x, 54f, 40f, 20f), "Speed", _mutedStyle);
             x += 42f;
-            _speed = GUI.HorizontalSlider(new Rect(x, 20f, 90f, 16f), _speed, 0.1f, 3f);
+            _speed = GUI.HorizontalSlider(new Rect(x, 61f, 90f, 16f), _speed, 0.1f, 3f);
             x += 96f;
-            GUI.Label(new Rect(x, 15f, 42f, 20f), $"{_speed:F1}x", _mutedStyle);
+            GUI.Label(new Rect(x, 54f, 42f, 20f), $"{_speed:F1}x", _mutedStyle);
             x += 44f;
             using (new EditorGUI.DisabledScope(Mathf.Approximately(_speed, DefaultPreviewSpeed)))
             {
-                if (GUI.Button(new Rect(x, 11f, 38f, 26f),
+                if (GUI.Button(new Rect(x, 52f, 38f, 26f),
                     new GUIContent("1x", "Reset preview speed to its 1x default."), _transportStyle))
                     _speed = DefaultPreviewSpeed;
             }
@@ -1056,23 +1065,21 @@ namespace InvertLab.Sprites.DOTS.Editor
             float checkX = rect.xMax - 338f;
             const float undoW = 46f;
             const float redoW = 46f;
-            const float listW = 50f;
+            const float listW = 58f;
             const float undoGap = 4f;
             float clusterW = undoW + undoGap + redoW + undoGap + listW;
-            float undoX = x;
-            if (undoX + clusterW + 8f > checkX)
-                undoX = checkX - clusterW - 8f;
+            float undoX = rect.xMax - clusterW - 14f;
 
-            if (GUI.Button(new Rect(undoX, 11f, undoW, 26f),
+            if (GUI.Button(new Rect(undoX, 52f, undoW, 26f),
                 new GUIContent("Undo", "Undo (Ctrl/Cmd+Z)"), _transportStyle))
                 Undo.PerformUndo();
             float redoX = undoX + undoW + undoGap;
-            if (GUI.Button(new Rect(redoX, 11f, redoW, 26f),
+            if (GUI.Button(new Rect(redoX, 52f, redoW, 26f),
                 new GUIContent("Redo", "Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)"), _transportStyle))
                 Undo.PerformRedo();
             float listX = redoX + redoW + undoGap;
-            if (GUI.Button(new Rect(listX, 11f, listW, 26f),
-                new GUIContent(_showHistoryPanel ? "Hide" : "List",
+            if (GUI.Button(new Rect(listX, 52f, listW, 26f),
+                new GUIContent(_showHistoryPanel ? "Hide" : "History",
                     "Show the undo/redo history panel."), _transportStyle))
                 _showHistoryPanel = !_showHistoryPanel;
             x = listX + listW + 8f;
@@ -1096,13 +1103,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 if (GUI.Button(saveRect,
                     new GUIContent("Save Profile", "Save to <SheetName>_profile.asset and matching json."),
-                    _transportStyle))
+                    _primaryStyle))
                     SaveProfile();
             }
 
-            float statusWidth = Mathf.Max(0f, saveRect.x - x - 8f);
-            if (statusWidth > 20f)
-                GUI.Label(new Rect(x, 15f, statusWidth, 20f), _status, _mutedStyle);
+            EditorGUI.DrawRect(new Rect(14f, 44f, rect.width - 28f, 1f), BorderColor);
+            GUI.Label(new Rect(14f, 86f, rect.width - 252f, 18f),
+                new GUIContent(_status, _status), _mutedStyle);
+            string saveState = _asset == null ? "Unsaved profile"
+                : EditorUtility.IsDirty(_asset) ? "Unsaved changes" : "Profile saved";
+            GUI.Label(new Rect(rect.xMax - 230f, 86f, 216f, 18f), saveState, _saveStatusStyle);
         }
 
         void NewProfile()
@@ -3289,10 +3299,42 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawPreview(Rect rect)
         {
             GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, 20f), "PREVIEW", _sectionStyle);
-            GUI.Label(new Rect(rect.x + 186f, rect.y + 9f, 36f, 20f), "Zoom", _mutedStyle);
-            _previewZoom = GUI.HorizontalSlider(new Rect(rect.x + 222f, rect.y + 14f, 86f, 14f), _previewZoom, 0.25f, 8f);
-            GUI.Label(new Rect(rect.x + 312f, rect.y + 9f, 46f, 20f), $"{_previewZoom:F2}x", _mutedStyle);
-            var canvas = new Rect(rect.x + 10f, rect.y + 54f, rect.width - 20f, rect.height - 66f);
+            var viewRect = new Rect(rect.xMax - 74f, rect.y + 7f, 62f, 22f);
+            if (GUI.Button(viewRect, new GUIContent("View ▾", "Preview offsets, motion paths, and socket frames."), EditorStyles.miniButton))
+            {
+                var menu = new GenericMenu();
+                menu.AddItem(new GUIContent("Authored offsets"), _previewOffsetMode == PreviewOffsetMode.Authored, () =>
+                {
+                    RecordWindowUndo("Change Sprite Offset Preview");
+                    _previewOffsetMode = PreviewOffsetMode.Authored;
+                    Repaint();
+                });
+                menu.AddItem(new GUIContent("Centered cells"), _previewOffsetMode == PreviewOffsetMode.Centered, () =>
+                {
+                    RecordWindowUndo("Change Sprite Offset Preview");
+                    _previewOffsetMode = PreviewOffsetMode.Centered;
+                    Repaint();
+                });
+                menu.AddSeparator("");
+                menu.AddItem(new GUIContent("Independent motion paths"), _showIndependentMotionPaths, () =>
+                {
+                    RecordWindowUndo("Toggle Independent Motion Paths");
+                    _showIndependentMotionPaths = !_showIndependentMotionPaths;
+                    Repaint();
+                });
+                if (!string.IsNullOrEmpty(_selectedSocketName))
+                    menu.AddItem(new GUIContent("Socket frames…"), false, () =>
+                        OpenSocketInheritPanel(CurrentClip, _selectedSocketName, _selectedFrame));
+                else
+                    menu.AddDisabledItem(new GUIContent("Socket frames…"));
+                menu.DropDown(viewRect);
+            }
+
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 35f, 34f, 20f), "Zoom", _mutedStyle);
+            float zoomWidth = Mathf.Max(24f, rect.width - 158f);
+            _previewZoom = GUI.HorizontalSlider(new Rect(rect.x + 49f, rect.y + 40f, zoomWidth, 14f), _previewZoom, 0.25f, 8f);
+            GUI.Label(new Rect(rect.xMax - 105f, rect.y + 35f, 46f, 20f), $"{_previewZoom:F2}x", _mutedStyle);
+            var canvas = new Rect(rect.x + 10f, rect.y + 82f, rect.width - 20f, rect.height - 94f);
             EventType previewEvent = Event.current.type;
             bool debugBlocksPreview = PreviewDebugToggleBlocksEditorInput(canvas);
             if (debugBlocksPreview)
@@ -3304,9 +3346,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             bool panAtDefault = _previewPan.sqrMagnitude < 0.01f && _previewScroll.sqrMagnitude < 1f;
             using (new EditorGUI.DisabledScope(zoomAtDefault && panAtDefault))
             {
-                if (GUI.Button(new Rect(rect.x + 356f, rect.y + 7f, 52f, 22f),
-                        new GUIContent("Reset", "Reset preview zoom and pan."),
-                        EditorStyles.miniButton))
+                if (GUI.Button(new Rect(rect.xMax - 60f, rect.y + 33f, 48f, 22f),
+                    new GUIContent("Reset", "Reset preview zoom and pan."), EditorStyles.miniButton))
                 {
                     _previewZoom = 1f;
                     _previewPan = Vector2.zero;
@@ -3318,52 +3359,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                                    _previewPan.sqrMagnitude < 0.01f;
             using (new EditorGUI.DisabledScope(_profile.Sheet == null || alreadyCentered))
             {
-                if (GUI.Button(new Rect(rect.x + 412f, rect.y + 7f, 68f, 22f),
-                        new GUIContent("Recenter",
-                            "Keep zoom and center the sprite in the preview pane."),
-                        EditorStyles.miniButton))
-                {
+                if (GUI.Button(new Rect(rect.xMax - 146f, rect.y + 7f, 68f, 22f),
+                    new GUIContent("Recenter", "Keep zoom and center the sprite in the preview pane."), EditorStyles.miniButton))
                     RecenterPreview(localCanvas);
-                }
-            }
-            var offsetModeRect = new Rect(rect.xMax - 126f, rect.y + 7f, 114f, 22f);
-            var motionPathRect = new Rect(rect.xMax - 310f, rect.y + 7f, 90f, 22f);
-            if (GUI.Button(motionPathRect,
-                    new GUIContent(_showIndependentMotionPaths ? "Paths: On" : "Paths: Off",
-                        "Toggle Independent Motion path lines when Preview Debug is on."),
-                    EditorStyles.miniButton))
-            {
-                RecordWindowUndo("Toggle Independent Motion Paths");
-                _showIndependentMotionPaths = !_showIndependentMotionPaths;
-                _status = _showIndependentMotionPaths
-                    ? "Independent Motion paths visible"
-                    : "Independent Motion paths hidden";
-                Repaint();
-            }
-            if (!string.IsNullOrEmpty(_selectedSocketName))
-            {
-                if (GUI.Button(new Rect(rect.xMax - 214f, rect.y + 7f, 82f, 22f),
-                        new GUIContent("Frames…",
-                            "Open the socket frame panel to copy position, rotation, and scale."),
-                        EditorStyles.miniButton))
-                {
-                    OpenSocketInheritPanel(CurrentClip, _selectedSocketName, _selectedFrame);
-                }
-            }
-            string offsetModeLabel = _previewOffsetMode == PreviewOffsetMode.Authored
-                ? "View: Offsets"
-                : "View: Centered";
-            if (GUI.Button(offsetModeRect, new GUIContent(offsetModeLabel,
-                    "Toggle between authored per-frame playback offsets and centered source cells."),
-                EditorStyles.miniButton))
-            {
-                RecordWindowUndo("Change Sprite Offset Preview");
-                _previewOffsetMode = _previewOffsetMode == PreviewOffsetMode.Authored
-                    ? PreviewOffsetMode.Centered
-                    : PreviewOffsetMode.Authored;
-                _status = _previewOffsetMode == PreviewOffsetMode.Authored
-                    ? "Preview applies authored frame offsets"
-                    : "Preview centers the active frame";
             }
             var clip = CurrentClip;
             var state = EvaluatePreview(clip, _previewTime);
@@ -3380,7 +3378,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 frameText += "   •   Socket tool armed";
             if (_colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
                 frameText += $"   •   {_polygonDraftUV.Count} vertices";
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 31f, rect.width - 24f, 16f), frameText, _mutedStyle);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 61f, rect.width - 24f, 16f), new GUIContent(frameText, frameText), _mutedStyle);
 
             HandlePreviewNavigationInput(canvas);
             HandlePreviewSheetDragDrop(canvas);
@@ -22370,10 +22368,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             _colliderMoveStartRects.Clear();
         }
 
-        static void DrawPanel(Rect rect)
+        void DrawPanel(Rect rect)
         {
-            EditorGUI.DrawRect(rect, PanelColor);
-            DrawBorder(rect, BorderColor, 1f);
+            GUI.Box(rect, GUIContent.none, _panelStyle);
         }
 
         static void DrawBorder(Rect rect, Color color, float thickness)
@@ -24049,13 +24046,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 };
                 _mutedStyle = new GUIStyle(EditorStyles.miniLabel)
                 {
+                    fontSize = 11,
                     normal = { textColor = TextMuted },
                     clipping = TextClipping.Clip,
                 };
                 _mutedWrapStyle = new GUIStyle(EditorStyles.miniLabel)
                 {
                     wordWrap = true,
-                    fontSize = 9,
+                    fontSize = 10,
                     alignment = TextAnchor.MiddleLeft,
                     clipping = TextClipping.Overflow,
                     normal = { textColor = TextMuted },
@@ -24076,10 +24074,24 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     fontSize = 11,
                     fixedHeight = 28f,
-                    normal = { background = SolidTexture(new Color(0.16f, 0.18f, 0.215f)), textColor = Color.white },
-                    hover = { background = SolidTexture(new Color(0.2f, 0.24f, 0.29f)), textColor = Color.white },
-                    active = { background = SolidTexture(new Color(0.14f, 0.52f, 0.72f)), textColor = Color.white },
+                    border = new RectOffset(6, 6, 6, 6),
+                    padding = new RectOffset(5, 5, 2, 2),
+                    normal = { background = RoundedTexture(new Color(0.15f, 0.18f, 0.215f), BorderColor), textColor = Color.white },
+                    hover = { background = RoundedTexture(new Color(0.20f, 0.25f, 0.29f), AccentColor * 0.65f), textColor = Color.white },
+                    active = { background = RoundedTexture(new Color(0.12f, 0.36f, 0.4f), AccentColor), textColor = Color.white },
                 };
+                _primaryStyle = new GUIStyle(_transportStyle)
+                {
+                    fontStyle = FontStyle.Bold,
+                    normal = { background = RoundedTexture(new Color(0.13f, 0.35f, 0.38f), new Color(0.22f, 0.53f, 0.56f)) },
+                    hover = { background = RoundedTexture(new Color(0.16f, 0.43f, 0.46f), AccentColor) },
+                };
+                _panelStyle = new GUIStyle
+                {
+                    border = new RectOffset(6, 6, 6, 6),
+                    normal = { background = RoundedTexture(PanelColor, BorderColor) },
+                };
+                _saveStatusStyle = new GUIStyle(_mutedStyle) { alignment = TextAnchor.MiddleRight };
                 _clipStyle = new GUIStyle(GUI.skin.button)
                 {
                     alignment = TextAnchor.MiddleLeft,
@@ -24088,8 +24100,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 };
                 _clipSelectedStyle = new GUIStyle(_clipStyle)
                 {
-                    normal = { background = SolidTexture(new Color(0.12f, 0.34f, 0.47f)) },
-                    hover = { background = SolidTexture(new Color(0.14f, 0.4f, 0.55f)) },
+                    normal = { background = SolidTexture(new Color(0.12f, 0.30f, 0.34f)), textColor = Color.white },
+                    hover = { background = SolidTexture(new Color(0.14f, 0.37f, 0.41f)), textColor = Color.white },
                 };
             }
 
@@ -24110,6 +24122,30 @@ namespace InvertLab.Sprites.DOTS.Editor
                     normal = { textColor = Color.white },
                 };
             }
+        }
+
+        Texture2D RoundedTexture(Color fill, Color border)
+        {
+            const int size = 16;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = Mathf.Max(Mathf.Abs(x + 0.5f - size * 0.5f) - 3f, 0f);
+                float dy = Mathf.Max(Mathf.Abs(y + 0.5f - size * 0.5f) - 3f, 0f);
+                float distance = Mathf.Sqrt(dx * dx + dy * dy) - 5f;
+                Color color = Color.Lerp(fill, border, Mathf.Clamp01(distance + 1.5f));
+                color.a = Mathf.Clamp01(0.5f - distance);
+                texture.SetPixel(x, y, color);
+            }
+            texture.Apply();
+            _styleTextures.Add(texture);
+            return texture;
         }
 
         Texture2D SolidTexture(Color color)

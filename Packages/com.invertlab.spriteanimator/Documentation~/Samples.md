@@ -24,7 +24,7 @@ On some embedded installs the `<version>` segment may be omitted:
 | EventsExample | Frame events | — |
 | Sockets | Socket attach points | — |
 | CrowdGpuExample | GPU / crowd scale | — |
-| ColliderQueryExample | Query + AABB hits | — |
+| PureColliderEventExample | Pure overlap hit queries | — |
 | ColliderEventExample | Unity 2D collider children | — |
 | UnityPhysicsExample | Character Physics body + frame AABB OverlapAabb | com.unity.physics |
 | Showcase | Art/profiles demo (Clembod) | credit Clembod |

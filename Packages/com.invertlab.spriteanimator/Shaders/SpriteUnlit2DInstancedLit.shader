@@ -70,7 +70,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced Lit"
 
             // ---- URP 2D lights (self-contained replica of Unity's
             // CombinedShapeLightShared with a constant white mask) ----
-            half4 _HDREmulationScale;
+            half _HDREmulationScale;
 #if USE_SHAPE_LIGHT_TYPE_0
             TEXTURE2D(_ShapeLightTexture0);
             SAMPLER(sampler_ShapeLightTexture0);
@@ -224,8 +224,9 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced Lit"
             float4 frag(v2f i) : SV_Target
             {
                 float4 t = tex2D(_MainTex, i.uv);
-                clip(t.a - _Cutoff);
-                return Apply2DLights(t * i.col, i.lightingUV);
+                t *= i.col;
+                clip(t.a - max(_Cutoff, 1e-6));
+                return Apply2DLights(t, i.lightingUV);
             }
             ENDHLSL
         }

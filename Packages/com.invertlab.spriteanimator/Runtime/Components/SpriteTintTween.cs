@@ -114,10 +114,11 @@ namespace InvertLab.Sprites.DOTS
             float dt = SystemAPI.Time.DeltaTime;
             var gpuFlag = new NativeReference<int>(Allocator.TempJob);
 
-            state.Dependency = new AdvanceTweenJob { Dt = dt }
-                .ScheduleParallel(state.Dependency);
+            // Capture active GPU tweens before AdvanceTweenJob disables completed ones.
             state.Dependency = new GpuDirtyJob { GpuFlag = gpuFlag }
                 .Schedule(state.Dependency);
+            state.Dependency = new AdvanceTweenJob { Dt = dt }
+                .ScheduleParallel(state.Dependency);
             state.Dependency.Complete();
 
             if (gpuFlag.Value != 0)

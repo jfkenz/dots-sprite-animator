@@ -73,9 +73,8 @@ namespace InvertLab.Sprites.DOTS
                 int n = def.FrameCount;
                 if (n <= 0) continue;
 
-                float t = player.ValueRO.Time;          // already wrapped by the player
-                int idx = math.clamp((int)t, 0, n - 1);
-                int drawIdx = def.WrapMode == SpriteAnimWrap.ReverseLoop ? n - 1 - idx : idx;
+                int drawIdx = SpriteAnimPlayerSystem.DisplayFrame(
+                    (int)math.floor(player.ValueRO.Time), n, def.WrapMode);
 
                 for (int b = 0; b < nBoxes; b++)
                 {

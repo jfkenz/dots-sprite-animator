@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -79,7 +79,7 @@ namespace InvertLab.Sprites.DOTS
             IList<FrameBoxDef> boxes, Vector2 pivot, float sizeUnits,
             bool flipX = false, bool flipY = false,
             uint belongsTo = uint.MaxValue, uint collidesWith = uint.MaxValue,
-            float thickness = DefaultThickness)
+            float thickness = DefaultThickness, float2 flipAxis = default)
         {
             if (boxes == null || boxes.Count == 0)
             {
@@ -91,12 +91,12 @@ namespace InvertLab.Sprites.DOTS
                     Lifetime = 1,
                 };
                 return CreateCollider(fallback, pivot, sizeUnits, flipX, flipY,
-                    belongsTo, collidesWith, thickness);
+                    belongsTo, collidesWith, thickness, flipAxis);
             }
 
             if (boxes.Count == 1)
                 return CreateCollider(boxes[0], pivot, sizeUnits, flipX, flipY,
-                    belongsTo, collidesWith, thickness);
+                    belongsTo, collidesWith, thickness, flipAxis);
 
             var children = new NativeArray<CompoundCollider.ColliderBlobInstance>(
                 boxes.Count, Allocator.Temp);
@@ -106,7 +106,7 @@ namespace InvertLab.Sprites.DOTS
                 {
                     CompoundFromChild = RigidTransform.identity,
                     Collider = CreateCollider(boxes[i], pivot, sizeUnits, flipX, flipY,
-                        belongsTo, collidesWith, thickness),
+                        belongsTo, collidesWith, thickness, flipAxis),
                 };
             }
             var compound = CompoundCollider.Create(children);
@@ -123,16 +123,20 @@ namespace InvertLab.Sprites.DOTS
         public static BlobAssetReference<Unity.Physics.Collider> CreateCollider(
             FrameBoxDef box, Vector2 pivot, float sizeUnits, bool flipX, bool flipY,
             uint belongsTo = uint.MaxValue, uint collidesWith = uint.MaxValue,
-            float thickness = DefaultThickness)
+            float thickness = DefaultThickness, float2 flipAxis = default)
         {
             SpriteColliderWorld.TryLocalFromUv(box, out var offset,
                 out var sizeN, out _);
 
-            var center = new float3(
-                (flipX ? 2f * (pivot.x - 0.5f) - offset.x : offset.x) * sizeUnits,
-                (flipY ? 2f * pivot.y - offset.y : offset.y) * sizeUnits,
-                0f);
-            var size = new float2(sizeN.x, sizeN.y) * sizeUnits;
+            // Same local placement as Scene gizmos / SpriteColliderWorld:
+            // child at TryLocalFromUv offset; flip is root at 2*axis with scale -1.
+            float su = math.max(0.001f, sizeUnits);
+            float axisX = flipAxis.x != 0f || flipAxis.y != 0f ? flipAxis.x : (pivot.x - 0.5f);
+            float axisY = flipAxis.x != 0f || flipAxis.y != 0f ? flipAxis.y : pivot.y;
+            float lx = flipX ? 2f * axisX - offset.x : offset.x;
+            float ly = flipY ? 2f * axisY - offset.y : offset.y;
+            var center = new float3(lx * su, ly * su, 0f);
+            var size = new float2(sizeN.x, sizeN.y) * su;
 
             var filter = new CollisionFilter
             {

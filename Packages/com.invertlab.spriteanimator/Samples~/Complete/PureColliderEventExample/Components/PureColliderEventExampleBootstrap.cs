@@ -9,7 +9,7 @@ namespace InvertLab.Sprites.DOTS
     /// code via SpriteHitboxQuery bounds overlap.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class PureColliderExampleBootstrap : MonoBehaviour
+    public sealed class PureColliderEventExampleBootstrap : MonoBehaviour
     {
         void Awake()
         {

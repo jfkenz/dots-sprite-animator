@@ -129,8 +129,9 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
             float4 frag(v2f i) : SV_Target
             {
                 float4 t = tex2D(_MainTex, i.uv);
-                clip(t.a - _Cutoff);
-                return t * i.col;
+                t *= i.col;
+                clip(t.a - max(_Cutoff, 1e-6));
+                return t;
             }
             ENDHLSL
         }

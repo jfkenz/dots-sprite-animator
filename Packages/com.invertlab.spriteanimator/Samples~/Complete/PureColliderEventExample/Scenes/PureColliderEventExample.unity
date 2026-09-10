@@ -2262,7 +2262,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5c8d2e7f4a1b4c9e8b3d6f2a5e8c1b40, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.PureColliderExampleEnemy
+  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.PureColliderEventExampleEnemy
   MaxHealth: 5
   HealthBarWorldOffsetY: 1.15
   FlashSeconds: 0.12
@@ -2286,7 +2286,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3d6f9a2c5b8e4d7a9c1f4b6e8d3a5c70, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.PureColliderExampleBootstrap
+  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.PureColliderEventExampleBootstrap
 --- !u!114 &1876501009
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2298,7 +2298,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e7a3b8d2f5c4e9b8a2d5f7c3e6b9a40, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.PureColliderExamplePlayer
+  m_EditorClassIdentifier: Assembly-CSharp::InvertLab.Sprites.DOTS.PureColliderEventExamplePlayer
   MoveSpeed: 3
   AttackKey: 106
   LeftKey: 97

@@ -37,7 +37,7 @@ namespace InvertLab.Sprites.DOTS
 
         [Min(1)] public int AttackDamage = 1;
         [Tooltip("Extra reach added to the attack box on the facing side.")]
-        [Min(0f)] public float AttackReachPadding = 0.3f;
+        [Min(0f)] public float AttackReachPadding = 0f;
         [Tooltip("On-screen readout of the attack query while attacking.")]
         public bool ShowQueryDebug = true;
         [Tooltip("Show the A/D/J help box in the corner.")]
@@ -75,6 +75,15 @@ namespace InvertLab.Sprites.DOTS
             if (enemy == null)
                 return;
             if (enemy.LastHitAttackId == attackId)
+                return;
+            // Broadphase OverlapAabb can hit empty AABB corners; require the
+            // authored slash polygon to actually intersect the hurt box.
+            if (!enemy.TryGetHurtBounds(out var hurt))
+                return;
+            string clipName = ClipName(AttackClipIndex);
+            if (!SpriteHitboxQuery.OverlapsHurtPrecise(
+                    _set, clipName, _player != null ? _player.Frame : 0,
+                    SpriteHitboxQuery.FrameBoxes, _facingLeft, hurt))
                 return;
             _hitLog = "\n" + enemy.name + ": HIT";
             enemy.ReceiveHit(damage, attackId);
@@ -149,7 +158,7 @@ namespace InvertLab.Sprites.DOTS
                 return;
             string clipName = ClipName(AttackClipIndex);
             bool gotBounds = SpriteHitboxQuery.TryGetBounds(_set, clipName, _player.Frame,
-                SpriteHitboxQuery.FrameBoxes | SpriteHitboxQuery.ClipBoxes,
+                SpriteHitboxQuery.FrameBoxes,
                 _facingLeft, out var attackBounds);
 
             if (gotBounds && AttackReachPadding > 0f)
@@ -175,11 +184,32 @@ namespace InvertLab.Sprites.DOTS
                 hitLog = "\nbounds=NONE (no slash boxes on this frame)";
             }
 
+            // Same-frame AABB fallback (PureCollider path): keeps hits working
+            // even if the physics body is a frame late or entity map misses.
             int enemyBodies = 0;
-            foreach (var e in FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude))
+            var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < enemies.Length; i++)
             {
-                if (e != null && e.HasColliderAttached)
+                var enemy = enemies[i];
+                if (enemy == null)
+                    continue;
+                if (enemy.HasColliderAttached)
                     enemyBodies++;
+                if (!gotBounds)
+                    continue;
+                bool hasHurt = enemy.TryGetHurtBounds(out var hurt);
+                // Precise polygon-vs-hurtbox (not fat AABB) so a small gap around
+                // the red slash does not count as a hit.
+                bool overlap = hasHurt && SpriteHitboxQuery.OverlapsHurtPrecise(
+                    _set, clipName, _player.Frame, SpriteHitboxQuery.FrameBoxes,
+                    _facingLeft, hurt);
+                hitLog += "\n" + enemy.name + ": hurt=" +
+                          (hasHurt ? hurt.ToString() : "none") + " poly=" + overlap;
+                if (overlap && enemy.LastHitAttackId != _attackId)
+                {
+                    _hitLog = "\n" + enemy.name + ": HIT";
+                    enemy.ReceiveHit(AttackDamage, _attackId);
+                }
             }
             _debugInfo = "clip='" + (clipName ?? "NULL") + "' frame=" + _player.Frame +
                          " flip=" + _facingLeft + "\nbounds=" +

@@ -17,6 +17,12 @@ namespace InvertLab.Sprites.DOTS
             }
 
             ref var def = ref set.Clips[clipIndex];
+            if (def.FrameCount <= 0 || def.FrameRate <= 0f || def.FirstFrame < 0 ||
+                def.FirstFrame > set.Frames.Length - def.FrameCount)
+            {
+                reason = "Clip has no valid frames or frame rate.";
+                return false;
+            }
             if (def.WrapMode != SpriteAnimWrap.Loop && def.WrapMode != SpriteAnimWrap.Once)
             {
                 reason = "Ping-pong / reverse / reverse-once require CPU timing.";

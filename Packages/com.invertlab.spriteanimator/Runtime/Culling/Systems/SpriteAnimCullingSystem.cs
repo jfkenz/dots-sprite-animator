@@ -35,9 +35,11 @@ namespace InvertLab.Sprites.DOTS
             if (cam == null) return;
             if (!SystemAPI.TryGetSingleton(out SpriteCullSettings s)) return;
 
+            bool layoutXy = SpriteBatchSpawner.LayoutXy;
             float halfH = cam.orthographicSize + s.MarginUnits;
-            float halfW = halfH * cam.aspect + s.MarginUnits;
-            float2 c = new float2(cam.transform.position.x, cam.transform.position.z);
+            float halfW = cam.orthographicSize * cam.aspect + s.MarginUnits;
+            float2 c = new float2(cam.transform.position.x,
+                layoutXy ? cam.transform.position.y : cam.transform.position.z);
             bool distOn = s.MaxDistanceSq > 0f;
 
             // Burst job writes the enableable bit directly — no per-entity
@@ -45,6 +47,7 @@ namespace InvertLab.Sprites.DOTS
             var job = new CullJob
             {
                 Center = c,
+                LayoutXy = layoutXy,
                 HalfW = halfW,
                 HalfH = halfH,
                 DistOn = distOn,
@@ -59,6 +62,7 @@ namespace InvertLab.Sprites.DOTS
         partial struct CullJob : IJobEntity
         {
             public float2 Center;
+            public bool LayoutXy;
             public float HalfW;
             public float HalfH;
             public bool DistOn;
@@ -66,7 +70,7 @@ namespace InvertLab.Sprites.DOTS
 
             void Execute(in LocalTransform lt, EnabledRefRW<SpriteAnimEnabled> enabled)
             {
-                float2 p = new float2(lt.Position.x, lt.Position.z);
+                float2 p = new float2(lt.Position.x, LayoutXy ? lt.Position.y : lt.Position.z);
                 bool vis = math.abs(p.x - Center.x) <= HalfW && math.abs(p.y - Center.y) <= HalfH;
                 if (vis && DistOn)
                     vis = math.distancesq(p, Center) <= MaxDistSq;

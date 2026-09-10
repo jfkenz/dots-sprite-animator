@@ -33,7 +33,8 @@ namespace InvertLab.Sprites.DOTS
             foreach (var (player, setRef, frame, entity) in
                      SystemAPI.Query<RefRW<SpriteAnimPlayer>, RefRO<SpriteAnimSetRef>,
                                      RefRW<SpriteAnimFrame>>()
-                              .WithNone<SpriteAnimEnabled, SpriteAnimCompleted>()
+                              .WithAbsent<SpriteAnimEnabled>()
+                              .WithNone<SpriteAnimCompleted>()
                               .WithNone<SpriteGpuDriven>()
                               .WithEntityAccess())
             {

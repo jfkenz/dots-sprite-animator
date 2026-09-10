@@ -17,11 +17,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             SpriteShaderLibrary.UseLit = !SpriteShaderLibrary.UseLit;
             EditorPrefs.SetBool(UseLitPrefsKey, SpriteShaderLibrary.UseLit);
 
-            // drop every cached material so the next draw recreates them
-            // with the lit (or unlit) shader
-            SpriteRenderResources.Material = null;
+            // Switch live materials without losing their texture/buffer bindings.
+            var instanced = Shader.Find(SpriteShaderLibrary.ActiveInstancedShader);
+            if (SpriteRenderResources.Material != null && instanced != null)
+                SpriteRenderResources.Material.shader = instanced;
             SpriteSheetRegistry.ResetMaterials();
-            SpriteGpuAnimResources.Material = null;
+            var gpu = Shader.Find(SpriteShaderLibrary.ActiveGpuAnimShader);
+            if (SpriteGpuAnimResources.Material != null && gpu != null)
+                SpriteGpuAnimResources.Material.shader = gpu;
             SpriteGpuAnimResources.MarkDirty();
         }
 

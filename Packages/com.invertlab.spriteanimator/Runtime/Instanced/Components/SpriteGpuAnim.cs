@@ -161,17 +161,19 @@ namespace InvertLab.Sprites.DOTS
                 !em.HasComponent<SpriteAnimSetRef>(e))
                 return false;
 
-            // GPU clock draws the legacy default sheet only. Promote a bound
-            // single sheet onto SetSheet/SetGrid, then clear the binding.
-            if (!TryPromoteBoundSheetToLegacy(em, e))
-                return false;
-
             var p = em.GetComponentData<SpriteAnimPlayer>(e);
-            ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
+            var setRef = em.GetComponentData<SpriteAnimSetRef>(e).Set;
+            if (!setRef.IsCreated || setRef.Value.Clips.Length == 0)
+                return false;
+            ref var set = ref setRef.Value;
             int ci = math.clamp(p.ClipIndex, 0, set.Clips.Length - 1);
             ref var def = ref set.Clips[ci];
 
             if (!SpriteGpuEligibility.IsGpuEligible(ref set, ci, out _))
+                return false;
+
+            // Validate before promotion: failed conversion must not change the CPU sheet.
+            if (!TryPromoteBoundSheetToLegacy(em, e))
                 return false;
 
             int cols = 4, rows = 4;
@@ -194,8 +196,36 @@ namespace InvertLab.Sprites.DOTS
 
             bool loop = def.WrapMode == SpriteAnimWrap.Loop;
             float rate = math.max(0.0001f, def.FrameRate * math.max(0.01f, p.Speed));
-            bool frozen = p.Playing == 0;
+            bool frozen = p.Playing == 0 || math.abs(p.Speed) <= 1e-6f;
             int slot0 = (int)set.Frames[def.FirstFrame].x;
+            // When frozen, Rate==0 forces shader frame 0 — pack cell origin on the
+            // paused atlas cell so the held frame is preserved across CPU→GPU.
+            if (frozen && def.FrameCount > 0)
+            {
+                int pausedFrame = (int)math.floor(math.max(0f, p.Time));
+                if (loop)
+                {
+                    pausedFrame %= def.FrameCount;
+                    if (pausedFrame < 0) pausedFrame += def.FrameCount;
+                }
+                else
+                    pausedFrame = math.clamp(pausedFrame, 0, def.FrameCount - 1);
+
+                if (em.HasComponent<SpriteAnimFrame>(e))
+                {
+                    int curSlot = em.GetComponentData<SpriteAnimFrame>(e).Slot;
+                    for (int fi = 0; fi < def.FrameCount; fi++)
+                    {
+                        if ((int)set.Frames[def.FirstFrame + fi].x == curSlot)
+                        {
+                            pausedFrame = fi;
+                            break;
+                        }
+                    }
+                }
+
+                slot0 = (int)set.Frames[def.FirstFrame + pausedFrame].x;
+            }
 
             if (!em.HasComponent<SpriteGpuDriven>(e))
                 em.AddComponentData(e, new SpriteGpuDriven());
@@ -241,7 +271,7 @@ namespace InvertLab.Sprites.DOTS
                 {
                     Time = gpu.SavedTime,
                     ClipIndex = gpu.SavedClipIndex,
-                    Speed = gpu.SavedSpeed == 0f ? 1f : gpu.SavedSpeed,
+                    Speed = gpu.SavedSpeed,
                     Playing = gpu.SavedPlaying,
                 });
             if (!em.HasComponent<SpriteAnimSetRef>(e))

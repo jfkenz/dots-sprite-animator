@@ -72,29 +72,35 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim Lit"
 
             float2 FrameUvOrigin(float4 cell, float4 anim)
             {
-                int n = (int)anim.z;
-                int cols = max(1, (int)round(1.0 / cell.x));
+                int n = max(1, (int)anim.z);
+                int cols = max(1, (int)round(1.0 / max(cell.x, 1e-6)));
+                int rows = max(1, (int)round(1.0 / max(cell.y, 1e-6)));
                 int f;
                 if (anim.y <= 0.0)
-                    f = 0;                                   // frozen (paused)
+                    f = 0;                                   // frozen: CPU packed cell.zw on paused frame
                 else
                 {
                     float t = _Now - anim.x;                 // seconds since start
                     f = (int)floor(t * anim.y);
                     f = anim.w > 0.5 ? (f % n) : min(f, n - 1);
-                    f = clamp(f, 0, n - 1);
                     if (f < 0) f += n;                       // negative-time safety
                 }
-                int col = f % cols;
-                int row = f / cols;
-                // walk DOWN in v for later rows (origin is bottom-left of cell 0)
-                return cell.zw + float2(col, -row) * cell.xy;
+                f = clamp(f, 0, n - 1);
+
+                // cell.zw = first (or frozen) cell origin. Include start column AND row
+                // so a clip that begins mid-row wraps to the next atlas row.
+                int startCol = clamp((int)round(cell.z / max(cell.x, 1e-6)), 0, cols - 1);
+                int startRow = clamp((int)round((1.0 - cell.w) / max(cell.y, 1e-6)) - 1, 0, rows - 1);
+                int absIndex = startRow * cols + startCol + f;
+                int col = absIndex % cols;
+                int row = min(absIndex / cols, rows - 1);
+                return float2(col * cell.x, (rows - 1 - row) * cell.y);
             }
 
 
             // ---- URP 2D lights (self-contained replica of Unity's
             // CombinedShapeLightShared with a constant white mask) ----
-            half4 _HDREmulationScale;
+            half _HDREmulationScale;
 #if USE_SHAPE_LIGHT_TYPE_0
             TEXTURE2D(_ShapeLightTexture0);
             SAMPLER(sampler_ShapeLightTexture0);
@@ -234,8 +240,9 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim Lit"
             float4 frag(v2f i) : SV_Target
             {
                 float4 t = tex2D(_MainTex, i.uv);
-                clip(t.a - _Cutoff);
-                return Apply2DLights(t * i.col, i.lightingUV);
+                t *= i.col;
+                clip(t.a - max(_Cutoff, 1e-6));
+                return Apply2DLights(t, i.lightingUV);
             }
             ENDHLSL
         }

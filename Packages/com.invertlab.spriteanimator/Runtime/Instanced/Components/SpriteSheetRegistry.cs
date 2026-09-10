@@ -157,16 +157,17 @@ namespace InvertLab.Sprites.DOTS
         public static void ClearForTests() => Reset();
 
         /// <summary>
-        /// Drop every record's material (shader toggle) — recreated on the
-        /// next draw with the currently active shader.
+        /// Switch cached materials in place, preserving their texture and buffers.
         /// </summary>
         public static void ResetMaterials()
         {
+            var shader = Shader.Find(SpriteShaderLibrary.ActiveInstancedShader);
+            if (shader == null)
+                return;
             foreach (var record in Records)
             {
                 if (record.Material != null)
-                    Object.Destroy(record.Material);
-                record.Material = null;
+                    record.Material.shader = shader;
             }
         }
     }

@@ -12,7 +12,7 @@ Contains:
 - EventsExample
 - Sockets
 - CrowdGpuExample
-- ColliderQueryExample
+- PureColliderEventExample
 - ColliderEventExample
 - UnityPhysicsExample
 - Showcase (Clembod)
