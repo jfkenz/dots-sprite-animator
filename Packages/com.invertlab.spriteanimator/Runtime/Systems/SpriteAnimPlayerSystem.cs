@@ -113,6 +113,11 @@ namespace InvertLab.Sprites.DOTS
             float phase = math.max(0f, player.ValueRO.Time);
             int phaseStep = (int)math.floor(phase);
             float fraction = math.saturate(phase - phaseStep);
+            if (def.WrapMode == SpriteAnimWrap.ReverseOnce && phase >= frameCount)
+            {
+                phaseStep = frameCount - 1;
+                fraction = 1f;
+            }
             int lastEventStep = player.ValueRO.LastEventStep;
             ulong firedMask = player.ValueRO.EventFiredMask;
             int onceClip = player.ValueRO.OnceEventClip;
@@ -133,7 +138,10 @@ namespace InvertLab.Sprites.DOTS
                 // ReverseOnce always advances toward frame 0 (like Once + negative Speed).
                 bool reverse = speed < 0f || def.WrapMode == SpriteAnimWrap.ReverseOnce;
 
-                while (remaining > 1e-6f && transitions < MaxTransitionsPerTick)
+                // Phase is stored as float between ticks. Snap tiny residuals at
+                // frame boundaries so weighted holds do not gain/lose a frame.
+                const float boundaryEpsilon = 1e-4f;
+                while (remaining > 0f && transitions < MaxTransitionsPerTick)
                 {
                     int displayed = DisplayFrame(phaseStep, frameCount, def.WrapMode);
                     float dwell = def.DurationScales.Length > displayed
@@ -149,7 +157,7 @@ namespace InvertLab.Sprites.DOTS
                             ref def, ref eventBuffers, ref pending, ref lastEventStep, ref firedMask,
                             ref onceFired);
 
-                        if (remaining + 1e-6f < toBoundary)
+                        if (remaining + boundaryEpsilon < toBoundary)
                         {
                             fraction = nextFraction;
                             remaining = 0f;
@@ -157,6 +165,7 @@ namespace InvertLab.Sprites.DOTS
                         }
 
                         remaining -= toBoundary;
+                        if (remaining < boundaryEpsilon) remaining = 0f;
                         fraction = 0f;
                         transitions++;
 
@@ -176,7 +185,7 @@ namespace InvertLab.Sprites.DOTS
                     else
                     {
                         // Reverse: move toward fraction 0, then previous phase step.
-                        if (fraction <= 1e-6f)
+                        if (fraction <= boundaryEpsilon)
                         {
                             if ((def.WrapMode == SpriteAnimWrap.Once || def.WrapMode == SpriteAnimWrap.ReverseOnce)
                                 && phaseStep <= 0)
@@ -205,7 +214,7 @@ namespace InvertLab.Sprites.DOTS
                             ref def, ref eventBuffers, ref pending, ref lastEventStep, ref firedMask,
                             ref onceFired);
 
-                        if (remaining + 1e-6f < toBoundary)
+                        if (remaining + boundaryEpsilon < toBoundary)
                         {
                             fraction = nextFraction;
                             remaining = 0f;
@@ -213,6 +222,7 @@ namespace InvertLab.Sprites.DOTS
                         }
 
                         remaining -= toBoundary;
+                        if (remaining < boundaryEpsilon) remaining = 0f;
                         fraction = 0f;
                         transitions++;
 
@@ -367,7 +377,7 @@ namespace InvertLab.Sprites.DOTS
                 ? math.max(0, clip.FrameCount - 1)
                 : 0;
             if (clip.WrapMode == SpriteAnimWrap.ReverseOnce)
-                player.ValueRW.Time = firstFrame;
+                player.ValueRW.Time = clip.FrameCount;
             if (clip.FrameCount > 0)
             {
                 float4 first = set.Frames[clip.FirstFrame + firstFrame];
@@ -621,30 +631,10 @@ namespace InvertLab.Sprites.DOTS
         }
 
         internal static int DisplayFrame(int phaseStep, int frameCount, byte wrapMode)
-        {
-            if (frameCount <= 1)
-                return 0;
-            if (wrapMode == SpriteAnimWrap.Once || wrapMode == SpriteAnimWrap.ReverseOnce)
-                return math.clamp(phaseStep, 0, frameCount - 1);
-
-            int raw;
-            if (wrapMode == SpriteAnimWrap.PingPong)
-            {
-                int span = frameCount - 1;
-                int cycle = span * 2;
-                raw = PositiveMod(phaseStep, cycle);
-                return raw <= span ? raw : cycle - raw;
-            }
-
-            raw = PositiveMod(phaseStep, frameCount);
-            return wrapMode == SpriteAnimWrap.ReverseLoop ? frameCount - 1 - raw : raw;
-        }
+            => SpriteAnimPlayback.DisplayFrame(phaseStep, frameCount, wrapMode);
 
         static int CycleLength(int frameCount, byte wrapMode)
-        {
-            if (frameCount <= 1) return 1;
-            return wrapMode == SpriteAnimWrap.PingPong ? (frameCount - 1) * 2 : frameCount;
-        }
+            => SpriteAnimPlayback.CycleLength(frameCount, wrapMode);
 
         static int PositiveMod(int value, int divisor)
         {

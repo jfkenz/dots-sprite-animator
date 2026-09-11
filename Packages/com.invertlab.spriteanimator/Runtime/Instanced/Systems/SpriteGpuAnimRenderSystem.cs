@@ -20,6 +20,9 @@ namespace InvertLab.Sprites.DOTS
     [UpdateInGroup(typeof(SimulationSystemGroup), OrderLast = true)]
     public partial struct SpriteGpuAnimRenderSystem : ISystem
     {
+        public void OnCreate(ref SystemState state)
+            => state.EntityManager.World.GetOrCreateSystemManaged<SpriteRenderResourceLifetimeSystem>();
+
         public static bool Active;
         public static string LastError;
         public static int Ticks;
@@ -51,7 +54,8 @@ namespace InvertLab.Sprites.DOTS
             Active = false;
 
             bool dirty = SpriteGpuAnimResources.TakeDirty()
-                         || count != lastCount || !uploadedOnce;
+                         || count != lastCount || !uploadedOnce
+                         || SpriteGpuAnimResources.LastUploadWorld != state.EntityManager.World.SequenceNumber;
             if (count == 0) return;
 
             SpriteGpuAnimResources.EnsureCapacity(count);
@@ -75,6 +79,7 @@ namespace InvertLab.Sprites.DOTS
                     SpriteGpuAnimResources.Staging, 0, 0, count);
                 uploadedOnce = true;
                 lastCount = count;
+                SpriteGpuAnimResources.LastUploadWorld = state.EntityManager.World.SequenceNumber;
             }
 
             var mat = SpriteGpuAnimResources.Material;

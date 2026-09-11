@@ -1,5 +1,7 @@
 using Unity.Collections;
+using Unity.Entities;
 using Unity.Mathematics;
+using Unity.Transforms;
 using UnityEngine;
 
 namespace InvertLab.Sprites.DOTS
@@ -7,6 +9,51 @@ namespace InvertLab.Sprites.DOTS
     /// <summary>Rules for deciding whether a clip can run on the compact GPU clock.</summary>
     public static class SpriteGpuEligibility
     {
+        /// <summary>Entity behavior must also fit the compact, visual-only GPU clock.</summary>
+        public static bool IsGpuEligible(EntityManager em, Entity entity, out FixedString128Bytes reason)
+        {
+            reason = "Entity has no CPU playback state.";
+            if (!em.Exists(entity) || !em.HasComponent<SpriteAnimSetRef>(entity) ||
+                !em.HasComponent<SpriteAnimPlayer>(entity) || em.HasComponent<SpriteGpuDriven>(entity))
+                return false;
+            var blob = em.GetComponentData<SpriteAnimSetRef>(entity).Set;
+            if (!blob.IsCreated) return false;
+            var player = em.GetComponentData<SpriteAnimPlayer>(entity);
+            if (!IsGpuEligible(ref blob.Value, player.ClipIndex, out reason)) return false;
+            if (!math.isfinite(player.Speed) || player.Speed < 0 || !math.isfinite(player.Time))
+            {
+                reason = "Negative or invalid playback clocks require CPU playback.";
+                return false;
+            }
+            if (player.QueuedClipIndex >= 0 || player.OneShotActive != 0 || player.ResumeClipIndex >= 0 ||
+                player.HitstopActive != 0 || player.BlendOutTime > 0)
+            {
+                reason = "Queued clips, one-shots, hitstop and active fades require CPU playback.";
+                return false;
+            }
+            if (em.HasComponent<SpriteHitboxSetRef>(entity) || em.HasComponent<SpriteSocketMotionPlayer>(entity) ||
+                em.HasBuffer<SpriteSocketBuffer>(entity) || em.HasBuffer<SpriteAnimEventBuffer>(entity) ||
+                em.HasComponent<SpriteAnimCompleted>(entity))
+            {
+                reason = "Hitboxes, sockets, lifecycle events or completed state require CPU playback.";
+                return false;
+            }
+            if (em.HasComponent<SpriteAnimEnabled>(entity) && !em.IsComponentEnabled<SpriteAnimEnabled>(entity))
+            {
+                reason = "Disabled animation must stay on CPU.";
+                return false;
+            }
+            if (em.HasComponent<Parent>(entity) || em.HasComponent<PostTransformMatrix>(entity) ||
+                (em.HasComponent<LocalTransform>(entity) &&
+                 math.abs(math.dot(em.GetComponentData<LocalTransform>(entity).Rotation.value,
+                                   quaternion.identity.value)) < 0.99999f))
+            {
+                reason = "Parented, rotated or non-uniform transforms require CPU rendering.";
+                return false;
+            }
+            return true;
+        }
+
         public static bool IsGpuEligible(ref SpriteAnimSetBlob set, int clipIndex, out FixedString128Bytes reason)
         {
             reason = default;
@@ -17,7 +64,12 @@ namespace InvertLab.Sprites.DOTS
             }
 
             ref var def = ref set.Clips[clipIndex];
-            if (def.FrameCount <= 0 || def.FrameRate <= 0f || def.FirstFrame < 0 ||
+            if (set.SocketMotions.Length > 0 || def.OnCompleteClipIndex >= 0)
+            {
+                reason = "Independent socket motion or completion chaining requires CPU playback.";
+                return false;
+            }
+            if (def.FrameCount <= 0 || !math.isfinite(def.FrameRate) || def.FrameRate <= 0f || def.FirstFrame < 0 ||
                 def.FirstFrame > set.Frames.Length - def.FrameCount)
             {
                 reason = "Clip has no valid frames or frame rate.";
@@ -41,9 +93,19 @@ namespace InvertLab.Sprites.DOTS
             }
 
             int firstSlot = (int)set.Frames[def.FirstFrame].x;
+            if (firstSlot < 0)
+            {
+                reason = "Invalid atlas slot.";
+                return false;
+            }
             for (int frame = 0; frame < def.FrameCount; frame++)
             {
                 float4 frameData = set.Frames[def.FirstFrame + frame];
+                if (!math.all(math.isfinite(frameData)))
+                {
+                    reason = "Invalid frame data.";
+                    return false;
+                }
                 if ((int)frameData.x != firstSlot + frame)
                 {
                     reason = "Frame reorder requires CPU playback.";
@@ -97,6 +159,11 @@ namespace InvertLab.Sprites.DOTS
             }
 
             clip.EnsureFrameData();
+            if (clip.OnCompleteClipIndex >= 0)
+            {
+                reason = "Completion chaining requires CPU playback.";
+                return false;
+            }
             if (clip.UsesMixedSheetRows())
             {
                 reason = "Frames from more than one sheet row require CPU playback.";

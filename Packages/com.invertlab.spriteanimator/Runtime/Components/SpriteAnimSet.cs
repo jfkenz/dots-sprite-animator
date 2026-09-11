@@ -246,17 +246,12 @@ namespace InvertLab.Sprites.DOTS
             }
 
             /// <summary>
-            /// 255 is unreachable by valid modes; treat it as "derive from Loop".
-            /// Since C#9 forbids initializing the field, callers who want a
-            /// specific mode just set it; everyone else gets Loop/Once via Loop.
+            /// Explicit nonzero modes override the legacy Loop flag. Zero is
+            /// also the default field value, so Loop/Once still derive from
+            /// Loop for old callers that do not supply a wrap mode.
             /// </summary>
-            public byte EffectiveWrapMode => Loop
-                ? (WrapMode == SpriteAnimWrap.ReverseLoop ? SpriteAnimWrap.ReverseLoop : SpriteAnimWrap.Loop)
-                : (WrapMode == SpriteAnimWrap.Once
-                    || WrapMode == SpriteAnimWrap.PingPong
-                    || WrapMode == SpriteAnimWrap.ReverseOnce
-                    ? WrapMode
-                    : SpriteAnimWrap.Once);
+            public byte EffectiveWrapMode => WrapMode >= SpriteAnimWrap.Once && WrapMode <= SpriteAnimWrap.ReverseOnce
+                ? WrapMode : Loop ? SpriteAnimWrap.Loop : SpriteAnimWrap.Once;
         }
 
         public struct SocketMotionInput
@@ -508,7 +503,8 @@ namespace InvertLab.Sprites.DOTS
 
             var player = default(SpriteAnimPlayer);
             player.ClipIndex = 0;
-            player.Time = 0f;
+            player.Time = result.Value.Clips.Length > 0 && result.Value.Clips[0].WrapMode == SpriteAnimWrap.ReverseOnce
+                ? result.Value.Clips[0].FrameCount : 0f;
             player.Speed = 1f;
             player.Playing = 1;
             player.LastEventStep = int.MinValue;
@@ -640,6 +636,15 @@ namespace InvertLab.Sprites.DOTS
     /// <summary>Gameplay-facing helpers.</summary>
     public static class SpriteAnims
     {
+        /// <summary>Gameplay controls migrate GPU entities to CPU at their displayed phase.</summary>
+        static bool EnsureCpuPlayback(EntityManager em, Entity entity)
+        {
+            if (!em.Exists(entity)) return false;
+            if (em.HasComponent<SpriteGpuDriven>(entity) &&
+                !SpriteGpuAnimSwitch.ToCpuAtTime(em, entity, Time.unscaledTime)) return false;
+            return true;
+        }
+
         public static ulong Fnv(string s) => SpriteAnimSetBuilder.Fnv(s);
 
         /// <summary>
@@ -665,7 +670,7 @@ namespace InvertLab.Sprites.DOTS
         public static bool Play(EntityManager em, Entity e, string clipName, bool force = false,
                                 float crossfadeSeconds = 0f)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e))
                 return false;
             if (string.IsNullOrWhiteSpace(clipName))
                 return false;
@@ -683,7 +688,7 @@ namespace InvertLab.Sprites.DOTS
                                       SpriteFacingDirection facingDirection, bool force = false,
                                       float crossfadeSeconds = 0f)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || string.IsNullOrWhiteSpace(facingGroup))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || string.IsNullOrWhiteSpace(facingGroup))
                 return false;
 
             ulong groupHash = Fnv(facingGroup.Trim());
@@ -713,7 +718,7 @@ namespace InvertLab.Sprites.DOTS
         public static bool Play(EntityManager em, Entity e, int clipIndex, bool force = false,
                                 float crossfadeSeconds = 0f)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return false;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             if (clipIndex < 0 || clipIndex >= set.Clips.Length)
@@ -763,10 +768,10 @@ namespace InvertLab.Sprites.DOTS
             int firstFrame = reverseStart
                 ? math.max(0, clip.FrameCount - 1)
                 : 0;
-            // ReverseOnce seeks to last frame phase (Play resets Time to 0 above).
+            // Start at the end of the last frame so reverse playback includes its full dwell.
             if (clip.WrapMode == SpriteAnimWrap.ReverseOnce)
             {
-                player.Time = firstFrame;
+                player.Time = clip.FrameCount;
                 em.SetComponentData(e, player);
             }
             if (em.HasComponent<SpriteAnimFrame>(e) && clip.FrameCount > 0)
@@ -857,7 +862,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Store the next clip. Drained with force when the current Once completes.</summary>
         public static bool Queue(EntityManager em, Entity e, string clipName, bool force = true)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || string.IsNullOrWhiteSpace(clipName))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || string.IsNullOrWhiteSpace(clipName))
                 return false;
             var hash = Fnv(clipName);
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
@@ -871,7 +876,7 @@ namespace InvertLab.Sprites.DOTS
 
         public static bool Queue(EntityManager em, Entity e, int clipIndex, bool force = true)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return false;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             if (clipIndex < 0 || clipIndex >= set.Clips.Length)
@@ -914,7 +919,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static bool PlayOneShot(EntityManager em, Entity e, string clipName)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || string.IsNullOrWhiteSpace(clipName))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || string.IsNullOrWhiteSpace(clipName))
                 return false;
             var hash = Fnv(clipName);
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
@@ -928,7 +933,7 @@ namespace InvertLab.Sprites.DOTS
 
         public static bool PlayOneShot(EntityManager em, Entity e, int clipIndex)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return false;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             if (clipIndex < 0 || clipIndex >= set.Clips.Length)
@@ -1011,7 +1016,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static bool CanInterruptCurrent(EntityManager em, Entity e)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return true;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             var player = em.GetComponentData<SpriteAnimPlayer>(e);
@@ -1088,7 +1093,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static void SetSpeed(EntityManager em, Entity e, float speed)
         {
-            if (!em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             var player = em.GetComponentData<SpriteAnimPlayer>(e);
             if (player.HitstopActive != 0)
@@ -1106,7 +1111,11 @@ namespace InvertLab.Sprites.DOTS
 
         public static float GetSpeed(EntityManager em, Entity e)
         {
-            if (!em.HasComponent<SpriteAnimPlayer>(e))
+            if (em.HasComponent<SpriteGpuDriven>(e) && em.HasComponent<SpriteGpuAnim>(e))
+                return SpriteGpuAnimResources.UseSharedClip && em.HasComponent<SpriteCrowdEntityTag>(e)
+                    ? SpriteGpuAnimResources.SharedClip.SavedSpeed
+                    : em.GetComponentData<SpriteGpuAnim>(e).SavedSpeed;
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return 0f;
             return em.GetComponentData<SpriteAnimPlayer>(e).Speed;
         }
@@ -1120,7 +1129,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static void Resume(EntityManager em, Entity e)
         {
-            if (!em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             if (em.HasComponent<SpriteAnimCompleted>(e))
                 return;
@@ -1135,7 +1144,7 @@ namespace InvertLab.Sprites.DOTS
 
         static void SetPlaying(EntityManager em, Entity e, byte playing)
         {
-            if (!em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             var player = em.GetComponentData<SpriteAnimPlayer>(e);
             player.Playing = playing;
@@ -1145,7 +1154,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Jump to a frame index. Clamps. Refreshes display; does not force Play.</summary>
         public static void SeekFrame(EntityManager em, Entity e, int frame)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             if (set.Clips.Length == 0)
@@ -1165,7 +1174,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Jump to normalized 0–1 progress (duration-weighted). Does not force Play.</summary>
         public static void SeekNormalized(EntityManager em, Entity e, float t01)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             if (set.Clips.Length == 0)
@@ -1187,7 +1196,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Set phase clock in frames (same units as <see cref="SpriteAnimPlayer.Time"/>).</summary>
         public static void SetTime(EntityManager em, Entity e, float phaseInFrames)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             if (set.Clips.Length == 0)
@@ -1347,7 +1356,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static void Hold(EntityManager em, Entity e, float durationSeconds)
         {
-            if (!em.HasComponent<SpriteAnimPlayer>(e) || durationSeconds <= 0f)
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e) || durationSeconds <= 0f)
                 return;
             var player = em.GetComponentData<SpriteAnimPlayer>(e);
             ApplyHold(ref player, durationSeconds);
@@ -1410,7 +1419,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static bool InComboWindow(EntityManager em, Entity e)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return false;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             if (set.Clips.Length == 0)
@@ -1520,7 +1529,7 @@ namespace InvertLab.Sprites.DOTS
         {
             if (!Play(em, e, clipIndex, force, crossfadeSeconds))
                 return false;
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return true;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
             if (clipIndex < 0 || clipIndex >= set.Clips.Length)
@@ -1544,7 +1553,7 @@ namespace InvertLab.Sprites.DOTS
                                            bool force = false, float crossfadeSeconds = 0f,
                                            uint seed = 0)
         {
-            if (!em.HasComponent<SpriteAnimSetRef>(e) || string.IsNullOrWhiteSpace(clipName))
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || string.IsNullOrWhiteSpace(clipName))
                 return false;
             var hash = Fnv(clipName);
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;

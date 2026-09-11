@@ -42,6 +42,7 @@ namespace InvertLab.Sprites.DOTS
 
         static Entity s_proto;
         static bool s_ready;
+        static World s_world;
 
         public static bool Ready => s_ready;
         public int LiveCount => CountAll();
@@ -51,6 +52,7 @@ namespace InvertLab.Sprites.DOTS
         {
             s_ready = false;
             s_proto = Entity.Null;
+            s_world = null;
             s_appliedScale = -1f;
             s_hasAppliedScale = false;
         }
@@ -70,8 +72,9 @@ namespace InvertLab.Sprites.DOTS
         public bool EnsureProto()
         {
             var world = World.DefaultGameObjectInjectionWorld;
-            if (s_ready || world == null || !world.IsCreated)
-                return s_ready;
+            if (world == null || !world.IsCreated) return false;
+            if (s_ready && s_world == world && world.EntityManager.Exists(s_proto)) return true;
+            s_ready = false;
 
             var authoring = Source != null
                 ? Source
@@ -102,11 +105,21 @@ namespace InvertLab.Sprites.DOTS
             authoring.TryGetClipSheet(0, out _, out int cols, out int rows, out _);
             cols = Mathf.Max(1, cols);
             rows = Mathf.Max(1, rows);
+            var em = world.EntityManager;
+            if (!SpriteGpuAnimResources.CanUseSheet(sheet, cols, rows,
+                    SpriteSheetProfile.GetCellAspect(sheet, cols, rows)))
+            {
+                Debug.LogWarning("[Crowd Spawner] Active GPU sprites use another sheet or layout. Convert them to CPU first.", this);
+                return false;
+            }
+            SpriteInstanceRenderSystem.Install(em);
+            SpriteInstanceRenderSystem.SetSheet(sheet);
+            ApplyInstanceGrid(em, authoring, 0);
             var clips = new SpriteAnimSetBuilder.ClipInput[srcClips.Length];
             for (int i = 0; i < srcClips.Length; i++)
             {
                 var src = srcClips[i];
-                authoring.TryGetClipSheet(i, out _, out int clipCols, out int clipRows, out _);
+                authoring.TryGetClipSheet(i, out _, out int clipCols, out int clipRows, out float clipPpu);
                 clipCols = Mathf.Max(1, clipCols);
                 clipRows = Mathf.Max(1, clipRows);
                 var frameCols = src.Frames != null && src.Frames.Length > 0
@@ -114,12 +127,24 @@ namespace InvertLab.Sprites.DOTS
                     : new[] { 0 };
                 var slots = new int[frameCols.Length];
                 for (int f = 0; f < frameCols.Length; f++)
-                    slots[f] = Mathf.Clamp(src.Row, 0, clipRows - 1) * clipCols
-                               + Mathf.Clamp(frameCols[f], 0, clipCols - 1);
+                {
+                    SpriteClipDef.ResolveSheetCell(src.Row, frameCols, src.FrameRows, f,
+                        clipCols, clipRows, out int row, out int col);
+                    slots[f] = row * clipCols + col;
+                }
 
-                byte wrap = src.WrapMode;
-                if (UseGpuAnim && wrap != SpriteAnimWrap.Loop && wrap != SpriteAnimWrap.Once)
-                    wrap = SpriteAnimWrap.Loop;
+                byte wrap = src.WrapMode == SpriteAnimWrap.Loop && !src.Loop
+                    ? SpriteAnimWrap.Once : src.WrapMode;
+                var offsets = new float2[frameCols.Length];
+                var scales = new float2[frameCols.Length];
+                for (int f = 0; f < frameCols.Length; f++)
+                {
+                    var offset = src.FrameOffsets != null && f < src.FrameOffsets.Length ? src.FrameOffsets[f] : Vector2.zero;
+                    if (authoring.Profile != null) offset /= Mathf.Max(0.01f, clipPpu);
+                    var scale = src.FrameScales != null && f < src.FrameScales.Length ? src.FrameScales[f] : Vector2.one;
+                    offsets[f] = new float2(offset.x, offset.y);
+                    scales[f] = new float2(scale.x, scale.y);
+                }
                 clips[i] = new SpriteAnimSetBuilder.ClipInput
                 {
                     Name = string.IsNullOrEmpty(src.Name) ? ("clip" + i) : src.Name,
@@ -127,11 +152,25 @@ namespace InvertLab.Sprites.DOTS
                     WrapMode = wrap,
                     FrameRate = Mathf.Max(0.1f, src.FrameRate),
                     GlobalFrameIndices = slots,
+                    FrameDurationScales = src.FrameDurationScales,
+                    FrameOffsets = offsets,
+                    FrameScales = scales,
+                    FrameRotations = src.FrameRotations,
+                    FrameTweenModes = src.FrameTweenModes,
+                    EventIds = src.EventIds,
+                    EventNormalizedTimes = src.EventNormalizedTimes,
+                    OnCompleteClipIndex = src.OnCompleteClipIndex,
+                    Interrupt = src.Interrupt,
+                    CancelAfter = src.CancelAfter,
+                    Priority = src.Priority,
+                    ComboWindowStartFrame = src.ComboWindowStartFrame,
+                    ComboWindowEndFrame = src.ComboWindowEndFrame,
+                    ComboWindowPriorityBoost = src.ComboWindowPriorityBoost,
                 };
             }
 
             var (setRef, player) = SpriteAnimSetBuilder.Build(Allocator.Persistent, clips);
-            var em = world.EntityManager;
+            world.GetOrCreateSystemManaged<SpriteAnimBlobLifetimeSystem>().OwnUntilWorldDisposal(setRef.Set);
             s_proto = em.CreateEntity();
             // 2D scene: pack/draw on XY so the ortho camera at (0,0,-10) sees the grid.
             SpriteBatchSpawner.LayoutXy = true;
@@ -152,7 +191,17 @@ namespace InvertLab.Sprites.DOTS
             em.AddComponentData(s_proto, new SpriteFlip());
             em.AddComponent<SpriteCrowdEntityTag>(s_proto);
 
-            bool gpu = UseGpuAnim;
+            bool gpu = UseGpuAnim && SpriteGpuAnimResources.CanUseSharedClip(setRef.Set);
+            var profileData = authoring.Profile != null ? authoring.Profile.Data : null;
+            if (gpu && profileData != null &&
+                ((profileData.SocketMotions != null && profileData.SocketMotions.Count > 0) ||
+                 (profileData.Hitboxes != null && profileData.Hitboxes.Count > 0))) gpu = false;
+            if (gpu && profileData?.Clips != null)
+                foreach (var clip in profileData.Clips)
+                    if (!SpriteGpuEligibility.IsGpuEligible(clip, out _)) { gpu = false; break; }
+            if (gpu)
+                foreach (var clip in srcClips)
+                    if (clip.Sockets != null && clip.Sockets.Length > 0) { gpu = false; break; }
             // Compact GPU clock needs uniform CellW; Cropped per-cell UVs use the CPU instance path.
             if (gpu)
             {
@@ -199,12 +248,9 @@ namespace InvertLab.Sprites.DOTS
 
             HideSourceMesh();
 
-            SpriteInstanceRenderSystem.Install(em);
-            SpriteInstanceRenderSystem.SetSheet(sheet);
-            ApplyInstanceGrid(em, authoring, 0);
-
             SpriteBatchSpawner.SetPrototype(em, s_proto);
             s_ready = true;
+            s_world = world;
             return true;
         }
 
@@ -321,6 +367,13 @@ namespace InvertLab.Sprites.DOTS
                 return;
             var em = world.EntityManager;
             authoring.TryGetClipSheet(clipIndex, out var clipTex, out int clipCols, out int clipRows, out _);
+            if (s_world != world || !em.Exists(s_proto)) return;
+            if (clipTex != null && !SpriteGpuAnimResources.CanUseSheet(clipTex, clipCols, clipRows,
+                    SpriteSheetProfile.GetCellAspect(clipTex, clipCols, clipRows)))
+            {
+                Debug.LogWarning("[Crowd Spawner] Convert GPU sprites to CPU before switching sheet layouts.", this);
+                return;
+            }
             if (clipTex != null)
                 SpriteInstanceRenderSystem.SetSheet(clipTex);
             ApplyInstanceGrid(em, authoring, clipIndex);
@@ -333,6 +386,7 @@ namespace InvertLab.Sprites.DOTS
                 ComponentType.ReadOnly<SpriteGpuDriven>());
             if (gpuQ.CalculateEntityCount() > 0)
             {
+                bool shared = false;
                 if (s_ready && s_proto != Entity.Null && em.HasComponent<SpriteAnimSetRef>(s_proto))
                 {
                     var setRef = em.GetComponentData<SpriteAnimSetRef>(s_proto);
@@ -342,11 +396,16 @@ namespace InvertLab.Sprites.DOTS
                             clipCols, clipRows, setRef.Set, out var gpuAnim))
                     {
                         SpriteGpuAnimResources.SetSharedClip(gpuAnim);
-                        return;
+                        shared = true;
                     }
                 }
-                SpriteGpuAnimSwitch.SetAllCrowdClips(world, clipIndex, Time.unscaledTime);
-                return;
+                if (!shared)
+                {
+                    using var gpuEntities = gpuQ.ToEntityArray(Allocator.Temp);
+                    foreach (var entity in gpuEntities)
+                        SpriteGpuAnimSwitch.ToCpuAtTime(em, entity, Time.unscaledTime);
+                    if (!SpriteGpuAnimResources.HasGpuSprites()) SpriteGpuAnimResources.UseSharedClip = false;
+                }
             }
 
             using var q = em.CreateEntityQuery(

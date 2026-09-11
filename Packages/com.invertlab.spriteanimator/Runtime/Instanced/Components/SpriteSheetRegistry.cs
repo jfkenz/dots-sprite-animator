@@ -53,6 +53,8 @@ namespace InvertLab.Sprites.DOTS
     {
         public Texture2D Texture;
         public Material Material;
+        /// <summary>Only registry-created materials are destroyed with this record.</summary>
+        public bool OwnsMaterial;
         public ComputeBuffer Buffer;
         public int Capacity;
 
@@ -95,6 +97,13 @@ namespace InvertLab.Sprites.DOTS
             Buffer?.Dispose();
             Buffer = null;
             if (Crops.IsCreated) Crops.Dispose();
+            Crops = default;
+            if (OwnsMaterial && Material != null)
+                SpriteRenderResourceLifetimeSystem.DestroyOwnedObject(Material);
+            Material = null;
+            OwnsMaterial = false;
+            Capacity = 0;
+            Count = 0;
         }
     }
 
@@ -128,11 +137,13 @@ namespace InvertLab.Sprites.DOTS
             if (shader == null)
                 return -1;
 
+            bool borrowLegacy = texture == SpriteRenderResources.Sheet && SpriteRenderResources.Material != null;
             var record = new SpriteSheetRecord
             {
                 Texture = texture,
                 // reuse the legacy material when this IS the default sheet
-                Material = texture == SpriteRenderResources.Sheet && SpriteRenderResources.Material != null
+                OwnsMaterial = !borrowLegacy,
+                Material = borrowLegacy
                     ? SpriteRenderResources.Material
                     : new Material(shader),
             };
@@ -145,7 +156,7 @@ namespace InvertLab.Sprites.DOTS
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void Reset()
+        public static void Reset()
         {
             foreach (var record in Records)
                 record.Dispose();

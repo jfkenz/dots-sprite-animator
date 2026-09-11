@@ -1,4 +1,5 @@
 using UnityEngine;
+using Unity.Mathematics;
 
 namespace InvertLab.Sprites.DOTS
 {
@@ -8,6 +9,31 @@ namespace InvertLab.Sprites.DOTS
     public static class SpriteAnimPlayback
     {
         public const float TimelineOriginX = 48f;
+
+        /// <summary>Maps the runtime phase step to its authored frame, including negative loops.</summary>
+        public static int DisplayFrame(int phaseStep, int frameCount, byte wrapMode)
+        {
+            if (frameCount <= 1) return 0;
+            if (wrapMode == SpriteAnimWrap.Once || wrapMode == SpriteAnimWrap.ReverseOnce)
+                return math.clamp(phaseStep, 0, frameCount - 1);
+            int cycle = CycleLength(frameCount, wrapMode);
+            int raw = phaseStep % cycle;
+            if (raw < 0) raw += cycle;
+            if (wrapMode == SpriteAnimWrap.PingPong)
+                return raw < frameCount ? raw : cycle - raw;
+            return wrapMode == SpriteAnimWrap.ReverseLoop ? frameCount - 1 - raw : raw;
+        }
+
+        public static int CycleLength(int frameCount, byte wrapMode)
+            => frameCount <= 1 ? 1 : wrapMode == SpriteAnimWrap.PingPong ? 2 * (frameCount - 1) : frameCount;
+
+        public static float CycleDuration(SpriteClipDef clip)
+        {
+            float total = TotalAuthoredDuration(clip);
+            return clip != null && clip.WrapMode == SpriteAnimWrap.PingPong && clip.Frames.Length > 1
+                ? 2 * total - FrameDuration(clip, 0) - FrameDuration(clip, clip.Frames.Length - 1)
+                : total;
+        }
 
         public readonly struct PreviewSample
         {
@@ -39,20 +65,30 @@ namespace InvertLab.Sprites.DOTS
             bool ended = false;
             float timelineTime;
 
-            if (wrap == SpriteAnimWrap.PingPong)
+            if (wrap == SpriteAnimWrap.PingPong || wrap == SpriteAnimWrap.ReverseLoop)
             {
-                float cycle = PingPongCycleDuration(total);
-                float local = loop ? Mathf.Repeat(time, cycle) : Mathf.Min(time, cycle);
-                if (!loop && time >= cycle)
-                    ended = true;
-                timelineTime = local <= total ? Mathf.Min(local, total) : cycle - local;
+                float local = Mathf.Repeat(time, CycleDuration(clip));
+                int steps = CycleLength(clip.Frames.Length, wrap);
+                for (int step = 0; step < steps; step++)
+                {
+                    int display = DisplayFrame(step, clip.Frames.Length, wrap);
+                    float dwell = FrameDuration(clip, display);
+                    if (local < dwell || step == steps - 1)
+                    {
+                        float progress = Mathf.Clamp01(local / dwell);
+                        return new PreviewSample(display, progress,
+                            AuthoredStartTime(clip, display) + progress * dwell, false);
+                    }
+                    local -= dwell;
+                }
+                return default;
             }
-            else if (wrap == SpriteAnimWrap.ReverseLoop)
+            else if (wrap == SpriteAnimWrap.ReverseOnce)
             {
-                float local = loop ? Mathf.Repeat(time, total) : Mathf.Min(time, total);
-                if (!loop && time >= total)
-                    ended = true;
-                timelineTime = local <= 0f ? total : total - local;
+                // Reverse-once callers count authored seconds down from total.
+                // Reaching total is the starting pose, not completion.
+                timelineTime = Mathf.Clamp(time, 0, total);
+                ended = !previewLoop && time <= 0;
             }
             else
             {
@@ -80,10 +116,11 @@ namespace InvertLab.Sprites.DOTS
 
         public static float FrameDuration(SpriteClipDef clip, int frame)
         {
+            float rate = clip != null ? Mathf.Max(0.1f, clip.FrameRate) : SpriteClipDef.DefaultFrameRate;
             if (clip?.FrameDurationScales == null ||
                 frame < 0 || frame >= clip.FrameDurationScales.Length)
-                return 1f / SpriteClipDef.DefaultFrameRate;
-            return clip.FrameDurationScales[frame] / Mathf.Max(0.1f, clip.FrameRate);
+                return 1f / rate;
+            return Mathf.Max(0.01f, clip.FrameDurationScales[frame]) / rate;
         }
 
         public static float TotalAuthoredDuration(SpriteClipDef clip)
@@ -146,12 +183,10 @@ namespace InvertLab.Sprites.DOTS
             if (clip.WrapMode != SpriteAnimWrap.ReverseLoop)
                 return authoredTime;
 
-            if (authoredTime <= 0f)
-                return Mathf.Max(0f, total - 0.0001f);
-            return Mathf.Max(0f, total - authoredTime);
+            int frame = AuthoredFrameAtTime(clip, authoredTime, out float fraction);
+            float elapsed = 0;
+            for (int i = clip.Frames.Length - 1; i > frame; i--) elapsed += FrameDuration(clip, i);
+            return elapsed + fraction * FrameDuration(clip, frame);
         }
-
-        static float PingPongCycleDuration(float total)
-            => Mathf.Max(0.001f, total * 2f);
     }
 }

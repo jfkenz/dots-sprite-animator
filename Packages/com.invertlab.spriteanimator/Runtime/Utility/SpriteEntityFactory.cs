@@ -34,6 +34,8 @@ namespace InvertLab.Sprites.DOTS
             bool flipY = false,
             float alphaCutoff = 0f)
         {
+            if (frames == null || frames.Count == 0 || frames[0] == null)
+                throw new System.ArgumentException("At least one sprite frame is required.", nameof(frames));
             var atlas = frames[0].texture;
 
             // ---- derive grid from the sprites' atlas rects ----
@@ -41,6 +43,8 @@ namespace InvertLab.Sprites.DOTS
             var ys = new HashSet<int>();
             foreach (var f in frames)
             {
+                if (f == null || f.texture != atlas)
+                    throw new System.ArgumentException("All frames must belong to the same texture.", nameof(frames));
                 xs.Add(Mathf.RoundToInt(f.textureRect.x));
                 ys.Add(Mathf.RoundToInt(f.textureRect.y));
             }
@@ -66,6 +70,8 @@ namespace InvertLab.Sprites.DOTS
                 SpriteSheetProfile.GetCellAspect(atlas, cols, rows));
 
             // ---- clip blob ----
+            var lifetime = em.World.GetOrCreateSystemManaged<SpriteAnimBlobLifetimeSystem>();
+            em.World.GetOrCreateSystemManaged<SimulationSystemGroup>().AddSystemToUpdateList(lifetime);
             var (setRef, player) = SpriteAnimSetBuilder.Build(Allocator.Persistent,
                 new[]
                 {
@@ -75,50 +81,62 @@ namespace InvertLab.Sprites.DOTS
                         Loop = loop,
                         FrameRate = math.max(0.1f, frameRate),
                         GlobalFrameIndices = slots,
+                        OnCompleteClipIndex = -1,
                     },
                 });
 
             // ---- entity ----
             var e = em.CreateEntity();
-            em.AddComponentData(e, new LocalTransform
+            try
             {
-                Position = new float3(position.x, position.y,
-                                      position.z - orderInLayer * 0.001f),
-                Rotation = quaternion.identity,
-                Scale = sizeUnits,
-            });
-            // the render packer reads LocalToWorld (rotation/scale/parent support)
-            em.AddComponentData(e, new LocalToWorld
+                em.AddComponentData(e, new LocalTransform
+                {
+                    Position = new float3(position.x, position.y,
+                                          position.z - orderInLayer * 0.001f),
+                    Rotation = quaternion.identity,
+                    Scale = sizeUnits,
+                });
+                // the render packer reads LocalToWorld (rotation/scale/parent support)
+                em.AddComponentData(e, new LocalToWorld
+                {
+                    Value = float4x4.TRS(position, quaternion.identity, new float3(sizeUnits)),
+                });
+                em.AddComponentData(e, setRef);
+                em.AddComponentData(e, player);
+                em.AddComponentData(e, new SpriteAnimFrame
+                {
+                    Slot = slots[0],
+                    Offset = float2.zero,
+                    Scale = new float2(1f, 1f),
+                    Rotation = 0f,
+                });
+                var t = tint ?? Color.white;
+                em.AddComponentData(e, new SpriteTint
+                {
+                    Value = new float4(t.r, t.g, t.b, t.a),
+                });
+                em.AddComponentData(e, new SpriteAnimEnabled());
+                em.AddComponentData(e, new SpriteFlip
+                {
+                    X = (byte)(flipX ? 1 : 0),
+                    Y = (byte)(flipY ? 1 : 0),
+                    Pivot = new float2(0.5f, 0.5f),
+                });
+                // NOTE: no event storage by default — SpriteAnimEventBuffer +
+                // SpriteAnimEventsPending are opt-in (see SpriteAnimEvents).
+                // Callers that subscribe to animation events add them explicitly:
+                //   em.AddBuffer<SpriteAnimEventBuffer>(e);
+                //   em.AddComponent<SpriteAnimEventsPending>(e); (enabled=false)
+                em.AddComponentData(e, new SpriteAnimBlobOwnerAlive { Blob = setRef.Set });
+                em.AddComponentData(e, new SpriteAnimOwnedBlob { Blob = setRef.Set });
+                return e;
+            }
+            catch
             {
-                Value = float4x4.TRS(position, quaternion.identity, new float3(sizeUnits)),
-            });
-            em.AddComponentData(e, setRef);
-            em.AddComponentData(e, player);
-            em.AddComponentData(e, new SpriteAnimFrame
-            {
-                Slot = slots[0],
-                Offset = float2.zero,
-                Scale = new float2(1f, 1f),
-                Rotation = 0f,
-            });
-            var t = tint ?? Color.white;
-            em.AddComponentData(e, new SpriteTint
-            {
-                Value = new float4(t.r, t.g, t.b, t.a),
-            });
-            em.AddComponentData(e, new SpriteAnimEnabled());
-            em.AddComponentData(e, new SpriteFlip
-            {
-                X = (byte)(flipX ? 1 : 0),
-                Y = (byte)(flipY ? 1 : 0),
-                Pivot = new float2(0.5f, 0.5f),
-            });
-            // NOTE: no event storage by default — SpriteAnimEventBuffer +
-            // SpriteAnimEventsPending are opt-in (see SpriteAnimEvents).
-            // Callers that subscribe to animation events add them explicitly:
-            //   em.AddBuffer<SpriteAnimEventBuffer>(e);
-            //   em.AddComponent<SpriteAnimEventsPending>(e); (enabled=false)
-            return e;
+                em.DestroyEntity(e);
+                setRef.Set.Dispose();
+                throw;
+            }
         }
     }
 }

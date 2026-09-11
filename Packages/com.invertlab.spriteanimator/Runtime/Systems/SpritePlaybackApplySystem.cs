@@ -85,7 +85,7 @@ namespace InvertLab.Sprites.DOTS
             int ci = player.ClipIndex;
             if (ci < 0 || ci >= set.Clips.Length)
                 return true;
-            return !SpriteGpuEligibility.IsGpuEligible(ref set, ci, out _);
+            return !SpriteGpuEligibility.IsGpuEligible(em, e, out _);
         }
 
         static bool HasMultipleClipSheets(EntityManager em, Entity e)

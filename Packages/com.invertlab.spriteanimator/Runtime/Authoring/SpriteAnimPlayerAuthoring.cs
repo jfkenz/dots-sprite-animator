@@ -142,8 +142,7 @@ namespace InvertLab.Sprites.DOTS
             {
                 int last = playDef.Frames.Length - 1;
                 _frame = last;
-                _time = SpriteAnimPlayback.AuthoredStartTime(playDef, last)
-                    + SpriteAnimPlayback.FrameDuration(playDef, last) * 0.999f;
+                _time = SpriteAnimPlayback.TotalAuthoredDuration(playDef);
             }
             SampleAndApply(set);
             ClipStarted?.Invoke(clipIndex);
@@ -750,7 +749,7 @@ namespace InvertLab.Sprites.DOTS
                 }
                 else if (wrap == SpriteAnimWrap.PingPong)
                 {
-                    float cycle = Mathf.Max(0.001f, total * 2f);
+                    float cycle = SpriteAnimPlayback.CycleDuration(def);
                     _time = Mathf.Repeat(_time, cycle);
                 }
                 else

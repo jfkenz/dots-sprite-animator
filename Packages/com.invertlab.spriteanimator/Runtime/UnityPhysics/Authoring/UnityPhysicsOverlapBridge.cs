@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Physics;
@@ -19,54 +21,96 @@ namespace InvertLab.Sprites.DOTS
     [UpdateInGroup(typeof(Unity.Physics.Systems.AfterPhysicsSystemGroup))]
     public sealed partial class UnityPhysicsOverlapBridge : SystemBase
     {
-        public static bool Ready;
-        public static PhysicsWorldSingleton CachedWorld;
-        public static int BodyCount;
+        // Legacy static API targets only the default world. Other worlds use
+        // their own bridge instance and Hit event.
+        static UnityPhysicsOverlapBridge DefaultBridge
+        {
+            get
+            {
+                var world = World.DefaultGameObjectInjectionWorld;
+                return world != null && world.IsCreated
+                    ? world.GetExistingSystemManaged<UnityPhysicsOverlapBridge>() : null;
+            }
+        }
 
-        static bool _hasPending;
-        static Aabb _pendingAabb;
-        static int _pendingAttackId;
-        static int _pendingDamage;
+        public static bool Ready => DefaultBridge?.IsReady ?? false;
+        public static PhysicsWorldSingleton CachedWorld => DefaultBridge?._cachedWorld ?? default;
+        public static int BodyCount => Ready ? CachedWorld.PhysicsWorld.NumBodies : 0;
+
+        readonly Queue<(Aabb Bounds, int AttackId, int Damage)> _pending = new();
+        PhysicsWorldSingleton _cachedWorld;
+        public bool IsReady { get; private set; }
+        public int PendingCount => _pending.Count;
+
+        /// <summary>Fired only for requests queued on this world.</summary>
+        public event Action<Entity, int, int> Hit;
 
         /// <summary>Fired per entity inside the slash box (system update).</summary>
         public static event System.Action<Entity, int, int> EntityHit;
 
-        protected override void OnUpdate()
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetSubscriptions() => EntityHit = null;
+
+        protected override void OnDestroy()
         {
-            if (SystemAPI.TryGetSingleton(out PhysicsWorldSingleton world))
-            {
-                CachedWorld = world;
-                Ready = true;
-                BodyCount = world.PhysicsWorld.NumBodies;
-            }
-
-            if (!Ready || !_hasPending)
-                return;
-            _hasPending = false;
-
-            var hits = new NativeList<int>(8, Allocator.Temp);
-            var input = new OverlapAabbInput
-            {
-                Aabb = _pendingAabb,
-                Filter = CollisionFilter.Default,
-            };
-            CachedWorld.OverlapAabb(input, ref hits);
-
-            for (int i = 0; i < hits.Length; i++)
-            {
-                var entity = CachedWorld.PhysicsWorld.Bodies[hits[i]].Entity;
-                EntityHit?.Invoke(entity, _pendingAttackId, _pendingDamage);
-            }
-            hits.Dispose();
+            _pending.Clear();
+            _cachedWorld = default;
+            IsReady = false;
+            Hit = null;
+            if (World == World.DefaultGameObjectInjectionWorld)
+                EntityHit = null;
         }
 
-        /// <summary>Queue an overlap (executed in the next system update).</summary>
-        public static void Queue(Aabb aabb, int attackId, int damage)
+        protected override void OnUpdate()
         {
-            _pendingAabb = aabb;
-            _pendingAttackId = attackId;
-            _pendingDamage = damage;
-            _hasPending = true;
+            IsReady = SystemAPI.TryGetSingleton(out PhysicsWorldSingleton world);
+            _cachedWorld = IsReady ? world : default;
+            if (!IsReady || _pending.Count == 0)
+                return;
+
+            var hits = new NativeList<int>(8, Allocator.Temp);
+            try
+            {
+                // Requests enqueued by a hit callback belong to the next update.
+                int count = _pending.Count;
+                for (int requestIndex = 0; requestIndex < count; requestIndex++)
+                {
+                    var request = _pending.Dequeue();
+                    hits.Clear();
+                    var input = new OverlapAabbInput
+                    {
+                        Aabb = request.Bounds,
+                        Filter = CollisionFilter.Default,
+                    };
+                    world.OverlapAabb(input, ref hits);
+                    for (int i = 0; i < hits.Length; i++)
+                    {
+                        var entity = world.PhysicsWorld.Bodies[hits[i]].Entity;
+                        Hit?.Invoke(entity, request.AttackId, request.Damage);
+                        if (World == World.DefaultGameObjectInjectionWorld)
+                            EntityHit?.Invoke(entity, request.AttackId, request.Damage);
+                    }
+                }
+            }
+            finally { hits.Dispose(); }
+        }
+
+        /// <summary>Queue an overlap in the default world. Call on the main thread.</summary>
+        public static void Queue(Aabb aabb, int attackId, int damage)
+            => Queue(World.DefaultGameObjectInjectionWorld, aabb, attackId, damage);
+
+        /// <summary>Queue an overlap in an explicit world. Call on the main thread.</summary>
+        public static void Queue(World world, Aabb aabb, int attackId, int damage)
+        {
+            if (world == null || !world.IsCreated)
+                throw new InvalidOperationException("An overlap request requires a live ECS world.");
+            world.GetOrCreateSystemManaged<UnityPhysicsOverlapBridge>().Enqueue(aabb, attackId, damage);
+        }
+
+        /// <summary>FIFO request, processed when this world's physics singleton is ready.</summary>
+        public void Enqueue(Aabb aabb, int attackId, int damage)
+        {
+            _pending.Enqueue((aabb, attackId, damage));
         }
 
         /// <summary>

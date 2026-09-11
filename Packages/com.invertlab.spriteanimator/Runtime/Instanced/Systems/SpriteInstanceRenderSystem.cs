@@ -61,13 +61,13 @@ namespace InvertLab.Sprites.DOTS
         public static int Capacity;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void Reset()
+        public static void Reset()
         {
             if (Staging.IsCreated) Staging.Dispose();
             if (Sorted.IsCreated) Sorted.Dispose();
             if (RecordIds.IsCreated) RecordIds.Dispose();
-            if (Material != null) Object.Destroy(Material);
-            if (Quad != null) Object.Destroy(Quad);
+            SpriteRenderResourceLifetimeSystem.DestroyOwnedObject(Material);
+            SpriteRenderResourceLifetimeSystem.DestroyOwnedObject(Quad);
             Staging = default;
             Sorted = default;
             RecordIds = default;
@@ -122,6 +122,9 @@ namespace InvertLab.Sprites.DOTS
     [UpdateInGroup(typeof(SimulationSystemGroup), OrderLast = true)]
     public partial struct SpriteInstanceRenderSystem : ISystem
     {
+        public void OnCreate(ref SystemState state)
+            => state.EntityManager.World.GetOrCreateSystemManaged<SpriteRenderResourceLifetimeSystem>();
+
         /// <summary>True once the instanced path has drawn at least one frame.</summary>
         public static bool Active;
 
@@ -132,7 +135,12 @@ namespace InvertLab.Sprites.DOTS
         public static int Ticks;
 
         /// <summary>Hand the renderer the legacy default sheet (call once after Install).</summary>
-        public static void SetSheet(Texture2D sheet) => SpriteRenderResources.Sheet = sheet;
+        public static void SetSheet(Texture2D sheet)
+        {
+            if (sheet != SpriteRenderResources.Sheet && SpriteGpuAnimResources.HasGpuSprites())
+                throw new System.InvalidOperationException("Convert active GPU sprites to CPU before changing the shared sheet.");
+            SpriteRenderResources.Sheet = sheet;
+        }
 
         public void OnUpdate(ref SystemState state)
         {
@@ -437,6 +445,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Create the grid singleton if missing (idempotent).</summary>
         public static void Install(EntityManager em)
         {
+            em.World.GetOrCreateSystemManaged<SpriteRenderResourceLifetimeSystem>();
             using var q = em.CreateEntityQuery(ComponentType.ReadOnly<SpriteAnimGrid>());
             if (q.CalculateEntityCount() > 0) return;
             var e = em.CreateEntity();
@@ -457,6 +466,11 @@ namespace InvertLab.Sprites.DOTS
         public static void SetGrid(EntityManager em, int cols, int rows, float cellAspect,
             Vector4[] cellCropSTs)
         {
+            if (SpriteGpuAnimResources.HasGpuSprites() &&
+                ((cellCropSTs != null && cellCropSTs.Length > 0) ||
+                 !SpriteGpuAnimResources.CanUseSheet(SpriteRenderResources.Sheet, Mathf.Max(1, cols),
+                     Mathf.Max(1, rows), cellAspect > 0.01f ? cellAspect : 1f)))
+                throw new System.InvalidOperationException("Convert active GPU sprites to CPU before changing the shared sheet layout.");
             Install(em);
             using var q = em.CreateEntityQuery(ComponentType.ReadOnly<SpriteAnimGrid>());
             var entity = q.GetSingletonEntity();
