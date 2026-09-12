@@ -13,6 +13,25 @@ namespace InvertLab.Sprites.DOTS
     public partial class SpriteRenderResourceLifetimeSystem : SystemBase
     {
         static readonly HashSet<World> Owners = new();
+        public ComputeBuffer GpuBuffer { get; private set; }
+        public Material GpuMaterial { get; private set; }
+        public Bounds GpuBounds;
+        int gpuCapacity;
+
+        public void EnsureGpuBatch(int count, Texture2D sheet)
+        {
+            if (GpuBuffer == null || count > gpuCapacity)
+            {
+                GpuBuffer?.Dispose();
+                gpuCapacity = Mathf.NextPowerOfTwo(Mathf.Max(4096, count));
+                GpuBuffer = new ComputeBuffer(gpuCapacity, SpriteGpuAnimResources.Stride);
+            }
+            var shader = Shader.Find(SpriteShaderLibrary.ActiveGpuAnimShader);
+            if (GpuMaterial == null) GpuMaterial = new Material(shader);
+            else if (GpuMaterial.shader != shader) GpuMaterial.shader = shader;
+            GpuMaterial.mainTexture = sheet;
+            GpuMaterial.SetFloat("_Cutoff", .02f);
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetOwners() => Owners.Clear();
@@ -23,6 +42,11 @@ namespace InvertLab.Sprites.DOTS
         protected override void OnDestroy()
         {
             EntityManager.CompleteAllTrackedJobs();
+            GpuBuffer?.Dispose();
+            GpuBuffer = null;
+            DestroyOwnedObject(GpuMaterial);
+            GpuMaterial = null;
+            SpriteSheetRegistry.ReleaseWorld(World.SequenceNumber);
             Owners.Remove(World);
             if (Owners.Count != 0) return;
             SpriteSheetRegistry.Reset();

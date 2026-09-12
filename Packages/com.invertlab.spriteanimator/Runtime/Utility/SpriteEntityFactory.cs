@@ -38,36 +38,42 @@ namespace InvertLab.Sprites.DOTS
                 throw new System.ArgumentException("At least one sprite frame is required.", nameof(frames));
             var atlas = frames[0].texture;
 
-            // ---- derive grid from the sprites' atlas rects ----
-            var xs = new HashSet<int>();
-            var ys = new HashSet<int>();
+            // The atlas dimensions, not the number of supplied frames, define the grid.
+            // Packed/trimmed/rotated sprites are not uniform sheet cells.
+            var first = frames[0].rect;
+            float cw = first.width;
+            float ch = first.height;
+            int cols = Mathf.RoundToInt(atlas.width / cw);
+            int rows = Mathf.RoundToInt(atlas.height / ch);
+            if (cols < 1 || rows < 1 || Mathf.Abs(cols * cw - atlas.width) > 0.01f ||
+                Mathf.Abs(rows * ch - atlas.height) > 0.01f)
+                throw new System.ArgumentException("Frames must be full cells on a uniform grid that covers the texture.", nameof(frames));
             foreach (var f in frames)
             {
                 if (f == null || f.texture != atlas)
                     throw new System.ArgumentException("All frames must belong to the same texture.", nameof(frames));
-                xs.Add(Mathf.RoundToInt(f.textureRect.x));
-                ys.Add(Mathf.RoundToInt(f.textureRect.y));
+                var rect = f.rect;
+                if (f.packed || Mathf.Abs(rect.width - cw) > 0.01f || Mathf.Abs(rect.height - ch) > 0.01f ||
+                    Mathf.Abs(rect.x / cw - Mathf.Round(rect.x / cw)) > 0.0001f ||
+                    Mathf.Abs(rect.y / ch - Mathf.Round(rect.y / ch)) > 0.0001f)
+                    throw new System.ArgumentException("Frames must be unpacked, aligned cells of equal size. Use profile cropped layouts for irregular atlases.", nameof(frames));
             }
-            int cols = math.max(1, xs.Count);
-            int rows = math.max(1, ys.Count);
 
             // slot per frame within that grid (row-major, row 0 = top)
-            float cw = atlas.width / (float)cols;
-            float ch = atlas.height / (float)rows;
             var slots = new int[frames.Count];
             for (int i = 0; i < frames.Count; i++)
             {
-                var r = frames[i].textureRect;
+                var r = frames[i].rect;
                 int col = Mathf.Clamp((int)((r.x + r.width * 0.5f) / cw), 0, cols - 1);
                 // rect origin is bottom-left in Unity -> invert for row index
                 int row = Mathf.Clamp((int)((atlas.height - r.y - r.height * 0.5f) / ch), 0, rows - 1);
                 slots[i] = row * cols + col;
             }
 
-            // ---- register sheet + grid with the instanced renderer ----
-            SpriteInstanceRenderSystem.SetSheet(atlas);
-            SpriteInstanceRenderSystem.SetGrid(em, cols, rows,
-                SpriteSheetProfile.GetCellAspect(atlas, cols, rows));
+            // Bind this entity to its own sheet; creating another atlas must not
+            // change existing sprites' legacy sheet or GPU grid.
+            SpriteInstanceRenderSystem.Install(em);
+            var sheet = GetOrCreateSheet(em, atlas, cols, rows, cw / ch);
 
             // ---- clip blob ----
             var lifetime = em.World.GetOrCreateSystemManaged<SpriteAnimBlobLifetimeSystem>();
@@ -102,6 +108,7 @@ namespace InvertLab.Sprites.DOTS
                     Value = float4x4.TRS(position, quaternion.identity, new float3(sizeUnits)),
                 });
                 em.AddComponentData(e, setRef);
+                em.AddComponentData(e, new SpriteSheetBinding { Sheet = sheet });
                 em.AddComponentData(e, player);
                 em.AddComponentData(e, new SpriteAnimFrame
                 {
@@ -137,6 +144,24 @@ namespace InvertLab.Sprites.DOTS
                 setRef.Set.Dispose();
                 throw;
             }
+        }
+
+        static Entity GetOrCreateSheet(EntityManager em, Texture2D texture, int cols, int rows, float aspect)
+        {
+            using var query = em.CreateEntityQuery(typeof(SpriteSheetDefinition), typeof(SpriteSheetAsset));
+            using var entities = query.ToEntityArray(Allocator.Temp);
+            foreach (var entity in entities)
+            {
+                var def = em.GetComponentData<SpriteSheetDefinition>(entity);
+                if (def.Cols == cols && def.Rows == rows && def.CellAspect == aspect && def.UseCellCrops == 0 &&
+                    em.GetComponentObject<SpriteSheetAsset>(entity).Texture == texture) return entity;
+            }
+            var result = em.CreateEntity();
+            em.AddComponentData(result, new SpriteSheetDefinition { Cols = cols, Rows = rows, CellAspect = aspect });
+            em.AddComponentObject(result, new SpriteSheetAsset { Texture = texture });
+            var registration = em.World.GetOrCreateSystemManaged<SpriteSheetRegistrationSystem>();
+            em.World.GetOrCreateSystemManaged<SimulationSystemGroup>().AddSystemToUpdateList(registration);
+            return result;
         }
     }
 }

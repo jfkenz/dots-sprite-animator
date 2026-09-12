@@ -2,7 +2,13 @@
   "name": "InvertLab.SpriteAnimator.CrowdSample.Editor",
   "rootNamespace": "InvertLab.Sprites.DOTS.Editor",
   "references": [
-    "InvertLab.SpriteAnimator.CrowdSample"
+    "InvertLab.SpriteAnimator.CrowdSample",
+    "InvertLab.SpriteAnimator.Editor",
+    "InvertLab.SpriteAnimator.Runtime",
+    "Unity.Entities",
+    "Unity.Collections",
+    "Unity.Mathematics",
+    "Unity.Scenes"
   ],
   "includePlatforms": [
     "Editor"
@@ -12,7 +18,15 @@
   "overrideReferences": false,
   "precompiledReferences": [],
   "autoReferenced": true,
-  "defineConstraints": [],
-  "versionDefines": [],
+  "defineConstraints": [
+    "INVERTLAB_SAMPLE_INPUT"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.inputsystem",
+      "expression": "1.0.0",
+      "define": "INVERTLAB_SAMPLE_INPUT"
+    }
+  ],
   "noEngineReferences": false
 }

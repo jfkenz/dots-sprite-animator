@@ -16,7 +16,15 @@
   "overrideReferences": false,
   "precompiledReferences": [],
   "autoReferenced": true,
-  "defineConstraints": [],
-  "versionDefines": [],
+  "defineConstraints": [
+    "INVERTLAB_SAMPLE_INPUT"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.inputsystem",
+      "expression": "1.0.0",
+      "define": "INVERTLAB_SAMPLE_INPUT"
+    }
+  ],
   "noEngineReferences": false
 }

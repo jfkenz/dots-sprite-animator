@@ -1,3 +1,9 @@
+# Samples
+
+**Starter**: generated demo art, CPU/GPU playback, pause/restart/flip controls. No Input System or Unity Physics dependency.
+
+**Complete**: full playback, events, sockets, colliders, crowd, and showcase examples. Interactive scripts require Input System. Unity Physics scripts compile only when Unity Physics is installed. Editor builders locate their imported folder without hard-coding a package version.
+
 # Samples map
 
 Samples ship inside the package as an optional `Samples~` folder. They are **not** in your project until you import them.
@@ -14,7 +20,7 @@ Imported path (Unity default):
 `Assets/Samples/DOTS Sprite Animator/<version>/Complete/`
 
 On some embedded installs the `<version>` segment may be omitted:
-`Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/`
+`Assets/Samples/DOTS Sprite Animator/1.0.0/Complete/`
 
 ## What’s inside Complete
 

@@ -120,6 +120,7 @@ namespace InvertLab.Sprites.DOTS
     /// scale, and parenting all render correctly.
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup), OrderLast = true)]
+    [UpdateAfter(typeof(TransformSystemGroup))]
     public partial struct SpriteInstanceRenderSystem : ISystem
     {
         public void OnCreate(ref SystemState state)
@@ -172,14 +173,7 @@ namespace InvertLab.Sprites.DOTS
             int legacyId = -1;
             if (SpriteRenderResources.Sheet != null)
             {
-                legacyId = SpriteSheetRegistry.GetOrAdd(SpriteRenderResources.Sheet);
-                if (legacyId >= 0)
                 {
-                    var legacy = SpriteSheetRegistry.Records[legacyId];
-                    legacy.Cols = grid.Cols;
-                    legacy.Rows = grid.Rows;
-                    legacy.CellAspect = grid.CellAspect > 0.01f ? grid.CellAspect : 1f;
-                    byte useCrops = 0;
                     float4[] crops = null;
                     if (grid.UseCellCrops != 0)
                     {
@@ -192,13 +186,11 @@ namespace InvertLab.Sprites.DOTS
                                 crops = new float4[buf.Length];
                                 for (int c = 0; c < buf.Length; c++)
                                     crops[c] = buf[c].Value;
-                                useCrops = 1;
                             }
                         }
                     }
-                    legacy.UseCellCrops = useCrops;
-                    if (useCrops != 0)
-                        legacy.SetCrops(crops);
+                    legacyId = SpriteSheetRegistry.GetOrAdd(SpriteRenderResources.Sheet,
+                        grid.Cols, grid.Rows, grid.CellAspect, crops, em.World.SequenceNumber);
                 }
             }
 
@@ -220,6 +212,7 @@ namespace InvertLab.Sprites.DOTS
             var gridCR = new NativeArray<int2>(recordCount, Allocator.TempJob);
             var useCropsArr = new NativeArray<byte>(recordCount, Allocator.TempJob);
             var cropOffsets = new NativeArray<int>(recordCount, Allocator.TempJob);
+            var cropCounts = new NativeArray<int>(recordCount, Allocator.TempJob);
             int cropTotal = 0;
             for (int r = 0; r < recordCount; r++)
             {
@@ -227,7 +220,8 @@ namespace InvertLab.Sprites.DOTS
                 gridCR[r] = new int2(rec.Cols, rec.Rows);
                 useCropsArr[r] = rec.UseCellCrops;
                 cropOffsets[r] = cropTotal;
-                cropTotal += rec.UseCellCrops != 0 && rec.Crops.IsCreated ? rec.Crops.Length : 0;
+                cropCounts[r] = rec.UseCellCrops != 0 && rec.Crops.IsCreated ? rec.Crops.Length : 0;
+                cropTotal += cropCounts[r];
             }
             var allCrops = new NativeArray<float4>(math.max(1, cropTotal), Allocator.TempJob);
             for (int r = 0; r < recordCount; r++)
@@ -250,6 +244,7 @@ namespace InvertLab.Sprites.DOTS
                 GridCR = gridCR,
                 UseCropsArr = useCropsArr,
                 CropOffsets = cropOffsets,
+                CropCounts = cropCounts,
                 AllCrops = allCrops,
                 Staging = SpriteRenderResources.Staging,
                 RecordIds = SpriteRenderResources.RecordIds,
@@ -279,9 +274,6 @@ namespace InvertLab.Sprites.DOTS
 
             // ---- draw one batch per record ----
             bool layoutXy = SpriteBatchSpawner.LayoutXy;
-            var bounds = layoutXy
-                ? new Bounds(Vector3.zero, new Vector3(4000f, 4000f, 4000f))
-                : new Bounds(Vector3.zero, new Vector3(4000f, 200f, 4000f));
             for (int r = 0; r < recordCount; r++)
             {
                 var rec = SpriteSheetRegistry.Records[r];
@@ -289,7 +281,21 @@ namespace InvertLab.Sprites.DOTS
                 if (rec.Count == 0)
                     continue;
                 rec.EnsureCapacity(rec.Count);
-                rec.Buffer.SetData(SpriteRenderResources.Sorted, cursors[r], 0, rec.Count);
+                Bounds bounds = default;
+                int start = cursors[r] - rec.Count;
+                for (int i = 0; i < rec.Count; i++)
+                {
+                    var data = SpriteRenderResources.Sorted[start + i];
+                    var center = layoutXy ? new Vector3(data.PosScale.x, data.PosScale.y, data.PosScale.w)
+                        : new Vector3(data.PosScale.x, data.PosScale.w, data.PosScale.y);
+                    float entityScale = layoutXy ? math.length(data.Transform2.xy) + math.length(data.Transform2.zw) : math.abs(data.PosScale.z);
+                    float radius = entityScale * math.cmax(math.abs(data.FrameTRS.xy)) * math.max(1, rec.CellAspect)
+                        * (1 + math.length(data.Flip.zw - .5f) * 2);
+                    var item = new Bounds(center, Vector3.one * math.max(.01f, radius * 2));
+                    if (i == 0) bounds = item; else bounds.Encapsulate(item);
+                }
+                // Scatter advances each cursor to the END of its batch.
+                rec.Buffer.SetData(SpriteRenderResources.Sorted, cursors[r] - rec.Count, 0, rec.Count);
                 rec.Material.SetFloat("_LayoutXy", layoutXy ? 1f : 0f);
                 rec.Material.SetFloat("_CellAspect", rec.CellAspect > 0.01f ? rec.CellAspect : 1f);
                 rec.Material.SetBuffer("_InstanceData", rec.Buffer);
@@ -302,6 +308,7 @@ namespace InvertLab.Sprites.DOTS
             gridCR.Dispose();
             useCropsArr.Dispose();
             cropOffsets.Dispose();
+            cropCounts.Dispose();
             allCrops.Dispose();
             counts.Dispose();
             cursors.Dispose();
@@ -317,6 +324,7 @@ namespace InvertLab.Sprites.DOTS
             [ReadOnly] public NativeArray<int2> GridCR;
             [ReadOnly] public NativeArray<byte> UseCropsArr;
             [ReadOnly] public NativeArray<int> CropOffsets;
+            [ReadOnly] public NativeArray<int> CropCounts;
             [ReadOnly] public NativeArray<float4> AllCrops;
             [WriteOnly] public NativeArray<SpriteInstanceData> Staging;
             [WriteOnly] public NativeArray<int> RecordIds;
@@ -333,8 +341,8 @@ namespace InvertLab.Sprites.DOTS
                 if (Bindings.HasComponent(entity))
                 {
                     var binding = Bindings[entity];
-                    if (binding.Sheet != Entity.Null && Registered.HasComponent(binding.Sheet))
-                        record = Registered[binding.Sheet].RegistryId;
+                    if (binding.Sheet != Entity.Null)
+                        record = Registered.HasComponent(binding.Sheet) ? Registered[binding.Sheet].RegistryId : -1;
                 }
                 RecordIds[i] = record;
                 if (record < 0 || record >= GridCR.Length)
@@ -344,6 +352,11 @@ namespace InvertLab.Sprites.DOTS
                 int2 cr = GridCR[record];
                 int cols = math.max(1, cr.x);
                 int rows = math.max(1, cr.y);
+                if (slot < 0 || (UseCropsArr[record] != 0 ? slot >= CropCounts[record] : (long)slot >= (long)cols * rows))
+                {
+                    RecordIds[i] = -1;
+                    return;
+                }
                 int col = slot % cols;
                 int row = slot / cols;
 
@@ -354,7 +367,7 @@ namespace InvertLab.Sprites.DOTS
                 if (UseCropsArr[record] != 0 && slot >= 0)
                 {
                     int cropIndex = CropOffsets[record] + slot;
-                    if (cropIndex < AllCrops.Length)
+                    if (slot < CropCounts[record])
                         cropST = AllCrops[cropIndex];
                     else
                         cropST = new float4(1f / cols, 1f / rows,
@@ -380,8 +393,10 @@ namespace InvertLab.Sprites.DOTS
                 float4 transform2;
                 if (LayoutXy != 0)
                 {
-                    posScale = new float4(worldPos.x + offset.x, worldPos.y + offset.y, 1f, worldPos.z);
-                    transform2 = new float4(entityScaleX, entityScaleY, entityRot, 0f);
+                    float3 worldOffset = ltw.Value.c0.xyz * offset.x + ltw.Value.c1.xyz * offset.y;
+                    posScale = new float4(worldPos.x + worldOffset.x, worldPos.y + worldOffset.y, 1f, worldPos.z + worldOffset.z);
+                    // Keep both basis vectors: decomposing loses reflection and parent-induced shear.
+                    transform2 = new float4(ltw.Value.c0.xy, ltw.Value.c1.xy);
                 }
                 else
                 {
@@ -396,7 +411,7 @@ namespace InvertLab.Sprites.DOTS
                 {
                     PosScale = posScale,
                     CropST = cropST,
-                    FrameTRS = new float4(frame.Scale.x, frame.Scale.y, math.radians(frameRotation), 0f),
+                    FrameTRS = new float4(frame.Scale.x, frame.Scale.y, math.radians(frameRotation), LayoutXy != 0 ? 1f : 0f),
                     Flip = new float4(flip.X, flip.Y, flip.ResolvedPivot.x, flip.ResolvedPivot.y),
                     Transform2 = transform2,
                     Color = tint.Value,

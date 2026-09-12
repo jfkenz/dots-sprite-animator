@@ -69,6 +69,7 @@ namespace InvertLab.Sprites.DOTS
         public static ulong LastUploadWorld;
 
         static bool dataDirty;
+        public static uint DataVersion { get; private set; }
 
         // Crowd plays one clip: shader uniforms, no 1M entity rewrite on switch.
         public static bool UseSharedClip;
@@ -77,7 +78,7 @@ namespace InvertLab.Sprites.DOTS
         public static SpriteGpuAnim SharedClip;
 
         /// <summary>Force re-upload of instance data next frame (spawn/move/convert).</summary>
-        public static void MarkDirty() => dataDirty = true;
+        public static void MarkDirty() { dataDirty = true; unchecked { DataVersion++; } }
 
         public static void SetSharedClip(in SpriteGpuAnim anim)
         {
@@ -112,6 +113,7 @@ namespace InvertLab.Sprites.DOTS
             LastUploadWorld = 0;
             dataDirty = false;
             UseSharedClip = false;
+            DataVersion = 0;
             SharedCell = 0f;
             SharedAnim = 0f;
             SharedClip = default;
@@ -157,14 +159,14 @@ namespace InvertLab.Sprites.DOTS
             return true;
         }
 
-        public static void EnsureCapacity(int need)
+        public static void EnsureCapacity(int need, bool allocateBuffer = true)
         {
-            if (Buffer != null && need <= Capacity && Staging.IsCreated && Staging.Length >= need)
+            if ((!allocateBuffer || Buffer != null) && need <= Capacity && Staging.IsCreated && Staging.Length >= need)
                 return;
             int cap = math.max(4096, Capacity);
             while (cap < need) cap *= 2;
             Buffer?.Dispose();
-            Buffer = new ComputeBuffer(cap, Stride);
+            Buffer = allocateBuffer ? new ComputeBuffer(cap, Stride) : null;
             Capacity = cap;
             if (Staging.IsCreated) Staging.Dispose();
             Staging = new NativeArray<SpriteGpuInstanceData>(cap, Allocator.Persistent,

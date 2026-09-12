@@ -110,10 +110,12 @@ namespace InvertLab.Sprites.DOTS.Tests
                 camera = cameraObject.GetComponent<Camera>();
             }
             var previousPosition = camera.transform.position;
+            var previousRotation = camera.transform.rotation;
             bool previousOrthographic = camera.orthographic;
             float previousSize = camera.orthographicSize;
             float previousAspect = camera.aspect;
-            camera.transform.position = Vector3.zero;
+            camera.transform.SetPositionAndRotation(xy ? new Vector3(0, 0, -10) : new Vector3(0, 100, 0),
+                xy ? Quaternion.identity : Quaternion.Euler(90, 0, 0));
             camera.orthographic = true;
             camera.orthographicSize = 5f;
             camera.aspect = 1f;
@@ -136,6 +138,7 @@ namespace InvertLab.Sprites.DOTS.Tests
                 else
                 {
                     camera.transform.position = previousPosition;
+                    camera.transform.rotation = previousRotation;
                     camera.orthographic = previousOrthographic;
                     camera.orthographicSize = previousSize;
                     camera.aspect = previousAspect;

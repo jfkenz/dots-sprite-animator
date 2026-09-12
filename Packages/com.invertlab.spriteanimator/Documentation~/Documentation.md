@@ -2,12 +2,12 @@
 
 **Product:** Invert Lab DOTS Sprite Animator  
 **Package id:** com.invertlab.spriteanimator  
-**Version:** 0.8.1  
+**Version:** 1.0.0
 **Publisher:** Invert Lab  
 **Namespace:** InvertLab.Sprites.DOTS  
-**Unity:** 6000.0+ (Entities, Entities Graphics, URP)
+**Unity:** 6000.5 (Entities 6.5.0, Entities Graphics 6.5.0, URP 17.5.0)
 
-This guide covers the shipped 0.8.1 feature set: playback control, combat helpers, wrap modes, editor UX, sockets, events, crowd/GPU overview, and samples.
+This guide covers the shipped 1.0.0 feature set: playback control, combat helpers, wrap modes, editor UX, sockets, events, crowd/GPU overview, and samples.
 
 ---
 
@@ -258,7 +258,7 @@ Showcase art © Clembod (personal/commercial use OK; do not redistribute/resell 
 
 ---
 
-*© Invert Lab. DOTS Sprite Animator 0.8.1.*
+*© Invert Lab. DOTS Sprite Animator 1.0.0.*
 
 ## System run order
 

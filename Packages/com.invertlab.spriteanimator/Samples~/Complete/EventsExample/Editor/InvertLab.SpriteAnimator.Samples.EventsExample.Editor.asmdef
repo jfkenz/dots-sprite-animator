@@ -1,0 +1,26 @@
+{
+  "includePlatforms": [
+    "Editor"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.inputsystem",
+      "expression": "1.0.0",
+      "define": "INVERTLAB_SAMPLE_INPUT"
+    }
+  ],
+  "references": [
+    "InvertLab.SpriteAnimator.Runtime",
+    "InvertLab.SpriteAnimator.Samples",
+    "InvertLab.SpriteAnimator.Editor",
+    "Unity.Entities",
+    "Unity.Collections",
+    "Unity.Mathematics",
+    "Unity.Scenes"
+  ],
+  "defineConstraints": [
+    "INVERTLAB_SAMPLE_INPUT"
+  ],
+  "autoReferenced": true,
+  "name": "InvertLab.SpriteAnimator.Samples.EventsExample.Editor"
+}

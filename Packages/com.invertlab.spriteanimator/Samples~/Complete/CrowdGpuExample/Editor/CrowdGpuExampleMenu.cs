@@ -9,8 +9,8 @@ namespace InvertLab.Sprites.DOTS.Editor
     /// </summary>
     public static class CrowdGpuExampleMenu
     {
-        public const string ScenePath =
-            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/CrowdGpuExample/Scenes/CrowdGpuExample.unity";
+        public static readonly string ScenePath =
+            SpriteAnimatorSamplePaths.Resolve("/CrowdGpuExample/Scenes/CrowdGpuExample.unity");
 
         [MenuItem("Tools/DOTS Sprite Animator/Open Crowd GPU Sample")]
         public static void Open()

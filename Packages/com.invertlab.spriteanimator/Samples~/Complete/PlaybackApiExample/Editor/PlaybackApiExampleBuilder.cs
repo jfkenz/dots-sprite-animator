@@ -12,12 +12,12 @@ namespace InvertLab.Sprites.DOTS.Editor
     /// </summary>
     public static class PlaybackApiExampleBuilder
     {
-        const string Root = "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/PlaybackApiExample";
-        const string ScenePath = Root + "/Scenes/PlaybackApiExample.unity";
-        const string ProfilePath =
-            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect_profile.asset";
-        const string BringerProfilePath =
-            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset";
+        static readonly string Root = SpriteAnimatorSamplePaths.Resolve("/PlaybackApiExample");
+        static readonly string ScenePath = Root + "/Scenes/PlaybackApiExample.unity";
+        static readonly string ProfilePath =
+            SpriteAnimatorSamplePaths.Resolve("/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect_profile.asset");
+        static readonly string BringerProfilePath =
+            SpriteAnimatorSamplePaths.Resolve("/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset");
 
         [MenuItem("Tools/DOTS Sprite Animator/Build Playback API Sample")]
         public static void Build()
@@ -42,7 +42,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             Debug.Log(
                 "[Playback API Sample] Built " + ScenePath +
-                ". Enter Play. Keys: 1 Walk Â· 2 PlayOneShot Attack Â· 3 Queue Â· 4 Priority Â· 5 Hitstop Â· 6 Hold Â· 0 Idle.");
+                ". Enter Play. Keys: 1 Walk · 2 PlayOneShot Attack · 3 Queue · 4 Priority · 5 Hitstop · 6 Hold · 0 Idle.");
         }
 
         static ScriptableSpriteSheetProfile LoadProfile()
@@ -55,7 +55,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         static void EnsureReadme()
         {
-            const string readmePath = Root + "/Systems/README.md";
+            string readmePath = Root + "/Systems/README.md";
             if (File.Exists(readmePath))
                 return;
             File.WriteAllText(

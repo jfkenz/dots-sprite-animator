@@ -1,0 +1,24 @@
+{
+  "name": "InvertLab.SpriteAnimator.Samples",
+  "defineConstraints": [
+    "INVERTLAB_SAMPLE_INPUT"
+  ],
+  "autoReferenced": true,
+  "references": [
+    "InvertLab.SpriteAnimator.Runtime",
+    "Unity.Entities",
+    "Unity.Mathematics",
+    "Unity.Transforms",
+    "Unity.Collections",
+    "Unity.Burst",
+    "Unity.InputSystem",
+    "InvertLab.SpriteAnimator.CrowdSample"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.inputsystem",
+      "expression": "1.0.0",
+      "define": "INVERTLAB_SAMPLE_INPUT"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ﻿# DOTS Sprite Animator Quick Start
 
-Publisher: **Invert Lab**. Package version **0.8.1**.
+Publisher: **Invert Lab**. Release baseline: **Unity 6000.5 / Entities 6.5 / URP 17.5**.
 
 ## 1) Install
 
@@ -15,6 +15,11 @@ Required packages:
 - com.unity.render-pipelines.universal
 
 Use **Tools > DOTS Sprite Animator > Validate Installation** after import.
+
+For a self-contained first run, import **Starter** from Package Manager Samples,
+add `SpriteAnimatorStarter` to an empty GameObject, assign a URP asset, and enter Play.
+For the full examples, import **Complete**; interactive examples use Input System,
+and the Unity Physics example additionally requires `com.unity.physics`.
 
 ## 2) Create a profile
 
@@ -58,12 +63,12 @@ Inspector: **Show Sprite** toggles scene MeshRenderer preview (ShowSpriteInScene
 
 Runtime calls:
 
-`csharp
+```csharp
 SpriteAnims.Play(entityManager, entity, "Run");
 SpriteAnims.PlayFacing(entityManager, entity, "Walk", SpriteFacingDirection.Down);
 player.PlayOneShot("Attack");
 player.Hitstop(0.12f);
-`
+```
 
 ## 5) GPU vs CPU path
 

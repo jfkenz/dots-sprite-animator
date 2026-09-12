@@ -1,0 +1,10 @@
+DOTS Sprite Animator
+
+Unity dependencies are installed separately by Package Manager and retain their
+respective licenses. Unity Physics and Input System are optional.
+
+Clembod showcase artwork has separate license terms supplied by the publisher.
+Keep the license files included with the showcase content. The framework license
+does not replace those artwork terms.
+
+Starter demo pixels are generated in code.

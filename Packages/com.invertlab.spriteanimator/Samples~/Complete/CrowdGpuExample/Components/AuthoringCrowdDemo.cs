@@ -45,7 +45,7 @@ namespace InvertLab.Sprites.DOTS
 
         protected override void OnUpdate()
         {
-            var spawner = Object.FindFirstObjectByType<SpriteCrowdSpawnerAuthoring>();
+            var spawner = Object.FindAnyObjectByType<SpriteCrowdSpawnerAuthoring>();
             if (spawner == null)
                 return;
 
@@ -56,7 +56,7 @@ namespace InvertLab.Sprites.DOTS
 
             var authoring = spawner.Source != null
                 ? spawner.Source
-                : Object.FindFirstObjectByType<SpriteAnimSetAuthoring>();
+                : Object.FindAnyObjectByType<SpriteAnimSetAuthoring>();
             int clipCount = authoring != null && authoring.Clips != null
                 ? authoring.Clips.Length
                 : 0;

@@ -10,13 +10,13 @@ namespace InvertLab.Sprites.DOTS.Editor
 {
     public static class SocketsExampleBuilder
     {
-        const string Root = "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Sockets";
-        const string ProfilePath = Root + "/SocketsProfile.asset";
-        const string SwordMaterialPath = Root + "/SocketsSword.mat";
-        const string ScenePath = Root + "/SocketsExample.unity";
-        const string SubScenePath = Root + "/SocketsExample_SubScene.unity";
-        const string CharacterPath =
-            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect.png";
+        static readonly string Root = SpriteAnimatorSamplePaths.Resolve("/Sockets");
+        static readonly string ProfilePath = Root + "/SocketsProfile.asset";
+        static readonly string SwordMaterialPath = Root + "/SocketsSword.mat";
+        static readonly string ScenePath = Root + "/SocketsExample.unity";
+        static readonly string SubScenePath = Root + "/SocketsExample_SubScene.unity";
+        static readonly string CharacterPath =
+            SpriteAnimatorSamplePaths.Resolve("/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect.png");
 
         [MenuItem("Tools/DOTS Sprite Animator/Build Sockets Sample")]
         public static void Build()
@@ -144,7 +144,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             set.Profile = profile;
             set.InitialClipIndex = 0;
             // Play mode uses SpriteInstanceRenderSystem for the character.
-            // Show Sprite is MeshRenderer edit preview only â€” DontSave mesh/mat
+            // Show Sprite is MeshRenderer edit preview only — DontSave mesh/mat
             // cannot serialize into SubScenes and can feed EG/BRG wrongly.
             set.ShowSpriteInScene = false;
             set.ApplyFromProfile();

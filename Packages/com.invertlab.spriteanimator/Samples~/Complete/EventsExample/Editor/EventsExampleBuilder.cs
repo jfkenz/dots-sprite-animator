@@ -12,12 +12,12 @@ namespace InvertLab.Sprites.DOTS.Editor
     /// </summary>
     public static class EventsExampleBuilder
     {
-        const string Root = "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/EventsExample";
-        const string ScenePath = Root + "/Scenes/EventsExample.unity";
-        const string ProfilePath =
-            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect_profile.asset";
-        const string BringerProfilePath =
-            "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset";
+        static readonly string Root = SpriteAnimatorSamplePaths.Resolve("/EventsExample");
+        static readonly string ScenePath = Root + "/Scenes/EventsExample.unity";
+        static readonly string ProfilePath =
+            SpriteAnimatorSamplePaths.Resolve("/Showcase/Clembod/Warrior free set/Sprite Sheet/Warrior_Sheet-Effect_profile.asset");
+        static readonly string BringerProfilePath =
+            SpriteAnimatorSamplePaths.Resolve("/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset");
 
         [MenuItem("Tools/DOTS Sprite Animator/Build Events Sample")]
         public static void Build()
@@ -55,7 +55,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         static void EnsureReadme()
         {
-            const string readmePath = Root + "/Systems/README.md";
+            string readmePath = Root + "/Systems/README.md";
             if (File.Exists(readmePath))
                 return;
             File.WriteAllText(

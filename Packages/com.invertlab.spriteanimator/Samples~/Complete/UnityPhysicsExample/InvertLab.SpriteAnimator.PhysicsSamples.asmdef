@@ -1,0 +1,33 @@
+{
+  "name": "InvertLab.SpriteAnimator.PhysicsSamples",
+  "defineConstraints": [
+    "INVERTLAB_SAMPLE_INPUT",
+    "INVERTLAB_SAMPLE_PHYSICS"
+  ],
+  "autoReferenced": true,
+  "references": [
+    "InvertLab.SpriteAnimator.Runtime",
+    "Unity.Entities",
+    "Unity.Mathematics",
+    "Unity.Transforms",
+    "Unity.Collections",
+    "Unity.Burst",
+    "Unity.InputSystem",
+    "InvertLab.SpriteAnimator.UnityPhysics",
+    "Unity.Physics",
+    "InvertLab.SpriteAnimator.CrowdSample",
+    "InvertLab.SpriteAnimator.Samples"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.inputsystem",
+      "expression": "1.0.0",
+      "define": "INVERTLAB_SAMPLE_INPUT"
+    },
+    {
+      "name": "com.unity.physics",
+      "expression": "1.0.0",
+      "define": "INVERTLAB_SAMPLE_PHYSICS"
+    }
+  ]
+}

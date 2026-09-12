@@ -1,0 +1,10 @@
+{
+  "references": [
+    "InvertLab.SpriteAnimator.Runtime",
+    "Unity.Entities",
+    "Unity.Collections",
+    "Unity.Mathematics"
+  ],
+  "autoReferenced": true,
+  "name": "InvertLab.SpriteAnimator.Starter"
+}

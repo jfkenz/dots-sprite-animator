@@ -117,57 +117,7 @@ namespace InvertLab.Sprites.DOTS
             ApplyInstanceGrid(em, authoring, 0);
             var clips = new SpriteAnimSetBuilder.ClipInput[srcClips.Length];
             for (int i = 0; i < srcClips.Length; i++)
-            {
-                var src = srcClips[i];
-                authoring.TryGetClipSheet(i, out _, out int clipCols, out int clipRows, out float clipPpu);
-                clipCols = Mathf.Max(1, clipCols);
-                clipRows = Mathf.Max(1, clipRows);
-                var frameCols = src.Frames != null && src.Frames.Length > 0
-                    ? src.Frames
-                    : new[] { 0 };
-                var slots = new int[frameCols.Length];
-                for (int f = 0; f < frameCols.Length; f++)
-                {
-                    SpriteClipDef.ResolveSheetCell(src.Row, frameCols, src.FrameRows, f,
-                        clipCols, clipRows, out int row, out int col);
-                    slots[f] = row * clipCols + col;
-                }
-
-                byte wrap = src.WrapMode == SpriteAnimWrap.Loop && !src.Loop
-                    ? SpriteAnimWrap.Once : src.WrapMode;
-                var offsets = new float2[frameCols.Length];
-                var scales = new float2[frameCols.Length];
-                for (int f = 0; f < frameCols.Length; f++)
-                {
-                    var offset = src.FrameOffsets != null && f < src.FrameOffsets.Length ? src.FrameOffsets[f] : Vector2.zero;
-                    if (authoring.Profile != null) offset /= Mathf.Max(0.01f, clipPpu);
-                    var scale = src.FrameScales != null && f < src.FrameScales.Length ? src.FrameScales[f] : Vector2.one;
-                    offsets[f] = new float2(offset.x, offset.y);
-                    scales[f] = new float2(scale.x, scale.y);
-                }
-                clips[i] = new SpriteAnimSetBuilder.ClipInput
-                {
-                    Name = string.IsNullOrEmpty(src.Name) ? ("clip" + i) : src.Name,
-                    Loop = wrap == SpriteAnimWrap.Loop || wrap == SpriteAnimWrap.ReverseLoop,
-                    WrapMode = wrap,
-                    FrameRate = Mathf.Max(0.1f, src.FrameRate),
-                    GlobalFrameIndices = slots,
-                    FrameDurationScales = src.FrameDurationScales,
-                    FrameOffsets = offsets,
-                    FrameScales = scales,
-                    FrameRotations = src.FrameRotations,
-                    FrameTweenModes = src.FrameTweenModes,
-                    EventIds = src.EventIds,
-                    EventNormalizedTimes = src.EventNormalizedTimes,
-                    OnCompleteClipIndex = src.OnCompleteClipIndex,
-                    Interrupt = src.Interrupt,
-                    CancelAfter = src.CancelAfter,
-                    Priority = src.Priority,
-                    ComboWindowStartFrame = src.ComboWindowStartFrame,
-                    ComboWindowEndFrame = src.ComboWindowEndFrame,
-                    ComboWindowPriorityBoost = src.ComboWindowPriorityBoost,
-                };
-            }
+                clips[i] = SpriteAnimClipConversion.CreateInput(authoring, i);
 
             var (setRef, player) = SpriteAnimSetBuilder.Build(Allocator.Persistent, clips);
             world.GetOrCreateSystemManaged<SpriteAnimBlobLifetimeSystem>().OwnUntilWorldDisposal(setRef.Set);
@@ -241,6 +191,7 @@ namespace InvertLab.Sprites.DOTS
                 em.AddComponentData(s_proto, player);
                 em.AddComponentData(s_proto, new SpriteAnimEnabled());
                 em.SetComponentEnabled<SpriteAnimEnabled>(s_proto, true);
+                em.AddBuffer<SpriteSocketBuffer>(s_proto);
                 em.AddBuffer<SpriteAnimEventBuffer>(s_proto);
                 em.AddComponent<SpriteAnimEventsPending>(s_proto);
                 em.SetComponentEnabled<SpriteAnimEventsPending>(s_proto, false);

@@ -29,6 +29,9 @@ namespace InvertLab.Sprites.DOTS
 
         int lastCount;
         bool uploadedOnce;
+        uint uploadedVersion;
+        byte uploadedLayout;
+        float uploadedAspect;
 
         public void OnUpdate(ref SystemState state)
         {
@@ -53,19 +56,20 @@ namespace InvertLab.Sprites.DOTS
             int count = q.CalculateEntityCount();
             Active = false;
 
-            bool dirty = SpriteGpuAnimResources.TakeDirty()
-                         || count != lastCount || !uploadedOnce
-                         || SpriteGpuAnimResources.LastUploadWorld != state.EntityManager.World.SequenceNumber;
+            byte layoutXy = SpriteBatchSpawner.LayoutXy ? (byte)1 : (byte)0;
+            bool dirty = uploadedVersion != SpriteGpuAnimResources.DataVersion
+                         || count != lastCount || !uploadedOnce || uploadedLayout != layoutXy;
             if (count == 0) return;
 
-            SpriteGpuAnimResources.EnsureCapacity(count);
+            SpriteGpuAnimResources.EnsureCapacity(count, false);
             SpriteGpuAnimResources.EnsureObjects(sheet);
-
-            byte layoutXy = SpriteBatchSpawner.LayoutXy ? (byte)1 : (byte)0;
-            SpriteGpuAnimResources.Material.SetFloat("_LayoutXy", layoutXy);
+            var batch = state.EntityManager.World.GetOrCreateSystemManaged<SpriteRenderResourceLifetimeSystem>();
+            batch.EnsureGpuBatch(count, sheet);
+            batch.GpuMaterial.SetFloat("_LayoutXy", layoutXy);
             float cellAspect = grid.CellAspect > 0.01f ? grid.CellAspect : 1f;
-            SpriteGpuAnimResources.Material.SetFloat("_CellAspect", cellAspect);
+            batch.GpuMaterial.SetFloat("_CellAspect", cellAspect);
 
+            dirty |= uploadedAspect != cellAspect;
             if (dirty)
             {
                 var job = new PackJob
@@ -75,25 +79,36 @@ namespace InvertLab.Sprites.DOTS
                 };
                 state.Dependency = job.ScheduleParallel(q, state.Dependency);
                 state.Dependency.Complete();
-                SpriteGpuAnimResources.Buffer.SetData(
+                batch.GpuBuffer.SetData(
                     SpriteGpuAnimResources.Staging, 0, 0, count);
                 uploadedOnce = true;
                 lastCount = count;
                 SpriteGpuAnimResources.LastUploadWorld = state.EntityManager.World.SequenceNumber;
+                uploadedVersion = SpriteGpuAnimResources.DataVersion;
+                uploadedLayout = layoutXy;
+                uploadedAspect = cellAspect;
+                Bounds bounds = default;
+                for (int i = 0; i < count; i++)
+                {
+                    var data = SpriteGpuAnimResources.Staging[i];
+                    var center = layoutXy != 0 ? new Vector3(data.PosScale.x, data.PosScale.y, data.PosScale.w)
+                        : new Vector3(data.PosScale.x, data.PosScale.w, data.PosScale.y);
+                    float radius = math.abs(data.PosScale.z) * (1 + math.length(data.Flip.zw - .5f) * 2) * math.max(1, cellAspect);
+                    var item = new Bounds(center, Vector3.one * math.max(.01f, radius * 2));
+                    if (i == 0) bounds = item; else bounds.Encapsulate(item);
+                }
+                batch.GpuBounds = bounds;
             }
 
-            var mat = SpriteGpuAnimResources.Material;
-            mat.SetBuffer("_InstanceData", SpriteGpuAnimResources.Buffer);
+            var mat = batch.GpuMaterial;
+            mat.SetBuffer("_InstanceData", batch.GpuBuffer);
             mat.SetFloat("_Now", Time.unscaledTime);
             mat.SetFloat("_UseSharedClip", SpriteGpuAnimResources.UseSharedClip ? 1f : 0f);
             mat.SetVector("_SharedCell", (Vector4)SpriteGpuAnimResources.SharedCell);
             mat.SetVector("_SharedAnim", (Vector4)SpriteGpuAnimResources.SharedAnim);
 
-            var bounds = layoutXy != 0
-                ? new Bounds(Vector3.zero, new Vector3(4000f, 4000f, 4000f))
-                : new Bounds(Vector3.zero, new Vector3(4000f, 200f, 4000f));
             Graphics.DrawMeshInstancedProcedural(
-                SpriteGpuAnimResources.Quad, 0, mat, bounds, count,
+                SpriteGpuAnimResources.Quad, 0, mat, batch.GpuBounds, count,
                 null, UnityEngine.Rendering.ShadowCastingMode.Off, false, 0);
             Active = true;
         }

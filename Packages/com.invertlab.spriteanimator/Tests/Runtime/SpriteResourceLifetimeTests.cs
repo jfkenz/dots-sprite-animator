@@ -10,7 +10,7 @@ namespace InvertLab.Sprites.DOTS.Tests
     public sealed class SpriteResourceLifetimeTests
     {
         [Test]
-        public void AlternatingWorldsRefreshTheSharedGpuUpload()
+        public void AlternatingWorldsKeepIndependentGpuBuffersAndDirtyVersions()
         {
             using var a = new World("GPU world A");
             using var b = new World("GPU world B");
@@ -34,11 +34,33 @@ namespace InvertLab.Sprites.DOTS.Tests
                 var renderA = a.GetOrCreateSystem<SpriteGpuAnimRenderSystem>();
                 var renderB = b.GetOrCreateSystem<SpriteGpuAnimRenderSystem>();
                 renderA.Update(a.Unmanaged);
-                Assert.AreEqual(1, SpriteGpuAnimResources.Staging[0].PosScale.x);
+                var batchA = a.GetExistingSystemManaged<SpriteRenderResourceLifetimeSystem>();
+                var data = new SpriteGpuInstanceData[1];
+                batchA.GpuBuffer.GetData(data, 0, 0, 1);
+                Assert.AreEqual(1, data[0].PosScale.x);
                 renderB.Update(b.Unmanaged);
-                Assert.AreEqual(2, SpriteGpuAnimResources.Staging[0].PosScale.x);
+                var batchB = b.GetExistingSystemManaged<SpriteRenderResourceLifetimeSystem>();
+                Assert.AreNotSame(batchA.GpuBuffer, batchB.GpuBuffer);
+                Assert.AreNotSame(batchA.GpuMaterial, batchB.GpuMaterial);
+                batchB.GpuBuffer.GetData(data, 0, 0, 1);
+                Assert.AreEqual(2, data[0].PosScale.x);
                 renderA.Update(a.Unmanaged);
-                Assert.AreEqual(1, SpriteGpuAnimResources.Staging[0].PosScale.x);
+                batchA.GpuBuffer.GetData(data, 0, 0, 1);
+                Assert.AreEqual(1, data[0].PosScale.x);
+                foreach (var world in new[] {a,b})
+                {
+                    using var query = world.EntityManager.CreateEntityQuery(typeof(SpriteGpuDriven), typeof(LocalTransform));
+                    var entity = query.GetSingletonEntity();
+                    world.EntityManager.SetComponentData(entity, LocalTransform.FromPosition(new float3(5000, 0, 0)));
+                }
+                SpriteGpuAnimResources.MarkDirty();
+                renderA.Update(a.Unmanaged);
+                renderB.Update(b.Unmanaged);
+                batchA.GpuBuffer.GetData(data, 0, 0, 1);
+                Assert.AreEqual(5000, data[0].PosScale.x);
+                batchB.GpuBuffer.GetData(data, 0, 0, 1);
+                Assert.AreEqual(5000, data[0].PosScale.x);
+                Assert.IsTrue(batchA.GpuBounds.Contains(new Vector3(5000, 0, 0)));
             }
             finally { Object.DestroyImmediate(texture); }
         }

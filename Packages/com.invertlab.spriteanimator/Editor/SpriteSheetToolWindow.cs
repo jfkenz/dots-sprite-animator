@@ -119,7 +119,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
-        const string PackageVersion = "0.8.1";
+        const string PackageVersion = "1.0.0";
         const float ToolbarHeight = 108f;
         const float DefaultTimelineHeight = 244f;
         const float MinTimelineHeight = 120f;

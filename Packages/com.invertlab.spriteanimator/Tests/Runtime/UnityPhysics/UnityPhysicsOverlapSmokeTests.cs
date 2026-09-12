@@ -21,10 +21,22 @@ namespace InvertLab.Sprites.DOTS
             "Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Clembod/Bringer Of Death/Sprite Sheet/Bringer-of-Death-SpritSheet_profile.asset";
         const string SlashClipName = "Bringer-of-Death-SpritSheet row 3";
 
+        static ScriptableSpriteSheetProfile LoadProfile()
+        {
+            var legacy = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(ProfilePath);
+            if (legacy != null) return legacy;
+            foreach (var guid in AssetDatabase.FindAssets("Bringer-of-Death-SpritSheet_profile t:ScriptableSpriteSheetProfile"))
+            {
+                var profile = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(AssetDatabase.GUIDToAssetPath(guid));
+                if (profile != null) return profile;
+            }
+            return null;
+        }
+
         [Test]
         public void BringerSlashBoxesResolveNonDegenerateBounds()
         {
-            var profile = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(ProfilePath);
+            var profile = LoadProfile();
             if (profile == null)
                 Assert.Ignore("Bringer profile not at expected path");
 
@@ -63,7 +75,7 @@ namespace InvertLab.Sprites.DOTS
         [Test]
         public void BringerHurtboxCollidersBakeValidGeometry()
         {
-            var profile = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(ProfilePath);
+            var profile = LoadProfile();
             if (profile == null)
                 Assert.Ignore("Bringer profile not at expected path");
 
@@ -78,7 +90,7 @@ namespace InvertLab.Sprites.DOTS
             if (bodyBox == null)
                 Assert.Ignore("no character body box authored");
 
-            var blob = SpriteUnityPhysicsShape.CreateCollider(
+            using var blob = SpriteUnityPhysicsShape.CreateCollider(
                 bodyBox, data.Pivot, 1f, false, false);
             Assert.IsTrue(blob.IsCreated, "convex collider blob failed to create");
 

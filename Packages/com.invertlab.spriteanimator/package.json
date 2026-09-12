@@ -1,15 +1,15 @@
 {
   "name": "com.invertlab.spriteanimator",
   "displayName": "DOTS Sprite Animator",
-  "version": "0.8.1",
-  "unity": "6000.0",
+  "version": "1.0.0",
+  "unity": "6000.5",
   "description": "Portable DOTS-first 2D flipbook sprite animation with timeline authoring, events, sockets, and Query/Unity2D colliders. Unity Physics (Character body + OverlapAabb) is optional via com.unity.physics.",
   "author": {
     "name": "InvertLab"
   },
   "dependencies": {
-    "com.unity.entities": "1.4.2",
-    "com.unity.entities.graphics": "1.4.16",
+    "com.unity.entities": "6.5.0",
+    "com.unity.entities.graphics": "6.5.0",
     "com.unity.render-pipelines.universal": "17.5.0"
   },
   "keywords": [
@@ -24,6 +24,11 @@
       "displayName": "Complete",
       "description": "All integration samples: Playback API, Events, Sockets, Crowd GPU, Collider Query, Collider Unity 2D Events, Unity Physics, and Showcase (Clembod). Import once to get everything.",
       "path": "Samples~/Complete"
+    },
+    {
+      "displayName": "Starter",
+      "description": "Self-contained CPU/GPU playback demo; no optional input or physics dependencies.",
+      "path": "Samples~/Starter"
     }
   ],
   "license": "See LICENSE.md file",

@@ -5,8 +5,8 @@
       "depth": 0,
       "source": "embedded",
       "dependencies": {
-        "com.unity.entities": "1.4.2",
-        "com.unity.entities.graphics": "1.4.16",
+        "com.unity.entities": "6.5.0",
+        "com.unity.entities.graphics": "6.5.0",
         "com.unity.render-pipelines.universal": "17.5.0"
       }
     },

@@ -74,9 +74,10 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                 else
                 {
                     float t = _Now - anim.x;                 // seconds since start
-                    f = (int)floor(t * anim.y);
-                    f = anim.w > 0.5 ? (f % n) : min(f, n - 1);
-                    if (f < 0) f += n;                       // negative-time safety
+                    float phase = floor(t * anim.y);
+                    // Euclidean wrapping also handles a clock before StartTime.
+                    f = anim.w > 0.5 ? (int)(phase - floor(phase / n) * n)
+                        : (int)clamp(phase, 0.0, (float)(n - 1));
                 }
                 f = clamp(f, 0, n - 1);
 
@@ -84,9 +85,9 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                 // so a clip that begins mid-row wraps to the next atlas row.
                 int startCol = clamp((int)round(cell.z / max(cell.x, 1e-6)), 0, cols - 1);
                 int startRow = clamp((int)round((1.0 - cell.w) / max(cell.y, 1e-6)) - 1, 0, rows - 1);
-                int absIndex = startRow * cols + startCol + f;
-                int col = absIndex % cols;
-                int row = min(absIndex / cols, rows - 1);
+                uint absIndex = (uint)(startRow * cols + startCol + f);
+                uint col = absIndex % (uint)cols;
+                uint row = min(absIndex / (uint)cols, (uint)(rows - 1));
                 return float2(col * cell.x, (rows - 1 - row) * cell.y);
             }
 
@@ -136,7 +137,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim"
                 float2 uv = c + 0.5;
 
                 v2f o;
-                o.pos = TransformObjectToHClip(wpos);
+                o.pos = TransformWorldToHClip(wpos);
                 o.uv = origin + uv * cell.xy;
                 o.col = d.Color;
                 return o;

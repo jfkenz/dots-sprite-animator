@@ -1,8 +1,8 @@
 # DOTS Sprite Animator
 
-Portable Unity 6000.0 package for DOTS-first 2D flipbook animation authoring and runtime playback.
+Portable Unity 6000.5 package for DOTS-first 2D flipbook animation authoring and runtime playback.
 
-Current package version: **0.8.1**. Full guide: Documentation~/Documentation.md / Documentation~/DOTS-Sprite-Animator-User-Guide-v0.8.1.pdf.
+Current package version: **1.0.0**. Full guide: [Documentation](Documentation~/Documentation.md). Start with [Quick Start](Documentation~/QuickStart.md).
 
 Published by **Invert Lab**.
 
@@ -82,3 +82,10 @@ See:
 - `Documentation~/AnimationEvents.md`
 
 
+
+## Validated release baseline
+
+Unity 6000.5.2f1, Entities / Entities Graphics 6.5.0, URP 17.5.0, Windows x64 / Direct3D 11.
+The Starter sample needs no optional input or physics package. Complete sample scripts
+activate only when their optional dependencies are installed. See `Documentation~/ReleaseReadiness.md`
+for release validation evidence and the supported CPU/GPU paths.

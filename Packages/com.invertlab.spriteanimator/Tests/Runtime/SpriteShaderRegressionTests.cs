@@ -50,7 +50,23 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.Less(pixel.r, 0.1f);
         }
 
-        static Color Render(string shaderName, Texture texture, float4 tint, bool lit, bool drawBehind = false)
+        [TestCase(SpriteShaderLibrary.GpuAnimShader)]
+        [TestCase(SpriteShaderLibrary.GpuAnimShaderLit)]
+        [TestCase(SpriteShaderLibrary.InstancedShader)]
+        [TestCase(SpriteShaderLibrary.InstancedShaderLit)]
+        public void WorldSpaceInstancesIgnoreObjectMatrix(string shaderName)
+        {
+            // Procedural instance data already includes the world transform.
+            // An unrelated object matrix must not move the sprite out of view.
+            var pixel = Render(shaderName, Texture2D.whiteTexture, new float4(1f), false,
+                objectMatrix: Matrix4x4.Translate(new Vector3(100, 200, 300)));
+            Assert.Greater(pixel.r, 0.9f);
+            Assert.Greater(pixel.g, 0.9f);
+            Assert.Greater(pixel.b, 0.9f);
+        }
+
+        static Color Render(string shaderName, Texture texture, float4 tint, bool lit, bool drawBehind = false,
+            Matrix4x4? objectMatrix = null)
         {
             if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
                 Assert.Ignore("Requires a graphics device.");
@@ -95,7 +111,7 @@ namespace InvertLab.Sprites.DOTS.Tests
                 commands.SetRenderTarget(target);
                 commands.ClearRenderTarget(true, true, Color.black);
                 commands.SetViewProjectionMatrices(Matrix4x4.Translate(new Vector3(0,0,-2)), Matrix4x4.Ortho(-0.5f,0.5f,-0.5f,0.5f,0.1f,10));
-                commands.DrawProcedural(Matrix4x4.identity, mat, 0, MeshTopology.Triangles, 6, drawBehind ? 2 : 1);
+                commands.DrawProcedural(objectMatrix ?? Matrix4x4.identity, mat, 0, MeshTopology.Triangles, 6, drawBehind ? 2 : 1);
                 Graphics.ExecuteCommandBuffer(commands);
                 RenderTexture.active = target;
                 readback.ReadPixels(new Rect(0,0,8,8), 0, 0);

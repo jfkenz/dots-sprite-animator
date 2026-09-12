@@ -2,8 +2,8 @@
 
 Open `SocketsExample.unity`, then enter Play mode.
 
-- Profile: `Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Sockets/SocketsProfile.asset`
-- Character art: `Assets/Samples/DOTS Sprite Animator/0.8.1/Complete/Showcase/Sword Character Prototype_All Frames.png`
+- Profile: `Assets/Samples/DOTS Sprite Animator/1.0.0/Complete/Sockets/SocketsProfile.asset`
+- Character art: `Assets/Samples/DOTS Sprite Animator/1.0.0/Complete/Showcase/Sword Character Prototype_All Frames.png`
 - Attached item: a sample-local Quad using `SocketsSword.mat`
 - Socket: `Weapon`
 - Clips: `Idle`, `Attack`

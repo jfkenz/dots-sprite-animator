@@ -36,8 +36,9 @@ namespace InvertLab.Sprites.DOTS
             if (!SystemAPI.TryGetSingleton(out SpriteCullSettings s)) return;
 
             bool layoutXy = SpriteBatchSpawner.LayoutXy;
-            float halfH = cam.orthographicSize + s.MarginUnits;
-            float halfW = cam.orthographicSize * cam.aspect + s.MarginUnits;
+            var planes = new FixedList128Bytes<float4>();
+            foreach (var plane in GeometryUtility.CalculateFrustumPlanes(cam))
+                planes.Add(new float4(plane.normal, plane.distance));
             float2 c = new float2(cam.transform.position.x,
                 layoutXy ? cam.transform.position.y : cam.transform.position.z);
             bool distOn = s.MaxDistanceSq > 0f;
@@ -48,8 +49,16 @@ namespace InvertLab.Sprites.DOTS
             {
                 Center = c,
                 LayoutXy = layoutXy,
-                HalfW = halfW,
-                HalfH = halfH,
+                Planes = planes,
+                Margin = math.max(0, s.MarginUnits),
+                Transforms = SystemAPI.GetComponentLookup<LocalTransform>(true),
+                Parents = SystemAPI.GetComponentLookup<Parent>(true),
+                PostTransforms = SystemAPI.GetComponentLookup<PostTransformMatrix>(true),
+                Frames = SystemAPI.GetComponentLookup<SpriteAnimFrame>(true),
+                Flips = SystemAPI.GetComponentLookup<SpriteFlip>(true),
+                Bindings = SystemAPI.GetComponentLookup<SpriteSheetBinding>(true),
+                Sheets = SystemAPI.GetComponentLookup<SpriteSheetDefinition>(true),
+                LegacyAspect = SystemAPI.TryGetSingleton(out SpriteAnimGrid grid) ? math.max(1, grid.CellAspect) : 1,
                 DistOn = distOn,
                 MaxDistSq = s.MaxDistanceSq,
             };
@@ -63,15 +72,39 @@ namespace InvertLab.Sprites.DOTS
         {
             public float2 Center;
             public bool LayoutXy;
-            public float HalfW;
-            public float HalfH;
+            public FixedList128Bytes<float4> Planes;
+            public float Margin;
+            public float LegacyAspect;
+            [ReadOnly] public ComponentLookup<LocalTransform> Transforms;
+            [ReadOnly] public ComponentLookup<Parent> Parents;
+            [ReadOnly] public ComponentLookup<PostTransformMatrix> PostTransforms;
+            [ReadOnly] public ComponentLookup<SpriteAnimFrame> Frames;
+            [ReadOnly] public ComponentLookup<SpriteFlip> Flips;
+            [ReadOnly] public ComponentLookup<SpriteSheetBinding> Bindings;
+            [ReadOnly] public ComponentLookup<SpriteSheetDefinition> Sheets;
             public bool DistOn;
             public float MaxDistSq;
 
-            void Execute(in LocalTransform lt, EnabledRefRW<SpriteAnimEnabled> enabled)
+            void Execute(Entity entity, in LocalTransform lt, EnabledRefRW<SpriteAnimEnabled> enabled)
             {
-                float2 p = new float2(lt.Position.x, LayoutXy ? lt.Position.y : lt.Position.z);
-                bool vis = math.abs(p.x - Center.x) <= HalfW && math.abs(p.y - Center.y) <= HalfH;
+                var matrix = lt.ToMatrix();
+                if (Parents.HasComponent(entity) || PostTransforms.HasComponent(entity))
+                    TransformHelpers.ComputeWorldTransformMatrix(entity, out matrix, ref Transforms, ref Parents, ref PostTransforms);
+                var position = matrix.c3.xyz;
+                float scale = math.length(matrix.c0.xyz) + math.length(matrix.c1.xyz);
+                float aspect = LegacyAspect;
+                if (Bindings.TryGetComponent(entity, out var binding) && Sheets.TryGetComponent(binding.Sheet, out var sheet))
+                    aspect = math.max(1, sheet.CellAspect);
+                float radius = scale * aspect;
+                if (Frames.TryGetComponent(entity, out var frame))
+                    radius *= math.max(1, math.cmax(math.abs(frame.Scale))) + math.length(frame.Offset);
+                if (Flips.TryGetComponent(entity, out var flip))
+                    radius *= 1 + 2 * math.length(flip.ResolvedPivot - .5f);
+                radius += Margin;
+                bool vis = true;
+                foreach (var plane in Planes)
+                    if (math.dot(plane.xyz, position) + plane.w < -radius) { vis = false; break; }
+                float2 p = new float2(position.x, LayoutXy ? position.y : position.z);
                 if (vis && DistOn)
                     vis = math.distancesq(p, Center) <= MaxDistSq;
                 enabled.ValueRW = vis;

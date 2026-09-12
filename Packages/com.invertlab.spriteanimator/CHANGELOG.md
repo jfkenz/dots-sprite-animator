@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0] - 2026-09-12
+
+- Fixed atlas batch identity, crop bounds, sorted-buffer uploads, frame subsets, and independent CPU sheet bindings.
+- Fixed procedural shader world-space projection; verified CPU/GPU pixels and URP 2D light response in a Windows player.
+- Preserved reflected/sheared XY transforms and transformed frame offsets; added dynamic draw bounds and parent-aware frustum culling.
+- Isolated GPU buffers/materials by world and propagated dirty updates across worlds. Shared GPU sheet/recipe restrictions remain documented.
+- Shared authoring/crowd clip conversion and repaired runtime preview, collider, and socket API compilation.
+- Retained runtime shader variants in player builds.
+- Added a generated-art Starter sample; repaired optional sample assembly dependencies and version-independent sample menus.
+- Polished editor toolbar, preview controls, status feedback, and save/history presentation.
+- Declared the validated Unity 6000.5 / Entities 6.5.0 / URP 17.5.0 baseline.
+
 ## [0.8.1] - 2026-09-08
 
 - Samples moved into optional UPM `Samples~` (Package Manager Samples tab). Project no longer ships a baked `Assets/Samples` copy.

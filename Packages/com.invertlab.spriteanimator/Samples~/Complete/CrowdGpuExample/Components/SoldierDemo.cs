@@ -35,6 +35,7 @@ namespace InvertLab.Sprites.DOTS
 
         static Entity _proto;
         static bool _ready;
+        static World _world;
         static readonly string[] StateNames = { "Idle", "Run", "Attack", "Block" };
 
         public static bool Ready => _ready;
@@ -46,14 +47,17 @@ namespace InvertLab.Sprites.DOTS
         public static void ResetForPlayMode()
         {
             _ready = false;
+            _world = null;
             _proto = Entity.Null;
         }
 
         public static void EnsureProto()
         {
             var world = World.DefaultGameObjectInjectionWorld;
-            if (_ready || world == null)
-                return;
+            if (world == null || !world.IsCreated) return;
+            if (_ready && _world == world && world.EntityManager.Exists(_proto)) return;
+            _ready = false;
+            _world = world;
 
             var tex = Resources.Load<Texture2D>("Images/tes");
             if (tex == null)
@@ -85,6 +89,10 @@ namespace InvertLab.Sprites.DOTS
                 quaternion.RotateX(math.radians(-90f)), // lay flat for top-down camera
                 SizeUnits));
             em.AddComponentData(_proto, setRef);
+            em.AddComponentData(_proto, new SpriteAnimBlobOwnerAlive { Blob = setRef.Set });
+            em.AddComponentData(_proto, new SpriteAnimOwnedBlob { Blob = setRef.Set });
+            var cleanup = world.GetOrCreateSystemManaged<SpriteAnimBlobLifetimeSystem>();
+            world.GetOrCreateSystemManaged<SimulationSystemGroup>().AddSystemToUpdateList(cleanup);
             em.AddComponentData(_proto, player);
             em.AddComponentData(_proto, new SpriteAnimFrame { Slot = 0 });
             em.AddComponentData(_proto, new SpriteTint { Value = new float4(1, 1, 1, 1) });
@@ -198,6 +206,10 @@ namespace InvertLab.Sprites.DOTS
 
         protected override void OnUpdate()
         {
+            // Importing sample code must not spawn entities in unrelated scenes/worlds.
+            if (World != Unity.Entities.World.DefaultGameObjectInjectionWorld) return;
+            var host = Object.FindAnyObjectByType<SoldierDemo>();
+            if (host == null || !host.isActiveAndEnabled) return;
             SoldierDemoRuntime.EnsureProto();
 
             if (!_bootstrapped)

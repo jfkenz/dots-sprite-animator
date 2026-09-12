@@ -104,6 +104,8 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                     float2 entityRotated = float2(
                         scaled.x * cs2 - scaled.y * sn2,
                         scaled.x * sn2 + scaled.y * cs2);
+                    if (d.FrameTRS.w > 0.5)
+                        entityRotated = d.Transform2.xy * rotated.x + d.Transform2.zw * rotated.y;
                     wpos.x = d.PosScale.x + entityRotated.x;
                     wpos.y = d.PosScale.y + entityRotated.y;
                     wpos.z = d.PosScale.w;
@@ -120,7 +122,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                 float2 uv = quad + 0.5;
 
                 v2f o;
-                o.pos = TransformObjectToHClip(wpos); // identity object->world; data already world
+                o.pos = TransformWorldToHClip(wpos); // instance data is already in world space
                 o.uv = d.CropST.zw + uv * d.CropST.xy;
                 o.col = d.Color;
                 return o;

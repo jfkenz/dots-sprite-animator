@@ -64,6 +64,7 @@ namespace InvertLab.Sprites.DOTS
         public float CellAspect = 1f;
         public byte UseCellCrops;
         public NativeArray<float4> Crops;
+        public ulong WorldSequence;
 
         public void EnsureCapacity(int need)
         {
@@ -102,13 +103,14 @@ namespace InvertLab.Sprites.DOTS
                 SpriteRenderResourceLifetimeSystem.DestroyOwnedObject(Material);
             Material = null;
             OwnsMaterial = false;
+            Texture = null;
             Capacity = 0;
             Count = 0;
         }
     }
 
     /// <summary>
-    /// Managed registry of sheet GPU records, one per distinct texture. Baked
+    /// Managed registry of sheet GPU records, one per distinct world and layout. Baked
     /// sheet entities (SpriteSheetDef + SpriteSheetAsset) are registered here
     /// by <see cref="SpriteSheetRegistrationSystem"/>; the render system draws
     /// one instanced batch per record. Record 0 slot is typically the legacy
@@ -117,7 +119,6 @@ namespace InvertLab.Sprites.DOTS
     public static class SpriteSheetRegistry
     {
         public static readonly List<SpriteSheetRecord> Records = new List<SpriteSheetRecord>();
-        static readonly Dictionary<EntityId, int> ByTextureId = new Dictionary<EntityId, int>();
 
         /// <summary>
         /// Get or create the record for a texture. Deduplicates by texture
@@ -126,32 +127,52 @@ namespace InvertLab.Sprites.DOTS
         /// missing shader.
         /// </summary>
         public static int GetOrAdd(Texture2D texture)
+            => GetOrAdd(texture, 4, 4, 1f, null);
+
+        /// <summary>Batch identity includes world, grid, aspect and every crop, not just the texture.</summary>
+        public static int GetOrAdd(Texture2D texture, int cols, int rows, float aspect,
+            float4[] crops, ulong worldSequence = 0)
         {
             if (texture == null)
                 return -1;
-            EntityId key = texture.GetEntityId();
-            if (ByTextureId.TryGetValue(key, out int existing))
-                return existing;
+            cols = math.max(1, cols);
+            rows = math.max(1, rows);
+            aspect = math.isfinite(aspect) && aspect > 0.01f ? aspect : 1f;
+            int cropCount = crops?.Length ?? 0;
+            for (int i = 0; i < Records.Count; i++)
+            {
+                var candidate = Records[i];
+                if (candidate.Texture != texture || candidate.Material == null ||
+                    candidate.WorldSequence != worldSequence || candidate.Cols != cols ||
+                    candidate.Rows != rows || candidate.CellAspect != aspect ||
+                    (candidate.Crops.IsCreated ? candidate.Crops.Length : 0) != cropCount) continue;
+                bool same = true;
+                for (int c = 0; c < cropCount; c++)
+                    if (!math.all(candidate.Crops[c] == crops[c])) { same = false; break; }
+                if (same) return i;
+            }
 
             var shader = Shader.Find(SpriteShaderLibrary.ActiveInstancedShader);
             if (shader == null)
                 return -1;
 
-            bool borrowLegacy = texture == SpriteRenderResources.Sheet && SpriteRenderResources.Material != null;
             var record = new SpriteSheetRecord
             {
                 Texture = texture,
-                // reuse the legacy material when this IS the default sheet
-                OwnsMaterial = !borrowLegacy,
-                Material = borrowLegacy
-                    ? SpriteRenderResources.Material
-                    : new Material(shader),
+                Cols = cols,
+                Rows = rows,
+                CellAspect = aspect,
+                WorldSequence = worldSequence,
+                OwnsMaterial = true,
+                Material = new Material(shader),
             };
             record.Material.mainTexture = texture;
             record.Material.SetFloat("_Cutoff", 0.02f);
-            record.Crops = new NativeArray<float4>(0, Allocator.Persistent);
+            record.SetCrops(crops);
+            for (int i = 0; i < Records.Count; i++)
+                if (Records[i].Material == null && Records[i].Texture == null)
+                { Records[i] = record; return i; }
             Records.Add(record);
-            ByTextureId[key] = Records.Count - 1;
             return Records.Count - 1;
         }
 
@@ -161,7 +182,13 @@ namespace InvertLab.Sprites.DOTS
             foreach (var record in Records)
                 record.Dispose();
             Records.Clear();
-            ByTextureId.Clear();
+        }
+
+        internal static void ReleaseWorld(ulong sequence)
+        {
+            // Keep indices stable for the remaining worlds' ECS registration components.
+            foreach (var record in Records)
+                if (record.WorldSequence == sequence) record.Dispose();
         }
 
         /// <summary>Test hook: drop every record without waiting for domain reload.</summary>
@@ -239,25 +266,15 @@ namespace InvertLab.Sprites.DOTS
                 var def = EntityManager.GetComponentData<SpriteSheetDefinition>(sheetEntity);
                 var asset = EntityManager.GetComponentObject<SpriteSheetAsset>(sheetEntity);
 
-                int id = SpriteSheetRegistry.GetOrAdd(asset.Texture);
-                if (id >= 0)
+                float4[] crops = null;
+                if (def.UseCellCrops != 0 && EntityManager.HasBuffer<SpriteAnimCellCrop>(sheetEntity))
                 {
-                    var record = SpriteSheetRegistry.Records[id];
-                    record.Cols = def.Cols;
-                    record.Rows = def.Rows;
-                    record.CellAspect = def.CellAspect > 0.01f ? def.CellAspect : 1f;
-                    if (def.UseCellCrops != 0 && EntityManager.HasBuffer<SpriteAnimCellCrop>(sheetEntity))
-                    {
-                        var buf = EntityManager.GetBuffer<SpriteAnimCellCrop>(sheetEntity);
-                        if (buf.Length > 0)
-                        {
-                            var crops = new float4[buf.Length];
-                            for (int c = 0; c < buf.Length; c++)
-                                crops[c] = buf[c].Value;
-                            record.SetCrops(crops);
-                        }
-                    }
+                    var buf = EntityManager.GetBuffer<SpriteAnimCellCrop>(sheetEntity);
+                    crops = new float4[buf.Length];
+                    for (int c = 0; c < buf.Length; c++) crops[c] = buf[c].Value;
                 }
+                int id = SpriteSheetRegistry.GetOrAdd(asset.Texture, def.Cols, def.Rows,
+                    def.CellAspect, crops, World.SequenceNumber);
 
                 EntityManager.AddComponentData(sheetEntity, new SpriteSheetRegistered { RegistryId = id });
             }
