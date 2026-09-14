@@ -1,0 +1,11 @@
+﻿{
+  "name": "InvertLab.SpriteAnimator.CutoutPartsSample.Editor",
+  "rootNamespace": "InvertLab.Sprites.DOTS.Samples.Editor",
+  "references": [
+    "InvertLab.SpriteAnimator.CutoutPartsSample",
+    "InvertLab.SpriteAnimator.Runtime",
+    "Unity.Entities"
+  ],
+  "includePlatforms": [ "Editor" ],
+  "autoReferenced": true
+}

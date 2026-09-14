@@ -241,6 +241,7 @@ namespace InvertLab.Sprites.DOTS
                 LayoutXy = (byte)(SpriteBatchSpawner.LayoutXy ? 1 : 0),
                 Bindings = SystemAPI.GetComponentLookup<SpriteSheetBinding>(true),
                 Registered = SystemAPI.GetComponentLookup<SpriteSheetRegistered>(true),
+                PartDepths = SystemAPI.GetComponentLookup<SpritePartRenderDepth>(true),
                 GridCR = gridCR,
                 UseCropsArr = useCropsArr,
                 CropOffsets = cropOffsets,
@@ -321,6 +322,7 @@ namespace InvertLab.Sprites.DOTS
             public byte LayoutXy;
             [ReadOnly] public ComponentLookup<SpriteSheetBinding> Bindings;
             [ReadOnly] public ComponentLookup<SpriteSheetRegistered> Registered;
+            [ReadOnly] public ComponentLookup<SpritePartRenderDepth> PartDepths;
             [ReadOnly] public NativeArray<int2> GridCR;
             [ReadOnly] public NativeArray<byte> UseCropsArr;
             [ReadOnly] public NativeArray<int> CropOffsets;
@@ -394,7 +396,10 @@ namespace InvertLab.Sprites.DOTS
                 if (LayoutXy != 0)
                 {
                     float3 worldOffset = ltw.Value.c0.xyz * offset.x + ltw.Value.c1.xyz * offset.y;
-                    posScale = new float4(worldPos.x + worldOffset.x, worldPos.y + worldOffset.y, 1f, worldPos.z + worldOffset.z);
+                    float depthZ = worldPos.z + worldOffset.z;
+                    if (PartDepths.HasComponent(entity))
+                        depthZ = PartDepths[entity].Value;
+                    posScale = new float4(worldPos.x + worldOffset.x, worldPos.y + worldOffset.y, 1f, depthZ);
                     // Keep both basis vectors: decomposing loses reflection and parent-induced shear.
                     transform2 = new float4(ltw.Value.c0.xy, ltw.Value.c1.xy);
                 }

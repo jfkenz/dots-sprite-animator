@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
@@ -622,6 +622,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 changed = true;
             }
+            if (_studioTab == StudioTab.Parts)
+            {
+                bool wasPlaying = _partsPlaying;
+                float before = _partsPreviewTime;
+                TickPartsPreview(delta);
+                if (_partsPlaying || (wasPlaying && before != _partsPreviewTime))
+                    changed = true;
+            }
             if (_socketPlaying && _profile != null)
             {
                 _profile.EnsureSocketMotions();
@@ -708,13 +716,26 @@ namespace InvertLab.Sprites.DOTS.Editor
             HandleWindowPivotContextClick(previewRect);
             HandleWindowSocketContextClick(previewRect);
 
-            DrawClipBrowser(clipsRect);
-            DrawInspector(inspectorRect);
-            DrawPreview(previewRect);
-            DrawPanelSplitter(leftSplitter, true, workRect.width);
-            DrawPanelSplitter(rightSplitter, false, workRect.width);
-            DrawTimelineSplitter(timelineSplitter);
-            DrawTimeline(timelineRect, timelineControlId);
+            if (_studioTab == StudioTab.Parts)
+            {
+                DrawPartsBrowser(clipsRect);
+                DrawPartsInspector(inspectorRect);
+                DrawPartsPreview(previewRect);
+                DrawPanelSplitter(leftSplitter, true, workRect.width);
+                DrawPanelSplitter(rightSplitter, false, workRect.width);
+                DrawTimelineSplitter(timelineSplitter);
+                DrawPartsTimeline(timelineRect, timelineControlId);
+            }
+            else
+            {
+                DrawClipBrowser(clipsRect);
+                DrawInspector(inspectorRect);
+                DrawPreview(previewRect);
+                DrawPanelSplitter(leftSplitter, true, workRect.width);
+                DrawPanelSplitter(rightSplitter, false, workRect.width);
+                DrawTimelineSplitter(timelineSplitter);
+                DrawTimeline(timelineRect, timelineControlId);
+            }
             DrawHistoryOverlay();
 
             if (overlayBlocksEditor)
@@ -979,8 +1000,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.DrawRect(rect, new Color(0.09f, 0.105f, 0.13f));
             EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), BorderColor);
 
-            GUI.Label(new Rect(14f, 8f, 280f, 24f), "◆  SPRITE ANIMATOR", _titleStyle);
-            GUI.Label(new Rect(15f, 29f, 260f, 14f), "v" + PackageVersion + "  ·  DOTS AUTHORING STUDIO", _mutedStyle);
+            GUI.Label(new Rect(14f, 8f, 280f, 24f), "â—†  SPRITE ANIMATOR", _titleStyle);
+            GUI.Label(new Rect(15f, 29f, 260f, 14f), "v" + PackageVersion + "  Â·  DOTS AUTHORING STUDIO", _mutedStyle);
 
             var clip = CurrentClip;
             bool hasClip = clip != null;
@@ -1000,38 +1021,68 @@ namespace InvertLab.Sprites.DOTS.Editor
             // Keep transport separate from file actions, even at the minimum window width.
             x = 14f;
 
-            using (new EditorGUI.DisabledScope(!hasClip))
+            using (new EditorGUI.DisabledScope(!(hasClip || _studioTab == StudioTab.Parts)))
             {
                 if (GUI.Button(new Rect(x, 52f, 28f, 28f), new GUIContent("|<", "Jump to first frame."), _transportStyle))
-                    StepToBoundary(clip, forward: false);
+                {
+                    if (_studioTab == StudioTab.Parts) { _partsPreviewTime = 0f; Repaint(); }
+                    else StepToBoundary(clip, forward: false);
+                }
                 x += 32f;
                 if (GUI.Button(new Rect(x, 52f, 24f, 28f), new GUIContent("<", "Step one frame backward."), _transportStyle))
-                    StepFrame(clip, -1);
+                {
+                    if (_studioTab == StudioTab.Parts) StepPartsPlayhead(-1);
+                    else StepFrame(clip, -1);
+                }
                 x += 28f;
                 if (GUI.Button(new Rect(x, 52f, 24f, 28f), new GUIContent(">", "Step one frame forward."), _transportStyle))
-                    StepFrame(clip, +1);
+                {
+                    if (_studioTab == StudioTab.Parts) StepPartsPlayhead(+1);
+                    else StepFrame(clip, +1);
+                }
                 x += 28f;
                 if (GUI.Button(new Rect(x, 52f, 28f, 28f), new GUIContent(">|", "Jump to last frame."), _transportStyle))
-                    StepToBoundary(clip, forward: true);
+                {
+                    if (_studioTab == StudioTab.Parts)
+                    {
+                        var pc = CurrentPartsClip;
+                        _partsPreviewTime = pc != null ? Mathf.Max(0f, pc.Duration) : 0f;
+                        Repaint();
+                    }
+                    else StepToBoundary(clip, forward: true);
+                }
                 x += 34f;
             }
 
-            using (new EditorGUI.DisabledScope(!hasClip))
+            using (new EditorGUI.DisabledScope(!(hasClip || _studioTab == StudioTab.Parts)))
             {
+                bool partsTab = _studioTab == StudioTab.Parts;
+                bool isPlaying = partsTab ? _partsPlaying : _playing;
                 if (GUI.Button(new Rect(x, 52f, 70f, 28f),
-                    new GUIContent(_playing ? "Pause" : "Play", _playing
-                        ? "Pause frame playback."
-                        : _spacePlaysBothClocks
-                            ? "Play frame playback. Space starts both clocks when Space: Both is on."
-                            : "Play frame playback (Space, this tab only)."),
+                    new GUIContent(isPlaying ? "Pause" : "Play", partsTab
+                        ? (isPlaying ? "Pause Parts preview." : "Play Parts preview.")
+                        : (isPlaying
+                            ? "Pause frame playback."
+                            : _spacePlaysBothClocks
+                                ? "Play frame playback. Space starts both clocks when Space: Both is on."
+                                : "Play frame playback (Space, this tab only).")),
                     _primaryStyle))
                 {
-                    bool starting = !_playing;
-                    _playing = !_playing;
-                    if (starting && _playing && CurrentClip != null
-                        && CurrentClip.WrapMode == SpriteAnimWrap.ReverseOnce)
+                    if (partsTab)
                     {
-                        _previewTime = SpriteAnimPlayback.TotalAuthoredDuration(CurrentClip);
+                        _partsPlaying = !_partsPlaying;
+                        _playing = false;
+                    }
+                    else
+                    {
+                        bool starting = !_playing;
+                        _playing = !_playing;
+                        _partsPlaying = false;
+                        if (starting && _playing && CurrentClip != null
+                            && CurrentClip.WrapMode == SpriteAnimWrap.ReverseOnce)
+                        {
+                            _previewTime = SpriteAnimPlayback.TotalAuthoredDuration(CurrentClip);
+                        }
                     }
                 }
             }
@@ -1039,8 +1090,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (GUI.Button(new Rect(x, 52f, 58f, 28f),
                 new GUIContent("Stop", "Stop playback and return to time 0."), _transportStyle))
             {
-                _playing = false;
-                _previewTime = 0f;
+                if (_studioTab == StudioTab.Parts)
+                {
+                    _partsPlaying = false;
+                    _partsPreviewTime = 0f;
+                }
+                else
+                {
+                    _playing = false;
+                    _previewTime = 0f;
+                }
                 Repaint();
             }
             x += 66f;
@@ -1106,6 +1165,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _primaryStyle))
                     SaveProfile();
             }
+
+            DrawPartsStudioTabToggle(rect);
 
             EditorGUI.DrawRect(new Rect(14f, 44f, rect.width - 28f, 1f), BorderColor);
             GUI.Label(new Rect(14f, 86f, rect.width - 252f, 18f),
@@ -1454,7 +1515,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     EditorGUI.BeginChangeCheck();
                     Vector2 nextPivot = EditorGUILayout.Vector2Field(
                         new GUIContent("Pivot",
-                            "Normalized cell pivot (0–1). (0,0)=bottom-left, (0.5,0.5)=center, (0.5,0)=feet. "
+                            "Normalized cell pivot (0â€“1). (0,0)=bottom-left, (0.5,0.5)=center, (0.5,0)=feet. "
                             + "In Cropped mode this is relative to the active cropped cell."),
                         _profile.Pivot);
                     if (EditorGUI.EndChangeCheck())
@@ -1506,10 +1567,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     EditorGUI.BeginChangeCheck();
                     float px = EditorGUILayout.FloatField(
-                        new GUIContent("Pivot X", "Normalized 0–1 across the active cell."),
+                        new GUIContent("Pivot X", "Normalized 0â€“1 across the active cell."),
                         _profile.Pivot.x);
                     float py = EditorGUILayout.FloatField(
-                        new GUIContent("Pivot Y", "Normalized 0–1 up the active cell (0 = bottom / feet)."),
+                        new GUIContent("Pivot Y", "Normalized 0â€“1 up the active cell (0 = bottom / feet)."),
                         _profile.Pivot.y);
                     if (EditorGUI.EndChangeCheck())
                     {
@@ -1521,14 +1582,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button(new GUIContent("Pivot Actions…",
+                    if (GUILayout.Button(new GUIContent("Pivot Actionsâ€¦",
                             "Snap presets, Character collider snap, opaque bounds, copy/paste, lock."),
                         EditorStyles.miniButton))
                         ShowPivotContextMenu();
                     using (new EditorGUI.DisabledScope(_pivotLocked))
                     {
                         if (GUILayout.Button(new GUIContent("Snap Feet",
-                                "Snap pivot to bottom-center (0.5, 0) — platformer default."),
+                                "Snap pivot to bottom-center (0.5, 0) â€” platformer default."),
                             EditorStyles.miniButton, GUILayout.Width(84f)))
                             SetProfilePivot(new Vector2(0.5f, 0f), "Snap Pivot to Bottom Center");
                         if (GUILayout.Button(new GUIContent("Snap Center",
@@ -1575,7 +1636,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.BeginChangeCheck();
             var nextLayout = (SpriteSheetCellLayoutMode)EditorGUILayout.EnumPopup(
                 new GUIContent("Cell Layout",
-                    "Grid: uniform Columns×Rows UV cells (current behavior). "
+                    "Grid: uniform ColumnsÃ—Rows UV cells (current behavior). "
                     + "Cropped: per-cell tight opaque rects that remove transparent spacing/gutters from sampled UVs. "
                     + "Switching modes keeps the other mode's data when practical."),
                 _profile.CellLayoutMode);
@@ -1830,7 +1891,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUILayout.Space(9f);
                 int selectedCount = Mathf.Max(1, _selectedFrames.Count);
                 SectionLabel(selectedCount > 1
-                    ? $"FRAME {_selectedFrame + 1}  •  {selectedCount} selected"
+                    ? $"FRAME {_selectedFrame + 1}  â€¢  {selectedCount} selected"
                     : $"FRAME {_selectedFrame + 1}");
                 clip.Frames[_selectedFrame] = Mathf.Clamp(
                     EditorGUILayout.IntField("Sheet Column", clip.Frames[_selectedFrame]),
@@ -1899,7 +1960,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     if (GUILayout.Button("+ Frame After"))
                         InsertFrameAfter(clip);
-                    if (GUILayout.Button(new GUIContent("1×1 from texture",
+                    if (GUILayout.Button(new GUIContent("1Ã—1 from texture",
                         "Pick one or more sheet cells and add them as frames.")))
                         OpenSheetCellPicker();
                 }
@@ -1975,7 +2036,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (validOnionSelection)
                     {
                         GUILayout.Label(
-                            $"Selected ghost  {SignedFrameDelta(_selectedOnionDelta)}  •  frame {_selectedOnionFrame + 1}",
+                            $"Selected ghost  {SignedFrameDelta(_selectedOnionDelta)}  â€¢  frame {_selectedOnionFrame + 1}",
                             EditorStyles.boldLabel);
                         clip.OnionOffsets[_selectedOnionFrame] = EditorGUILayout.Vector2Field(
                             "Playback Offset (px)", clip.OnionOffsets[_selectedOnionFrame]);
@@ -2483,7 +2544,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             OpenColliderRowDetails(box);
             _pendingInspectorScrollToColliders = true;
             _status = box.IsCharacter
-                ? $"Editing Character collider #{box.Id} · {ColliderHomeLabel(box)}"
+                ? $"Editing Character collider #{box.Id} Â· {ColliderHomeLabel(box)}"
                 : $"Editing {box.Shape} collider #{box.Id}";
             Repaint();
         }
@@ -3316,7 +3377,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         };
         static readonly string[] SocketOrbitPatternTips =
         {
-            "Intersecting orbital planes (Bohr). 3 = 0°, 60°, 120°.",
+            "Intersecting orbital planes (Bohr). 3 = 0Â°, 60Â°, 120Â°.",
             "N sockets on one ellipse, evenly phased.",
             "Concentric rings, like electron shells.",
             "Infinity / lemniscate path, evenly phased.",
@@ -3326,8 +3387,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         };
         static readonly string[] SocketOrbitTiltLabels =
         {
-            "0°", "15°", "30°", "45°", "60°", "75°", "90°",
-            "105°", "120°", "135°", "150°", "165°",
+            "0Â°", "15Â°", "30Â°", "45Â°", "60Â°", "75Â°", "90Â°",
+            "105Â°", "120Â°", "135Â°", "150Â°", "165Â°",
         };
         static readonly string[] SocketPreviewPlayModeLabels = { "Cell", "Play Clip", "Follow Character" };
 
@@ -3550,7 +3611,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             string fileName = SheetTextureFileName(texture);
             if (!EditorUtility.DisplayDialog(
                     "Flip Sprite Sheet",
-                    $"Overwrite '{fileName}' on disk? Every {columns}×{rows} grid cell is mirrored {axis} in place, so clip frames stay on the same cells.\n\nPivot, sockets, colliders, and Independent Motion on this sheet are mirrored to match. Undo restores the previous texture and authored poses.",
+                    $"Overwrite '{fileName}' on disk? Every {columns}Ã—{rows} grid cell is mirrored {axis} in place, so clip frames stay on the same cells.\n\nPivot, sockets, colliders, and Independent Motion on this sheet are mirrored to match. Undo restores the previous texture and authored poses.",
                     flipX ? "Flip Horizontal" : "Flip Vertical",
                     "Cancel"))
                 return;
@@ -3628,7 +3689,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _profile.Columns = columnCount;
                     _profile.Rows = rowCount;
                     WriteActiveSheetFromLegacy();
-                    _status = $"Detected {columnCount} × {rowCount} grid";
+                    _status = $"Detected {columnCount} Ã— {rowCount} grid";
                     SaveDirty();
                 }
                 else _status = "No transparent gaps detected; set grid manually";
@@ -3670,14 +3731,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             if (!SpriteSheetProfile.HasCroppedCellData(def))
             {
-                GUILayout.Label("Cropped mode: no crop rects yet — run Detect spacing & crop cells.", _mutedStyle);
+                GUILayout.Label("Cropped mode: no crop rects yet â€” run Detect spacing & crop cells.", _mutedStyle);
                 return;
             }
             int cells = def.CroppedCellRects.Length;
             int cols = Mathf.Max(1, _profile.Columns);
             int rows = Mathf.Max(1, _profile.Rows);
             GUILayout.Label(
-                $"Cropped: {cells} cell rects  •  grid {cols}×{rows}  •  {_cropStatusDetail}",
+                $"Cropped: {cells} cell rects  â€¢  grid {cols}Ã—{rows}  â€¢  {_cropStatusDetail}",
                 _mutedStyle);
         }
 
@@ -3851,13 +3912,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
 
                 _cropStatusDetail =
-                    $"spacing ~{avgColGutter:0.#}px H / {avgRowGutter:0.#}px V  •  "
-                    + $"opaque bands {opaqueCols}×{opaqueRows}  •  "
-                    + $"crop size {minW}–{maxW} × {minH}–{maxH} px";
+                    $"spacing ~{avgColGutter:0.#}px H / {avgRowGutter:0.#}px V  â€¢  "
+                    + $"opaque bands {opaqueCols}Ã—{opaqueRows}  â€¢  "
+                    + $"crop size {minW}â€“{maxW} Ã— {minH}â€“{maxH} px";
 
                 _status = setMode
-                    ? $"Cropped {nonempty}/{rects.Length} cells  •  {_cropStatusDetail}"
-                    : $"Stored crops for {nonempty}/{rects.Length} cells  •  {_cropStatusDetail}";
+                    ? $"Cropped {nonempty}/{rects.Length} cells  â€¢  {_cropStatusDetail}"
+                    : $"Stored crops for {nonempty}/{rects.Length} cells  â€¢  {_cropStatusDetail}";
                 InvalidateSheetPixelCache();
                 Repaint();
             }
@@ -4082,7 +4143,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             => $"c{column} r{row}  i{index}";
 
         static string FormatSheetCellFull(int column, int row, int index)
-            => $"col {column}  row {row}  •  index {index}";
+            => $"col {column}  row {row}  â€¢  index {index}";
 
         void DrawClipFrame(SpriteClipDef clip, int frame, Rect rect, float alpha)
         {
@@ -4234,8 +4295,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (_profile.Sheet == null)
             {
-                EditorGUILayout.LabelField("File name", "—");
-                EditorGUILayout.LabelField("Size", "—");
+                EditorGUILayout.LabelField("File name", "â€”");
+                EditorGUILayout.LabelField("Size", "â€”");
                 return;
             }
 
@@ -4251,20 +4312,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
             EditorGUILayout.LabelField("Size",
-                $"{_profile.Sheet.width} × {_profile.Sheet.height}");
+                $"{_profile.Sheet.width} Ã— {_profile.Sheet.height}");
             int columns = Mathf.Max(1, _profile.Columns);
             int rows = Mathf.Max(1, _profile.Rows);
             EditorGUILayout.LabelField("Cell size",
                 _profile.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped
                     ? "Cropped per cell (see Detect spacing)"
-                    : $"{_profile.Sheet.width / columns} × {_profile.Sheet.height / rows} px");
+                    : $"{_profile.Sheet.width / columns} Ã— {_profile.Sheet.height / rows} px");
         }
 
         void DrawPixelsPerUnitSize()
         {
             if (_profile.Sheet == null)
             {
-                EditorGUILayout.LabelField("Cell in world", "—");
+                EditorGUILayout.LabelField("Cell in world", "â€”");
                 return;
             }
 
@@ -4291,7 +4352,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             float worldW = cellW / ppu;
             float worldH = cellH / ppu;
             EditorGUILayout.LabelField("Cell in world",
-                $"{worldW:0.###} × {worldH:0.###} units ({sizeNote})");
+                $"{worldW:0.###} Ã— {worldH:0.###} units ({sizeNote})");
             GUILayout.Label($"{cellW:0.#} px / {ppu:0.#} PPU", _mutedStyle);
             if (_profile.Sheets != null && _profile.Sheets.Count > 1)
                 GUILayout.Label("PPU is per sheet so every sheet is the same world size.", _mutedStyle);
@@ -4300,7 +4361,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         static string SheetTextureFileName(Texture2D sheet)
         {
             if (sheet == null)
-                return "—";
+                return "â€”";
             string path = AssetDatabase.GetAssetPath(sheet);
             if (!string.IsNullOrEmpty(path))
             {
@@ -4308,7 +4369,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (!string.IsNullOrEmpty(fileName))
                     return fileName;
             }
-            return string.IsNullOrEmpty(sheet.name) ? "—" : sheet.name;
+            return string.IsNullOrEmpty(sheet.name) ? "â€”" : sheet.name;
         }
 
         bool TryComputePreviewLayout(Rect localCanvas, out Rect cell, out float contentW, out float contentH)
@@ -4495,13 +4556,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             EditorGUI.DrawRect(rect, new Color(0.1f, 0.2f, 0.14f, 1f));
             DrawBorder(rect, new Color(0.35f, 0.9f, 0.4f, 1f), 1f);
-            string lockNote = _pivotLocked ? "  •  LOCKED" : string.Empty;
+            string lockNote = _pivotLocked ? "  â€¢  LOCKED" : string.Empty;
             GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, 18f),
                 $"PIVOT  {_profile.Pivot.x:F3}, {_profile.Pivot.y:F3}{lockNote}",
                 EditorStyles.boldLabel);
             float x = rect.x + 8f;
             if (GUI.Button(new Rect(x, rect.y + 26f, 120f, 22f),
-                    new GUIContent("Pivot Actions…",
+                    new GUIContent("Pivot Actionsâ€¦",
                         "Snap presets, Character collider, opaque bounds, copy/paste, lock."),
                     EditorStyles.miniButton))
                 ShowPivotContextMenu();
@@ -4612,7 +4673,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 menu.AddItem(new GUIContent("Unlock Pivot"), false, () => SetPivotLocked(false));
                 menu.AddSeparator(string.Empty);
                 menu.AddDisabledItem(new GUIContent("Snap/Cell Center (locked)"));
-                menu.AddDisabledItem(new GUIContent("Snap/Bottom Center — Feet (locked)"));
+                menu.AddDisabledItem(new GUIContent("Snap/Bottom Center â€” Feet (locked)"));
                 menu.AddDisabledItem(new GUIContent("Other snap / edit actions (unlock first)"));
                 menu.ShowAsContext();
                 return;
@@ -4621,7 +4682,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Snap/Cell Center (0.5, 0.5)"), false,
                 () => SetProfilePivot(new Vector2(0.5f, 0.5f), "Snap Pivot to Cell Center"));
-            menu.AddItem(new GUIContent("Snap/Bottom Center — Feet (0.5, 0)"), false,
+            menu.AddItem(new GUIContent("Snap/Bottom Center â€” Feet (0.5, 0)"), false,
                 () => SetProfilePivot(new Vector2(0.5f, 0f), "Snap Pivot to Bottom Center"));
             menu.AddItem(new GUIContent("Snap/Top Center (0.5, 1)"), false,
                 () => SetProfilePivot(new Vector2(0.5f, 1f), "Snap Pivot to Top Center"));
@@ -4651,7 +4712,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 menu.AddDisabledItem(new GUIContent(
                     "Snap to Character Collider Center (add Character collider first)"));
             }
-            menu.AddItem(new GUIContent("Add Character Collider…",
+            menu.AddItem(new GUIContent("Add Character Colliderâ€¦",
                     "Create a Character (body) square collider on this profile, then snap pivot to its center."),
                 false, () => PromptAddCharacterColliderForPivot(snapAfter: true));
             menu.AddSeparator(string.Empty);
@@ -4662,7 +4723,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         "Tight AABB center of opaque pixels in the active cell (Grid or Cropped)."),
                     false, () => SnapPivotToOpaqueContent(bottomCenter: false));
                 menu.AddItem(new GUIContent("Snap to Opaque Content Bottom Center",
-                        "Feet of the art — bottom-center of the opaque AABB in the active cell."),
+                        "Feet of the art â€” bottom-center of the opaque AABB in the active cell."),
                     false, () => SnapPivotToOpaqueContent(bottomCenter: true));
             }
             else
@@ -4694,7 +4755,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             if (_pivotLocked)
             {
-                _status = "Pivot is locked — unlock to edit";
+                _status = "Pivot is locked â€” unlock to edit";
                 Repaint();
                 return;
             }
@@ -4926,7 +4987,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         static Rect CenteredSquareRect(Vector2 center, Vector2 edge, Rect bounds, float minimumRadius)
         {
             // Free create: do not clamp to the cell frame. Hitboxes/hurtboxes often
-            // extend past the sprite cell; transform/move already allowed that —
+            // extend past the sprite cell; transform/move already allowed that â€”
             // create must match so the click center is not pulled inward (offset).
             _ = bounds;
             float radius = Mathf.Max(Mathf.Abs(edge.x - center.x), Mathf.Abs(edge.y - center.y));
@@ -5213,8 +5274,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             var icon = EditorGUIUtility.IconContent(locked ? "LockIcon-On" : "LockIcon");
             string tooltip = locked
-                ? "Unlock pivot — allow select and drag in the preview (inspector only)"
-                : "Lock pivot — prevent select and drag (inspector only; persists via EditorPrefs)";
+                ? "Unlock pivot â€” allow select and drag in the preview (inspector only)"
+                : "Lock pivot â€” prevent select and drag (inspector only; persists via EditorPrefs)";
             if (icon != null && icon.image != null)
             {
                 icon.tooltip = tooltip;
@@ -5297,7 +5358,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (IsColliderKnobHandle(kind))
                 return true;
 
-            // Body hit on the selection — defer if another collider is on top / tighter.
+            // Body hit on the selection â€” defer if another collider is on top / tighter.
             FrameBoxDef under = FindColliderAt(clip, frame, cell, mouse);
             if (under == null)
                 return true;
@@ -5544,7 +5605,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (snap)
                     angle = Mathf.Round(angle / 15f) * 15f;
                 box.Angle = angle;
-                _status = $"Collider angle {box.Angle:0.#}°";
+                _status = $"Collider angle {box.Angle:0.#}Â°";
                 return;
             }
 
@@ -5793,7 +5854,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 : ResolvedEaseMode(key).ToString();
             if (key.AllowOvershoot)
                 ease += " + Overshoot";
-            return $"{ease}  •  {ResolvedPathMode(key)}  •  {ResolvedRotationMode(key)}";
+            return $"{ease}  â€¢  {ResolvedPathMode(key)}  â€¢  {ResolvedRotationMode(key)}";
         }
 
         static void DrawTriangle(Vector2 top, float radius, Color color)
@@ -6427,7 +6488,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawBorder(_sheetCellPickerRect, AccentColor, 2f);
             EditorGUI.DrawRect(title, new Color(0.14f, 0.22f, 0.3f, 1f));
             GUI.Label(new Rect(title.x + 8f, title.y + 4f, title.width - 16f, 18f),
-                "1×1 from texture", EditorStyles.boldLabel);
+                "1Ã—1 from texture", EditorStyles.boldLabel);
 
             var body = new Rect(
                 _sheetCellPickerRect.x + 8f,
@@ -6485,7 +6546,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             GUILayout.BeginArea(footer);
             GUILayout.Label(
-                $"{_sheetCellPickerSelection.Count} selected   •   click = replace   •   Ctrl = toggle   •   Shift = range   •   Enter / OK adds after the current frame",
+                $"{_sheetCellPickerSelection.Count} selected   â€¢   click = replace   â€¢   Ctrl = toggle   â€¢   Shift = range   â€¢   Enter / OK adds after the current frame",
                 _mutedStyle);
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -6634,7 +6695,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUILayout.Label("No actions yet.", _mutedStyle);
             for (int i = _undoNames.Count - 1; i >= 0; i--)
             {
-                string mark = i == _undoNames.Count - 1 ? "▸ " : "   ";
+                string mark = i == _undoNames.Count - 1 ? "â–¸ " : "   ";
                 GUILayout.Label(mark + _undoNames[i]);
             }
             if (_redoNames.Count > 0)
@@ -6649,3 +6710,4 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
     }
 }
+

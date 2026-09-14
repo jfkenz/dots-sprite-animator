@@ -1,0 +1,19 @@
+﻿{
+  "name": "InvertLab.SpriteAnimator.CutoutPartsSample",
+  "rootNamespace": "InvertLab.Sprites.DOTS.Samples",
+  "references": [
+    "InvertLab.SpriteAnimator.Runtime",
+    "Unity.Entities",
+    "Unity.Mathematics",
+    "Unity.Collections"
+  ],
+  "autoReferenced": true,
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

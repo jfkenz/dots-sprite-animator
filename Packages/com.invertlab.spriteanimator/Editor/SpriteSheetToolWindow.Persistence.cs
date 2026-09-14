@@ -262,6 +262,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _profile.EnsureTimelineHitPolygon();
             _profile.EnsureSocketCatalog();
             _profile.EnsureSocketMotions();
+            _profile.EnsurePartsRig();
             if (!_profile.OnionSettingsInitialized)
             {
                 _profile.OnionSettingsInitialized = true;

@@ -645,6 +645,9 @@ namespace InvertLab.Sprites.DOTS
             return true;
         }
 
+        static bool IsParts(EntityManager em, Entity e) => SpriteParts.IsPartsRoot(em, e);
+
+
         public static ulong Fnv(string s) => SpriteAnimSetBuilder.Fnv(s);
 
         /// <summary>
@@ -653,7 +656,11 @@ namespace InvertLab.Sprites.DOTS
         /// or the entity is already GPU-driven.
         /// </summary>
         public static bool TryToGpu(EntityManager em, Entity e, float now)
-            => SpriteGpuAnimSwitch.ToGpu(em, e, now);
+        {
+            if (SpriteParts.IsPartsRoot(em, e) || (em.Exists(e) && (em.HasComponent<SpritePartSlot>(e) || em.HasComponent<SpritePartsVisualRoot>(e))))
+                return false;
+            return SpriteGpuAnimSwitch.ToGpu(em, e, now);
+        }
 
         public static bool TryToGpu(EntityManager em, Entity e)
             => SpriteGpuAnimSwitch.ToGpu(em, e, Time.unscaledTime);
@@ -670,6 +677,8 @@ namespace InvertLab.Sprites.DOTS
         public static bool Play(EntityManager em, Entity e, string clipName, bool force = false,
                                 float crossfadeSeconds = 0f)
         {
+            if (IsParts(em, e))
+                return SpriteParts.Play(em, e, clipName, force, crossfadeSeconds);
             if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e))
                 return false;
             if (string.IsNullOrWhiteSpace(clipName))
@@ -718,6 +727,8 @@ namespace InvertLab.Sprites.DOTS
         public static bool Play(EntityManager em, Entity e, int clipIndex, bool force = false,
                                 float crossfadeSeconds = 0f)
         {
+            if (IsParts(em, e))
+                return SpriteParts.Play(em, e, clipIndex, force, crossfadeSeconds);
             if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return false;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
@@ -1093,6 +1104,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static void SetSpeed(EntityManager em, Entity e, float speed)
         {
+            if (IsParts(em, e)) { SpriteParts.SetSpeed(em, e, speed); return; }
             if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             var player = em.GetComponentData<SpriteAnimPlayer>(e);
@@ -1111,6 +1123,8 @@ namespace InvertLab.Sprites.DOTS
 
         public static float GetSpeed(EntityManager em, Entity e)
         {
+            if (IsParts(em, e))
+                return SpriteParts.GetSpeed(em, e);
             if (em.HasComponent<SpriteGpuDriven>(e) && em.HasComponent<SpriteGpuAnim>(e))
                 return SpriteGpuAnimResources.UseSharedClip && em.HasComponent<SpriteCrowdEntityTag>(e)
                     ? SpriteGpuAnimResources.SharedClip.SavedSpeed
@@ -1121,7 +1135,11 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>Playing = 0; keeps Time. Alias of Freeze.</summary>
-        public static void Pause(EntityManager em, Entity e) => SetPlaying(em, e, 0);
+        public static void Pause(EntityManager em, Entity e)
+        {
+            if (IsParts(em, e)) { SpriteParts.Pause(em, e); return; }
+            SetPlaying(em, e, 0);
+        }
 
         /// <summary>
         /// Playing = 1 if the clip is not marked <see cref="SpriteAnimCompleted"/>.
@@ -1129,6 +1147,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static void Resume(EntityManager em, Entity e)
         {
+            if (IsParts(em, e)) { SpriteParts.Resume(em, e); return; }
             if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             if (em.HasComponent<SpriteAnimCompleted>(e))
@@ -1137,6 +1156,32 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>Same as Pause.</summary>
+
+        /// <summary>Pause and sample current clip at time zero. Keeps selected clip.</summary>
+        public static void Stop(EntityManager em, Entity e)
+        {
+            if (IsParts(em, e)) { SpriteParts.Stop(em, e); return; }
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e))
+                return;
+            var player = em.GetComponentData<SpriteAnimPlayer>(e);
+            player.Playing = 0;
+            player.Time = 0f;
+            em.SetComponentData(e, player);
+            if (em.HasComponent<SpriteAnimCompleted>(e))
+                em.RemoveComponent<SpriteAnimCompleted>(e);
+            SeekNormalized(em, e, 0f);
+        }
+
+        /// <summary>Sample start of current clip and play.</summary>
+        public static void Restart(EntityManager em, Entity e)
+        {
+            if (IsParts(em, e)) { SpriteParts.Restart(em, e); return; }
+            if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimPlayer>(e))
+                return;
+            var player = em.GetComponentData<SpriteAnimPlayer>(e);
+            Play(em, e, player.ClipIndex, force: true);
+        }
+
         public static void Freeze(EntityManager em, Entity e) => Pause(em, e);
 
         /// <summary>Same as Resume.</summary>
@@ -1174,6 +1219,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Jump to normalized 0–1 progress (duration-weighted). Does not force Play.</summary>
         public static void SeekNormalized(EntityManager em, Entity e, float t01)
         {
+            if (IsParts(em, e)) { SpriteParts.SeekNormalized(em, e, t01); return; }
             if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;
@@ -1294,6 +1340,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Per-entity UV mirror. Does not change clips or the sheet texture.</summary>
         public static void SetFlip(EntityManager em, Entity e, bool flipX, bool flipY)
         {
+            if (IsParts(em, e)) { SpriteParts.SetFlip(em, e, flipX, flipY); return; }
             var previous = em.HasComponent<SpriteFlip>(e)
                 ? em.GetComponentData<SpriteFlip>(e)
                 : SpriteFlip.Identity;
@@ -1326,6 +1373,7 @@ namespace InvertLab.Sprites.DOTS
 
         public static bool TryGetFlip(EntityManager em, Entity e, out bool flipX, out bool flipY)
         {
+            if (IsParts(em, e)) return SpriteParts.TryGetFlip(em, e, out flipX, out flipY);
             flipX = false;
             flipY = false;
             if (!em.HasComponent<SpriteFlip>(e))
@@ -1473,6 +1521,7 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Set FlipX only (keeps FlipY). Mirror = <paramref name="flipX"/> true.</summary>
         public static void SetFacing(EntityManager em, Entity e, bool flipX)
         {
+            if (IsParts(em, e)) { SpriteParts.SetFacing(em, e, flipX); return; }
             bool flipY = false;
             if (em.HasComponent<SpriteFlip>(e))
                 flipY = em.GetComponentData<SpriteFlip>(e).Y != 0;

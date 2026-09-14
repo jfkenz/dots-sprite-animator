@@ -1325,6 +1325,17 @@ namespace InvertLab.Sprites.DOTS
             public override void Bake(SpriteAnimSetAuthoring authoring)
             {
                 var profile = authoring.Profile != null ? authoring.Profile.Data : null;
+                // Exactly one baker by Profile.AnimKind. Parts owned by SpritePartsCharacterAuthoring.
+                if (profile != null && profile.AnimKind == SpriteAnimKind.Parts)
+                {
+                    if (authoring.GetComponent<SpritePartsCharacterAuthoring>() == null)
+                    {
+                        UnityEngine.Debug.LogError(
+                            $"[SpriteAnimSetAuthoring] '{authoring.name}': Profile AnimKind=Parts but no SpritePartsCharacterAuthoring. Add Parts character authoring or switch profile to Frame.",
+                            authoring);
+                    }
+                    return;
+                }
                 if (profile != null)
                 {
                     profile.EnsureSheets();

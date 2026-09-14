@@ -6,6 +6,15 @@ case appears.
 > This file lives in `DevTools~/` (project sandbox only). It is **not** part of
 > the Asset Store / UPM package under `Packages/com.invertlab.spriteanimator`.
 
+## Next version (v2 cutout / Parts tab)
+
+Locked product brief: [CutoutParts-v2-Brief.md](CutoutParts-v2-Brief.md).
+Astra: write technical design only in CutoutParts-v2-Design.md. Do not implement yet.
+
+Brotato-style cutout rig + tween clips + slot sheet swap. Skip Sprite Skin, IK, Spine, Unity Animator.
+
+---
+
 ## Next version (collider damage pipeline)
 
 The collider system currently detects; these make it combat-ready.

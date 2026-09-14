@@ -13,7 +13,16 @@ namespace InvertLab.Sprites.DOTS
         public static bool IsGpuEligible(EntityManager em, Entity entity, out FixedString128Bytes reason)
         {
             reason = "Entity has no CPU playback state.";
-            if (!em.Exists(entity) || !em.HasComponent<SpriteAnimSetRef>(entity) ||
+            if (!em.Exists(entity))
+                return false;
+            // Parts roots and children are permanently CPU-pose; reject at all promotion entry points.
+            if (em.HasComponent<SpritePartsPlayer>(entity) || em.HasComponent<SpritePartSlot>(entity) ||
+                em.HasComponent<SpritePartsVisualRoot>(entity))
+            {
+                reason = "Parts characters require CPU pose playback.";
+                return false;
+            }
+            if (!em.HasComponent<SpriteAnimSetRef>(entity) ||
                 !em.HasComponent<SpriteAnimPlayer>(entity) || em.HasComponent<SpriteGpuDriven>(entity))
                 return false;
             var blob = em.GetComponentData<SpriteAnimSetRef>(entity).Set;

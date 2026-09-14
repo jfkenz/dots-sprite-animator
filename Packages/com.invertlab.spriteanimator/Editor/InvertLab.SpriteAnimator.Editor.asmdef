@@ -5,6 +5,8 @@
         "InvertLab.SpriteAnimator.Runtime",
         "Unity.Entities",
         "Unity.Entities.Graphics",
+        "Unity.Entities.Hybrid",
+        "Unity.Scenes",
         "Unity.Transforms",
         "Unity.Mathematics",
         "Unity.Burst",

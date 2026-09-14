@@ -68,6 +68,7 @@ namespace InvertLab.Sprites.DOTS
         [BurstCompile]
         [WithOptions(Unity.Entities.EntityQueryOptions.IgnoreComponentEnabledState)]
         [WithAll(typeof(SpriteAnimEnabled))]
+        [WithNone(typeof(SpritePartSlot))]
         partial struct CullJob : IJobEntity
         {
             public float2 Center;

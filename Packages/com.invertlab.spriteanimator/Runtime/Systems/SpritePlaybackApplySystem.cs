@@ -56,6 +56,8 @@ namespace InvertLab.Sprites.DOTS
             if (em.HasComponent<SpriteGpuDriven>(e))
                 return true;
 
+            if (em.HasComponent<SpritePartsPlayer>(e) || em.HasComponent<SpritePartSlot>(e))
+                return true; // Parts never promote to GPU clock
             if (!em.HasComponent<SpriteAnimPlayer>(e) || !em.HasComponent<SpriteAnimSetRef>(e))
                 return false; // not baked yet — retry
 
