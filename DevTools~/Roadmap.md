@@ -6,6 +6,12 @@ case appears.
 > This file lives in `DevTools~/` (project sandbox only). It is **not** part of
 > the Asset Store / UPM package under `Packages/com.invertlab.spriteanimator`.
 
+## v2 cutout / parts (design only)
+
+JFKENZ locked the product. Technical design (do not implement from the
+design PR): **`CutoutParts-v2-Design.md`**. Slices 1–4 are data, Parts tab,
+DOTS play+tests, swap+tiny sample. Not Unity 2D Animation / IK / GPU parts.
+
 ## Next version (collider damage pipeline)
 
 The collider system currently detects; these make it combat-ready.

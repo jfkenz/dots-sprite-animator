@@ -17,6 +17,7 @@ so a normal package export will not include it.
 |------|---------|
 | `cursor/rules/` | Cursor AI project rules (editor undo/redo checklist, etc.) |
 | `Roadmap.md` | Internal feature backlog (not customer docs) |
+| `CutoutParts-v2-Design.md` | v2 cutout/parts technical design (sandbox; not package docs) |
 | `patches/` | One-off local patch scripts (optional) |
 
 ## Use Cursor rules from here
