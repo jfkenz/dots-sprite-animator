@@ -71,6 +71,67 @@ One existing IMGUI window; one Parts tab. No new animation window or graph.
 
 Resizable panels. At narrow widths, collapse inspector to a drawer before overlapping canvas controls. Keep transport and Auto Key visible. Technical CPU/GPU details belong in Advanced diagnostics.
 
+### Parts tree: exact interaction contract (2026-09-15)
+
+This refines the screenshot containing Part 1, Part 2 and + Part. Implement a real hierarchy, not a flat list that only looks indented. Each part can be renamed and can own multiple children. Children may themselves own children. Floating parts need not touch their parents visually.
+
+    PARTS TREE                         [+ Part v]
+    Character                         (virtual root)
+      v Body                 [eye] [lock]
+          Head               [eye] [lock]
+        v Hand R             [eye] [lock]
+            Weapon           [eye] [lock]
+          Hand L             [eye] [lock]
+
+Character is a permanent virtual root/drop target, not a rendered part and not included in the 32-part limit. Every actual part counts toward that limit, including hidden or locked parts. No separate grouping-node or socket feature is introduced here.
+
+**Rows and creation**
+
+- Show an expansion chevron only when children exist, then sprite thumbnail, editable display name, visibility and lock icons. Indent consistently. Selected rows use the accent highlight; hover and drop targets must remain distinguishable. Truncate long names with a tooltip. Empty tree shows “Add a part or drag a sprite onto the canvas.”
+- Single-click selects and synchronizes canvas handles, inspector and timeline. Chevron click only expands/collapses. Multi-selection uses Ctrl/Cmd and Shift. Collapsing a parent does not clear a selected descendant; highlight the ancestor subtly when selection is inside it.
+- + Part creates a root-level part. Its dropdown and row context menu provide Add Child of [name], enabled for exactly one selected, unlocked parent. Do not silently parent normal + Part creations to the selection. Newly created parts are selected and enter rename mode; show a placeholder if no sprite is assigned.
+- Eye and lock are editor-only. An ancestor's eye/lock applies to its subtree; preserve each descendant's own toggle when restoring the ancestor. Hidden parts still evaluate transforms so visible hierarchy evaluation remains correct. Locked parts can be selected for inspection but cannot be transformed, renamed, deleted or dragged; dropping onto a locked parent is disabled.
+
+**Rename**
+
+F2, double-click the name, or Rename in the context menu opens an inline text field. Enter or clicking outside commits a valid name; Escape restores the old name. Trim whitespace, reject an empty name, and reject duplicate sibling names with a nearby explanation. The same display name under a different parent is allowed. Generate unique sibling names for new parts. Text editing consumes Delete, Space and navigation keys instead of invoking canvas/timeline commands.
+
+Rename changes display Name only. SlotId, clip tracks, skin bindings and runtime references remain unchanged. Do not derive an existing ID from its new name or hierarchy path. Rename is one Undo operation and is permitted in all three modes because it is metadata.
+
+**Tree drag and drop: hierarchy, not animation**
+
+Hierarchy edits are Rig-only. Animate/Skins keep selection and expansion available; disabled structural actions explain “Switch to Rig to edit hierarchy.” Use the normal mode-switch flow so pending unkeyed poses are resolved first.
+
+- Start a row drag only after a small movement threshold (approximately 5 UI points). Drag the whole subtree. For a multi-selection, move only topmost selected roots; preserve their relative order. Do not mutate serialized data while hovering.
+- Middle of a row: append as a child. Show an outlined target and “Parent under Body.” Top/bottom edge: insert before/after that row as a sibling, shown with an insertion line at the destination indentation. Use top/bottom quarters for insertion, middle half for parenting.
+- Drop on Character or the explicit “Move to root” area below the rows: unparent and append at root. Do not infer a parent from arbitrary empty panel space.
+- Hover a collapsed valid parent for about 500 ms to expand; scroll near panel edges. Escape or dropping outside a valid target cancels without data changes.
+- Reject self/descendant parenting, invalid or missing parents, and moves involving locked affected parts. A selected subtree containing a locked descendant cannot be moved. Reject destination sibling-name collisions; explain that the user must rename first. Display the reason beside the invalid target.
+- Sibling reordering changes tree presentation only. It does NOT change front/back rendering. Keep explicit Front/Back controls and a Draw Order value in the inspector; changing a parent also does not implicitly change draw order.
+
+Store sibling order explicitly alongside stable parent identity (ParentSlotId plus SiblingOrder, or an equivalent serialized structure). Keep draw order separate. Tree selection, expansion, locks and visibility use SlotId, never row index. Bake parent-before-child runtime indices independently; hierarchy edits cannot redirect tracks or skins by shifting list indices. Normalize sibling order only during a committed edit, never during repaint.
+
+**Reparenting and removal**
+
+Preserve the moved subtree root's REST world transform: new local matrix = inverse(new parent rest world matrix) * old rest world matrix. Recompute only that root's local rest pose; descendants retain their local poses. Reject the entire operation if a required matrix is singular or cannot be represented by the supported translation/rotation/positive XY scale without shear. Multi-selection commits atomically or not at all.
+
+Existing animation keys remain local. Therefore changing a parent can change animated world motion even when the rest pose is preserved. When a move affects animated subtrees, show a review dialog naming the moved parts and affected clip count: “Keep rest pose; animation motion may change.” Offer Reparent and Cancel. Do not silently resample or rewrite all clips. Pure sibling reorder needs no such dialog.
+
+The destructive action is explicitly named Delete Part / Delete Subtree. For children or referenced animation/skin data, show the affected counts before deletion. Remove associated tracks and bindings together, never leave dangling references. One Undo restores the complete subtree, bindings, keys and editor selection. Character root cannot be deleted. Do not add implicit child promotion.
+
+**Canvas drag: pose, not hierarchy**
+
+Dragging a part on the canvas moves its rest pose in Rig or its selected-clip pose in Animate, respecting Auto Key. A parent move carries children; moving a child changes only that child's local pose and its descendants. No automatic reparenting, IK or physics detachment occurs. Tree dragging never creates animation keys. Every complete drag is one Undo entry; Escape restores its starting state. Onion ghosts remain non-interactive and refresh after committed changes or Undo.
+
+**Required acceptance checks for the implementation agent**
+
+1. Create Body > Hand R > Weapon, rename all three, save/reopen: hierarchy, selection resolution, keys and skin references remain correct.
+2. Drag Weapon between parents and back to Character: rest world pose stays fixed when representable; Undo/Redo restores all data. Invalid shear/cycle/locked/collision drops change nothing.
+3. Reorder siblings: tree order persists after reopen, rendered overlap order and slot bindings stay unchanged.
+4. Move Body on canvas: Hand R and Weapon follow once. Move Weapon: Body stays still. Repeat in Animate: only keys change, no rest edits.
+5. Rename with F2 and Escape, drag and Escape, delete subtree and Undo; verify keyboard input never leaks into playback or timeline deletion.
+6. Add 32 parts; creation of a 33rd is blocked clearly, but valid reordering and reparenting still work. Exercise narrow panels, collapsed targets, autoscroll and empty-tree creation.
+
 ### Mode contract
 
 - Rig edits hierarchy, rest transforms, joint pivot and default appearance. No keys. Banner: Rig changes affect every clip. Existing keyed local poses are not silently rebased.
@@ -298,6 +359,6 @@ Later: scene-view puppet editing, GameObject runtime bridge, runtime visibility,
 
 ## 11. Paste this prompt to the implementing agent
 
-Read DevTools~/CutoutParts-v2-Implementation-Design.md, PR #2 at its pinned commit, the product brief, and applicable repo rules. Use this document's explicit corrections as the proposed contract; report actual code conflicts instead of silently inventing another architecture. Implement only the assigned slice on the v2 worktree. Preserve main/1.0 and existing uncommitted user files. Do not add Unity 2D Animation, Spine or Mecanim dependencies, or bump URP. Reuse existing IMGUI window and CPU instanced renderer. Onion skin is mandatory. Keep Rig, Animate and Skins edits separate. Share pose/geometry evaluation across editor/runtime. Swaps preserve joints and playback. Complete the slice's tests and show evidence. No commits or PR publication unless separately requested.
+Read DevTools~/CutoutParts-v2-Implementation-Design.md, PR #2 at its pinned commit, the product brief, and applicable repo rules. Use this document's explicit corrections as the proposed contract; report actual code conflicts instead of silently inventing another architecture. Implement only the assigned slice on the v2 worktree. Preserve main/1.0 and existing uncommitted user files. Do not add Unity 2D Animation, Spine or Mecanim dependencies, or bump URP. Reuse existing IMGUI window and CPU instanced renderer. Onion skin is mandatory. Implement section 3's Parts tree interaction contract: inline rename with stable IDs, nested children, explicit drag-to-parent and sibling insertion, atomic Undo and mode-safe canvas editing. Keep Rig, Animate and Skins edits separate. Share pose/geometry evaluation across editor/runtime. Swaps preserve joints and playback. Complete the slice's tests and show evidence. No commits or PR publication unless separately requested.
 
 Recommended first assignment: slice 1, including sampling and mixed-size/pivot appearance tests. Design is ready for that assignment. Production implementation was intentionally not performed in this review.

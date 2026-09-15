@@ -65,6 +65,10 @@ namespace InvertLab.Sprites.DOTS
                     continue;
                 SpritePartsSampler.SampleSlot(ref set, clipIndex, slotIndex, time, out var pose);
                 SpritePartsPoseUtility.ApplyPartTransform(em, part, pose);
+                int sampledApp = SpritePartsSampler.SampleAppearanceIndex(
+                    ref set, clipIndex, slotIndex, time);
+                SpriteParts.ApplySampledAppearance(
+                    em, root, part, slotIndex, sampledApp, ref set);
             }
             SpritePartsPoseUtility.ApplyFacing(em, root);
         }

@@ -86,6 +86,15 @@ namespace InvertLab.Sprites.DOTS
                     if (track == null) continue;
                     track.SlotId = SpritePartIdUtility.Canonical(track.SlotId);
                     track.Keys ??= new List<SpritePartsKeyDef>();
+                    for (int k = 0; k < track.Keys.Count; k++)
+                    {
+                        var key = track.Keys[k];
+                        if (key == null) continue;
+                        if (!string.IsNullOrWhiteSpace(key.AppearanceId))
+                            key.AppearanceId = SpritePartIdUtility.Canonical(key.AppearanceId);
+                        else
+                            key.AppearanceId = string.Empty;
+                    }
                 }
             }
             for (int i = 0; i < profile.PartsSkins.Count; i++)
@@ -304,6 +313,12 @@ namespace InvertLab.Sprites.DOTS
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] scale must be > 0.");
                         if (!SpriteEase.IsValidMode(key.EaseMode))
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] has invalid EaseMode.");
+                        if (!string.IsNullOrWhiteSpace(key.AppearanceId))
+                        {
+                            string aid = SpritePartIdUtility.Canonical(key.AppearanceId);
+                            if (FindAppearanceIndex(profile, aid) < 0)
+                                errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] appearance '{aid}' is missing from the profile.");
+                        }
                     }
                 }
             }

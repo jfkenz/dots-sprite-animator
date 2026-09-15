@@ -99,6 +99,51 @@ namespace InvertLab.Sprites.DOTS
             pose.Rotation = LerpAngleShortest(a.Rotation, b.Rotation, u);
         }
 
+        /// <summary>
+        /// Last non-empty keyed appearance at/before time.
+        /// Empty AppearanceIndex on a key holds the previous keyed value.
+        /// Loop: if none at/before wrapped time, carry the last keyed appearance from the clip
+        /// (previous loop iteration). Once: no wrap-around carry — returns -1 (skin/default).
+        /// Returns appearance index into set.Appearances, or -1 when no keyed appearance is active.
+        /// </summary>
+        public static int SampleAppearanceIndex(
+            ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds)
+        {
+            if (clipIndex < 0 || clipIndex >= set.Clips.Length)
+                return -1;
+            if (slotIndex < 0 || slotIndex >= set.Slots.Length)
+                return -1;
+
+            ref var clip = ref set.Clips[clipIndex];
+            float time = WrapTime(timeSeconds, clip.Duration, clip.WrapMode);
+            int trackIndex = TrackIndexForSlot(ref clip, slotIndex);
+            if (trackIndex < 0)
+                return -1;
+
+            ref var track = ref clip.Tracks[trackIndex];
+            if (track.Keys.Length == 0)
+                return -1;
+
+            int best = -1;
+            int lastInClip = -1;
+            for (int i = 0; i < track.Keys.Length; i++)
+            {
+                int app = track.Keys[i].AppearanceIndex;
+                if (app < 0)
+                    continue;
+                lastInClip = app;
+                if (track.Keys[i].Time <= time + 1e-6f)
+                    best = app;
+            }
+
+            if (best >= 0)
+                return best;
+
+            // Loop carry from previous iteration when wrapped time sits before the first sprite key.
+            if (clip.WrapMode != (byte)SpritePartsWrap.Once && lastInClip >= 0)
+                return lastInClip;
+            return -1;
+        }
         public static float WrapTime(float time, float duration, byte wrapMode)
         {
             if (!(duration > 0f) || !math.isfinite(duration))

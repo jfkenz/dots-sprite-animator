@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
@@ -31,6 +31,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] float _partsPreviewTime;
         [SerializeField] bool _partsPlaying;
         [SerializeField] bool _partsAutoKey = true;
+        [SerializeField] string _partsKeyAppearanceId = string.Empty;
+        [SerializeField] bool _partsKeyPoseIncludesAppearance;
         [SerializeField] bool _partsOnionEnabled = true;
         [SerializeField] int _partsOnionBefore = SpritePartsAuthoringOps.DefaultOnionBefore;
         [SerializeField] int _partsOnionAfter = SpritePartsAuthoringOps.DefaultOnionAfter;
@@ -114,6 +116,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _partsSelectedClip = Mathf.Clamp(_partsSelectedClip, 0, _profile.PartsClips.Count - 1);
             if (string.IsNullOrEmpty(_partsPreviewSkinId) && !string.IsNullOrEmpty(_profile.PartsDefaultSkinId))
                 _partsPreviewSkinId = _profile.PartsDefaultSkinId;
+            if (_partsExpandedSlotIds.Count == 0 && _profile.PartsSlots != null)
+            {
+                for (int i = 0; i < _profile.PartsSlots.Count; i++)
+                {
+                    var s = _profile.PartsSlots[i];
+                    if (s != null) _partsExpandedSlotIds.Add(SpritePartIdUtility.Canonical(s.SlotId));
+                }
+            }
+            EnsurePartsTreeSelectionSynced();
         }
 
         void TickPartsPreview(float delta)
@@ -206,55 +217,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             GUILayout.Space(8f);
             GUILayout.Label("PARTS TREE", _sectionStyle);
+            DrawPartsTreeToolbar();
             DrawPartsTree();
-            if (GUILayout.Button("+ Part", GUILayout.Width(70f)))
-                AddPartsSlot();
 
             EditorGUILayout.EndScrollView();
             GUILayout.EndArea();
-        }
-
-        void DrawPartsTree()
-        {
-            // Indent by parent depth; list in draw-rank then hierarchy.
-            var roots = new List<int>();
-            for (int i = 0; i < _profile.PartsSlots.Count; i++)
-            {
-                var s = _profile.PartsSlots[i];
-                if (s == null) continue;
-                if (string.IsNullOrEmpty(s.ParentSlotId))
-                    roots.Add(i);
-            }
-            roots.Sort((a, b) => _profile.PartsSlots[a].DrawRank.CompareTo(_profile.PartsSlots[b].DrawRank));
-            foreach (int root in roots)
-                DrawPartsTreeNode(root, 0);
-            // Orphans with missing parents
-            for (int i = 0; i < _profile.PartsSlots.Count; i++)
-            {
-                var s = _profile.PartsSlots[i];
-                if (s == null || string.IsNullOrEmpty(s.ParentSlotId)) continue;
-                if (SpritePartsAuthoringOps.FindSlot(_profile, s.ParentSlotId) == null)
-                    DrawPartsTreeNode(i, 0);
-            }
-        }
-
-        void DrawPartsTreeNode(int index, int depth)
-        {
-            var slot = _profile.PartsSlots[index];
-            if (slot == null) return;
-            bool selected = index == _partsSelectedSlot;
-            var style = selected ? _clipSelectedStyle : _clipStyle;
-            string label = new string(' ', depth * 2) + slot.Name;
-            if (GUILayout.Button(label, style, GUILayout.Height(20f)))
-                _partsSelectedSlot = index;
-            for (int i = 0; i < _profile.PartsSlots.Count; i++)
-            {
-                var child = _profile.PartsSlots[i];
-                if (child == null) continue;
-                if (SpritePartIdUtility.Canonical(child.ParentSlotId) ==
-                    SpritePartIdUtility.Canonical(slot.SlotId))
-                    DrawPartsTreeNode(i, depth + 1);
-            }
         }
 
         void DrawPartsInspector(Rect rect)
@@ -306,35 +273,82 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 GUILayout.Space(6f);
                 GUILayout.Label("SELECTED PART", _sectionStyle);
-                EditorGUI.BeginChangeCheck();
-                string slotName = EditorGUILayout.TextField("Name", slot.Name);
-                string slotId = EditorGUILayout.TextField("Slot Id", slot.SlotId);
-                string parent = DrawParentPopup(slot);
-                if (_partsMode == SpritePartsStudioMode.Rig)
+                bool partLocked = slot.EditorLocked ||
+                    SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId);
+                using (new EditorGUI.DisabledScope(partLocked))
                 {
-                    Vector2 restPos = EditorGUILayout.Vector2Field("Rest Position", slot.RestPosition);
-                    float restRot = EditorGUILayout.FloatField("Rest Rotation", slot.RestRotation);
-                    Vector2 restScale = EditorGUILayout.Vector2Field("Rest Scale", slot.RestScale);
-                    string appearance = EditorGUILayout.TextField("Default Appearance Id", slot.DefaultAppearanceId);
-                    int rank = EditorGUILayout.IntField("Draw Rank", slot.DrawRank);
+                    EditorGUI.BeginChangeCheck();
+                    string slotName = EditorGUILayout.TextField("Name", slot.Name);
                     if (EditorGUI.EndChangeCheck())
                     {
-                        RecordProfileUndo("Edit Parts Slot");
-                        slot.Name = slotName;
-                        slot.SlotId = slotId;
-                        slot.ParentSlotId = parent;
-                        slot.RestPosition = restPos;
-                        slot.RestRotation = restRot;
-                        slot.RestScale = restScale;
-                        slot.DefaultAppearanceId = appearance;
-                        slot.DrawRank = rank;
-                        SpritePartsValidation.CanonicalizeIds(_profile);
-                        SaveDirty();
+                        RecordProfileUndo("Rename Parts Slot");
+                        var rename = SpritePartsAuthoringOps.TryRenameDisplayName(_profile, slot.SlotId, slotName);
+                        if (!rename.Ok)
+                            _status = rename.Reason;
+                        else
+                            SaveDirty();
+                    }
+                }
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUILayout.TextField("Slot Id", slot.SlotId);
+                EditorGUI.EndDisabledGroup();
+                EditorGUILayout.LabelField("Sibling Order", slot.SiblingOrder.ToString());
+                if (_partsMode == SpritePartsStudioMode.Rig)
+                {
+                    using (new EditorGUI.DisabledScope(partLocked))
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        string parent = DrawParentPopup(slot);
+                        Vector2 restPos = EditorGUILayout.Vector2Field("Rest Position", slot.RestPosition);
+                        float restRot = EditorGUILayout.FloatField("Rest Rotation", slot.RestRotation);
+                        Vector2 restScale = EditorGUILayout.Vector2Field("Rest Scale", slot.RestScale);
+                        string appearance = EditorGUILayout.TextField("Default Appearance Id", slot.DefaultAppearanceId);
+                        int rank = EditorGUILayout.IntField("Draw Order", slot.DrawRank);
+                        EditorGUILayout.BeginHorizontal();
+                        if (GUILayout.Button("Front", GUILayout.Width(60f)))
+                        {
+                            RecordProfileUndo("Parts Draw Order Front");
+                            SpritePartsAuthoringOps.TryNudgeDrawRank(_profile, slot.SlotId, +1);
+                            SaveDirty();
+                            GUI.FocusControl(null);
+                        }
+                        if (GUILayout.Button("Back", GUILayout.Width(60f)))
+                        {
+                            RecordProfileUndo("Parts Draw Order Back");
+                            SpritePartsAuthoringOps.TryNudgeDrawRank(_profile, slot.SlotId, -1);
+                            SaveDirty();
+                            GUI.FocusControl(null);
+                        }
+                        EditorGUILayout.EndHorizontal();
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            RecordProfileUndo("Edit Parts Slot");
+                            string newParent = parent ?? string.Empty;
+                            string oldParent = slot.ParentSlotId ?? string.Empty;
+                            if (SpritePartIdUtility.Canonical(newParent) !=
+                                SpritePartIdUtility.Canonical(oldParent))
+                            {
+                                var kind = string.IsNullOrEmpty(newParent)
+                                    ? SpritePartsAuthoringOps.TreeDropKind.MoveToRoot
+                                    : SpritePartsAuthoringOps.TreeDropKind.ParentUnder;
+                                var rel = string.IsNullOrEmpty(newParent) ? string.Empty : newParent;
+                                var move = SpritePartsAuthoringOps.TryCommitTreeMove(
+                                    _profile, slot.SlotId, kind, rel, confirmAnimationReview: true);
+                                if (!move.Ok)
+                                    _status = move.Reason;
+                            }
+                            slot.RestPosition = restPos;
+                            slot.RestRotation = restRot;
+                            slot.RestScale = restScale;
+                            slot.DefaultAppearanceId = appearance;
+                            slot.DrawRank = rank;
+                            SpritePartsValidation.CanonicalizeIds(_profile);
+                            SaveDirty();
+                        }
                     }
                 }
                 else if (_partsMode == SpritePartsStudioMode.Animate)
                 {
-                    EditorGUI.EndChangeCheck();
                     var pose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
                     EditorGUI.BeginChangeCheck();
                     Vector2 pos = EditorGUILayout.Vector2Field("Position", pose.Position);
@@ -671,16 +685,26 @@ namespace InvertLab.Sprites.DOTS.Editor
                 int hit = HitTestPartsSlot(canvas, evt.mousePosition);
                 if (hit >= 0)
                 {
-                    _partsSelectedSlot = hit;
                     var slot = _profile.PartsSlots[hit];
-                    _partsDragActive = true;
-                    _partsDragSlotId = slot.SlotId;
-                    _partsDragStartMouse = evt.mousePosition;
-                    _partsDragStartPose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
-                    BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
-                        ? "Move Parts Rest"
-                        : "Move Parts Key");
-                    evt.Use();
+                    SelectPartsSlotId(slot.SlotId, false, false);
+                    bool locked = slot.EditorLocked ||
+                        SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId);
+                    if (locked)
+                    {
+                        _status = "Part is locked.";
+                        evt.Use();
+                    }
+                    else
+                    {
+                        _partsDragActive = true;
+                        _partsDragSlotId = slot.SlotId;
+                        _partsDragStartMouse = evt.mousePosition;
+                        _partsDragStartPose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
+                        BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
+                            ? "Move Parts Rest"
+                            : "Move Parts Key");
+                        evt.Use();
+                    }
                 }
             }
             else if (evt.type == EventType.MouseDrag && _partsDragActive && evt.button == 0)
@@ -876,20 +900,33 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsDisplayFps = Mathf.Clamp(
                 EditorGUI.FloatField(new Rect(rect.x + 205f, y, 40f, 18f), _partsDisplayFps), 1f, 120f);
 
-            _partsAutoKey = GUI.Toggle(new Rect(rect.x + 260f, y, 90f, 18f), _partsAutoKey,
+            _partsAutoKey = GUI.Toggle(new Rect(rect.x + 260f, y, 70f, 18f), _partsAutoKey,
                 new GUIContent("Auto Key", "Animate drags write keys (default ON)."));
-            if (GUI.Button(new Rect(rect.x + 355f, y, 70f, 18f),
-                new GUIContent("Key Pose", "Insert/update key at playhead for selection."), EditorStyles.miniButton))
+            _partsKeyPoseIncludesAppearance = GUI.Toggle(new Rect(rect.x + 332f, y, 70f, 18f),
+                _partsKeyPoseIncludesAppearance,
+                new GUIContent("Incl. Sprite", "Key Pose also writes AppearanceId from the dropdown."));
+            if (GUI.Button(new Rect(rect.x + 405f, y, 70f, 18f),
+                new GUIContent("Key Pose", "Insert/update TRS key at playhead for selection."), EditorStyles.miniButton))
             {
                 CommitKeyPose();
+            }
+            if (GUI.Button(new Rect(rect.x + 478f, y, 78f, 18f),
+                new GUIContent("Key Sprite", "Upsert appearance key from profile Appearances."), EditorStyles.miniButton))
+            {
+                CommitKeySprite();
             }
 
             float timeLabelX = rect.xMax - 120f;
             GUI.Label(new Rect(timeLabelX, y, 110f, 18f),
                 $"t={_partsPreviewTime:F3}s", _mutedStyle);
 
-            float tracksTop = rect.y + 28f;
-            float tracksHeight = rect.height - 34f;
+            // Appearance picker bound to profile Appearances (same-profile sheet+cell).
+            float appY = y + 20f;
+            GUI.Label(new Rect(rect.x + 8f, appY, 70f, 16f), "Sprite Key", _mutedStyle);
+            DrawPartsAppearancePopup(new Rect(rect.x + 80f, appY, 220f, 16f));
+
+            float tracksTop = rect.y + 48f;
+            float tracksHeight = rect.height - 54f;
             var tracksRect = new Rect(rect.x + 8f, tracksTop, rect.width - 16f, tracksHeight);
             DrawPartsTracks(tracksRect, clip, controlId);
         }
@@ -905,10 +942,63 @@ namespace InvertLab.Sprites.DOTS.Editor
                 : SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
             RecordProfileUndo("Key Parts Pose");
             var result = SpritePartsAuthoringOps.WriteKeyPose(
-                _profile, _partsSelectedClip, slot.SlotId, _partsPreviewTime, pose, _partsDisplayFps);
+                _profile, _partsSelectedClip, slot.SlotId, _partsPreviewTime, pose, _partsDisplayFps,
+                appearanceId: _partsKeyAppearanceId,
+                includeAppearance: _partsKeyPoseIncludesAppearance);
             _partsHasTempPose = false;
             SaveDirty();
-            _status = result.WroteKey ? "Keyed pose" : (result.Reason ?? "Key Pose failed");
+            if (!result.WroteKey && result.Rejected)
+                _status = result.Reason ?? "Key Pose failed";
+            else if (result.WroteAppearance)
+                _status = "Keyed pose + sprite";
+            else
+                _status = result.WroteKey ? "Keyed pose" : (result.Reason ?? "Key Pose failed");
+        }
+
+        void CommitKeySprite()
+        {
+            var slot = CurrentPartsSlot;
+            if (slot == null || CurrentPartsClip == null) return;
+            var pose = _partsHasTempPose &&
+                       SpritePartIdUtility.Canonical(_partsTempSlotId) ==
+                       SpritePartIdUtility.Canonical(slot.SlotId)
+                ? _partsTempPose
+                : SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
+            RecordProfileUndo("Key Parts Sprite");
+            var result = SpritePartsAuthoringOps.WriteKeySprite(
+                _profile, _partsSelectedClip, slot.SlotId, _partsPreviewTime,
+                _partsKeyAppearanceId, pose, _partsDisplayFps);
+            SaveDirty();
+            _status = result.WroteAppearance
+                ? (string.IsNullOrEmpty(_partsKeyAppearanceId)
+                    ? "Keyed sprite hold (cleared AppearanceId)"
+                    : "Keyed sprite " + _partsKeyAppearanceId)
+                : (result.Reason ?? "Key Sprite failed");
+        }
+
+        void DrawPartsAppearancePopup(Rect rect)
+        {
+            var apps = _profile?.PartsAppearances;
+            var labels = new List<string> { "(hold / none)" };
+            var ids = new List<string> { string.Empty };
+            int selected = 0;
+            if (apps != null)
+            {
+                for (int i = 0; i < apps.Count; i++)
+                {
+                    var app = apps[i];
+                    if (app == null) continue;
+                    string id = SpritePartIdUtility.Canonical(app.AppearanceId, app.Name);
+                    string label = string.IsNullOrEmpty(app.Name) ? id : $"{app.Name} [{id}] s{app.SheetIndex}:c{app.CellIndex}";
+                    labels.Add(label);
+                    ids.Add(id);
+                    if (SpritePartIdUtility.Canonical(_partsKeyAppearanceId) == id)
+                        selected = labels.Count - 1;
+                }
+            }
+            int next = EditorGUI.Popup(rect, selected, labels.ToArray());
+            if (next >= 0 && next < ids.Count)
+                _partsKeyAppearanceId = ids[next];
         }
 
         void DrawPartsTracks(Rect rect, SpritePartsClipDef clip, int controlId)
@@ -965,7 +1055,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     {
                         float u = track.Keys[k].Time / duration;
                         float kx = Mathf.Lerp(trackRect.x, trackRect.xMax, u);
-                        DrawPartsKeyDiamond(kx, rowY + rowH * 0.5f, selected);
+                        bool hasSprite = !string.IsNullOrWhiteSpace(track.Keys[k].AppearanceId);
+                        DrawPartsKeyDiamond(kx, rowY + rowH * 0.5f, selected, hasSprite);
                     }
                 }
                 else
@@ -980,11 +1071,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.DrawRect(new Rect(px - 1f, rect.y, 2f, rect.height), new Color(1f, 0.85f, 0.2f, 0.9f));
         }
 
-        void DrawPartsKeyDiamond(float x, float y, bool selected)
+        void DrawPartsKeyDiamond(float x, float y, bool selected, bool hasSpriteChange = false)
         {
             float s = selected ? 5f : 4f;
             Handles.BeginGUI();
-            Handles.color = selected ? new Color(0.4f, 1f, 0.55f) : new Color(0.7f, 0.85f, 1f);
+            if (hasSpriteChange)
+                Handles.color = selected ? new Color(1f, 0.75f, 0.2f) : new Color(1f, 0.55f, 0.15f);
+            else
+                Handles.color = selected ? new Color(0.4f, 1f, 0.55f) : new Color(0.7f, 0.85f, 1f);
             Handles.DrawAAConvexPolygon(
                 new Vector3(x, y - s), new Vector3(x + s, y),
                 new Vector3(x, y + s), new Vector3(x - s, y));
@@ -1007,25 +1101,6 @@ namespace InvertLab.Sprites.DOTS.Editor
             });
             SpritePartsValidation.CanonicalizeIds(_profile);
             _partsSelectedClip = _profile.PartsClips.Count - 1;
-            SaveDirty();
-        }
-
-        void AddPartsSlot()
-        {
-            RecordProfileUndo("Add Parts Slot");
-            _profile.EnsurePartsRig();
-            int n = _profile.PartsSlots.Count + 1;
-            string parent = CurrentPartsSlot?.SlotId ?? string.Empty;
-            _profile.PartsSlots.Add(new SpritePartSlotDef
-            {
-                Name = "Part " + n,
-                SlotId = "part." + n,
-                ParentSlotId = parent,
-                RestScale = Vector2.one,
-                DrawRank = n - 1,
-            });
-            SpritePartsValidation.CanonicalizeIds(_profile);
-            _partsSelectedSlot = _profile.PartsSlots.Count - 1;
             SaveDirty();
         }
 

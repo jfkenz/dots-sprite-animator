@@ -1,4 +1,4 @@
-﻿using Unity.Entities;
+using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
 
@@ -406,8 +406,80 @@ namespace InvertLab.Sprites.DOTS
             return true;
         }
 
+        /// <summary>
+        /// Drive part appearance from clip sampling. sampledAppIndex >= 0 applies that appearance
+        /// as a keyed override. sampledAppIndex < 0 clears keyed override and restores active skin
+        /// binding or slot default (joint TRS untouched).
+        /// </summary>
+        public static void ApplySampledAppearance(
+            EntityManager em, Entity root, Entity part, int slotIndex, int sampledAppIndex, ref SpritePartsSetBlob set)
+        {
+            if (part == Entity.Null || !em.Exists(part))
+                return;
+
+            var state = em.HasComponent<SpritePartAppearanceState>(part)
+                ? em.GetComponentData<SpritePartAppearanceState>(part)
+                : default;
+            bool wasKeyed = state.KeyedOverride != 0;
+
+            if (sampledAppIndex >= 0)
+            {
+                if (sampledAppIndex >= set.Appearances.Length)
+                    return;
+                if (state.KeyedOverride != 0 && state.AppearanceIndex == sampledAppIndex)
+                    return;
+                ref var app = ref set.Appearances[sampledAppIndex];
+                if (!IsAppearanceGeometryValid(ref app))
+                    return;
+                ApplyAppearanceBlob(em, root, part, sampledAppIndex, ref app, keyedOverride: 1);
+                return;
+            }
+
+            if (!wasKeyed)
+                return;
+
+            // Restore skin binding if active, else default appearance.
+            int restore = -1;
+            if (em.HasComponent<SpritePartsActiveSkin>(root))
+            {
+                ulong skinHash = em.GetComponentData<SpritePartsActiveSkin>(root).SkinIdHash;
+                if (skinHash != 0)
+                {
+                    for (int s = 0; s < set.SkinPatches.Length; s++)
+                    {
+                        if (set.SkinPatches[s].SkinIdHash != skinHash) continue;
+                        ref var skin = ref set.SkinPatches[s];
+                        for (int b = 0; b < skin.Bindings.Length; b++)
+                        {
+                            if (skin.Bindings[b].SlotIndex == slotIndex)
+                            {
+                                restore = skin.Bindings[b].AppearanceIndex;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            if (restore < 0 && slotIndex >= 0 && slotIndex < set.Slots.Length)
+                restore = set.Slots[slotIndex].DefaultAppearanceIndex;
+            if (restore < 0 || restore >= set.Appearances.Length)
+            {
+                if (em.HasComponent<SpritePartAppearanceState>(part))
+                {
+                    state.KeyedOverride = 0;
+                    em.SetComponentData(part, state);
+                }
+                return;
+            }
+            ref var restoreApp = ref set.Appearances[restore];
+            if (!IsAppearanceGeometryValid(ref restoreApp))
+                return;
+            ApplyAppearanceBlob(em, root, part, restore, ref restoreApp, keyedOverride: 0);
+        }
         static void ApplyAppearanceBlob(
-            EntityManager em, Entity root, Entity part, int appIndex, ref SpritePartAppearanceBlob app)
+            EntityManager em, Entity root, Entity part, int appIndex, ref SpritePartAppearanceBlob app,
+            byte keyedOverride = 0)
         {
             var state = new SpritePartAppearanceState
             {
@@ -418,6 +490,7 @@ namespace InvertLab.Sprites.DOTS
                 Pivot = app.Pivot,
                 FrameOffset = app.FrameOffset,
                 FrameScale = app.FrameScale,
+                KeyedOverride = keyedOverride,
             };
             if (!em.HasComponent<SpritePartAppearanceState>(part))
                 em.AddComponentData(part, state);

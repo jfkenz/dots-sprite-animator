@@ -54,6 +54,8 @@ namespace InvertLab.Sprites.DOTS
         public float Rotation;
         public float2 Scale;
         public byte EaseMode;
+        /// <summary>-1 = no appearance change on this key (hold previous / skin default).</summary>
+        public int AppearanceIndex;
     }
 
     public struct SpritePartAppearanceBlob
@@ -114,6 +116,8 @@ namespace InvertLab.Sprites.DOTS
             public float Rotation;
             public float2 Scale;
             public byte EaseMode;
+            /// <summary>Empty = hold (-1). Non-empty must exist in Appearances.</summary>
+            public string AppearanceId;
         }
 
         public struct TrackInput
@@ -281,7 +285,7 @@ namespace InvertLab.Sprites.DOTS
                         int sIndex = slotIndex[sid];
                         dense[sIndex] = write;
 
-                        var keys = NormalizeKeys(tr.Keys, duration);
+                        var keys = NormalizeKeys(tr.Keys, duration, appIndex);
                         var keyArr = builder.Allocate(ref trackArr[write].Keys, keys.Length);
                         for (int k = 0; k < keys.Length; k++)
                             keyArr[k] = keys[k];
@@ -335,7 +339,10 @@ namespace InvertLab.Sprites.DOTS
             }
         }
 
-        static SpritePartsKeyBlob[] NormalizeKeys(KeyInput[] keys, float duration)
+        static SpritePartsKeyBlob[] NormalizeKeys(
+            KeyInput[] keys,
+            float duration,
+            System.Collections.Generic.Dictionary<string, int> appIndex)
         {
             if (keys == null || keys.Length == 0)
                 return Array.Empty<SpritePartsKeyBlob>();
@@ -349,6 +356,13 @@ namespace InvertLab.Sprites.DOTS
                 if (k.Scale.x <= 0f || k.Scale.y <= 0f)
                     throw new ArgumentException("Key scale must be > 0.");
                 byte ease = SpriteEase.IsValidMode(k.EaseMode) ? k.EaseMode : (byte)SpriteEaseMode.Linear;
+                int appearanceIndex = -1;
+                if (!string.IsNullOrWhiteSpace(k.AppearanceId))
+                {
+                    string aid = SpritePartIdUtility.Canonical(k.AppearanceId);
+                    if (appIndex == null || !appIndex.TryGetValue(aid, out appearanceIndex))
+                        throw new ArgumentException($"Key appearance '{aid}' is missing from the profile.");
+                }
                 list.Add((i, new SpritePartsKeyBlob
                 {
                     Time = math.clamp(k.Time, 0f, duration),
@@ -356,12 +370,13 @@ namespace InvertLab.Sprites.DOTS
                     Rotation = k.Rotation,
                     Scale = k.Scale,
                     EaseMode = ease,
+                    AppearanceIndex = appearanceIndex,
                 }));
             }
             list.Sort((a, b) =>
             {
-                int c = a.key.Time.CompareTo(b.key.Time);
-                return c != 0 ? c : a.index.CompareTo(b.index);
+                int cmp = a.key.Time.CompareTo(b.key.Time);
+                return cmp != 0 ? cmp : a.index.CompareTo(b.index);
             });
             // Duplicate times: last writer wins (stable by original index).
             var unique = new System.Collections.Generic.List<SpritePartsKeyBlob>(list.Count);

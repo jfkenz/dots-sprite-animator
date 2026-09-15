@@ -1,4 +1,4 @@
-﻿using Unity.Entities;
+using Unity.Entities;
 using Unity.Mathematics;
 
 namespace InvertLab.Sprites.DOTS
@@ -49,6 +49,8 @@ namespace InvertLab.Sprites.DOTS
         public float2 Pivot;
         public float2 FrameOffset;
         public float2 FrameScale;
+        /// <summary>1 when a clip appearance key is driving this part; 0 when skin/default owns it.</summary>
+        public byte KeyedOverride;
     }
 
     /// <summary>World-local sheet entity for each baked sheet-table index.</summary>

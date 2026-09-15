@@ -31,13 +31,20 @@ namespace InvertLab.Sprites.DOTS
         public string Name = "Body";
         public string SlotId = "body";
         public string ParentSlotId = string.Empty;
+        /// <summary>
+        /// Tree sibling presentation order under ParentSlotId (or Character root).
+        /// Independent of DrawRank / front-back rendering.
+        /// </summary>
+        public int SiblingOrder;
         public Vector2 RestPosition = Vector2.zero;
         public float RestRotation;
         public Vector2 RestScale = Vector2.one;
         public string DefaultAppearanceId = string.Empty;
         public int DrawRank;
-        /// <summary>Editor selection/preview only. Bake still includes the slot.</summary>
+        /// <summary>Editor eye toggle / selection-preview only. Bake still includes the slot.</summary>
         public bool Enabled = true;
+        /// <summary>Editor-only lock. Locked parts cannot be transformed, renamed, deleted or dragged.</summary>
+        public bool EditorLocked;
     }
 
     /// <summary>Art binding relative to a joint. Swap changes this; motion keys stay.</summary>
@@ -62,6 +69,11 @@ namespace InvertLab.Sprites.DOTS
         public float Rotation;
         public Vector2 Scale = Vector2.one;
         public byte EaseMode = (byte)SpriteEaseMode.Linear;
+        /// <summary>
+        /// Optional. Empty = hold previous keyed appearance (or skin/default when none active).
+        /// Non-empty must be a profile PartsAppearances id (sheet index + cell already on profile).
+        /// </summary>
+        public string AppearanceId = string.Empty;
     }
 
     [Serializable]

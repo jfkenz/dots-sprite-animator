@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Mathematics;
@@ -18,7 +18,7 @@ namespace InvertLab.Sprites.DOTS
     /// Pure Parts authoring operations. Mode isolation and templates live here so
     /// EditMode tests can cover contracts without opening the tool window.
     /// </summary>
-    public static class SpritePartsAuthoringOps
+    public static partial class SpritePartsAuthoringOps
     {
         public const float DefaultDisplayFps = 30f;
         public const float DefaultOnionOpacity = 0.30f;
@@ -37,6 +37,7 @@ namespace InvertLab.Sprites.DOTS
         {
             public bool WroteRest;
             public bool WroteKey;
+            public bool WroteAppearance;
             public bool InsertedRestAnchorAtZero;
             public bool Rejected;
             public string Reason;
@@ -56,21 +57,25 @@ namespace InvertLab.Sprites.DOTS
             profile.PartsSlots.Add(new SpritePartSlotDef
             {
                 Name = "Body", SlotId = "body", ParentSlotId = string.Empty,
+                SiblingOrder = 0,
                 RestPosition = Vector2.zero, RestScale = Vector2.one, DrawRank = 0,
             });
             profile.PartsSlots.Add(new SpritePartSlotDef
             {
                 Name = "Hand L", SlotId = "hand.l", ParentSlotId = "body",
+                SiblingOrder = 0,
                 RestPosition = new Vector2(-0.35f, 0.1f), RestScale = Vector2.one, DrawRank = 1,
             });
             profile.PartsSlots.Add(new SpritePartSlotDef
             {
                 Name = "Hand R", SlotId = "hand.r", ParentSlotId = "body",
+                SiblingOrder = 1,
                 RestPosition = new Vector2(0.35f, 0.1f), RestScale = Vector2.one, DrawRank = 2,
             });
             profile.PartsSlots.Add(new SpritePartSlotDef
             {
                 Name = "Weapon", SlotId = "weapon", ParentSlotId = "hand.r",
+                SiblingOrder = 0,
                 RestPosition = new Vector2(0.25f, 0f), RestScale = Vector2.one, DrawRank = 3,
             });
 
@@ -211,10 +216,152 @@ namespace InvertLab.Sprites.DOTS
             string slotId,
             float timeSeconds,
             PoseEdit pose,
+            float snapFps = DefaultDisplayFps,
+            string appearanceId = null,
+            bool includeAppearance = false)
+        {
+            var result = ApplyPoseEdit(profile, SpritePartsStudioMode.Animate, clipIndex, slotId,
+                timeSeconds, pose, autoKey: true, snapFps);
+            if (!result.WroteKey || !includeAppearance)
+                return result;
+            return WriteKeyAppearance(profile, clipIndex, slotId, timeSeconds, appearanceId, snapFps,
+                ensurePoseFrom: pose);
+        }
+
+        /// <summary>
+        /// Upsert a sprite/appearance key at playhead. Empty appearanceId clears the key's
+        /// appearance field (hold). Missing track/key creates one from current/rest pose.
+        /// </summary>
+        public static WriteResult WriteKeySprite(
+            SpriteSheetProfile profile,
+            int clipIndex,
+            string slotId,
+            float timeSeconds,
+            string appearanceId,
+            PoseEdit? poseFallback = null,
             float snapFps = DefaultDisplayFps)
         {
-            return ApplyPoseEdit(profile, SpritePartsStudioMode.Animate, clipIndex, slotId,
-                timeSeconds, pose, autoKey: true, snapFps);
+            return WriteKeyAppearance(profile, clipIndex, slotId, timeSeconds, appearanceId, snapFps,
+                ensurePoseFrom: poseFallback);
+        }
+
+        static WriteResult WriteKeyAppearance(
+            SpriteSheetProfile profile,
+            int clipIndex,
+            string slotId,
+            float timeSeconds,
+            string appearanceId,
+            float snapFps,
+            PoseEdit? ensurePoseFrom)
+        {
+            var result = new WriteResult();
+            if (profile == null)
+            {
+                result.Rejected = true;
+                result.Reason = "Profile is null.";
+                return result;
+            }
+            profile.EnsurePartsRig();
+            var slot = FindSlot(profile, slotId);
+            if (slot == null)
+            {
+                result.Rejected = true;
+                result.Reason = "Slot not found.";
+                return result;
+            }
+            if (clipIndex < 0 || clipIndex >= profile.PartsClips.Count)
+            {
+                result.Rejected = true;
+                result.Reason = "No Parts clip selected.";
+                return result;
+            }
+
+            string aid = string.IsNullOrWhiteSpace(appearanceId)
+                ? string.Empty
+                : SpritePartIdUtility.Canonical(appearanceId);
+            if (!string.IsNullOrEmpty(aid))
+            {
+                bool found = false;
+                if (profile.PartsAppearances != null)
+                {
+                    for (int i = 0; i < profile.PartsAppearances.Count; i++)
+                    {
+                        var app = profile.PartsAppearances[i];
+                        if (app != null &&
+                            SpritePartIdUtility.Canonical(app.AppearanceId, app.Name) == aid)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found)
+                {
+                    result.Rejected = true;
+                    result.Reason = $"Appearance '{aid}' is not on this profile.";
+                    return result;
+                }
+            }
+
+            var clip = profile.PartsClips[clipIndex];
+            float duration = Mathf.Max(1e-3f, clip.Duration);
+            float time = SnapTime(Mathf.Clamp(timeSeconds, 0f, duration), snapFps, duration);
+            var track = GetOrCreateTrack(clip, slot.SlotId);
+            var existing = FindKeyAtTime(track, time);
+            if (existing == null)
+            {
+                PoseEdit pose = ensurePoseFrom ?? new PoseEdit
+                {
+                    Position = slot.RestPosition,
+                    Rotation = slot.RestRotation,
+                    Scale = slot.RestScale,
+                };
+                UpsertKey(track, time, pose, appearanceId: aid, setAppearance: true);
+                result.WroteKey = true;
+            }
+            else
+            {
+                existing.AppearanceId = aid;
+                result.WroteKey = true;
+            }
+            result.WroteAppearance = true;
+            return result;
+        }
+
+        /// <summary>
+        /// Sample keyed appearance id for editor preview: last non-empty at/before time,
+        /// with Loop carry. Empty string means no keyed appearance (skin/default applies).
+        /// </summary>
+        public static string SampleKeyedAppearanceId(
+            SpriteSheetProfile profile, int clipIndex, string slotId, float timeSeconds)
+        {
+            if (profile?.PartsClips == null || clipIndex < 0 || clipIndex >= profile.PartsClips.Count)
+                return string.Empty;
+            var clip = profile.PartsClips[clipIndex];
+            if (clip == null) return string.Empty;
+            float duration = Mathf.Max(1e-3f, clip.Duration);
+            float time = SpritePartsSampler.WrapTime(timeSeconds, duration, clip.WrapMode);
+            var track = FindTrack(clip, slotId);
+            if (track?.Keys == null || track.Keys.Count == 0)
+                return string.Empty;
+
+            string best = null;
+            string lastInClip = null;
+            for (int i = 0; i < track.Keys.Count; i++)
+            {
+                var key = track.Keys[i];
+                if (key == null || string.IsNullOrWhiteSpace(key.AppearanceId))
+                    continue;
+                string aid = SpritePartIdUtility.Canonical(key.AppearanceId);
+                lastInClip = aid;
+                if (key.Time <= time + 1e-6f)
+                    best = aid;
+            }
+            if (!string.IsNullOrEmpty(best))
+                return best;
+            if (clip.WrapMode != (byte)SpritePartsWrap.Once && !string.IsNullOrEmpty(lastInClip))
+                return lastInClip;
+            return string.Empty;
         }
 
         public static SpritePartsKeyDef FindKeyAtTime(SpritePartsTrackDef track, float time, float epsilon = 1e-4f)
@@ -386,7 +533,12 @@ namespace InvertLab.Sprites.DOTS
             return track;
         }
 
-        static void UpsertKey(SpritePartsTrackDef track, float time, PoseEdit pose)
+        static void UpsertKey(
+            SpritePartsTrackDef track,
+            float time,
+            PoseEdit pose,
+            string appearanceId = null,
+            bool setAppearance = false)
         {
             track.Keys ??= new List<SpritePartsKeyDef>();
             var existing = FindKeyAtTime(track, time);
@@ -395,6 +547,8 @@ namespace InvertLab.Sprites.DOTS
                 existing.Position = pose.Position;
                 existing.Rotation = pose.Rotation;
                 existing.Scale = SanitizeScale(pose.Scale);
+                if (setAppearance)
+                    existing.AppearanceId = appearanceId ?? string.Empty;
                 return;
             }
             track.Keys.Add(new SpritePartsKeyDef
@@ -404,6 +558,7 @@ namespace InvertLab.Sprites.DOTS
                 Rotation = pose.Rotation,
                 Scale = SanitizeScale(pose.Scale),
                 EaseMode = (byte)SpriteEaseMode.Linear,
+                AppearanceId = setAppearance ? (appearanceId ?? string.Empty) : string.Empty,
             });
             track.Keys.Sort((a, b) => a.Time.CompareTo(b.Time));
         }
@@ -416,4 +571,5 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 }
+
 

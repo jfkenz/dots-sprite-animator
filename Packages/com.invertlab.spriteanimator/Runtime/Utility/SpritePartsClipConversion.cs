@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
@@ -126,6 +126,7 @@ namespace InvertLab.Sprites.DOTS
                             Rotation = key.Rotation,
                             Scale = new float2(key.Scale.x, key.Scale.y),
                             EaseMode = key.EaseMode,
+                            AppearanceId = key.AppearanceId,
                         };
                     }
                     trackInputs[t] = new SpritePartsSetBuilder.TrackInput

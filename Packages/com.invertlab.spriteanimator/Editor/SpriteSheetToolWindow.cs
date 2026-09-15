@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
@@ -6068,6 +6068,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
                 {
                     RemoveLastPolygonVertex();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                // Parts hierarchy: Delete/Backspace when selection active and not renaming.
+                if (_studioTab == StudioTab.Parts &&
+                    _profile != null &&
+                    _profile.AnimKind == SpriteAnimKind.Parts &&
+                    string.IsNullOrEmpty(_partsRenameSlotId) &&
+                    _partsSelectedSlotIds.Count > 0 &&
+                    !EditorGUIUtility.editingTextField)
+                {
+                    TryDeleteSelectedPartsFromHotkey();
                     evt.Use();
                     Repaint();
                     return;
