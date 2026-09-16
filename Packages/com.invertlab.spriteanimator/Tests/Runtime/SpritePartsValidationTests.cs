@@ -165,5 +165,27 @@ namespace InvertLab.Sprites.DOTS.Tests
             var result = SpritePartsValidation.Validate(MinimalValid());
             Assert.IsTrue(result.Ok, string.Join(" | ", result.Errors));
         }
+
+        [Test]
+        public void AllowsNegativeScale_AndBuildsBlob()
+        {
+            var profile = MinimalValid();
+            profile.PartsSlots[0].RestScale = new Vector2(-1f, 1f);
+            profile.PartsClips[0].Tracks.Clear();
+            profile.PartsClips[0].Tracks.Add(new SpritePartsTrackDef
+            {
+                SlotId = "body",
+                Keys = new List<SpritePartsKeyDef>
+                {
+                    new SpritePartsKeyDef { Time = 0f, Scale = new Vector2(-1f, 1f) },
+                    new SpritePartsKeyDef { Time = 0.5f, Scale = new Vector2(-1.2f, 1f) },
+                },
+            });
+            var result = SpritePartsValidation.Validate(profile);
+            Assert.IsTrue(result.Ok, string.Join(" | ", result.Errors));
+            Assert.IsTrue(SpritePartsClipConversion.TryBuildBlob(
+                profile, Unity.Collections.Allocator.Temp, out var blob, out var err), err);
+            if (blob.IsCreated) blob.Dispose();
+        }
     }
 }

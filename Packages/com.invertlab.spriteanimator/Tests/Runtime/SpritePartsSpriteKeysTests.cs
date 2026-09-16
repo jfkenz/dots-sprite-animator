@@ -46,7 +46,7 @@ namespace InvertLab.Sprites.DOTS.Tests
 
             string describe = SpritePartsAuthoringOps.DescribeHierarchyEditBlock(
                 profile, "hand.r", SpritePartsStudioMode.Animate, "delete");
-            StringAssert.Contains("Rig", describe);
+            StringAssert.Contains("locked", describe.ToLowerInvariant());
 
             describe = SpritePartsAuthoringOps.DescribeHierarchyEditBlock(
                 profile, "hand.r", SpritePartsStudioMode.Rig, "delete");
@@ -61,6 +61,8 @@ namespace InvertLab.Sprites.DOTS.Tests
         public void DeleteHotkeyPath_SucceedsInRigWhenUnlocked()
         {
             var profile = MakeFloatingWithAppearances();
+            Assert.IsNull(SpritePartsAuthoringOps.DescribeHierarchyEditBlock(
+                profile, "weapon", SpritePartsStudioMode.Animate, "delete"));
             Assert.IsNull(SpritePartsAuthoringOps.DescribeHierarchyEditBlock(
                 profile, "weapon", SpritePartsStudioMode.Rig, "delete"));
             var del = SpritePartsAuthoringOps.TryDeleteSubtree(profile, "weapon");

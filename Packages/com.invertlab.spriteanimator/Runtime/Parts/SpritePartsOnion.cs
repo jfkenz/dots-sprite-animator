@@ -84,6 +84,30 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>
+        /// True when every slot's local-to-root matrix matches within epsilon.
+        /// Idle with only rest (or a single key) would otherwise onion-draw a
+        /// second grey square on top of the live pose.
+        /// </summary>
+        public static bool MatricesApproximatelyEqual(
+            NativeArray<float4x4> a, NativeArray<float4x4> b, float epsilon = 1e-3f)
+        {
+            if (!a.IsCreated || !b.IsCreated || a.Length != b.Length || a.Length == 0)
+                return false;
+            float e = math.max(1e-6f, epsilon);
+            for (int i = 0; i < a.Length; i++)
+            {
+                float4x4 da = a[i];
+                float4x4 db = b[i];
+                for (int c = 0; c < 4; c++)
+                {
+                    if (math.cmax(math.abs(da[c] - db[c])) > e)
+                        return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
         /// Build a pose-only blob and sample all slots at time (local + root matrices).
         /// Caller must <see cref="DisposeSample"/>.
         /// </summary>

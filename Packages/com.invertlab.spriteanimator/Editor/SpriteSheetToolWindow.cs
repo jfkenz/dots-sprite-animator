@@ -521,6 +521,10 @@ namespace InvertLab.Sprites.DOTS.Editor
         GUIStyle _clipSelectedStyle;
         GUIStyle _transportStyle;
         GUIStyle _primaryStyle;
+        GUIStyle _partsTabStyle;
+        GUIStyle _partsEyeToggleStyle;
+        GUIStyle _partsLockToggleStyle;
+        GUIStyle _partsRowIconStyle;
         GUIStyle _panelStyle;
         GUIStyle _saveStatusStyle;
         GUIStyle _frameLabelStyle;
@@ -578,6 +582,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (texture != null)
                     DestroyImmediate(texture);
             _styleTextures.Clear();
+            _partsEyeToggleStyle = null;
+            _partsLockToggleStyle = null;
+            _partsRowIconStyle = null;
             _titleStyle = null;
             _socketLabelStyle = null;
             _socketBalloonStyle = null;
@@ -675,7 +682,16 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             int timelineControlId = GUIUtility.GetControlID(
                 "InvertLabSpriteAnimatorTimeline".GetHashCode(), FocusType.Passive);
+            int partsCanvasControlId = GUIUtility.GetControlID(
+                "InvertLab.PartsCanvas".GetHashCode(), FocusType.Passive);
+            int partsScrubControlId = GUIUtility.GetControlID(
+                "InvertLab.PartsTimelineScrub".GetHashCode(), FocusType.Passive);
+            int partsKeyControlId = GUIUtility.GetControlID(
+                "InvertLab.PartsTimelineKeys".GetHashCode(), FocusType.Passive);
             HandleActiveTimelineDrag(timelineControlId);
+            HandleActivePartsCanvasDrag(partsCanvasControlId);
+            HandleActivePartsKeyDrag(partsKeyControlId);
+            HandleActivePartsTimelineScrub(partsScrubControlId);
             EditorGUI.DrawRect(new Rect(Vector2.zero, position.size), WindowColor);
 
             DrawToolbar(new Rect(0f, 0f, position.width, ToolbarHeight));
@@ -720,11 +736,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 DrawPartsBrowser(clipsRect);
                 DrawPartsInspector(inspectorRect);
-                DrawPartsPreview(previewRect);
+                DrawPartsPreview(previewRect, partsCanvasControlId);
                 DrawPanelSplitter(leftSplitter, true, workRect.width);
                 DrawPanelSplitter(rightSplitter, false, workRect.width);
                 DrawTimelineSplitter(timelineSplitter);
-                DrawPartsTimeline(timelineRect, timelineControlId);
+                DrawPartsTimeline(timelineRect, partsScrubControlId, partsKeyControlId);
             }
             else
             {
@@ -1023,7 +1039,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             using (new EditorGUI.DisabledScope(!(hasClip || _studioTab == StudioTab.Parts)))
             {
-                if (GUI.Button(new Rect(x, 52f, 28f, 28f), new GUIContent("|<", "Jump to first frame."), _transportStyle))
+                if (GUI.Button(new Rect(x, 52f, 36f, 28f), new GUIContent("<<", "Jump to first frame."), _transportStyle))
                 {
                     if (_studioTab == StudioTab.Parts) { _partsPreviewTime = 0f; Repaint(); }
                     else StepToBoundary(clip, forward: false);
@@ -1041,7 +1057,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     else StepFrame(clip, +1);
                 }
                 x += 28f;
-                if (GUI.Button(new Rect(x, 52f, 28f, 28f), new GUIContent(">|", "Jump to last frame."), _transportStyle))
+                if (GUI.Button(new Rect(x, 52f, 36f, 28f), new GUIContent(">>", "Jump to last frame."), _transportStyle))
                 {
                     if (_studioTab == StudioTab.Parts)
                     {
@@ -1072,6 +1088,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                     {
                         _partsPlaying = !_partsPlaying;
                         _playing = false;
+                        _socketPlaying = false;
+                        _lastEditorTime = EditorApplication.timeSinceStartup;
+                        _status = _partsPlaying ? "Parts playback started" : "Parts playback paused";
                     }
                     else
                     {
@@ -5959,6 +5978,17 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (now - _lastSpaceToggleTime < 0.08d)
                 return false;
             _lastSpaceToggleTime = now;
+            if (_studioTab == StudioTab.Parts)
+            {
+                if (CurrentPartsClip == null)
+                    return false;
+                _partsPlaying = !_partsPlaying;
+                _playing = false;
+                _socketPlaying = false;
+                _lastEditorTime = now;
+                _status = _partsPlaying ? "Parts playback started" : "Parts playback paused";
+                return true;
+            }
             if (_spacePlaysBothClocks)
             {
                 bool anyPlaying = _playing || _socketPlaying;
@@ -5998,13 +6028,94 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (evt.type != EventType.KeyDown)
                 return;
 
+            if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+            {
+                if (_partsRenamingClip >= 0)
+                {
+                    CommitPartsClipRename();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+                if (!string.IsNullOrEmpty(_partsRenameSlotId))
+                {
+                    CommitPartsRename();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+            }
+            if (evt.keyCode == KeyCode.Escape)
+            {
+                if (_partsRenamingClip >= 0)
+                {
+                    CancelPartsClipRename();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+                if (!string.IsNullOrEmpty(_partsRenameSlotId))
+                {
+                    CancelPartsRename();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+            }
+
             if (IsSpaceKey(evt))
             {
-                if (IsEditingStringTextField())
+                // Renames keep Space as a character; everything else (incl. float fields
+                // like Duration / Display FPS / Position) yields to play/pause.
+                if (IsRenamingAnything())
+                    return;
+                if (_studioTab != StudioTab.Parts && IsEditingStringTextField())
                     return;
 
                 ReleaseShortcutKeyboardFocus();
-                TryTogglePlaybackFromSpace();
+                if (!TryTogglePlaybackFromSpace())
+                {
+                    if (_studioTab == StudioTab.Parts)
+                        _status = CurrentPartsClip == null
+                            ? "No Parts clip to play"
+                            : "Space play ignored";
+                }
+                evt.Use();
+                Repaint();
+                return;
+            }
+
+            if (_studioTab == StudioTab.Parts &&
+                !evt.control && !evt.command && !evt.alt &&
+                (evt.keyCode == KeyCode.Q || evt.keyCode == KeyCode.W || evt.keyCode == KeyCode.E))
+            {
+                if (IsEditingAnyTextField())
+                    return;
+                ReleaseShortcutKeyboardFocus();
+                if (evt.keyCode == KeyCode.Q)
+                    SetPartsCanvasTool(PartsCanvasTool.Move);
+                else if (evt.keyCode == KeyCode.W)
+                    SetPartsCanvasTool(PartsCanvasTool.Rotate);
+                else
+                    SetPartsCanvasTool(PartsCanvasTool.Scale);
+                evt.Use();
+                return;
+            }
+
+            if (HandlePartsKeyShortcuts(evt))
+                return;
+
+            if (_studioTab == StudioTab.Parts &&
+                (evt.control || evt.command) && !evt.alt &&
+                evt.keyCode == KeyCode.D)
+            {
+                if (IsEditingAnyTextField())
+                    return;
+                var slot = CurrentPartsSlot;
+                if (slot == null)
+                    return;
+                ReleaseShortcutKeyboardFocus();
+                DuplicatePartsSlot(SpritePartIdUtility.Canonical(slot.SlotId), evt.shift);
                 evt.Use();
                 Repaint();
                 return;
@@ -6068,6 +6179,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
                 {
                     RemoveLastPolygonVertex();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                // Parts keys first, then hierarchy delete.
+                if (_studioTab == StudioTab.Parts && _partsSelectedKeys.Count > 0)
+                {
+                    DeleteSelectedPartsKeys();
                     evt.Use();
                     Repaint();
                     return;
@@ -6293,6 +6413,23 @@ namespace InvertLab.Sprites.DOTS.Editor
             ClearPolygonDraft();
             if (_timelineDragMode != TimelineDragMode.None)
                 EndTimelineDrag();
+            // Parts studio: drop in-flight transforms and resync selection to restored data.
+            _partsDragActive = false;
+            _partsCanvasHotControl = 0;
+            _partsDragUndoGroup = -1;
+            _partsHasTempPose = false;
+            _partsKeyDragging = false;
+            _partsKeyDragUndoRecorded = false;
+            _partsKeyHotControl = 0;
+            ClearPartsKeySelection();
+            if (_profile?.PartsClips != null && _profile.PartsClips.Count > 0)
+                _partsSelectedClip = Mathf.Clamp(_partsSelectedClip, 0, _profile.PartsClips.Count - 1);
+            else
+                _partsSelectedClip = 0;
+            if (_profile?.PartsSlots != null && _profile.PartsSlots.Count > 0)
+                _partsSelectedSlot = Mathf.Clamp(_partsSelectedSlot, 0, _profile.PartsSlots.Count - 1);
+            else
+                _partsSelectedSlot = -1;
             _status = "Undo/Redo applied";
             Repaint();
         }

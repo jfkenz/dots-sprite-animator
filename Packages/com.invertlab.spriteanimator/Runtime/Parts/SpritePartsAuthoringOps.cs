@@ -388,6 +388,164 @@ namespace InvertLab.Sprites.DOTS
             return null;
         }
 
+        public struct AssignArtResult
+        {
+            public bool Ok;
+            public string Reason;
+            public string AppearanceId;
+            public int SheetIndex;
+            public int CellIndex;
+        }
+
+        public static SpritePartAppearanceDef FindAppearance(SpriteSheetProfile profile, string appearanceId)
+        {
+            if (profile?.PartsAppearances == null || string.IsNullOrWhiteSpace(appearanceId))
+                return null;
+            string id = SpritePartIdUtility.Canonical(appearanceId);
+            for (int i = 0; i < profile.PartsAppearances.Count; i++)
+            {
+                var app = profile.PartsAppearances[i];
+                if (app != null && SpritePartIdUtility.Canonical(app.AppearanceId, app.Name) == id)
+                    return app;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Bind a texture cell as this slot's default appearance. 1x1 = whole image.
+        /// Reuses a sheet with the same texture+grid. Updates the slot's existing
+        /// default appearance when present, otherwise creates `{slotId}.default`.
+        /// </summary>
+        public static AssignArtResult AssignSlotArt(
+            SpriteSheetProfile profile,
+            string slotId,
+            Texture2D texture,
+            int columns,
+            int rows,
+            int cellIndex)
+        {
+            var result = new AssignArtResult();
+            if (profile == null)
+            {
+                result.Reason = "Profile is null.";
+                return result;
+            }
+            if (texture == null)
+            {
+                result.Reason = "Texture is null.";
+                return result;
+            }
+            profile.EnsurePartsRig();
+            profile.EnsureSheets();
+            var slot = FindSlot(profile, slotId);
+            if (slot == null)
+            {
+                result.Reason = "Slot not found.";
+                return result;
+            }
+
+            columns = Mathf.Max(1, columns);
+            rows = Mathf.Max(1, rows);
+            int cellCount = columns * rows;
+            cellIndex = ((cellIndex % cellCount) + cellCount) % cellCount;
+
+            int sheetIndex = -1;
+            for (int i = 0; i < profile.Sheets.Count; i++)
+            {
+                var s = profile.Sheets[i];
+                if (s == null || s.Texture != texture) continue;
+                if (Mathf.Max(1, s.Columns) != columns) continue;
+                if (Mathf.Max(1, s.Rows) != rows) continue;
+                sheetIndex = i;
+                break;
+            }
+            if (sheetIndex < 0)
+            {
+                profile.Sheets.Add(new SpriteSheetDef
+                {
+                    Name = string.IsNullOrWhiteSpace(texture.name) ? "Sheet" : texture.name,
+                    Texture = texture,
+                    Columns = columns,
+                    Rows = rows,
+                    PixelsPerUnit = profile.PixelsPerUnit > 0f
+                        ? profile.PixelsPerUnit
+                        : SpriteSheetProfile.DefaultPixelsPerUnit,
+                    Pivot = SpriteSheetProfile.DefaultPivot,
+                    CellLayoutMode = SpriteSheetCellLayoutMode.Grid,
+                });
+                sheetIndex = profile.Sheets.Count - 1;
+            }
+
+            string desiredId = SpritePartIdUtility.Canonical(slot.SlotId) + ".default";
+            SpritePartAppearanceDef app = null;
+            if (!string.IsNullOrWhiteSpace(slot.DefaultAppearanceId))
+                app = FindAppearance(profile, slot.DefaultAppearanceId);
+            if (app == null)
+                app = FindAppearance(profile, desiredId);
+            if (app == null)
+            {
+                for (int i = 0; i < profile.PartsAppearances.Count; i++)
+                {
+                    var a = profile.PartsAppearances[i];
+                    if (a != null && a.SheetIndex == sheetIndex && a.CellIndex == cellIndex)
+                    {
+                        app = a;
+                        break;
+                    }
+                }
+            }
+            if (app == null)
+            {
+                string id = desiredId;
+                int n = 2;
+                while (FindAppearance(profile, id) != null)
+                {
+                    id = desiredId + n;
+                    n++;
+                }
+                app = new SpritePartAppearanceDef
+                {
+                    Name = (string.IsNullOrWhiteSpace(slot.Name) ? slot.SlotId : slot.Name) + " Default",
+                    AppearanceId = id,
+                    SheetIndex = sheetIndex,
+                    CellIndex = cellIndex,
+                    LogicalWorldSize = Vector2.zero,
+                    PivotSource = SpritePartPivotSource.SheetDefault,
+                };
+                profile.PartsAppearances.Add(app);
+            }
+            else
+            {
+                app.SheetIndex = sheetIndex;
+                app.CellIndex = cellIndex;
+            }
+
+            slot.DefaultAppearanceId = SpritePartIdUtility.Canonical(app.AppearanceId, app.Name);
+            SpritePartsValidation.CanonicalizeIds(profile);
+            result.Ok = true;
+            result.AppearanceId = slot.DefaultAppearanceId;
+            result.SheetIndex = sheetIndex;
+            result.CellIndex = cellIndex;
+            return result;
+        }
+
+        /// <summary>
+        /// Preview resolve: keyed clip appearance, else skin preview, else slot default.
+        /// </summary>
+        public static string ResolvePreviewAppearanceId(
+            SpriteSheetProfile profile,
+            SpritePartSlotDef slot,
+            int clipIndex,
+            float timeSeconds,
+            Dictionary<string, string> previewOverrides)
+        {
+            if (slot == null) return string.Empty;
+            string keyed = SampleKeyedAppearanceId(profile, clipIndex, slot.SlotId, timeSeconds);
+            if (!string.IsNullOrEmpty(keyed))
+                return keyed;
+            return ResolveAppearanceId(slot, previewOverrides);
+        }
+
         public static SpritePartSlotDef FindSlot(SpriteSheetProfile profile, string slotId)
         {
             if (profile?.PartsSlots == null) return null;
@@ -565,9 +723,15 @@ namespace InvertLab.Sprites.DOTS
 
         static Vector2 SanitizeScale(Vector2 scale)
         {
-            float sx = scale.x <= 0f || !!(float.IsNaN(scale.x) || float.IsInfinity(scale.x)) ? 1f : scale.x;
-            float sy = scale.y <= 0f || !!(float.IsNaN(scale.y) || float.IsInfinity(scale.y)) ? 1f : scale.y;
-            return new Vector2(sx, sy);
+            // Allow negative axes so Flip Horizontal/Vertical can use RestScale / key Scale.
+            return new Vector2(SanitizeScaleAxis(scale.x), SanitizeScaleAxis(scale.y));
+        }
+
+        static float SanitizeScaleAxis(float v)
+        {
+            if (float.IsNaN(v) || float.IsInfinity(v) || Mathf.Abs(v) < 1e-5f)
+                return v < 0f ? -1f : 1f;
+            return v;
         }
     }
 }

@@ -366,6 +366,313 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>
+        /// Duplicate one part (not subtree). Copies rest pose, appearance, DrawRank+1,
+        /// and every clip track for that SlotId. Optional horizontal mirror for opposite limbs.
+        /// </summary>
+        public static HierarchyEditResult TryDuplicatePart(
+            SpriteSheetProfile profile,
+            string slotId,
+            out SpritePartSlotDef created,
+            bool mirrorHorizontal = false)
+        {
+            created = null;
+            var result = new HierarchyEditResult();
+            if (profile == null)
+            {
+                result.Reason = "Profile is null.";
+                return result;
+            }
+            profile.EnsurePartsRig();
+            var srcRoot = FindSlot(profile, slotId);
+            if (srcRoot == null)
+            {
+                result.Reason = "Slot not found.";
+                return result;
+            }
+            if (srcRoot.EditorLocked || SlotOrAncestorLocked(profile, srcRoot.SlotId))
+            {
+                result.Reason = "Part is locked.";
+                return result;
+            }
+
+            var subtree = CollectSubtreeSlots(profile, srcRoot.SlotId);
+            if (subtree.Count == 0)
+            {
+                result.Reason = "Nothing to duplicate.";
+                return result;
+            }
+            if (profile.PartsSlots.Count + subtree.Count > SpritePartIdUtility.MaxParts)
+            {
+                result.Reason = $"Parts supports at most {SpritePartIdUtility.MaxParts} slots.";
+                return result;
+            }
+
+            int nextRank = 0;
+            for (int i = 0; i < profile.PartsSlots.Count; i++)
+            {
+                var s = profile.PartsSlots[i];
+                if (s != null) nextRank = Math.Max(nextRank, s.DrawRank + 1);
+            }
+
+            var idMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            SpritePartSlotDef newRoot = null;
+
+            for (int n = 0; n < subtree.Count; n++)
+            {
+                var src = subtree[n];
+                bool isRoot = n == 0;
+                string srcId = SpritePartIdUtility.Canonical(src.SlotId);
+                string parentNew = isRoot
+                    ? (src.ParentSlotId ?? string.Empty)
+                    : (idMap.TryGetValue(SpritePartIdUtility.Canonical(src.ParentSlotId), out var mapped)
+                        ? mapped
+                        : (src.ParentSlotId ?? string.Empty));
+
+                string srcName = string.IsNullOrWhiteSpace(src.Name) ? "Part" : src.Name.Trim();
+                string stem;
+                if (isRoot)
+                {
+                    if (mirrorHorizontal)
+                        stem = SuggestMirroredDisplayName(srcName);
+                    else if (srcName.EndsWith(" Copy", StringComparison.Ordinal))
+                        stem = srcName;
+                    else
+                        stem = srcName + " Copy";
+                }
+                else
+                {
+                    stem = mirrorHorizontal ? SuggestMirroredDisplayName(srcName) : srcName;
+                }
+
+                string display = UniqueSiblingDisplayName(profile, parentNew, stem);
+                string slotIdBase = SpritePartIdUtility.Canonical(display, "part");
+                string newId = slotIdBase;
+                int suffix = 2;
+                while (FindSlot(profile, newId) != null || ContainsMappedId(idMap, newId))
+                {
+                    newId = slotIdBase + "." + suffix;
+                    suffix++;
+                }
+                idMap[srcId] = newId;
+
+                var createdSlot = new SpritePartSlotDef
+                {
+                    Name = display,
+                    SlotId = newId,
+                    ParentSlotId = parentNew,
+                    SiblingOrder = src.SiblingOrder,
+                    RestPosition = src.RestPosition,
+                    RestRotation = src.RestRotation,
+                    RestScale = SanitizeScale(src.RestScale),
+                    DefaultAppearanceId = src.DefaultAppearanceId ?? string.Empty,
+                    DrawRank = Mathf.Clamp(nextRank++, 0, SpritePartIdUtility.MaxParts - 1),
+                    Enabled = src.Enabled,
+                    EditorLocked = false,
+                };
+
+                if (isRoot)
+                {
+                    if (mirrorHorizontal)
+                    {
+                        createdSlot.RestPosition = new Vector2(-createdSlot.RestPosition.x, createdSlot.RestPosition.y);
+                        createdSlot.RestScale = SanitizeScale(new Vector2(-createdSlot.RestScale.x, createdSlot.RestScale.y));
+                        createdSlot.RestRotation = -createdSlot.RestRotation;
+                    }
+                    else
+                    {
+                        // Nudge so the copy is not stacked exactly on the original.
+                        createdSlot.RestPosition = new Vector2(
+                            createdSlot.RestPosition.x + 0.45f,
+                            createdSlot.RestPosition.y);
+                    }
+
+                    var siblings = GetChildrenSorted(profile, parentNew);
+                    int insertAt = src.SiblingOrder + 1;
+                    for (int s = 0; s < siblings.Count; s++)
+                    {
+                        if (siblings[s] != null && siblings[s].SiblingOrder >= insertAt)
+                            siblings[s].SiblingOrder++;
+                    }
+                    createdSlot.SiblingOrder = insertAt;
+                    newRoot = createdSlot;
+                }
+                // Children keep local TRS; root mirror flips the whole subtree visually.
+
+                profile.PartsSlots.Add(createdSlot);
+            }
+
+            if (profile.PartsClips != null)
+            {
+                foreach (var kv in idMap)
+                {
+                    string srcId = kv.Key;
+                    string dstId = kv.Value;
+                    for (int c = 0; c < profile.PartsClips.Count; c++)
+                    {
+                        var clip = profile.PartsClips[c];
+                        if (clip == null) continue;
+                        var srcTrack = FindTrack(clip, srcId);
+                        if (srcTrack?.Keys == null || srcTrack.Keys.Count == 0) continue;
+                        var dst = GetOrCreateTrack(clip, dstId);
+                        dst.Keys = new List<SpritePartsKeyDef>(srcTrack.Keys.Count);
+                        for (int k = 0; k < srcTrack.Keys.Count; k++)
+                        {
+                            var key = srcTrack.Keys[k];
+                            if (key == null) continue;
+                            var copy = new SpritePartsKeyDef
+                            {
+                                Time = key.Time,
+                                Position = key.Position,
+                                Rotation = key.Rotation,
+                                Scale = SanitizeScale(key.Scale),
+                                EaseMode = key.EaseMode,
+                                AppearanceId = key.AppearanceId ?? string.Empty,
+                            };
+                            // Mirror clip keys only for the duplicated root slot.
+                            if (mirrorHorizontal &&
+                                string.Equals(srcId, SpritePartIdUtility.Canonical(srcRoot.SlotId), StringComparison.Ordinal))
+                            {
+                                copy.Position = new Vector2(-copy.Position.x, copy.Position.y);
+                                copy.Rotation = -copy.Rotation;
+                                copy.Scale = SanitizeScale(new Vector2(-copy.Scale.x, copy.Scale.y));
+                            }
+                            dst.Keys.Add(copy);
+                        }
+                        dst.Keys.Sort((a, b) => a.Time.CompareTo(b.Time));
+                    }
+                }
+            }
+
+            NormalizeSiblingOrders(profile);
+            SpritePartsValidation.CanonicalizeIds(profile);
+            created = newRoot != null ? FindSlot(profile, newRoot.SlotId) ?? newRoot : null;
+            result.Ok = created != null;
+            result.DeletedSlotCount = subtree.Count; // reused: number of slots copied
+            result.AffectedClipCount = profile.PartsClips?.Count ?? 0;
+            if (!result.Ok)
+                result.Reason = "Duplicate created no slots.";
+            return result;
+        }
+
+        static bool ContainsMappedId(Dictionary<string, string> map, string value)
+        {
+            foreach (var kv in map)
+                if (string.Equals(kv.Value, value, StringComparison.Ordinal))
+                    return true;
+            return false;
+        }
+
+        static List<SpritePartSlotDef> CollectSubtreeSlots(SpriteSheetProfile profile, string rootId)
+        {
+            var list = new List<SpritePartSlotDef>();
+            var root = FindSlot(profile, rootId);
+            if (root == null) return list;
+            void Walk(SpritePartSlotDef s)
+            {
+                list.Add(s);
+                var kids = GetChildrenSorted(profile, s.SlotId);
+                for (int i = 0; i < kids.Count; i++)
+                    Walk(kids[i]);
+            }
+            Walk(root);
+            return list;
+        }
+
+        static string SuggestMirroredDisplayName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "Part";
+            string n = name.Trim();
+            // Common Left/Right and L/R swaps for limb pairing.
+            string[][] pairs =
+            {
+                new[] { "Left ", "Right " }, new[] { "left ", "right " },
+                new[] { "LEFT ", "RIGHT " }, new[] { "L ", "R " },
+                new[] { "Left", "Right" }, new[] { "left", "right" },
+                new[] { "_L", "_R" }, new[] { ".L", ".R" },
+                new[] { " L", " R" },
+            };
+            for (int i = 0; i < pairs.Length; i++)
+            {
+                string a = pairs[i][0], b = pairs[i][1];
+                if (n.Contains(a)) return ReplaceFirst(n, a, b);
+                if (n.Contains(b)) return ReplaceFirst(n, b, a);
+            }
+            return n + " Mirrored";
+        }
+
+        static string ReplaceFirst(string text, string search, string replace)
+        {
+            int i = text.IndexOf(search, StringComparison.Ordinal);
+            if (i < 0) return text;
+            return text.Substring(0, i) + replace + text.Substring(i + search.Length);
+        }
+
+        /// <summary>
+        /// Flip a part in place (rest + all clip keys). Negative scale is the sprite flip;
+        /// local position/rotation on that axis are mirrored so the joint stays visually opposite.
+        /// </summary>
+        public static HierarchyEditResult TryFlipPart(
+            SpriteSheetProfile profile, string slotId, bool flipX, bool flipY)
+        {
+            var result = new HierarchyEditResult();
+            if (!flipX && !flipY)
+            {
+                result.Reason = "Nothing to flip.";
+                return result;
+            }
+            if (profile == null)
+            {
+                result.Reason = "Profile is null.";
+                return result;
+            }
+            profile.EnsurePartsRig();
+            var slot = FindSlot(profile, slotId);
+            if (slot == null)
+            {
+                result.Reason = "Slot not found.";
+                return result;
+            }
+            if (slot.EditorLocked || SlotOrAncestorLocked(profile, slot.SlotId))
+            {
+                result.Reason = "Part is locked.";
+                return result;
+            }
+
+            float sx = flipX ? -1f : 1f;
+            float sy = flipY ? -1f : 1f;
+            slot.RestPosition = new Vector2(slot.RestPosition.x * sx, slot.RestPosition.y * sy);
+            slot.RestScale = SanitizeScale(new Vector2(slot.RestScale.x * sx, slot.RestScale.y * sy));
+            if (flipX ^ flipY)
+                slot.RestRotation = -slot.RestRotation;
+
+            string id = SpritePartIdUtility.Canonical(slot.SlotId);
+            int clipsTouched = 0;
+            if (profile.PartsClips != null)
+            {
+                for (int c = 0; c < profile.PartsClips.Count; c++)
+                {
+                    var clip = profile.PartsClips[c];
+                    var track = FindTrack(clip, id);
+                    if (track?.Keys == null || track.Keys.Count == 0) continue;
+                    clipsTouched++;
+                    for (int k = 0; k < track.Keys.Count; k++)
+                    {
+                        var key = track.Keys[k];
+                        if (key == null) continue;
+                        key.Position = new Vector2(key.Position.x * sx, key.Position.y * sy);
+                        key.Scale = SanitizeScale(new Vector2(key.Scale.x * sx, key.Scale.y * sy));
+                        if (flipX ^ flipY)
+                            key.Rotation = -key.Rotation;
+                    }
+                }
+            }
+
+            result.Ok = true;
+            result.AffectedClipCount = clipsTouched;
+            return result;
+        }
+
+        /// <summary>
         /// Pure sibling reorder under the same parent. Does NOT change DrawRank.
         /// </summary>
         public static HierarchyEditResult TryReorderSibling(
@@ -802,8 +1109,12 @@ namespace InvertLab.Sprites.DOTS
                 return false; // shear
 
             float det2 = x.x * y.y - x.y * y.x;
-            if (!(det2 > 0f))
-                return false; // reflection / negative scale
+            if (!math.isfinite(det2) || math.abs(det2) < 1e-6f)
+                return false;
+
+            // Reflection (negative scale) is legal for Flip H/V; return signed sx.
+            if (det2 < 0f)
+                sx = -sx;
 
             rotationDeg = math.degrees(math.atan2(x.y, x.x));
             if (!math.isfinite(rotationDeg))
@@ -912,8 +1223,7 @@ namespace InvertLab.Sprites.DOTS
         public static string DescribeHierarchyEditBlock(
             SpriteSheetProfile profile, string slotId, SpritePartsStudioMode mode, string action)
         {
-            if (mode != SpritePartsStudioMode.Rig)
-                return "Switch to Rig to edit hierarchy.";
+            _ = mode;
             if (string.IsNullOrWhiteSpace(slotId))
                 return "No part selected.";
             var slot = FindSlot(profile, slotId);
@@ -995,6 +1305,66 @@ public static HierarchyEditResult TryDeleteSubtree(SpriteSheetProfile profile, s
             result.DeletedSlotCount = deleted;
             result.DeletedTrackCount = tracksRemoved;
             result.DeletedBindingCount = bindingsRemoved;
+            return result;
+        }
+
+
+        /// <summary>Slots sorted by DrawRank. frontFirst: highest rank first (drawn last / on top).</summary>
+        public static List<SpritePartSlotDef> GetSlotsSortedByDrawRank(
+            SpriteSheetProfile profile, bool frontFirst)
+        {
+            var list = new List<SpritePartSlotDef>();
+            if (profile?.PartsSlots == null) return list;
+            for (int i = 0; i < profile.PartsSlots.Count; i++)
+            {
+                var s = profile.PartsSlots[i];
+                if (s != null) list.Add(s);
+            }
+            list.Sort((a, b) =>
+            {
+                int cmp = a.DrawRank.CompareTo(b.DrawRank);
+                if (cmp == 0)
+                    cmp = string.CompareOrdinal(
+                        SpritePartIdUtility.Canonical(a.SlotId),
+                        SpritePartIdUtility.Canonical(b.SlotId));
+                return frontFirst ? -cmp : cmp;
+            });
+            return list;
+        }
+
+        /// <summary>
+        /// Place slot at front-first index (0 = in front). Reassigns unique DrawRank 0..n-1
+        /// with n-1 = front. Does not change hierarchy / SiblingOrder.
+        /// </summary>
+        public static HierarchyEditResult TryMoveDrawRankToFrontIndex(
+            SpriteSheetProfile profile, string slotId, int frontIndex)
+        {
+            var result = new HierarchyEditResult();
+            var slot = FindSlot(profile, slotId);
+            if (slot == null)
+            {
+                result.Reason = "Slot not found.";
+                return result;
+            }
+            var list = GetSlotsSortedByDrawRank(profile, frontFirst: true);
+            int from = list.FindIndex(s =>
+                SpritePartIdUtility.Canonical(s.SlotId) == SpritePartIdUtility.Canonical(slot.SlotId));
+            if (from < 0)
+            {
+                result.Reason = "Slot not in layer list.";
+                return result;
+            }
+            frontIndex = Mathf.Clamp(frontIndex, 0, list.Count - 1);
+            if (from == frontIndex)
+            {
+                result.Ok = true;
+                return result;
+            }
+            list.RemoveAt(from);
+            list.Insert(frontIndex, slot);
+            for (int i = 0; i < list.Count; i++)
+                list[i].DrawRank = list.Count - 1 - i;
+            result.Ok = true;
             return result;
         }
 

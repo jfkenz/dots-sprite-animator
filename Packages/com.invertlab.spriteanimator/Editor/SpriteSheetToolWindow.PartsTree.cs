@@ -29,6 +29,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         string _partsTreeDropReason;
         string _partsTreeHoverExpandId;
         double _partsTreeHoverExpandStart;
+        int _partsTreeDragControlId;
+        int _partsLayerDragControlId;
+        bool _partsLayerDragStarted;
+        bool _partsLayerDragActive;
+        Vector2 _partsLayerDragStartMouse;
+        string _partsLayerDragSlotId;
+        int _partsLayerDropIndex = -1;
 
         void EnsurePartsTreeSelectionSynced()
         {
@@ -64,6 +71,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             string id = SpritePartIdUtility.Canonical(slotId);
             if (string.IsNullOrEmpty(id)) return;
+            _partsBrowserFocus = PartsBrowserFocus.Tree;
 
             if (range && _partsSelectedSlotIds.Count > 0 && _partsTreeRowIds.Count > 0)
             {
@@ -115,12 +123,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
+            _partsTreeDragControlId = GUIUtility.GetControlID(FocusType.Passive);
+
             // Character virtual root
             var rootRect = GUILayoutUtility.GetRect(0f, 20f, GUILayout.ExpandWidth(true));
             EditorGUI.DrawRect(rootRect, new Color(0.18f, 0.2f, 0.24f, 0.6f));
             GUI.Label(new Rect(rootRect.x + 6f, rootRect.y + 1f, rootRect.width - 12f, 18f),
                 "Character", EditorStyles.miniLabel);
-            HandlePartsTreeRootDrop(rootRect);
+            HandlePartsTreeRootDrop(rootRect, isCharacterHeader: true);
 
             _partsTreeRowIds.Clear();
             var rows = SpritePartsAuthoringOps.BuildTreeRows(_profile);
@@ -140,7 +150,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             var rootDrop = GUILayoutUtility.GetRect(0f, 18f, GUILayout.ExpandWidth(true));
             GUI.Label(rootDrop, "Move to root", EditorStyles.centeredGreyMiniLabel);
-            HandlePartsTreeRootDrop(rootDrop);
+            HandlePartsTreeRootDrop(rootDrop, isCharacterHeader: false);
 
             HandlePartsTreeDragEvents();
             HandlePartsTreeRenameHotkeys();
@@ -179,30 +189,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 : (row.Contains(Event.current.mousePosition)
                     ? new Color(1f, 1f, 1f, 0.06f)
                     : Color.clear);
-            if (_partsTreeDragActive && _partsTreeDropRelativeId == id)
-            {
-                if (_partsTreeDropKind == SpritePartsAuthoringOps.TreeDropKind.ParentUnder)
-                    bg = string.IsNullOrEmpty(_partsTreeDropReason)
-                        ? new Color(0.2f, 0.6f, 0.35f, 0.45f)
-                        : new Color(0.7f, 0.25f, 0.2f, 0.45f);
-            }
+            if (_partsTreeDragActive && id == _partsTreeDragSlotId)
+                bg = new Color(1f, 1f, 1f, 0.08f);
             if (bg.a > 0f) EditorGUI.DrawRect(row, bg);
-
-            // Insertion lines
-            if (_partsTreeDragActive && _partsTreeDropRelativeId == id)
-            {
-                if (_partsTreeDropKind == SpritePartsAuthoringOps.TreeDropKind.InsertBefore)
-                    EditorGUI.DrawRect(new Rect(row.x + 8f + depth * 14f, row.y, row.width - 16f, 2f), Color.cyan);
-                else if (_partsTreeDropKind == SpritePartsAuthoringOps.TreeDropKind.InsertAfter)
-                    EditorGUI.DrawRect(new Rect(row.x + 8f + depth * 14f, row.yMax - 2f, row.width - 16f, 2f), Color.cyan);
-            }
 
             float x = row.x + 4f + depth * 14f;
             // Chevron
             var chevronRect = new Rect(x, row.y + 2f, 16f, 18f);
             if (hasChildren)
             {
-                if (GUI.Button(chevronRect, expanded ? "▼" : "▶", EditorStyles.miniLabel))
+                if (GUI.Button(chevronRect, expanded ? "v" : ">", EditorStyles.miniLabel))
                 {
                     if (expanded) _partsExpandedSlotIds.Remove(id);
                     else _partsExpandedSlotIds.Add(id);
@@ -216,61 +212,82 @@ namespace InvertLab.Sprites.DOTS.Editor
             x += 20f;
 
             // Name / rename field
-            float iconsW = 44f;
+            float iconsW = 78f;
             var nameRect = new Rect(x, row.y + 1f, Mathf.Max(40f, row.xMax - iconsW - x - 4f), 20f);
             if (renaming)
             {
-                GUI.SetNextControlName("PartsRenameField");
+                GUI.SetNextControlName(PartsSlotRenameControl);
                 _partsRenameDraft = GUI.TextField(nameRect, _partsRenameDraft ?? string.Empty);
                 if (_partsRenameFocus)
                 {
-                    EditorGUI.FocusTextInControl("PartsRenameField");
+                    EditorGUI.FocusTextInControl(PartsSlotRenameControl);
                     _partsRenameFocus = false;
                 }
-                var e = Event.current;
-                if (e.type == EventType.KeyDown)
-                {
-                    if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
-                    {
-                        CommitPartsRename();
-                        e.Use();
-                    }
-                    else if (e.keyCode == KeyCode.Escape)
-                    {
-                        CancelPartsRename();
-                        e.Use();
-                    }
-                }
-                if (e.type == EventType.MouseDown && !nameRect.Contains(e.mousePosition))
-                    CommitPartsRename();
             }
             else
             {
                 string label = slot.Name ?? string.Empty;
+                if (slot.EditorLocked || lockedByAncestor)
+                    label = "# " + label;
                 if (hiddenByAncestor || !slot.Enabled)
                     GUI.contentColor = new Color(1f, 1f, 1f, 0.45f);
+                else if (slot.EditorLocked || lockedByAncestor)
+                    GUI.contentColor = new Color(1f, 0.85f, 0.55f, 0.95f);
                 GUI.Label(nameRect, new GUIContent(label, label));
                 GUI.contentColor = Color.white;
             }
             x = nameRect.xMax + 2f;
 
-            // Eye
-            var eyeRect = new Rect(row.xMax - 40f, row.y + 2f, 18f, 18f);
-            if (GUI.Button(eyeRect, slot.Enabled ? "V" : "H", EditorStyles.miniButton))
+            EnsurePartsRowIconStyles();
+            // Right-edge chrome: Z | x | eye | lock (text always visible).
+            var zRect = new Rect(row.xMax - 78f, row.y + 2f, 20f, 16f);
+            var deleteRect = new Rect(row.xMax - 56f, row.y + 2f, 18f, 18f);
+            var eyeRect = new Rect(row.xMax - 36f, row.y + 2f, 18f, 18f);
+            var lockRect = new Rect(row.xMax - 18f, row.y + 2f, 18f, 18f);
+            GUI.Label(zRect, new GUIContent(slot.DrawRank.ToString(),
+                "Z-order / layer. Higher draws in front. Use Layers panel to reorder."), _mutedStyle);
+
+            bool locked = slot.EditorLocked ||
+                          SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId);
+            using (new EditorGUI.DisabledScope(locked))
             {
-                RecordProfileUndo(slot.Enabled ? "Hide Parts Slot" : "Show Parts Slot");
-                slot.Enabled = !slot.Enabled;
-                SaveDirty();
+                if (GUI.Button(deleteRect, new GUIContent("x", "Delete this part and its children."), _partsRowIconStyle))
+                    DeletePartsSubtree(id);
             }
 
-            // Lock
-            var lockRect = new Rect(row.xMax - 20f, row.y + 2f, 18f, 18f);
-            if (GUI.Button(lockRect, slot.EditorLocked ? "L" : "·", EditorStyles.miniButton))
+            string eyeTip = Event.current.alt
+                ? "Solo: show only this part (Alt+click)"
+                : (slot.Enabled
+                    ? "Hide part (Alt+click = solo)"
+                    : "Show part (Alt+click = solo)");
+            var eyePrev = GUI.color;
+            if (!slot.Enabled || hiddenByAncestor)
+                GUI.color = new Color(1f, 0.55f, 0.5f, 1f);
+            if (GUI.Button(eyeRect, new GUIContent(slot.Enabled ? "O" : "-", eyeTip), _partsRowIconStyle))
             {
-                RecordProfileUndo(slot.EditorLocked ? "Unlock Parts Slot" : "Lock Parts Slot");
-                slot.EditorLocked = !slot.EditorLocked;
-                SaveDirty();
+                if (Event.current.alt)
+                    SoloPartsVisibility(id);
+                else
+                    TogglePartsVisibility(id, !slot.Enabled);
             }
+            GUI.color = eyePrev;
+
+            string lockTip = lockedByAncestor
+                ? "Locked by parent"
+                : (slot.EditorLocked
+                    ? "Unlock (allows Move/Rotate/Scale)"
+                    : "Lock (blocks transform + reparent)");
+            var lockPrev = GUI.color;
+            if (slot.EditorLocked || lockedByAncestor)
+                GUI.color = new Color(1f, 0.82f, 0.35f, 1f);
+            using (new EditorGUI.DisabledScope(lockedByAncestor))
+            {
+                if (GUI.Button(lockRect,
+                        new GUIContent(slot.EditorLocked || lockedByAncestor ? "#" : "=", lockTip),
+                        _partsRowIconStyle))
+                    TogglePartsLock(id, !slot.EditorLocked);
+            }
+            GUI.color = lockPrev;
 
             if (!string.IsNullOrEmpty(_partsTreeDropReason) &&
                 _partsTreeDragActive && _partsTreeDropRelativeId == id)
@@ -279,24 +296,59 @@ namespace InvertLab.Sprites.DOTS.Editor
                 // reason shown via status; keep row clean
             }
 
-            HandlePartsTreeRowEvents(row, slot, id, nameRect, chevronRect, eyeRect, lockRect);
+            DrawPartsTreeDropCue(row, depth, id);
+            if (_partsTreeDragActive)
+                EditorGUIUtility.AddCursorRect(row, MouseCursor.MoveArrow);
+            HandlePartsTreeRowEvents(row, slot, id, nameRect, chevronRect, eyeRect, lockRect, deleteRect);
+        }
+
+        void DrawPartsTreeDropCue(Rect row, int depth, string id)
+        {
+            if (!_partsTreeDragActive || _partsTreeDropRelativeId != id)
+                return;
+            bool ok = string.IsNullOrEmpty(_partsTreeDropReason);
+            var line = ok
+                ? new Color(0.30f, 0.55f, 1f, 1f)
+                : new Color(0.90f, 0.28f, 0.24f, 1f);
+            var fill = ok
+                ? new Color(0.30f, 0.55f, 1f, 0.28f)
+                : new Color(0.90f, 0.28f, 0.24f, 0.32f);
+            var kind = _partsTreeDropKind;
+            if (kind == SpritePartsAuthoringOps.TreeDropKind.ParentUnder ||
+                kind == SpritePartsAuthoringOps.TreeDropKind.MoveToRoot)
+            {
+                EditorGUI.DrawRect(row, fill);
+                DrawBorder(row, line, 1f);
+                return;
+            }
+            if (kind != SpritePartsAuthoringOps.TreeDropKind.InsertBefore &&
+                kind != SpritePartsAuthoringOps.TreeDropKind.InsertAfter)
+                return;
+            float y = kind == SpritePartsAuthoringOps.TreeDropKind.InsertBefore
+                ? row.y
+                : row.yMax - 2f;
+            float x = row.x + 6f + depth * 14f;
+            EditorGUI.DrawRect(new Rect(x, y, Mathf.Max(8f, row.xMax - x - 4f), 2f), line);
+            EditorGUI.DrawRect(new Rect(x - 3f, y - 2f, 6f, 6f), line);
         }
 
         void HandlePartsTreeRowEvents(
             Rect row, SpritePartSlotDef slot, string id,
-            Rect nameRect, Rect chevronRect, Rect eyeRect, Rect lockRect)
+            Rect nameRect, Rect chevronRect, Rect eyeRect, Rect lockRect, Rect deleteRect)
         {
             var evt = Event.current;
             if (evt.type == EventType.MouseDown && evt.button == 0 && row.Contains(evt.mousePosition))
             {
                 if (chevronRect.Contains(evt.mousePosition) ||
                     eyeRect.Contains(evt.mousePosition) ||
-                    lockRect.Contains(evt.mousePosition))
+                    lockRect.Contains(evt.mousePosition) ||
+                    deleteRect.Contains(evt.mousePosition))
                     return;
 
                 bool additive = evt.control || evt.command;
                 bool range = evt.shift;
                 SelectPartsSlotId(id, additive, range);
+                _partsBrowserFocus = PartsBrowserFocus.Tree;
 
                 if (evt.clickCount == 2 && nameRect.Contains(evt.mousePosition))
                 {
@@ -305,15 +357,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
-                // Prepare potential tree drag (Rig only)
-                if (_partsMode == SpritePartsStudioMode.Rig &&
-                    !slot.EditorLocked &&
+                if (!slot.EditorLocked &&
+                    !SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId) &&
                     string.IsNullOrEmpty(_partsRenameSlotId))
                 {
                     _partsTreeDragStarted = true;
                     _partsTreeDragActive = false;
                     _partsTreeDragStartMouse = evt.mousePosition;
                     _partsTreeDragSlotId = id;
+                    GUIUtility.hotControl = _partsTreeDragControlId;
                 }
                 evt.Use();
                 Repaint();
@@ -329,19 +381,30 @@ namespace InvertLab.Sprites.DOTS.Editor
                 UpdatePartsTreeDropTarget(row, id, evt.mousePosition);
         }
 
-        void HandlePartsTreeRootDrop(Rect rect)
+        void HandlePartsTreeRootDrop(Rect rect, bool isCharacterHeader)
         {
             if (!_partsTreeDragActive && !_partsTreeDragStarted) return;
             var evt = Event.current;
             if (!rect.Contains(evt.mousePosition)) return;
-            _partsTreeDropKind = SpritePartsAuthoringOps.TreeDropKind.MoveToRoot;
-            _partsTreeDropRelativeId = string.Empty;
-            var v = SpritePartsAuthoringOps.ValidateTreeMove(
-                _profile, _partsTreeDragSlotId,
-                SpritePartsAuthoringOps.TreeDropKind.MoveToRoot, string.Empty);
-            _partsTreeDropReason = v.Ok ? null : v.Reason;
-            if (evt.type == EventType.Repaint && v.Ok)
-                EditorGUI.DrawRect(rect, new Color(0.2f, 0.55f, 0.4f, 0.35f));
+            if (_partsTreeDragActive)
+            {
+                _partsTreeDropKind = SpritePartsAuthoringOps.TreeDropKind.MoveToRoot;
+                _partsTreeDropRelativeId = isCharacterHeader ? "__character__" : string.Empty;
+                var v = SpritePartsAuthoringOps.ValidateTreeMove(
+                    _profile, _partsTreeDragSlotId,
+                    SpritePartsAuthoringOps.TreeDropKind.MoveToRoot, string.Empty);
+                _partsTreeDropReason = v.Ok ? null : v.Reason;
+            }
+            if (evt.type == EventType.Repaint && _partsTreeDragActive)
+            {
+                bool ok = string.IsNullOrEmpty(_partsTreeDropReason);
+                EditorGUI.DrawRect(rect, ok
+                    ? new Color(0.30f, 0.55f, 1f, 0.28f)
+                    : new Color(0.90f, 0.28f, 0.24f, 0.32f));
+                DrawBorder(rect, ok
+                    ? new Color(0.30f, 0.55f, 1f, 1f)
+                    : new Color(0.90f, 0.28f, 0.24f, 1f), 1f);
+            }
         }
 
         void UpdatePartsTreeDropTarget(Rect row, string id, Vector2 mouse)
@@ -358,10 +421,12 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             float y = mouse.y - row.y;
             float h = row.height;
+            bool expandedKids = _partsExpandedSlotIds.Contains(id) &&
+                SpritePartsAuthoringOps.GetChildrenSorted(_profile, id).Count > 0;
             SpritePartsAuthoringOps.TreeDropKind kind;
-            if (y < h * 0.25f)
+            if (y < h * 0.28f)
                 kind = SpritePartsAuthoringOps.TreeDropKind.InsertBefore;
-            else if (y > h * 0.75f)
+            else if (y > h * 0.72f && !expandedKids)
                 kind = SpritePartsAuthoringOps.TreeDropKind.InsertAfter;
             else
                 kind = SpritePartsAuthoringOps.TreeDropKind.ParentUnder;
@@ -396,28 +461,35 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 if ((evt.mousePosition - _partsTreeDragStartMouse).magnitude >= PartsTreeDragThreshold)
                 {
-                    if (_partsMode != SpritePartsStudioMode.Rig)
-                    {
-                        _status = "Switch to Rig to edit hierarchy.";
-                        _partsTreeDragStarted = false;
-                        return;
-                    }
                     _partsTreeDragActive = true;
+                    GUIUtility.hotControl = _partsTreeDragControlId;
                     evt.Use();
                     Repaint();
                 }
             }
 
+            bool ours = GUIUtility.hotControl == _partsTreeDragControlId ||
+                        _partsTreeDragActive || _partsTreeDragStarted;
+
+            if (ours && evt.type == EventType.MouseDrag && evt.button == 0)
+            {
+                evt.Use();
+                Repaint();
+            }
+
             if (_partsTreeDragActive && evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape)
             {
+                if (GUIUtility.hotControl == _partsTreeDragControlId)
+                    GUIUtility.hotControl = 0;
                 CancelPartsTreeDrag();
                 evt.Use();
                 return;
             }
 
-            if ((_partsTreeDragActive || _partsTreeDragStarted) &&
-                evt.type == EventType.MouseUp && evt.button == 0)
+            if (ours && evt.type == EventType.MouseUp && evt.button == 0)
             {
+                if (GUIUtility.hotControl == _partsTreeDragControlId)
+                    GUIUtility.hotControl = 0;
                 if (_partsTreeDragActive &&
                     _partsTreeDropKind != SpritePartsAuthoringOps.TreeDropKind.None &&
                     string.IsNullOrEmpty(_partsTreeDropReason))
@@ -450,24 +522,19 @@ namespace InvertLab.Sprites.DOTS.Editor
             string moving = _partsTreeDragSlotId;
             var kind = _partsTreeDropKind;
             string relative = _partsTreeDropRelativeId;
+            if (kind == SpritePartsAuthoringOps.TreeDropKind.MoveToRoot ||
+                relative == "__character__")
+            {
+                kind = SpritePartsAuthoringOps.TreeDropKind.MoveToRoot;
+                relative = string.Empty;
+            }
             var preview = SpritePartsAuthoringOps.ValidateTreeMove(_profile, moving, kind, relative);
             if (!preview.Ok)
             {
                 _status = preview.Reason;
                 return;
             }
-            bool confirm = true;
-            if (preview.NeedsAnimationReview)
-            {
-                confirm = EditorUtility.DisplayDialog(
-                    "Reparent Parts",
-                    $"Keep rest pose; animation motion may change.\n\nMoved: {moving}\nAffected clips: {preview.AffectedClipCount}",
-                    "Reparent",
-                    "Cancel");
-            }
-            if (!confirm) return;
-
-            RecordProfileUndo("Reparent Parts");
+            RecordPartsUndo("Reparent Parts");
             var result = SpritePartsAuthoringOps.TryCommitTreeMove(
                 _profile, moving, kind, relative, confirmAnimationReview: true);
             if (!result.Ok)
@@ -476,9 +543,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
             SaveDirty();
-            _status = kind == SpritePartsAuthoringOps.TreeDropKind.ParentUnder
-                ? $"Parented under {relative}"
-                : "Hierarchy updated";
+            if (kind == SpritePartsAuthoringOps.TreeDropKind.ParentUnder)
+                _status = "Parented under " + relative;
+            else if (kind == SpritePartsAuthoringOps.TreeDropKind.MoveToRoot)
+                _status = "Moved to root";
+            else
+                _status = "Reordered";
             SelectPartsSlotId(moving, false, false);
         }
 
@@ -488,7 +558,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             var evt = Event.current;
             if (evt.type != EventType.KeyDown) return;
             if (EditorGUIUtility.editingTextField) return;
-            if (evt.keyCode == KeyCode.F2 && _partsSelectedSlotIds.Count == 1)
+            if (evt.keyCode == KeyCode.F2 &&
+                _partsBrowserFocus == PartsBrowserFocus.Tree &&
+                _partsSelectedSlotIds.Count == 1)
             {
                 var slot = SpritePartsAuthoringOps.FindSlot(_profile, PrimarySelectedPartsSlotId());
                 if (slot != null) BeginPartsRename(slot);
@@ -505,7 +577,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _status = "Part is locked.";
                 return;
             }
-            // Rename is metadata — allowed in all modes.
+            // Rename is metadata - allowed in all modes.
+            CancelPartsClipRename();
+            _partsBrowserFocus = PartsBrowserFocus.Tree;
             _partsRenameSlotId = SpritePartIdUtility.Canonical(slot.SlotId);
             _partsRenameDraft = slot.Name;
             _partsRenameFocus = true;
@@ -516,22 +590,24 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (string.IsNullOrEmpty(_partsRenameSlotId)) return;
             string id = _partsRenameSlotId;
-            string draft = _partsRenameDraft;
+            string draft = (_partsRenameDraft ?? string.Empty).Trim();
             _partsRenameSlotId = null;
             _partsRenameDraft = null;
-            RecordProfileUndo("Rename Parts Slot");
+            _partsRenameFocus = false;
+            GUIUtility.keyboardControl = 0;
+            GUI.FocusControl(null);
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+            if (slot != null && slot.Name == draft)
+                return;
+            RecordPartsUndo("Rename Parts Slot");
             var result = SpritePartsAuthoringOps.TryRenameDisplayName(_profile, id, draft);
             if (!result.Ok)
-            {
                 _status = result.Reason;
-                // keep previous name
-            }
             else
             {
                 SaveDirty();
                 _status = "Renamed part";
             }
-            GUI.FocusControl(null);
             Repaint();
         }
 
@@ -539,6 +615,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             _partsRenameSlotId = null;
             _partsRenameDraft = null;
+            _partsRenameFocus = false;
+            GUIUtility.keyboardControl = 0;
             GUI.FocusControl(null);
             Repaint();
         }
@@ -552,24 +630,72 @@ namespace InvertLab.Sprites.DOTS.Editor
                           SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId);
 
             menu.AddItem(new GUIContent("Rename"), false, () => BeginPartsRename(slot));
+            if (!locked && _partsMode != SpritePartsStudioMode.Skins)
+                menu.AddItem(new GUIContent("Center"), false, () =>
+                {
+                    SelectPartsSlotId(slot.SlotId, false, false);
+                    CenterSelectedPartsSlot();
+                });
+            else
+                menu.AddDisabledItem(new GUIContent("Center"));
+
+            menu.AddSeparator("");
+            if (!locked)
+            {
+                menu.AddItem(new GUIContent("Duplicate"), false, () => DuplicatePartsSlot(id, false));
+                menu.AddItem(new GUIContent("Duplicate Mirrored (Horizontal)"), false,
+                    () => DuplicatePartsSlot(id, true));
+                if (_partsMode != SpritePartsStudioMode.Skins)
+                {
+                    menu.AddItem(new GUIContent("Flip/Horizontal"), false,
+                        () => FlipPartsSlot(id, true, false));
+                    menu.AddItem(new GUIContent("Flip/Vertical"), false,
+                        () => FlipPartsSlot(id, false, true));
+                }
+                else
+                {
+                    menu.AddDisabledItem(new GUIContent("Flip/Horizontal (not in Skins)"));
+                    menu.AddDisabledItem(new GUIContent("Flip/Vertical (not in Skins)"));
+                }
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Duplicate (Part is locked)"));
+                menu.AddDisabledItem(new GUIContent("Duplicate Mirrored (Part is locked)"));
+                menu.AddDisabledItem(new GUIContent("Flip/Horizontal (Part is locked)"));
+                menu.AddDisabledItem(new GUIContent("Flip/Vertical (Part is locked)"));
+            }
+            menu.AddSeparator("");
+            menu.AddItem(new GUIContent("Z-Order/Bring to Front"), false, () => MovePartsLayer(id, 0));
+            menu.AddItem(new GUIContent("Z-Order/Bring Forward"), false, () => NudgePartsLayer(id, -1));
+            menu.AddItem(new GUIContent("Z-Order/Send Backward"), false, () => NudgePartsLayer(id, +1));
+            menu.AddItem(new GUIContent("Z-Order/Send to Back"), false, () =>
+            {
+                int n = SpritePartsAuthoringOps.GetSlotsSortedByDrawRank(_profile, true).Count;
+                MovePartsLayer(id, Mathf.Max(0, n - 1));
+            });
+
+            if (!locked)
+                menu.AddItem(new GUIContent("Add Child"), false, () => AddPartsChildOf(slot.SlotId));
+            else
+                menu.AddDisabledItem(new GUIContent("Add Child (Part is locked)"));
 
             if (isRig && !locked)
             {
-                menu.AddItem(new GUIContent("Add Child"), false, () => AddPartsChildOf(slot.SlotId));
                 menu.AddSeparator("");
                 menu.AddItem(new GUIContent("Break from Parent"), false, () => BreakPartsFromParent(id));
                 menu.AddItem(new GUIContent("Move Up One Level"), false, () => MovePartsUpOneLevel(id));
                 menu.AddSeparator("");
                 menu.AddItem(new GUIContent("Move to Top of Siblings"), false, () =>
                 {
-                    RecordProfileUndo("Move Parts Sibling To Top");
+                    RecordPartsUndo("Move Parts Sibling To Top");
                     var r = SpritePartsAuthoringOps.TryMoveSiblingToTop(_profile, id);
                     if (!r.Ok) _status = r.Reason;
                     else { SaveDirty(); _status = "Moved to top of siblings"; }
                 });
                 menu.AddItem(new GUIContent("Move to Bottom of Siblings"), false, () =>
                 {
-                    RecordProfileUndo("Move Parts Sibling To Bottom");
+                    RecordPartsUndo("Move Parts Sibling To Bottom");
                     var r = SpritePartsAuthoringOps.TryMoveSiblingToBottom(_profile, id);
                     if (!r.Ok) _status = r.Reason;
                     else { SaveDirty(); _status = "Moved to bottom of siblings"; }
@@ -577,90 +703,297 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             else if (!isRig)
             {
-                menu.AddDisabledItem(new GUIContent("Add Child (Switch to Rig…)"));
-                menu.AddDisabledItem(new GUIContent("Break from Parent (Switch to Rig…)"));
-                menu.AddDisabledItem(new GUIContent("Move Up One Level (Switch to Rig…)"));
+                menu.AddDisabledItem(new GUIContent("Break from Parent (Switch to Rig to reparent)"));
+                menu.AddDisabledItem(new GUIContent("Move Up One Level (Switch to Rig to reparent)"));
             }
             else
             {
-                menu.AddDisabledItem(new GUIContent("Add Child (Part is locked)"));
                 menu.AddDisabledItem(new GUIContent("Break from Parent (Part is locked)"));
                 menu.AddDisabledItem(new GUIContent("Move Up One Level (Part is locked)"));
             }
 
             menu.AddSeparator("");
-            // Delete always listed; disabled with clear reason when blocked.
             string deleteReason = null;
-            if (!isRig)
-                deleteReason = "Switch to Rig to edit hierarchy.";
-            else
-            {
-                var v = SpritePartsAuthoringOps.ValidateDeleteSubtree(_profile, id);
-                if (!v.Ok) deleteReason = v.Reason;
-            }
+            var v = SpritePartsAuthoringOps.ValidateDeleteSubtree(_profile, id);
+            if (!v.Ok) deleteReason = v.Reason;
             if (deleteReason == null)
-            {
                 menu.AddItem(new GUIContent("Delete Subtree"), false, () => DeletePartsSubtree(id));
-            }
             else
-            {
                 menu.AddDisabledItem(new GUIContent("Delete Subtree (" + deleteReason + ")"));
-            }
-
-            if (!isRig)
-            {
-                menu.AddSeparator("");
-                menu.AddDisabledItem(new GUIContent("Animate/Skins: Switch to Rig to edit hierarchy…"));
-            }
 
             menu.ShowAsContext();
         }
+        void DrawPartsLayers()
+        {
+            GUILayout.Space(8f);
+            GUILayout.Label("LAYERS", _sectionStyle);
+            GUILayout.Label("Front on top. Drag to change z-order (not hierarchy).", _mutedStyle);
+            _partsLayerDragControlId = GUIUtility.GetControlID(FocusType.Passive);
+            var list = SpritePartsAuthoringOps.GetSlotsSortedByDrawRank(_profile, frontFirst: true);
+            for (int i = 0; i < list.Count; i++)
+                DrawPartsLayerRow(list[i], i, list.Count);
+            HandlePartsLayerDragEvents(list.Count);
+        }
+
+        void DrawPartsLayerRow(SpritePartSlotDef slot, int index, int count)
+        {
+            if (slot == null) return;
+            string id = SpritePartIdUtility.Canonical(slot.SlotId);
+            var row = GUILayoutUtility.GetRect(0f, 20f, GUILayout.ExpandWidth(true));
+            bool selected = _partsSelectedSlotIds.Contains(id);
+            var evt = Event.current;
+            Color bg = selected
+                ? new Color(0.22f, 0.45f, 0.75f, 0.55f)
+                : (row.Contains(evt.mousePosition) ? new Color(1f, 1f, 1f, 0.06f) : Color.clear);
+            if (_partsLayerDragActive && id == _partsLayerDragSlotId)
+                bg = new Color(1f, 1f, 1f, 0.08f);
+            if (bg.a > 0f) EditorGUI.DrawRect(row, bg);
+
+            string caption = index == 0 ? "Front" : (index == count - 1 ? "Back" : "");
+            GUI.Label(new Rect(row.x + 6f, row.y + 1f, 36f, 18f),
+                slot.DrawRank.ToString(), _mutedStyle);
+            GUI.Label(new Rect(row.x + 28f, row.y + 1f, row.width - 90f, 18f),
+                string.IsNullOrEmpty(caption) ? slot.Name : slot.Name + "  (" + caption + ")");
+            var up = new Rect(row.xMax - 40f, row.y + 1f, 18f, 18f);
+            var down = new Rect(row.xMax - 20f, row.y + 1f, 18f, 18f);
+            if (GUI.Button(up, new GUIContent("\u25b2", "Bring forward"), EditorStyles.miniLabel) && index > 0)
+                MovePartsLayer(id, index - 1);
+            if (GUI.Button(down, new GUIContent("\u25bc", "Send backward"), EditorStyles.miniLabel) && index < count - 1)
+                MovePartsLayer(id, index + 1);
+
+            if (_partsLayerDragActive && _partsLayerDropIndex >= 0)
+            {
+                var lineCol = new Color(0.30f, 0.55f, 1f, 1f);
+                if (_partsLayerDropIndex == index)
+                    EditorGUI.DrawRect(new Rect(row.x + 4f, row.y, row.width - 8f, 2f), lineCol);
+                else if (_partsLayerDropIndex == index + 1 && index == count - 1)
+                    EditorGUI.DrawRect(new Rect(row.x + 4f, row.yMax - 2f, row.width - 8f, 2f), lineCol);
+            }
+
+            if (evt.type == EventType.MouseDown && evt.button == 0 && row.Contains(evt.mousePosition) &&
+                !up.Contains(evt.mousePosition) && !down.Contains(evt.mousePosition))
+            {
+                SelectPartsSlotId(id, false, false);
+                _partsBrowserFocus = PartsBrowserFocus.Tree;
+                _partsLayerDragStarted = true;
+                _partsLayerDragActive = false;
+                _partsLayerDragStartMouse = evt.mousePosition;
+                _partsLayerDragSlotId = id;
+                GUIUtility.hotControl = _partsLayerDragControlId;
+                evt.Use();
+                Repaint();
+            }
+            if (_partsLayerDragActive && row.Contains(evt.mousePosition))
+            {
+                _partsLayerDropIndex = (evt.mousePosition.y - row.y) < row.height * 0.5f ? index : index + 1;
+                EditorGUIUtility.AddCursorRect(row, MouseCursor.MoveArrow);
+            }
+        }
+
+        void HandlePartsLayerDragEvents(int count)
+        {
+            var evt = Event.current;
+            bool ours = GUIUtility.hotControl == _partsLayerDragControlId ||
+                        _partsLayerDragActive || _partsLayerDragStarted;
+            if (!ours) return;
+            if (evt.type == EventType.MouseDrag && evt.button == 0)
+            {
+                if (_partsLayerDragStarted && !_partsLayerDragActive &&
+                    (evt.mousePosition - _partsLayerDragStartMouse).magnitude >= PartsTreeDragThreshold)
+                    _partsLayerDragActive = true;
+                evt.Use();
+                Repaint();
+            }
+            if (evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape)
+            {
+                if (GUIUtility.hotControl == _partsLayerDragControlId)
+                    GUIUtility.hotControl = 0;
+                CancelPartsLayerDrag();
+                evt.Use();
+                return;
+            }
+            if (evt.type == EventType.MouseUp && evt.button == 0)
+            {
+                if (GUIUtility.hotControl == _partsLayerDragControlId)
+                    GUIUtility.hotControl = 0;
+                if (_partsLayerDragActive && !string.IsNullOrEmpty(_partsLayerDragSlotId) &&
+                    _partsLayerDropIndex >= 0)
+                {
+                    var list = SpritePartsAuthoringOps.GetSlotsSortedByDrawRank(_profile, true);
+                    int from = list.FindIndex(s => s != null &&
+                        SpritePartIdUtility.Canonical(s.SlotId) == _partsLayerDragSlotId);
+                    int dest = _partsLayerDropIndex;
+                    if (from >= 0 && from < dest) dest--;
+                    dest = Mathf.Clamp(dest, 0, Mathf.Max(0, count - 1));
+                    if (from >= 0 && dest != from)
+                        MovePartsLayer(_partsLayerDragSlotId, dest);
+                }
+                CancelPartsLayerDrag();
+                evt.Use();
+            }
+        }
+
+        void CancelPartsLayerDrag()
+        {
+            _partsLayerDragActive = false;
+            _partsLayerDragStarted = false;
+            _partsLayerDragSlotId = null;
+            _partsLayerDropIndex = -1;
+            Repaint();
+        }
+
+        void MovePartsLayer(string slotId, int frontIndex)
+        {
+            RecordPartsUndo("Change Parts Z-Order");
+            var r = SpritePartsAuthoringOps.TryMoveDrawRankToFrontIndex(_profile, slotId, frontIndex);
+            if (!r.Ok) _status = r.Reason;
+            else
+            {
+                SaveDirty();
+                _status = "Z-order updated";
+            }
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        void NudgePartsLayer(string slotId, int deltaFront)
+        {
+            var list = SpritePartsAuthoringOps.GetSlotsSortedByDrawRank(_profile, true);
+            int from = list.FindIndex(s => s != null &&
+                SpritePartIdUtility.Canonical(s.SlotId) == SpritePartIdUtility.Canonical(slotId));
+            if (from < 0) return;
+            MovePartsLayer(slotId, Mathf.Clamp(from + deltaFront, 0, list.Count - 1));
+        }
+
         void DrawPartsTreeToolbar()
         {
+            EnsurePartsRowIconStyles();
             EditorGUILayout.BeginHorizontal();
-            bool canAdd = _partsMode == SpritePartsStudioMode.Rig ||
-                          _profile.AnimKind == SpriteAnimKind.Parts;
-            // + Part always root-level when Rig; in other modes still allow metadata? Contract: structural = Rig only.
-            using (new EditorGUI.DisabledScope(_partsMode != SpritePartsStudioMode.Rig))
+            if (GUILayout.Button("+ Part", GUILayout.Width(60f)))
+                AddPartsSlot();
+            using (new EditorGUI.DisabledScope(CurrentPartsSlot == null))
             {
-                if (GUILayout.Button("+ Part", GUILayout.Width(60f)))
-                    AddPartsSlot();
-                if (GUILayout.Button("▾", GUILayout.Width(22f)))
+                if (GUILayout.Button(new GUIContent("Dup", "Duplicate selected part + children. Ctrl+D / Ctrl+Shift+D mirror."),
+                        GUILayout.Width(40f)))
                 {
-                    var menu = new GenericMenu();
-                    menu.AddItem(new GUIContent("Add Root Part"), false, AddPartsSlot);
-                    string parentId = null;
-                    if (_partsSelectedSlotIds.Count == 1)
-                        parentId = PrimarySelectedPartsSlotId();
-                    var parent = parentId != null
-                        ? SpritePartsAuthoringOps.FindSlot(_profile, parentId)
-                        : null;
-                    if (parent != null && !parent.EditorLocked &&
-                        !SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, parent.SlotId))
-                    {
-                        menu.AddItem(new GUIContent("Add Child of " + parent.Name), false,
-                            () => AddPartsChildOf(parent.SlotId));
-                    }
-                    else
-                    {
-                        menu.AddDisabledItem(new GUIContent("Add Child of [select one unlocked parent]"));
-                    }
-                    menu.ShowAsContext();
+                    var sel = CurrentPartsSlot;
+                    if (sel != null)
+                        DuplicatePartsSlot(SpritePartIdUtility.Canonical(sel.SlotId), Event.current.shift);
                 }
             }
-            if (_partsMode != SpritePartsStudioMode.Rig)
-                GUILayout.Label("Switch to Rig to edit hierarchy.", EditorStyles.miniLabel);
+            if (GUILayout.Button("v", GUILayout.Width(22f)))
+            {
+                var menu = new GenericMenu();
+                menu.AddItem(new GUIContent("Add Root Part"), false, AddPartsSlot);
+                string parentId = null;
+                if (_partsSelectedSlotIds.Count == 1)
+                    parentId = PrimarySelectedPartsSlotId();
+                var parent = parentId != null
+                    ? SpritePartsAuthoringOps.FindSlot(_profile, parentId)
+                    : null;
+                if (parent != null && !parent.EditorLocked &&
+                    !SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, parent.SlotId))
+                {
+                    menu.AddItem(new GUIContent("Add Child of " + parent.Name), false,
+                        () => AddPartsChildOf(parent.SlotId));
+                }
+                else
+                {
+                    menu.AddDisabledItem(new GUIContent("Add Child of [select one unlocked parent]"));
+                }
+                menu.ShowAsContext();
+            }
+
+            GUILayout.FlexibleSpace();
+            var primary = CurrentPartsSlot;
+            using (new EditorGUI.DisabledScope(primary == null))
+            {
+                bool vis = primary == null || primary.Enabled;
+                if (GUILayout.Button(new GUIContent(vis ? "O" : "-",
+                        "Toggle visibility of selection. Alt+click a row eye to solo."),
+                        _partsRowIconStyle, GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    if (primary != null)
+                        TogglePartsVisibility(SpritePartIdUtility.Canonical(primary.SlotId), !primary.Enabled);
+                }
+                bool loc = primary != null && primary.EditorLocked;
+                if (GUILayout.Button(new GUIContent(loc ? "#" : "=",
+                        "Toggle lock on selection (blocks Move/Rotate/Scale)."),
+                        _partsRowIconStyle, GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    if (primary != null)
+                        TogglePartsLock(SpritePartIdUtility.Canonical(primary.SlotId), !primary.EditorLocked);
+                }
+            }
+            if (GUILayout.Button(new GUIContent("All", "Show every part (clear hides)."),
+                    EditorStyles.miniButton, GUILayout.Width(32f)))
+                ShowAllPartsVisibility();
             EditorGUILayout.EndHorizontal();
+        }
+
+        void TogglePartsVisibility(string slotId, bool enabled)
+        {
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, slotId);
+            if (slot == null) return;
+            if (slot.Enabled == enabled) return;
+            RecordPartsUndo(enabled ? "Show Parts Slot" : "Hide Parts Slot");
+            slot.Enabled = enabled;
+            SaveDirty();
+            _status = (enabled ? "Shown " : "Hidden ") + (slot.Name ?? slot.SlotId);
+            Repaint();
+        }
+
+        void TogglePartsLock(string slotId, bool locked)
+        {
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, slotId);
+            if (slot == null) return;
+            if (SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId) && !slot.EditorLocked)
+            {
+                _status = "Locked by parent.";
+                return;
+            }
+            if (slot.EditorLocked == locked) return;
+            RecordPartsUndo(locked ? "Lock Parts Slot" : "Unlock Parts Slot");
+            slot.EditorLocked = locked;
+            SaveDirty();
+            _status = (locked ? "Locked " : "Unlocked ") + (slot.Name ?? slot.SlotId);
+            Repaint();
+        }
+
+        void SoloPartsVisibility(string slotId)
+        {
+            if (_profile?.PartsSlots == null) return;
+            string id = SpritePartIdUtility.Canonical(slotId);
+            RecordPartsUndo("Solo Parts Visibility");
+            for (int i = 0; i < _profile.PartsSlots.Count; i++)
+            {
+                var s = _profile.PartsSlots[i];
+                if (s == null) continue;
+                s.Enabled = SpritePartIdUtility.Canonical(s.SlotId) == id;
+            }
+            SaveDirty();
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+            _status = "Solo " + (slot?.Name ?? id);
+            Repaint();
+        }
+
+        void ShowAllPartsVisibility()
+        {
+            if (_profile?.PartsSlots == null) return;
+            RecordPartsUndo("Show All Parts");
+            for (int i = 0; i < _profile.PartsSlots.Count; i++)
+            {
+                var s = _profile.PartsSlots[i];
+                if (s != null) s.Enabled = true;
+            }
+            SaveDirty();
+            _status = "Shown all parts";
+            Repaint();
         }
 
         void AddPartsSlot()
         {
-            if (_partsMode != SpritePartsStudioMode.Rig)
-            {
-                _status = "Switch to Rig to edit hierarchy.";
-                return;
-            }
-            RecordProfileUndo("Add Parts Slot");
+            RecordPartsUndo("Add Parts Slot");
             var result = SpritePartsAuthoringOps.TryAddRootPart(_profile, out var created);
             if (!result.Ok)
             {
@@ -676,12 +1009,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void AddPartsChildOf(string parentSlotId)
         {
-            if (_partsMode != SpritePartsStudioMode.Rig)
-            {
-                _status = "Switch to Rig to edit hierarchy.";
-                return;
-            }
-            RecordProfileUndo("Add Child Parts Slot");
+            RecordPartsUndo("Add Child Parts Slot");
             var result = SpritePartsAuthoringOps.TryAddChildPart(_profile, parentSlotId, out var created);
             if (!result.Ok)
             {
@@ -702,6 +1030,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             var evt = Event.current;
             if (evt.type != EventType.KeyDown) return;
             if (evt.keyCode != KeyCode.Delete && evt.keyCode != KeyCode.Backspace) return;
+            if (_partsSelectedKeys.Count > 0)
+            {
+                DeleteSelectedPartsKeys();
+                evt.Use();
+                Repaint();
+                return;
+            }
             if (_partsSelectedSlotIds.Count == 0) return;
 
             // Consume always when Parts selection is active so frame-clip Delete does not steal it.
@@ -762,7 +1097,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Cancel");
             }
             if (!confirm) return;
-            RecordProfileUndo("Break Parts From Parent");
+            RecordPartsUndo("Break Parts From Parent");
             var result = SpritePartsAuthoringOps.TryBreakFromParent(
                 _profile, slotId, confirmAnimationReview: true);
             if (!result.Ok)
@@ -771,7 +1106,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
             SaveDirty();
-            _status = "Broke from parent → Character root";
+            _status = "Broke from parent -> Character root";
             SelectPartsSlotId(slotId, false, false);
         }
 
@@ -824,7 +1159,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Cancel");
             }
             if (!confirm) return;
-            RecordProfileUndo("Move Parts Up One Level");
+            RecordPartsUndo("Move Parts Up One Level");
             var result = SpritePartsAuthoringOps.TryMoveUpOneLevel(
                 _profile, slotId, confirmAnimationReview: true);
             if (!result.Ok)
@@ -836,13 +1171,46 @@ namespace InvertLab.Sprites.DOTS.Editor
             _status = "Moved up one level";
             SelectPartsSlotId(slotId, false, false);
         }
-        void DeletePartsSubtree(string slotId)
+        void DuplicatePartsSlot(string slotId, bool mirrorHorizontal)
         {
-            if (_partsMode != SpritePartsStudioMode.Rig)
+            RecordPartsUndo(mirrorHorizontal ? "Duplicate Parts Mirrored" : "Duplicate Parts Slot");
+            var result = SpritePartsAuthoringOps.TryDuplicatePart(
+                _profile, slotId, out var created, mirrorHorizontal);
+            if (!result.Ok || created == null)
             {
-                _status = "Switch to Rig to edit hierarchy.";
+                _status = result.Reason ?? "Duplicate failed";
                 return;
             }
+            SaveDirty();
+            SelectPartsSlotId(created.SlotId, false, false);
+            _status = (mirrorHorizontal ? "Mirrored " : "Duplicated ") +
+                      (created.Name ?? created.SlotId) +
+                      (result.DeletedSlotCount > 1 ? (" +" + (result.DeletedSlotCount - 1) + " children") : "");
+            Repaint();
+        }
+
+        void FlipPartsSlot(string slotId, bool flipX, bool flipY)
+        {
+            RecordPartsUndo(flipX && flipY ? "Flip Parts Both"
+                : flipX ? "Flip Parts Horizontal" : "Flip Parts Vertical");
+            var result = SpritePartsAuthoringOps.TryFlipPart(_profile, slotId, flipX, flipY);
+            if (!result.Ok)
+            {
+                _status = result.Reason ?? "Flip failed";
+                return;
+            }
+            SaveDirty();
+            string axis = flipX && flipY ? "H+V" : flipX ? "Horizontal" : "Vertical";
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, slotId);
+            _status = "Flipped " + axis + " " + (slot?.Name ?? slotId) +
+                      (result.AffectedClipCount > 0
+                          ? $" ({result.AffectedClipCount} clip tracks)"
+                          : " (rest only)");
+            Repaint();
+        }
+
+        void DeletePartsSubtree(string slotId)
+        {
             var subtree = SpritePartsAuthoringOps.CollectSubtreeSlotIds(_profile, slotId);
             int clips = SpritePartsAuthoringOps.CountClipsWithKeysInSubtree(_profile, subtree);
             int bindings = 0;
@@ -868,7 +1236,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Cancel"))
                 return;
 
-            RecordProfileUndo("Delete Parts Subtree");
+            RecordPartsUndo("Delete Parts Subtree");
             var result = SpritePartsAuthoringOps.TryDeleteSubtree(_profile, slotId);
             if (!result.Ok)
             {

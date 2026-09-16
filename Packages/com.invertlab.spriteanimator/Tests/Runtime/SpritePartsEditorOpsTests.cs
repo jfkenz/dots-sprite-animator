@@ -184,5 +184,90 @@ namespace InvertLab.Sprites.DOTS.Tests
                 blob.Dispose();
             }
         }
+
+        [Test]
+        public void OnionGhostsMatchLivePose_WhenIdleHasNoKeys()
+        {
+            var profile = MakeFloating();
+            int idle = SpritePartsAuthoringOps.FindClipIndex(profile, "idle");
+            Assert.GreaterOrEqual(idle, 0);
+            Assert.IsTrue(SpritePartsOnion.TrySampleCharacter(
+                profile, idle, 0.4f, Allocator.Temp,
+                out var liveBlob, out var livePoses, out var liveMats, out var err), err);
+            try
+            {
+                var clip = profile.PartsClips[idle];
+                var ghosts = SpritePartsOnion.CollectGhostTimes(
+                    0.4f, clip.Duration, clip.WrapMode, 1, 1, 2, 30f, false, false);
+                Assert.Greater(ghosts.Count, 0, "Idle should still emit onion times");
+                foreach (var g in ghosts)
+                {
+                    Assert.IsTrue(SpritePartsOnion.TrySampleCharacter(
+                        profile, idle, g.Time, Allocator.Temp,
+                        out var gb, out var gp, out var gm, out var ge), ge);
+                    try
+                    {
+                        Assert.IsTrue(SpritePartsOnion.MatricesApproximatelyEqual(gm, liveMats),
+                            $"ghost t={g.Time} should match live rest pose");
+                    }
+                    finally
+                    {
+                        SpritePartsOnion.DisposeSample(gb, gp, gm);
+                    }
+                }
+            }
+            finally
+            {
+                SpritePartsOnion.DisposeSample(liveBlob, livePoses, liveMats);
+            }
+        }
+
+        [Test]
+        public void AssignSlotArt_1x1BindsWholeImageAsDefaultAppearance()
+        {
+            var profile = MakeFloating();
+            var tex = Texture2D.whiteTexture;
+            var result = SpritePartsAuthoringOps.AssignSlotArt(profile, "body", tex, 1, 1, 0);
+            Assert.IsTrue(result.Ok, result.Reason);
+            Assert.AreEqual("body.default", result.AppearanceId);
+            var body = SpritePartsAuthoringOps.FindSlot(profile, "body");
+            Assert.AreEqual("body.default", body.DefaultAppearanceId);
+            var app = SpritePartsAuthoringOps.FindAppearance(profile, body.DefaultAppearanceId);
+            Assert.IsNotNull(app);
+            Assert.AreEqual(0, app.CellIndex);
+            var sheet = profile.SheetAt(app.SheetIndex);
+            Assert.IsNotNull(sheet);
+            Assert.AreEqual(tex, sheet.Texture);
+            Assert.AreEqual(1, sheet.Columns);
+            Assert.AreEqual(1, sheet.Rows);
+
+            // Re-assign updates the same appearance, does not spawn a second id.
+            var again = SpritePartsAuthoringOps.AssignSlotArt(profile, "body", tex, 1, 1, 0);
+            Assert.IsTrue(again.Ok, again.Reason);
+            Assert.AreEqual("body.default", again.AppearanceId);
+            int defaults = 0;
+            for (int i = 0; i < profile.PartsAppearances.Count; i++)
+            {
+                var a = profile.PartsAppearances[i];
+                if (a != null && a.AppearanceId == "body.default")
+                    defaults++;
+            }
+            Assert.AreEqual(1, defaults);
+        }
+
+        [Test]
+        public void AssignSlotArt_SheetCell_ReusesMatchingGrid()
+        {
+            var profile = MakeFloating();
+            var tex = Texture2D.whiteTexture;
+            var a = SpritePartsAuthoringOps.AssignSlotArt(profile, "hand.l", tex, 2, 2, 1);
+            var b = SpritePartsAuthoringOps.AssignSlotArt(profile, "hand.r", tex, 2, 2, 2);
+            Assert.IsTrue(a.Ok, a.Reason);
+            Assert.IsTrue(b.Ok, b.Reason);
+            Assert.AreEqual(a.SheetIndex, b.SheetIndex);
+            Assert.AreEqual(1, a.CellIndex);
+            Assert.AreEqual(2, b.CellIndex);
+            Assert.AreNotEqual(a.AppearanceId, b.AppearanceId);
+        }
     }
 }

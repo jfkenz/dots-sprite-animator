@@ -154,8 +154,8 @@ namespace InvertLab.Sprites.DOTS
 
                 if (!IsFinite(slot.RestPosition) || !math.isfinite(slot.RestRotation) || !IsFinite(slot.RestScale))
                     errors.Add($"Slot '{id}' has non-finite rest transform.");
-                if (slot.RestScale.x <= 0f || slot.RestScale.y <= 0f)
-                    errors.Add($"Slot '{id}' rest scale must be > 0 (got {slot.RestScale}).");
+                if (math.abs(slot.RestScale.x) < 1e-5f || math.abs(slot.RestScale.y) < 1e-5f)
+                    errors.Add($"Slot '{id}' rest scale axes must be non-zero (got {slot.RestScale}).");
                 if (slot.DrawRank < 0 || slot.DrawRank >= SpritePartIdUtility.MaxParts)
                     errors.Add($"Slot '{id}' DrawRank must be in 0..{SpritePartIdUtility.MaxParts - 1}.");
                 else if (!ranks.Add(slot.DrawRank))
@@ -309,8 +309,8 @@ namespace InvertLab.Sprites.DOTS
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key time {key.Time} must be in [0, Duration={clip.Duration}].");
                         if (!IsFinite(key.Position) || !math.isfinite(key.Rotation) || !IsFinite(key.Scale))
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] has non-finite values.");
-                        if (key.Scale.x <= 0f || key.Scale.y <= 0f)
-                            errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] scale must be > 0.");
+                        if (math.abs(key.Scale.x) < 1e-5f || math.abs(key.Scale.y) < 1e-5f)
+                            errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] scale axes must be non-zero.");
                         if (!SpriteEase.IsValidMode(key.EaseMode))
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] has invalid EaseMode.");
                         if (!string.IsNullOrWhiteSpace(key.AppearanceId))

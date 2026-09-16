@@ -283,5 +283,72 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual(1, handL.DrawRank);
             Assert.AreEqual(2, handR.DrawRank);
         }
+    
+        [Test]
+        public void MoveDrawRankToFrontIndex_PutsWeaponBehindBody()
+        {
+            var profile = MakeFloating();
+            var weapon = SpritePartsAuthoringOps.FindSlot(profile, "weapon");
+            var body = SpritePartsAuthoringOps.FindSlot(profile, "body");
+            Assert.Greater(weapon.DrawRank, body.DrawRank);
+
+            var front = SpritePartsAuthoringOps.GetSlotsSortedByDrawRank(profile, frontFirst: true);
+            Assert.AreEqual("weapon", SpritePartIdUtility.Canonical(front[0].SlotId));
+
+            var result = SpritePartsAuthoringOps.TryMoveDrawRankToFrontIndex(
+                profile, "weapon", front.Count - 1);
+            Assert.IsTrue(result.Ok, result.Reason);
+            Assert.AreEqual(0, weapon.DrawRank);
+            Assert.Greater(body.DrawRank, weapon.DrawRank);
+
+            var parent = SpritePartIdUtility.Canonical(weapon.ParentSlotId);
+            Assert.AreEqual("hand.r", parent);
+        }
+
+
+        [Test]
+        public void DuplicateMirrored_OnlyMirrorsRoot_AndStillBuildsBlob()
+        {
+            var profile = MakeFloating();
+            var hand = SpritePartsAuthoringOps.FindSlot(profile, "hand.l");
+            Assert.IsNotNull(hand);
+            // Ensure hand has a child so subtree copy is exercised.
+            Assert.IsTrue(SpritePartsAuthoringOps.TryAddChildPart(profile, "hand.l", out var child).Ok);
+            child.RestPosition = new Vector2(0.25f, 0.1f);
+            child.RestScale = Vector2.one;
+            float childPx = child.RestPosition.x;
+            float childSx = child.RestScale.x;
+
+            var result = SpritePartsAuthoringOps.TryDuplicatePart(
+                profile, "hand.l", out var created, mirrorHorizontal: true);
+            Assert.IsTrue(result.Ok, result.Reason);
+            Assert.IsNotNull(created);
+            Assert.Less(created.RestScale.x, 0f);
+            Assert.AreEqual(-hand.RestPosition.x, created.RestPosition.x, 1e-4f);
+
+            // Find mirrored child under created
+            string createdId = SpritePartIdUtility.Canonical(created.SlotId);
+            SpritePartSlotDef mirroredChild = null;
+            for (int i = 0; i < profile.PartsSlots.Count; i++)
+            {
+                var s = profile.PartsSlots[i];
+                if (s == null) continue;
+                if (SpritePartIdUtility.Canonical(s.ParentSlotId) == createdId &&
+                    s.SlotId != created.SlotId)
+                {
+                    mirroredChild = s;
+                    break;
+                }
+            }
+            Assert.IsNotNull(mirroredChild, "expected mirrored subtree child");
+            Assert.AreEqual(childPx, mirroredChild.RestPosition.x, 1e-4f);
+            Assert.AreEqual(childSx, mirroredChild.RestScale.x, 1e-4f);
+
+            var validation = SpritePartsValidation.Validate(profile);
+            Assert.IsTrue(validation.Ok, string.Join(" | ", validation.Errors));
+            Assert.IsTrue(SpritePartsClipConversion.TryBuildPoseEvaluationBlob(
+                profile, Unity.Collections.Allocator.Temp, out var blob, out var err), err);
+            if (blob.IsCreated) blob.Dispose();
+        }
     }
 }

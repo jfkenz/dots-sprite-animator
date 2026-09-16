@@ -596,7 +596,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                || !string.IsNullOrEmpty(_renamingSocketId)
                || _renamingInventoryIndex >= 0
                || _renamingEventId != 0
-               || _pendingEventRename;
+               || _pendingEventRename
+               || _partsRenamingClip >= 0
+               || !string.IsNullOrEmpty(_partsRenameSlotId);
 
         bool TryBeginPreferredRename()
         {
@@ -1142,6 +1144,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CommitInventoryRename();
             if (_renamingEventId != 0)
                 CommitEventRename();
+            if (_partsRenamingClip >= 0)
+                CommitPartsClipRename();
+            if (!string.IsNullOrEmpty(_partsRenameSlotId))
+                CommitPartsRename();
         }
 
         void CancelAllRenames()
@@ -1158,6 +1164,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CancelInventoryRename();
             if (_renamingEventId != 0)
                 CancelEventRename();
+            if (_partsRenamingClip >= 0)
+                CancelPartsClipRename();
+            if (!string.IsNullOrEmpty(_partsRenameSlotId))
+                CancelPartsRename();
         }
 
         void WriteActiveSheetFromLegacy()

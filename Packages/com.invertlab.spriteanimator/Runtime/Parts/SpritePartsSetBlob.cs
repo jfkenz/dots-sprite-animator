@@ -353,8 +353,8 @@ namespace InvertLab.Sprites.DOTS
                 var k = keys[i];
                 if (!math.isfinite(k.Time) || k.Time < 0f || k.Time > duration + 1e-5f)
                     throw new ArgumentException($"Key time {k.Time} outside [0, {duration}].");
-                if (k.Scale.x <= 0f || k.Scale.y <= 0f)
-                    throw new ArgumentException("Key scale must be > 0.");
+                if (math.abs(k.Scale.x) < 1e-5f || math.abs(k.Scale.y) < 1e-5f)
+                    throw new ArgumentException("Key scale axes must be non-zero.");
                 byte ease = SpriteEase.IsValidMode(k.EaseMode) ? k.EaseMode : (byte)SpriteEaseMode.Linear;
                 int appearanceIndex = -1;
                 if (!string.IsNullOrWhiteSpace(k.AppearanceId))
