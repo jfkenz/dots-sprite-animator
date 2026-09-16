@@ -47,6 +47,8 @@ namespace InvertLab.Sprites.DOTS
             profile.PartsSkins ??= new List<SpritePartsSkinDef>();
             profile.PartsDefaultClipId ??= string.Empty;
             profile.PartsDefaultSkinId ??= string.Empty;
+            profile.ArtLibraries ??= new List<SpriteArtLibraryLink>();
+            profile.ArtLibraries.RemoveAll(l => l == null);
             if (profile.PartsSchemaVersion <= 0)
                 profile.PartsSchemaVersion = 1;
         }

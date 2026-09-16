@@ -72,17 +72,22 @@ namespace InvertLab.Sprites.DOTS
                 }
 
                 DependsOn(profileAsset);
+#if UNITY_EDITOR
+                if (profile.ArtLibraries != null)
+                {
+                    for (int i = 0; i < profile.ArtLibraries.Count; i++)
+                    {
+                        var link = profile.ArtLibraries[i];
+                        if (link == null || string.IsNullOrWhiteSpace(link.LibraryGuid))
+                            continue;
+                        var library = SpriteArtLibraryOps.LoadByGuid(link.LibraryGuid);
+                        if (library != null)
+                            DependsOn(library);
+                    }
+                }
+#endif
                 profile.EnsureSheets();
                 profile.EnsurePartsRig();
-                SpritePartsValidation.CanonicalizeIds(profile);
-                var validation = SpritePartsValidation.Validate(profile);
-                if (!validation.Ok)
-                {
-                    Debug.LogError(
-                        $"[SpritePartsCharacterAuthoring] '{authoring.name}' bake blocked: {string.Join(" | ", validation.Errors)}",
-                        authoring);
-                    return;
-                }
 
                 if (!SpritePartsClipConversion.TryBuildBlob(profile, Allocator.Persistent,
                         out var partsBlob, out string blobError))
@@ -349,4 +354,3 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 }
-

@@ -104,7 +104,8 @@ namespace InvertLab.Sprites.DOTS
         }
 
         internal static SpriteImportProvenance StampProvenance(
-            ImportSourceInfo sourceInfo, string sourceItem, string importedUtc)
+            ImportSourceInfo sourceInfo, string sourceItem, string importedUtc,
+            string libraryGuid = null, string libraryItemId = null)
         {
             return new SpriteImportProvenance
             {
@@ -114,6 +115,8 @@ namespace InvertLab.Sprites.DOTS
                 ImportedUtc = string.IsNullOrEmpty(importedUtc)
                     ? DateTime.UtcNow.ToString("o")
                     : importedUtc,
+                LibraryGuid = libraryGuid ?? string.Empty,
+                LibraryItemId = libraryItemId ?? string.Empty,
             };
         }
 
@@ -382,6 +385,7 @@ namespace InvertLab.Sprites.DOTS
                             LogicalWorldSize = sourceApp.LogicalWorldSize,
                             PivotSource = sourceApp.PivotSource,
                             PivotOverride = sourceApp.PivotOverride,
+                            SemanticRole = sourceApp.SemanticRole,
                             Import = StampProvenance(sourceInfo,
                                 $"appearance '{action.SourceAppearanceId}' (replaced)", importedUtc),
                         };
@@ -397,6 +401,7 @@ namespace InvertLab.Sprites.DOTS
                             LogicalWorldSize = sourceApp.LogicalWorldSize,
                             PivotSource = sourceApp.PivotSource,
                             PivotOverride = sourceApp.PivotOverride,
+                            SemanticRole = sourceApp.SemanticRole,
                             Import = StampProvenance(sourceInfo,
                                 $"appearance '{action.SourceAppearanceId}'", importedUtc),
                         };
@@ -604,6 +609,8 @@ namespace InvertLab.Sprites.DOTS
                     continue;
                 if (destApp.PivotSource != sourceApp.PivotSource || destApp.PivotOverride != sourceApp.PivotOverride)
                     continue;
+                if (destApp.SemanticRole != sourceApp.SemanticRole)
+                    continue;
                 var destSheet = destApp.SheetIndex >= 0 && destApp.SheetIndex < destSheets.Count
                     ? destSheets[destApp.SheetIndex]
                     : null;
@@ -622,7 +629,7 @@ namespace InvertLab.Sprites.DOTS
             return -1;
         }
 
-        static SpriteSheetDef CloneSheet(SpriteSheetDef source, string name)
+        internal static SpriteSheetDef CloneSheet(SpriteSheetDef source, string name)
         {
             return new SpriteSheetDef
             {
@@ -639,6 +646,22 @@ namespace InvertLab.Sprites.DOTS
                 CellPivots = source.CellPivots == null
                     ? null
                     : new List<SpriteCellPivot>(source.CellPivots),
+            };
+        }
+
+        internal static SpritePartAppearanceDef CloneAppearance(
+            SpritePartAppearanceDef source, string name, string appearanceId, int destSheetIndex)
+        {
+            return new SpritePartAppearanceDef
+            {
+                Name = name,
+                AppearanceId = appearanceId,
+                SheetIndex = destSheetIndex,
+                CellIndex = source.CellIndex,
+                LogicalWorldSize = source.LogicalWorldSize,
+                PivotSource = source.PivotSource,
+                PivotOverride = source.PivotOverride,
+                SemanticRole = source.SemanticRole,
             };
         }
 

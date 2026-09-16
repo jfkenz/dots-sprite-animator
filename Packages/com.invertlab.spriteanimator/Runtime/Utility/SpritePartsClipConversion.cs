@@ -18,6 +18,14 @@ namespace InvertLab.Sprites.DOTS
             Allocator allocator,
             out BlobAssetReference<SpritePartsSetBlob> blob,
             out string error)
+            => TryBuildBlob(profile, allocator, out blob, out error, null);
+
+        public static bool TryBuildBlob(
+            SpriteSheetProfile profile,
+            Allocator allocator,
+            out BlobAssetReference<SpritePartsSetBlob> blob,
+            out string error,
+            SpriteArtLibraryOps.LibraryResolver libraryResolver)
         {
             blob = default;
             error = null;
@@ -29,7 +37,16 @@ namespace InvertLab.Sprites.DOTS
 
             profile.EnsurePartsRig();
             SpritePartsValidation.CanonicalizeIds(profile);
-            var validation = SpritePartsValidation.Validate(profile);
+
+            var bakeProfile = SpriteArtLibraryOps.ResolveForBake(profile, out error, libraryResolver);
+            if (bakeProfile == null)
+                return false;
+            if (!ReferenceEquals(bakeProfile, profile))
+            {
+                bakeProfile.EnsurePartsRig();
+                SpritePartsValidation.CanonicalizeIds(bakeProfile);
+            }
+            var validation = SpritePartsValidation.Validate(bakeProfile);
             if (!validation.Ok)
             {
                 error = string.Join(" | ", validation.Errors);
@@ -38,12 +55,12 @@ namespace InvertLab.Sprites.DOTS
 
             try
             {
-                var slots = CreateSlots(profile);
-                var appearances = CreateAppearances(profile, out error);
+                var slots = CreateSlots(bakeProfile);
+                var appearances = CreateAppearances(bakeProfile, out error);
                 if (appearances == null)
                     return false;
-                var clips = CreateClips(profile);
-                var skins = CreateSkins(profile);
+                var clips = CreateClips(bakeProfile);
+                var skins = CreateSkins(bakeProfile);
                 blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins);
                 return true;
             }
@@ -300,4 +317,3 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 }
-

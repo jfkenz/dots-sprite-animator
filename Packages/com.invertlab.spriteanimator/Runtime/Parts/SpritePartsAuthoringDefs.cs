@@ -24,6 +24,19 @@ namespace InvertLab.Sprites.DOTS
         Override = 2,
     }
 
+    /// <summary>
+    /// Optional outfit/skin role. Used by Apply Outfit (appearance binding by role).
+    /// Not a motion retarget channel and not required for bake.
+    /// </summary>
+    public enum SpritePartSemanticRole : byte
+    {
+        None = 0,
+        Body = 1,
+        Head = 2,
+        Weapon = 3,
+        Offhand = 4,
+    }
+
     /// <summary>One named body slot in a Parts rig. Joint rest is parent-local world units.</summary>
     [Serializable]
     public class SpritePartSlotDef
@@ -45,6 +58,8 @@ namespace InvertLab.Sprites.DOTS
         public bool Enabled = true;
         /// <summary>Editor-only lock. Locked parts cannot be transformed, renamed, deleted or dragged.</summary>
         public bool EditorLocked;
+        /// <summary>Optional outfit role for Apply Outfit. None = ignored by role mapping.</summary>
+        public SpritePartSemanticRole SemanticRole;
     }
 
     /// <summary>Art binding relative to a joint. Swap changes this; motion keys stay.</summary>
@@ -61,6 +76,8 @@ namespace InvertLab.Sprites.DOTS
         public Vector2 PivotOverride = new(0.5f, 0.5f);
         /// <summary>Display-only provenance when this appearance was copied/created by an import.</summary>
         public SpriteImportProvenance Import;
+        /// <summary>Optional outfit role. When set, Apply Outfit prefers this over the bound slot's role.</summary>
+        public SpritePartSemanticRole SemanticRole;
     }
 
     [Serializable]

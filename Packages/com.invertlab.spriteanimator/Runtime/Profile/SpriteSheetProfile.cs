@@ -1303,6 +1303,25 @@ namespace InvertLab.Sprites.DOTS
         public string SourceItem = string.Empty;
         /// <summary>ISO-8601 UTC import time; empty when not recorded.</summary>
         public string ImportedUtc = string.Empty;
+        /// <summary>
+        /// Non-empty when this item was pulled from a <see cref="SpriteArtLibrary"/>.
+        /// Display-only at play; bake embeds resolved art and never looks this up.
+        /// </summary>
+        public string LibraryGuid = string.Empty;
+        /// <summary>Stable library item key (appearance id or sheet identity) for Pull/Sync replace.</summary>
+        public string LibraryItemId = string.Empty;
+    }
+
+    /// <summary>
+    /// Opt-in GUID reference from a profile to a shared <see cref="SpriteArtLibrary"/>.
+    /// Import-from-profile copy remains the default; library refs are additive.
+    /// </summary>
+    [Serializable]
+    public class SpriteArtLibraryLink
+    {
+        public string LibraryGuid = string.Empty;
+        public string LibraryPath = string.Empty;
+        public string LibraryName = string.Empty;
     }
 
     [System.Serializable]
@@ -1371,6 +1390,11 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsSkinDef> PartsSkins = new();
         public string PartsDefaultClipId = string.Empty;
         public string PartsDefaultSkinId = string.Empty;
+        /// <summary>
+        /// Shared art libraries this profile may pull from. Empty = local art only.
+        /// Bake flattens library art into the blob; play mode never resolves these.
+        /// </summary>
+        public List<SpriteArtLibraryLink> ArtLibraries = new();
         public List<SpriteEventDef> Events = new();
         public List<FrameBoxDef> Hitboxes = new();
         public SpriteSocketCatalog SocketCatalog = new();

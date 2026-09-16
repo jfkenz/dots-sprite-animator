@@ -66,6 +66,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] Vector2 _framesPreviewPan;
         [SerializeField] float _partsCanvasZoom = 1f;
         [SerializeField] Vector2 _partsCanvasPan;
+        SpriteArtLibrary _pendingLibraryAttach;
 
         readonly Dictionary<string, string> _partsSkinPreviewOverrides = new(StringComparer.Ordinal);
         string _partsArtSyncedSlotId;
@@ -125,6 +126,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         SpritePartsClipDef _importPreviewClip;
         string _importPreviewSourceName;
         string _importPreviewClipName;
+        string _importPreviewBanner;
 
         bool ImportPreviewActive => _importPreviewClip != null;
 
@@ -135,17 +137,20 @@ namespace InvertLab.Sprites.DOTS.Editor
         internal bool ImportPreviewPlaying => _partsPlaying;
 
         internal void StartImportPreview(
-            string sourceName, string clipName, SpritePartsClipDef transientClip)
+            string sourceName, string clipName, SpritePartsClipDef transientClip,
+            string status = null, string banner = null)
         {
             if (transientClip == null) return;
             _importPreviewClip = transientClip;
             _importPreviewSourceName = sourceName ?? string.Empty;
             _importPreviewClipName = clipName ?? string.Empty;
+            _importPreviewBanner = banner;
             _partsHasTempPose = false;
             _partsPreviewTime = 0f;
             _partsPlaying = true;
             _lastEditorTime = EditorApplication.timeSinceStartup;
-            _status = $"Previewing '{_importPreviewClipName}' from {_importPreviewSourceName} on this rig (motion copy, no retargeting)";
+            _status = status ??
+                      $"Previewing '{_importPreviewClipName}' from {_importPreviewSourceName} on this rig (motion copy, no retargeting)";
             Repaint();
         }
 
@@ -171,6 +176,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _importPreviewClip = null;
             _importPreviewSourceName = null;
             _importPreviewClipName = null;
+            _importPreviewBanner = null;
             _partsPlaying = false;
             if (!string.IsNullOrEmpty(status))
                 _status = status;
@@ -517,6 +523,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUILayout.Space(4f);
             DrawPartsModeToolbar();
             GUILayout.Space(8f);
+            DrawArtLibrariesInspector();
+            GUILayout.Space(4f);
             float prevLabelWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = Mathf.Max(72f, Mathf.Min(96f, rect.width * 0.38f));
 
@@ -549,6 +557,22 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SaveDirty();
                 }
                 DrawImportProvenanceLabel(clip.Import);
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button(new GUIContent("Retarget Parts Clip...",
+                        "Explicitly remap this (or another) clip's keys onto this rig's rest/hierarchy. Not Spine-style retargeting."),
+                    GUILayout.Height(20f)))
+                {
+                    var anchor = GUILayoutUtility.GetLastRect();
+                    PopupWindow.Show(anchor, new SpritePartsClipRetargetPopup(this));
+                }
+                if (GUILayout.Button(new GUIContent("Bake to Frame Clip...",
+                        "Sample this Parts clip at a chosen FPS into a new frame clip. Does not change runtime AnimKind."),
+                    GUILayout.Height(20f)))
+                {
+                    var anchor = GUILayoutUtility.GetLastRect();
+                    PopupWindow.Show(anchor, new SpritePartsToFrameBakePopup(this, _partsSelectedClip));
+                }
+                EditorGUILayout.EndHorizontal();
             }
 
             var slot = CurrentPartsSlot;
@@ -575,6 +599,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUI.BeginDisabledGroup(true);
                 EditorGUILayout.TextField("Slot Id", slot.SlotId);
                 EditorGUI.EndDisabledGroup();
+                EditorGUI.BeginChangeCheck();
+                var nextRole = (SpritePartSemanticRole)EditorGUILayout.EnumPopup(
+                    new GUIContent("Semantic Role",
+                        "Optional outfit role for Apply Outfit (Body/Head/Weapon/Offhand). None = ignored."),
+                    slot.SemanticRole);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordPartsUndo("Set Slot Semantic Role");
+                    slot.SemanticRole = nextRole;
+                    SaveDirty();
+                }
                 EditorGUILayout.LabelField("Sibling Order", slot.SiblingOrder.ToString());
                 DrawPartsZOrderInspector(slot);
                 DrawPartsArtInspector(slot);
@@ -796,6 +831,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 EditorGUILayout.LabelField("Appearance Id", slot.DefaultAppearanceId);
                 DrawImportProvenanceLabel(app?.Import);
+                if (app != null)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    var nextRole = (SpritePartSemanticRole)EditorGUILayout.EnumPopup(
+                        new GUIContent("Appearance Role",
+                            "Optional. Apply Outfit uses this when set; otherwise the slot role."),
+                        app.SemanticRole);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        RecordPartsUndo("Set Appearance Semantic Role");
+                        app.SemanticRole = nextRole;
+                        SaveDirty();
+                    }
+                }
             }
         }
 
@@ -816,8 +865,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             string when = string.IsNullOrEmpty(provenance.ImportedUtc)
                 ? string.Empty
                 : " | " + provenance.ImportedUtc;
+            bool fromLibrary = SpriteArtLibraryOps.HasLibraryProvenance(provenance);
             EditorGUILayout.LabelField(
-                "Imported From",
+                fromLibrary ? "From Library" : "Imported From",
                 provenance.SourceItem + (string.IsNullOrEmpty(origin) ? string.Empty : " | " + origin) + when,
                 EditorStyles.wordWrappedMiniLabel);
         }
@@ -1112,6 +1162,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _partsSkinPreviewOverrides.Clear();
                 _status = "Cleared skin preview";
             }
+            GUILayout.Space(6f);
+            if (GUILayout.Button(new GUIContent("Apply Outfit...",
+                    "Map a source skin/outfit onto this profile by semantic role (Body/Head/Weapon/Offhand). Appearance binding only — not motion retargeting."),
+                GUILayout.Height(22f)))
+            {
+                var anchor = GUILayoutUtility.GetLastRect();
+                PopupWindow.Show(anchor, new SpritePartsOutfitPopup(this));
+            }
         }
 
         void DrawPartsPreview(Rect rect, int partsCanvasControlId)
@@ -1295,6 +1353,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     var banner = new Rect(canvas.x + 8f, canvas.yMax - 30f, canvas.width - 16f, 22f);
                     EditorGUI.DrawRect(banner, new Color(0.12f, 0.16f, 0.22f, 0.94f));
                     GUI.Label(new Rect(banner.x + 6f, banner.y + 3f, banner.width - 12f, 16f),
+                        _importPreviewBanner ??
                         $" IMPORT PREVIEW: '{_importPreviewClipName}' from {_importPreviewSourceName} - motion copied onto this rig. Editing paused.",
                         _mutedStyle);
                     return;
@@ -2159,6 +2218,311 @@ namespace InvertLab.Sprites.DOTS.Editor
             SealUndoGroup();
             _partsDragUndoGroup = -1;
             SaveDirty();
+        }
+
+        void DrawArtLibrariesInspector()
+        {
+            if (_profile == null) return;
+            GUILayout.Label("ART LIBRARIES", _sectionStyle);
+            GUILayout.Label(
+                "Opt-in shared sheets/appearances. Import from Profile remains the default copy path. Pull/Sync updates local art in one Undo. Bake flattens into the blob — play never looks up the library.",
+                EditorStyles.wordWrappedMiniLabel);
+            _profile.ArtLibraries ??= new List<SpriteArtLibraryLink>();
+            for (int i = 0; i < _profile.ArtLibraries.Count; i++)
+            {
+                var link = _profile.ArtLibraries[i];
+                if (link == null) continue;
+                EditorGUILayout.BeginHorizontal();
+                string label = string.IsNullOrEmpty(link.LibraryName) ? link.LibraryGuid : link.LibraryName;
+                GUILayout.Label(label, EditorStyles.miniLabel);
+                if (GUILayout.Button("Sync", GUILayout.Width(48f)))
+                    SyncAttachedLibrary(link);
+                if (GUILayout.Button("Detach", GUILayout.Width(56f)))
+                    DetachArtLibrary(link.LibraryGuid);
+                EditorGUILayout.EndHorizontal();
+                if (!string.IsNullOrEmpty(link.LibraryPath))
+                    GUILayout.Label(link.LibraryPath, EditorStyles.miniLabel);
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            _pendingLibraryAttach = (SpriteArtLibrary)EditorGUILayout.ObjectField(
+                _pendingLibraryAttach, typeof(SpriteArtLibrary), false);
+            using (new EditorGUI.DisabledScope(_pendingLibraryAttach == null))
+            {
+                if (GUILayout.Button("Attach", GUILayout.Width(56f)))
+                {
+                    AttachArtLibrary(_pendingLibraryAttach);
+                    _pendingLibraryAttach = null;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+
+        internal void AttachArtLibrary(SpriteArtLibrary library)
+        {
+            if (library == null || _profile == null) return;
+            string guid = SpriteArtLibraryOps.IdentityOf(library);
+            string path = SpriteArtLibraryOps.PathOf(library);
+            var preview = SpriteArtLibraryOps.Attach(
+                CloneProfileForPlan(_profile), library, guid, path);
+            if (!preview.Ok)
+            {
+                _status = preview.Reason;
+                EditorUtility.DisplayDialog("Attach Art Library", preview.Reason, "OK");
+                return;
+            }
+            RecordPartsUndo("Attach Art Library");
+            var result = SpriteArtLibraryOps.Attach(_profile, library, guid, path);
+            if (!result.Ok)
+            {
+                Undo.PerformUndo();
+                _status = result.Reason;
+                return;
+            }
+            SaveDirty();
+            _status = result.Summary;
+            Repaint();
+        }
+
+        internal void DetachArtLibrary(string guid)
+        {
+            if (_profile == null) return;
+            RecordPartsUndo("Detach Art Library");
+            var result = SpriteArtLibraryOps.Detach(_profile, guid);
+            if (!result.Ok)
+            {
+                Undo.PerformUndo();
+                _status = result.Reason;
+                return;
+            }
+            SaveDirty();
+            _status = result.Summary;
+            Repaint();
+        }
+
+        internal void SyncAttachedLibrary(SpriteArtLibraryLink link)
+        {
+            if (link == null || _profile == null) return;
+            var library = SpriteArtLibraryOps.LoadByGuid(link.LibraryGuid);
+            if (library == null)
+            {
+                _status = "Library asset is missing: " +
+                          (string.IsNullOrEmpty(link.LibraryName) ? link.LibraryGuid : link.LibraryName);
+                EditorUtility.DisplayDialog("Sync Art Library", _status, "OK");
+                return;
+            }
+            SyncArtLibrary(library, link.LibraryGuid, link.LibraryPath);
+        }
+
+        internal void SyncArtLibrary(SpriteArtLibrary library, string guid = null, string path = null)
+        {
+            if (library == null || _profile == null) return;
+            guid = string.IsNullOrWhiteSpace(guid) ? SpriteArtLibraryOps.IdentityOf(library) : guid;
+            path = path ?? SpriteArtLibraryOps.PathOf(library);
+            var plan = SpriteArtLibraryOps.PlanSync(_profile, library, guid);
+            if (!plan.Ok)
+            {
+                _status = plan.Reason;
+                EditorUtility.DisplayDialog("Sync Art Library", plan.Reason, "OK");
+                return;
+            }
+            if (!EditorUtility.DisplayDialog(
+                    "Pull / Sync from Library",
+                    plan.Summary + Environment.NewLine + Environment.NewLine +
+                    (plan.Added.Count > 0 ? "Added: " + string.Join(", ", plan.Added.ToArray()) + Environment.NewLine : "") +
+                    (plan.Updated.Count > 0 ? "Updated: " + string.Join(", ", plan.Updated.ToArray()) + Environment.NewLine : "") +
+                    (plan.Reused.Count > 0 ? "Reused: " + string.Join(", ", plan.Reused.ToArray()) + Environment.NewLine : "") +
+                    "One Undo restores the profile. Local-only art is not deleted.",
+                    "Sync", "Cancel"))
+                return;
+            RecordPartsUndo("Sync Art Library " + library.name);
+            var result = SpriteArtLibraryOps.ApplySync(
+                plan, _profile, library,
+                new SpriteProfileArtImport.ImportSourceInfo
+                {
+                    Guid = guid ?? string.Empty,
+                    Path = path ?? string.Empty,
+                });
+            if (!result.Ok)
+            {
+                Undo.PerformUndo();
+                _status = result.Reason;
+                return;
+            }
+            SaveDirty();
+            _status = "Synced " + library.name + ": " + result.Summary;
+            Repaint();
+        }
+
+        internal void ApplyPartsClipRetarget(
+            ScriptableSpriteSheetProfile sourceAsset,
+            int sourceClipIndex,
+            Dictionary<string, string> slotMap,
+            SpritePartsClipRetarget.RestDeltaMode mode)
+        {
+            if (sourceAsset?.Data == null || _profile == null) return;
+            ClearImportPreview();
+            var plan = SpritePartsClipRetarget.PlanRetarget(
+                sourceAsset.Data, sourceClipIndex, _profile, slotMap, mode);
+            if (!plan.Ok)
+            {
+                _status = plan.Reason;
+                EditorUtility.DisplayDialog("Retarget Parts Clip", plan.Reason, "OK");
+                return;
+            }
+            RecordPartsUndo("Retarget Parts Clip");
+            string path = AssetDatabase.GetAssetPath(sourceAsset);
+            var result = SpritePartsClipRetarget.Apply(
+                plan, sourceAsset.Data, _profile,
+                new SpriteProfileArtImport.ImportSourceInfo
+                {
+                    Guid = AssetDatabase.AssetPathToGUID(path) ?? string.Empty,
+                    Path = path ?? string.Empty,
+                });
+            if (!result.Ok)
+            {
+                Undo.PerformUndo();
+                _status = result.Reason;
+                return;
+            }
+            _partsSelectedClip = result.DestinationClipIndex;
+            SaveDirty();
+            _status = result.Summary;
+            Repaint();
+        }
+
+        internal void ApplyOutfitMapping(
+            ScriptableSpriteSheetProfile sourceAsset, int sourceSkinIndex)
+        {
+            if (sourceAsset?.Data == null || _profile == null) return;
+            var plan = SpritePartsOutfitMapping.PlanApply(sourceAsset.Data, sourceSkinIndex, _profile);
+            if (!plan.Ok)
+            {
+                _status = plan.Reason;
+                EditorUtility.DisplayDialog("Apply Outfit", plan.Reason, "OK");
+                return;
+            }
+            string extras = plan.Unmapped.Count > 0
+                ? Environment.NewLine + Environment.NewLine + "Unmapped (unchanged):" + Environment.NewLine +
+                  "- " + string.Join(Environment.NewLine + "- ", plan.Unmapped.ToArray())
+                : string.Empty;
+            if (!EditorUtility.DisplayDialog(
+                    "Apply Outfit",
+                    plan.Summary + extras + Environment.NewLine + Environment.NewLine +
+                    "Appearance/skin binding only. Motion curves are not retargeted.",
+                    "Apply", "Cancel"))
+                return;
+            RecordPartsUndo("Apply Outfit");
+            string path = AssetDatabase.GetAssetPath(sourceAsset);
+            var result = SpritePartsOutfitMapping.Apply(
+                plan, sourceAsset.Data, _profile,
+                new SpriteProfileArtImport.ImportSourceInfo
+                {
+                    Guid = AssetDatabase.AssetPathToGUID(path) ?? string.Empty,
+                    Path = path ?? string.Empty,
+                });
+            if (!result.Ok)
+            {
+                Undo.PerformUndo();
+                _status = result.Reason;
+                return;
+            }
+            SaveDirty();
+            _status = result.Summary;
+            Repaint();
+        }
+
+        internal void BakePartsClipToFrame(int partsClipIndex, float fps)
+        {
+            if (_profile == null) return;
+            var plan = SpritePartsToFrameBake.PlanBake(_profile, partsClipIndex, fps);
+            if (!plan.Ok)
+            {
+                _status = plan.Reason;
+                EditorUtility.DisplayDialog("Bake Parts Clip to Frame Clip", plan.Reason, "OK");
+                return;
+            }
+            string unsupported = plan.Unsupported.Count > 0
+                ? Environment.NewLine + Environment.NewLine + "Not transferred:" + Environment.NewLine +
+                  "- " + string.Join(Environment.NewLine + "- ", plan.Unsupported.ToArray())
+                : string.Empty;
+            if (!EditorUtility.DisplayDialog(
+                    "Bake Parts Clip to Frame Clip",
+                    plan.Summary + Environment.NewLine + Environment.NewLine +
+                    string.Join(Environment.NewLine, plan.Notes.ToArray()) +
+                    unsupported,
+                    "Bake", "Cancel"))
+                return;
+            RecordPartsUndo("Bake Parts Clip to Frame Clip");
+            string ownPath = _asset != null ? AssetDatabase.GetAssetPath(_asset) : string.Empty;
+            var result = SpritePartsToFrameBake.Apply(
+                plan, _profile,
+                new SpriteProfileArtImport.ImportSourceInfo
+                {
+                    Guid = string.IsNullOrEmpty(ownPath) ? string.Empty : AssetDatabase.AssetPathToGUID(ownPath),
+                    Path = ownPath,
+                });
+            if (!result.Ok)
+            {
+                Undo.PerformUndo();
+                _status = result.Reason;
+                return;
+            }
+            PersistBakedFrameTexture(result.Texture, plan.DestinationSheetName);
+            SaveDirty();
+            _status = result.Summary + ". Runtime AnimKind is unchanged.";
+            Repaint();
+        }
+
+        void PersistBakedFrameTexture(Texture2D texture, string sheetName)
+        {
+            if (texture == null || _asset == null)
+                return;
+            string assetPath = AssetDatabase.GetAssetPath(_asset);
+            if (string.IsNullOrEmpty(assetPath))
+                return;
+            string dir = System.IO.Path.GetDirectoryName(assetPath);
+            if (string.IsNullOrEmpty(dir))
+                return;
+            string file = SanitizeFileName(sheetName) + ".png";
+            string pngPath = dir.Replace("\\", "/") + "/" + file;
+            pngPath = AssetDatabase.GenerateUniqueAssetPath(pngPath);
+            System.IO.File.WriteAllBytes(pngPath, texture.EncodeToPNG());
+            AssetDatabase.ImportAsset(pngPath);
+            var imported = AssetDatabase.LoadAssetAtPath<Texture2D>(pngPath);
+            if (imported == null || _profile.Sheets == null || _profile.Sheets.Count == 0)
+                return;
+            _profile.Sheets[_profile.Sheets.Count - 1].Texture = imported;
+        }
+
+        static string SanitizeFileName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return "PartsBake";
+            foreach (char c in System.IO.Path.GetInvalidFileNameChars())
+                name = name.Replace(c, '_');
+            return name.Trim();
+        }
+
+        static SpriteSheetProfile CloneProfileForPlan(SpriteSheetProfile profile)
+        {
+            var copy = new SpriteSheetProfile();
+            copy.ArtLibraries = new List<SpriteArtLibraryLink>();
+            if (profile.ArtLibraries != null)
+            {
+                for (int i = 0; i < profile.ArtLibraries.Count; i++)
+                {
+                    var link = profile.ArtLibraries[i];
+                    if (link == null) continue;
+                    copy.ArtLibraries.Add(new SpriteArtLibraryLink
+                    {
+                        LibraryGuid = link.LibraryGuid,
+                        LibraryPath = link.LibraryPath,
+                        LibraryName = link.LibraryName,
+                    });
+                }
+            }
+            return copy;
         }
 
         /// <summary>One-shot Parts mutation: full SO snapshot so transform/key/tree edits undo reliably.</summary>
