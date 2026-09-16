@@ -222,15 +222,23 @@ namespace InvertLab.Sprites.DOTS
         {
             var result = ApplyPoseEdit(profile, SpritePartsStudioMode.Animate, clipIndex, slotId,
                 timeSeconds, pose, autoKey: true, snapFps);
-            if (!result.WroteKey || !includeAppearance)
+            if (!includeAppearance)
                 return result;
-            return WriteKeyAppearance(profile, clipIndex, slotId, timeSeconds, appearanceId, snapFps,
-                ensurePoseFrom: pose);
+            // Pose and appearance are separate channels: the id never lands on
+            // the pose key this write created.
+            var sprite = WriteKeyAppearance(profile, clipIndex, slotId, timeSeconds, appearanceId, snapFps);
+            result.WroteAppearance = sprite.WroteAppearance;
+            if (sprite.Rejected)
+                result.Reason = sprite.Reason;
+            return result;
         }
 
         /// <summary>
-        /// Upsert a sprite/appearance key at playhead. Empty appearanceId clears the key's
-        /// appearance field (hold). Missing track/key creates one from current/rest pose.
+        /// Upsert a sprite key at playhead. The appearance goes to the slot's
+        /// independent appearance channel - pose keys never carry ids from new
+        /// writes. When poseFallback has a value a pose key is written too
+        /// (without an id); without one, no pose key is created.
+        /// Empty appearanceId writes a hold marker on the channel.
         /// </summary>
         public static WriteResult WriteKeySprite(
             SpriteSheetProfile profile,
@@ -241,18 +249,32 @@ namespace InvertLab.Sprites.DOTS
             PoseEdit? poseFallback = null,
             float snapFps = DefaultDisplayFps)
         {
-            return WriteKeyAppearance(profile, clipIndex, slotId, timeSeconds, appearanceId, snapFps,
-                ensurePoseFrom: poseFallback);
+            var result = WriteKeyAppearance(profile, clipIndex, slotId, timeSeconds, appearanceId, snapFps);
+            if (result.Rejected)
+                return result;
+            if (poseFallback.HasValue)
+            {
+                var poseResult = ApplyPoseEdit(profile, SpritePartsStudioMode.Animate, clipIndex, slotId,
+                    timeSeconds, poseFallback.Value, autoKey: true, snapFps);
+                result.WroteKey = poseResult.WroteKey || result.WroteKey;
+                if (poseResult.Rejected && !string.IsNullOrEmpty(poseResult.Reason))
+                    result.Reason = poseResult.Reason;
+            }
+            return result;
         }
 
-        static WriteResult WriteKeyAppearance(
+        /// <summary>
+        /// Upsert an appearance key on the slot's independent channel. Pose keys
+        /// are never created or modified; legacy ids on the pose track migrate
+        /// into the channel on first write (see EnsureAppearanceTrack).
+        /// </summary>
+        public static WriteResult WriteKeyAppearance(
             SpriteSheetProfile profile,
             int clipIndex,
             string slotId,
             float timeSeconds,
             string appearanceId,
-            float snapFps,
-            PoseEdit? ensurePoseFrom)
+            float snapFps = DefaultDisplayFps)
         {
             var result = new WriteResult();
             if (profile == null)
@@ -306,24 +328,8 @@ namespace InvertLab.Sprites.DOTS
             var clip = profile.PartsClips[clipIndex];
             float duration = Mathf.Max(1e-3f, clip.Duration);
             float time = SnapTime(Mathf.Clamp(timeSeconds, 0f, duration), snapFps, duration);
-            var track = GetOrCreateTrack(clip, slot.SlotId);
-            var existing = FindKeyAtTime(track, time);
-            if (existing == null)
-            {
-                PoseEdit pose = ensurePoseFrom ?? new PoseEdit
-                {
-                    Position = slot.RestPosition,
-                    Rotation = slot.RestRotation,
-                    Scale = slot.RestScale,
-                };
-                UpsertKey(track, time, pose, appearanceId: aid, setAppearance: true);
-                result.WroteKey = true;
-            }
-            else
-            {
-                existing.AppearanceId = aid;
-                result.WroteKey = true;
-            }
+            var channel = EnsureAppearanceTrack(clip, slot.SlotId);
+            UpsertAppearanceKey(channel, time, aid);
             result.WroteAppearance = true;
             return result;
         }
@@ -341,7 +347,11 @@ namespace InvertLab.Sprites.DOTS
             if (clip == null) return string.Empty;
             float duration = Mathf.Max(1e-3f, clip.Duration);
             float time = SpritePartsSampler.WrapTime(timeSeconds, duration, clip.WrapMode);
-            var track = FindTrack(clip, slotId);
+            // Dedicated appearance channel wins; legacy ids mixed into pose keys
+            // still sample when the slot has no channel.
+            var track = FindAppearanceTrack(clip, slotId);
+            if (track == null)
+                track = FindTrack(clip, slotId);
             if (track?.Keys == null || track.Keys.Count == 0)
                 return string.Empty;
 
@@ -375,18 +385,26 @@ namespace InvertLab.Sprites.DOTS
             return null;
         }
 
+        /// <summary>Find the slot's POSE track. Never returns an appearance track.</summary>
         public static SpritePartsTrackDef FindTrack(SpritePartsClipDef clip, string slotId)
+            => FindTrack(clip, slotId, SpritePartsTrackKind.Pose);
+
+        public static SpritePartsTrackDef FindTrack(SpritePartsClipDef clip, string slotId, SpritePartsTrackKind kind)
         {
             if (clip?.Tracks == null) return null;
             string id = SpritePartIdUtility.Canonical(slotId);
             for (int i = 0; i < clip.Tracks.Count; i++)
             {
                 var t = clip.Tracks[i];
-                if (t != null && SpritePartIdUtility.Canonical(t.SlotId) == id)
+                if (t != null && t.Kind == kind && SpritePartIdUtility.Canonical(t.SlotId) == id)
                     return t;
             }
             return null;
         }
+
+        /// <summary>The slot's independent appearance channel, or null.</summary>
+        public static SpritePartsTrackDef FindAppearanceTrack(SpritePartsClipDef clip, string slotId)
+            => FindTrack(clip, slotId, SpritePartsTrackKind.Appearance);
 
         public struct AssignArtResult
         {
@@ -526,6 +544,262 @@ namespace InvertLab.Sprites.DOTS
             result.AppearanceId = slot.DefaultAppearanceId;
             result.SheetIndex = sheetIndex;
             result.CellIndex = cellIndex;
+            return result;
+        }
+
+        public struct KindSwitchResult
+        {
+            public bool Ok;
+            public string Reason;
+        }
+
+        /// <summary>
+        /// Explicit, validated runtime-mode change. The editor workspace never
+        /// calls this implicitly. Switching preserves both data sets; activating
+        /// Parts requires a rig that passes validation, activating Frames requires
+        /// at least one frame clip on a sheet with a texture. Rejected switches
+        /// change nothing and explain the fix.
+        /// </summary>
+        public static KindSwitchResult TrySetAnimKind(SpriteSheetProfile profile, SpriteAnimKind kind)
+        {
+            if (profile == null)
+                return new KindSwitchResult { Reason = "Profile is null." };
+            if (profile.AnimKind == kind)
+                return new KindSwitchResult { Ok = true };
+
+            if (kind == SpriteAnimKind.Parts)
+            {
+                var previous = profile.AnimKind;
+                profile.AnimKind = SpriteAnimKind.Parts;
+                var validation = SpritePartsValidation.Validate(profile);
+                if (validation.Ok)
+                    return new KindSwitchResult { Ok = true };
+                profile.AnimKind = previous;
+                return new KindSwitchResult { Reason = SummarizeErrors(validation.Errors) };
+            }
+
+            // Read-only: a rejected switch must not migrate legacy sheet fields.
+            if (profile.Clips != null)
+            {
+                for (int i = 0; i < profile.Clips.Count; i++)
+                {
+                    var clip = profile.Clips[i];
+                    if (clip?.Frames == null || clip.Frames.Length == 0)
+                        continue;
+                    var sheet = profile.SheetForClip(clip);
+                    if (sheet != null && sheet.Texture != null)
+                    {
+                        profile.AnimKind = SpriteAnimKind.Frame;
+                        return new KindSwitchResult { Ok = true };
+                    }
+                }
+            }
+            return new KindSwitchResult
+            {
+                Reason = "Frames runtime needs at least one frame clip on a sheet with a texture. " +
+                         "Assign a sheet in the Frames workspace first.",
+            };
+        }
+
+        /// <summary>
+        /// Peek variant of <see cref="TrySetAnimKind"/>: validates and restores
+        /// the previous kind, so callers can check first and only record Undo
+        /// for switches that will actually apply.
+        /// </summary>
+        public static bool CanSetAnimKind(SpriteSheetProfile profile, SpriteAnimKind kind, out string reason)
+        {
+            var previous = profile?.AnimKind ?? SpriteAnimKind.Frame;
+            var result = TrySetAnimKind(profile, kind);
+            reason = result.Reason;
+            if (result.Ok && profile != null && previous != kind)
+                profile.AnimKind = previous;
+            return result.Ok;
+        }
+
+        static string SummarizeErrors(List<string> errors)
+        {
+            if (errors == null || errors.Count == 0)
+                return "Parts data is not usable yet.";
+            return errors.Count == 1
+                ? errors[0]
+                : errors[0] + $" (and {errors.Count - 1} more)";
+        }
+
+        public struct BindAppearanceResult
+        {
+            public bool Ok;
+            public string Reason;
+            public string AppearanceId;
+        }
+
+        /// <summary>Bind an existing profile appearance as the slot's default art.</summary>
+        public static BindAppearanceResult SetSlotDefaultAppearance(
+            SpriteSheetProfile profile, string slotId, string appearanceId)
+        {
+            if (profile == null)
+                return new BindAppearanceResult { Reason = "Profile is null." };
+            var slot = FindSlot(profile, slotId);
+            if (slot == null)
+                return new BindAppearanceResult { Reason = $"Slot '{slotId}' not found." };
+            var app = FindAppearance(profile, appearanceId);
+            if (app == null)
+                return new BindAppearanceResult
+                {
+                    Reason = $"Appearance '{appearanceId}' is not in this profile. Use Import from Profile first.",
+                };
+            string id = SpritePartIdUtility.Canonical(app.AppearanceId, app.Name);
+            slot.DefaultAppearanceId = id;
+            SpritePartsValidation.CanonicalizeIds(profile);
+            return new BindAppearanceResult { Ok = true, AppearanceId = id };
+        }
+
+        /// <summary>
+        /// Bind a sheet cell of this profile as the slot's default art. Reuses an
+        /// appearance already pointing at that cell, otherwise creates one.
+        /// </summary>
+        public static BindAppearanceResult BindSlotArtFromCell(
+            SpriteSheetProfile profile, string slotId, int sheetIndex, int cellIndex)
+        {
+            if (profile == null)
+                return new BindAppearanceResult { Reason = "Profile is null." };
+            var slot = FindSlot(profile, slotId);
+            if (slot == null)
+                return new BindAppearanceResult { Reason = $"Slot '{slotId}' not found." };
+            profile.EnsureSheets();
+            var sheet = profile.SheetAt(sheetIndex);
+            if (sheet == null || sheet.Texture == null)
+                return new BindAppearanceResult { Reason = $"Sheet {sheetIndex} has no texture." };
+            int columns = Mathf.Max(1, sheet.Columns);
+            int rows = Mathf.Max(1, sheet.Rows);
+            int cells = columns * rows;
+            cellIndex = Mathf.Clamp(cellIndex, 0, cells - 1);
+
+            SpritePartAppearanceDef app = null;
+            for (int i = 0; i < profile.PartsAppearances.Count; i++)
+            {
+                var a = profile.PartsAppearances[i];
+                if (a != null && a.SheetIndex == sheetIndex && a.CellIndex == cellIndex)
+                {
+                    app = a;
+                    break;
+                }
+            }
+            if (app == null)
+            {
+                string desired = SpritePartIdUtility.Canonical(slot.SlotId) + ".cell" + cellIndex;
+                string id = desired;
+                int n = 2;
+                while (FindAppearance(profile, id) != null)
+                    id = desired + n++;
+                app = new SpritePartAppearanceDef
+                {
+                    Name = (string.IsNullOrWhiteSpace(slot.Name) ? slot.SlotId : slot.Name) + " Cell " + cellIndex,
+                    AppearanceId = id,
+                    SheetIndex = sheetIndex,
+                    CellIndex = cellIndex,
+                    LogicalWorldSize = Vector2.zero,
+                    PivotSource = SpritePartPivotSource.SheetDefault,
+                };
+                profile.PartsAppearances.Add(app);
+            }
+
+            string boundId = SpritePartIdUtility.Canonical(app.AppearanceId, app.Name);
+            slot.DefaultAppearanceId = boundId;
+            SpritePartsValidation.CanonicalizeIds(profile);
+            return new BindAppearanceResult { Ok = true, AppearanceId = boundId };
+        }
+
+        public struct BatchAppearanceResult
+        {
+            public bool Ok;
+            public string Reason;
+            public int Created;
+            public int Reused;
+            public List<string> AppearanceIds;
+        }
+
+        /// <summary>
+        /// Batch-create one appearance per selected sheet cell (From This
+        /// Profile batch mode). Exact sheet+cell matches are reused; new ids
+        /// derive from the sheet name and are unique on the profile.
+        /// </summary>
+        public static BatchAppearanceResult CreateAppearancesForCells(
+            SpriteSheetProfile profile, int sheetIndex, List<int> cellIndices)
+        {
+            var result = new BatchAppearanceResult
+            {
+                AppearanceIds = new List<string>(),
+            };
+            if (profile == null)
+            {
+                result.Reason = "Profile is null.";
+                return result;
+            }
+            profile.EnsureSheets();
+            var sheet = profile.SheetAt(sheetIndex);
+            if (sheet == null || sheet.Texture == null)
+            {
+                result.Reason = $"Sheet {sheetIndex} has no texture.";
+                return result;
+            }
+            if (cellIndices == null || cellIndices.Count == 0)
+            {
+                result.Reason = "No cells selected.";
+                return result;
+            }
+            int columns = Mathf.Max(1, sheet.Columns);
+            int rows = Mathf.Max(1, sheet.Rows);
+            int cells = columns * rows;
+            string sheetBase = SpritePartIdUtility.Canonical(
+                string.IsNullOrWhiteSpace(sheet.Name) ? "sheet" : sheet.Name);
+
+            var taken = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < profile.PartsAppearances.Count; i++)
+            {
+                var a = profile.PartsAppearances[i];
+                if (a != null)
+                    taken.Add(SpritePartIdUtility.Canonical(a.AppearanceId, a.Name));
+            }
+
+            for (int c = 0; c < cellIndices.Count; c++)
+            {
+                int cell = Mathf.Clamp(cellIndices[c], 0, cells - 1);
+                SpritePartAppearanceDef match = null;
+                for (int i = 0; i < profile.PartsAppearances.Count; i++)
+                {
+                    var a = profile.PartsAppearances[i];
+                    if (a != null && a.SheetIndex == sheetIndex && a.CellIndex == cell)
+                    {
+                        match = a;
+                        break;
+                    }
+                }
+                if (match != null)
+                {
+                    result.Reused++;
+                    result.AppearanceIds.Add(SpritePartIdUtility.Canonical(match.AppearanceId, match.Name));
+                    continue;
+                }
+                string desired = sheetBase + ".cell" + cell;
+                string id = desired;
+                int n = 2;
+                while (taken.Contains(id))
+                    id = desired + n++;
+                taken.Add(id);
+                profile.PartsAppearances.Add(new SpritePartAppearanceDef
+                {
+                    Name = (string.IsNullOrWhiteSpace(sheet.Name) ? "Sheet" : sheet.Name) + " Cell " + cell,
+                    AppearanceId = id,
+                    SheetIndex = sheetIndex,
+                    CellIndex = cell,
+                    LogicalWorldSize = Vector2.zero,
+                    PivotSource = SpritePartPivotSource.SheetDefault,
+                });
+                result.Created++;
+                result.AppearanceIds.Add(id);
+            }
+            SpritePartsValidation.CanonicalizeIds(profile);
+            result.Ok = true;
             return result;
         }
 
@@ -680,15 +954,80 @@ namespace InvertLab.Sprites.DOTS
         static SpritePartsTrackDef GetOrCreateTrack(SpritePartsClipDef clip, string slotId)
         {
             clip.Tracks ??= new List<SpritePartsTrackDef>();
-            var existing = FindTrack(clip, slotId);
+            var existing = FindTrack(clip, slotId, SpritePartsTrackKind.Pose);
             if (existing != null) return existing;
             var track = new SpritePartsTrackDef
             {
                 SlotId = SpritePartIdUtility.Canonical(slotId),
+                Kind = SpritePartsTrackKind.Pose,
                 Keys = new List<SpritePartsKeyDef>(),
             };
             clip.Tracks.Add(track);
             return track;
+        }
+
+        /// <summary>
+        /// Ensure the slot's independent appearance channel. Creating it migrates
+        /// legacy ids mixed into the pose track into the channel (same times,
+        /// same ids) and blanks them on the pose keys, so after any channel
+        /// write the channel is the single source for that slot. Pose key TRS
+        /// values are never touched.
+        /// </summary>
+        public static SpritePartsTrackDef EnsureAppearanceTrack(
+            SpritePartsClipDef clip, string slotId)
+        {
+            clip.Tracks ??= new List<SpritePartsTrackDef>();
+            var existing = FindAppearanceTrack(clip, slotId);
+            if (existing != null)
+                return existing;
+            var channel = new SpritePartsTrackDef
+            {
+                SlotId = SpritePartIdUtility.Canonical(slotId),
+                Kind = SpritePartsTrackKind.Appearance,
+                Keys = new List<SpritePartsKeyDef>(),
+            };
+            var pose = FindTrack(clip, slotId, SpritePartsTrackKind.Pose);
+            if (pose?.Keys != null)
+            {
+                for (int i = 0; i < pose.Keys.Count; i++)
+                {
+                    var key = pose.Keys[i];
+                    if (key == null || string.IsNullOrWhiteSpace(key.AppearanceId))
+                        continue;
+                    channel.Keys.Add(new SpritePartsKeyDef
+                    {
+                        Time = key.Time,
+                        EaseMode = (byte)SpriteEaseMode.Step,
+                        AppearanceId = SpritePartIdUtility.Canonical(key.AppearanceId),
+                    });
+                    key.AppearanceId = string.Empty;
+                }
+            }
+            clip.Tracks.Add(channel);
+            return channel;
+        }
+
+        /// <summary>
+        /// Upsert an appearance key on the channel. Pose fields stay default;
+        /// sampling is step/hold. Same snapped time replaces the existing key.
+        /// </summary>
+        static void UpsertAppearanceKey(SpritePartsTrackDef channel, float time, string canonicalAppearanceId)
+        {
+            channel.Keys ??= new List<SpritePartsKeyDef>();
+            var existing = FindKeyAtTime(channel, time);
+            if (existing != null)
+            {
+                existing.AppearanceId = canonicalAppearanceId;
+                existing.EaseMode = (byte)SpriteEaseMode.Step;
+                return;
+            }
+            channel.Keys.Add(new SpritePartsKeyDef
+            {
+                Time = time,
+                EaseMode = (byte)SpriteEaseMode.Step,
+                AppearanceId = canonicalAppearanceId,
+            });
+            channel.Keys.Sort((a, b) => a.Time.CompareTo(b.Time));
         }
 
         static void UpsertKey(

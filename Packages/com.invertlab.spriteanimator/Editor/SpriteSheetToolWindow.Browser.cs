@@ -20,10 +20,25 @@ namespace InvertLab.Sprites.DOTS.Editor
             int sheetCount = _profile.Sheets.Count;
             int clipCount = _profile.Clips != null ? _profile.Clips.Count : 0;
             CacheSheetClipCounts(sheetCount);
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, 20f), "CLIPS", _sectionStyle);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, 20f), "FRAME CLIPS", _sectionStyle);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 31f, rect.width - 24f, 16f),
                 $"{sheetCount} sheet{(sheetCount == 1 ? "" : "s")} · {clipCount} clip{(clipCount == 1 ? "" : "s")}",
                 _mutedStyle);
+
+            // Inactive-workspace banner: this workspace stays editable, but the
+            // character's runtime mode is Parts.
+            float bannerH = 0f;
+            if (_profile.AnimKind == SpriteAnimKind.Parts)
+            {
+                bannerH = 48f;
+                var bannerRect = new Rect(rect.x + 8f, rect.y + 50f, rect.width - 16f, bannerH);
+                EditorGUI.DrawRect(bannerRect, new Color(0.13f, 0.17f, 0.22f, 1f));
+                GUI.Label(new Rect(bannerRect.x + 8f, bannerRect.y + 4f, bannerRect.width - 16f, 16f),
+                    "Preview only. Character currently uses Parts.", _mutedStyle);
+                if (GUI.Button(new Rect(bannerRect.x + 8f, bannerRect.y + 23f, 190f, 20f),
+                        "Use Frames for Character", EditorStyles.miniButton))
+                    SwitchRuntimeKind(SpriteAnimKind.Frame, "Use Frames for Character");
+            }
 
             const float cardPad = 8f;
             const float headerH = 24f;
@@ -36,8 +51,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             bool stackAddSheet = sheetCount > 1;
             const float columnFooterH = 38f;
 
-            var listRect = new Rect(rect.x + 8f, rect.y + 52f, rect.width - 16f,
-                Mathf.Max(24f, rect.height - 52f - (stackAddSheet ? columnFooterH : 4f)));
+            float listTop = 52f + bannerH;
+            var listRect = new Rect(rect.x + 8f, rect.y + listTop, rect.width - 16f,
+                Mathf.Max(24f, rect.height - listTop - (stackAddSheet ? columnFooterH : 4f)));
 
             float contentHeight = 4f;
             for (int s = 0; s < sheetCount; s++)

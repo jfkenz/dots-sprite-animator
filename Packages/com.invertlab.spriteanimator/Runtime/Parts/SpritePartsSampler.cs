@@ -101,6 +101,8 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Last non-empty keyed appearance at/before time.
+        /// Reads the slot's appearance track; falls back to the pose track for
+        /// legacy baked data where ids were mixed into pose keys.
         /// Empty AppearanceIndex on a key holds the previous keyed value.
         /// Loop: if none at/before wrapped time, carry the last keyed appearance from the clip
         /// (previous loop iteration). Once: no wrap-around carry — returns -1 (skin/default).
@@ -116,7 +118,9 @@ namespace InvertLab.Sprites.DOTS
 
             ref var clip = ref set.Clips[clipIndex];
             float time = WrapTime(timeSeconds, clip.Duration, clip.WrapMode);
-            int trackIndex = TrackIndexForSlot(ref clip, slotIndex);
+            int trackIndex = AppearanceTrackIndexForSlot(ref clip, slotIndex);
+            if (trackIndex < 0)
+                trackIndex = TrackIndexForSlot(ref clip, slotIndex);
             if (trackIndex < 0)
                 return -1;
 
@@ -191,6 +195,14 @@ namespace InvertLab.Sprites.DOTS
                     return i;
             }
             return -1;
+        }
+
+        /// <summary>Dense slot -> appearance track index; -1 when the slot has none.</summary>
+        static int AppearanceTrackIndexForSlot(ref SpritePartsClipBlob clip, int slotIndex)
+        {
+            if (slotIndex < 0 || slotIndex >= clip.SlotAppearanceTrackIndices.Length)
+                return -1;
+            return clip.SlotAppearanceTrackIndices[slotIndex];
         }
     }
 }

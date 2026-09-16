@@ -198,9 +198,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         readonly List<string> _undoNames = new();
         readonly List<string> _redoNames = new();
         readonly List<int> _sheetClipCounts = new();
-        int _selectedClip;
+        [SerializeField] int _selectedClip;
         readonly HashSet<int> _selectedClips = new();
-        int _selectedSheet;
+        [SerializeField] int _selectedSheet;
         bool _showTimelineInputHelp;
         bool _showSheetCellPicker;
         Rect _sheetCellPickerRect = new(80f, 56f, 520f, 460f);
@@ -215,7 +215,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         string _renameSheetValue = string.Empty;
         string _renameSheetOriginal = string.Empty;
         bool _focusSheetRename;
-        int _selectedFrame;
+        [SerializeField] int _selectedFrame;
         readonly HashSet<int> _selectedFrames = new();
         int _frameListAnchor = -1;
         int _selectedEventFrame = -1;
@@ -1180,7 +1180,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             using (new EditorGUI.DisabledScope(!CanSaveProfile()))
             {
                 if (GUI.Button(saveRect,
-                    new GUIContent("Save Profile", "Save to <SheetName>_profile.asset and matching json."),
+                    new GUIContent("Save Profile",
+                    "Save Frames + Parts into the profile asset. Needs a sheet texture for a brand-new profile, or an already-open .asset."),
                     _primaryStyle))
                     SaveProfile();
             }
@@ -1197,6 +1198,43 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void NewProfile()
         {
+            int kind = EditorUtility.DisplayDialogComplex("New Profile",
+                "Frame Animation\nSpritesheet flipbook: frame clips play cells of a sliced sheet.\n\n" +
+                "Parts Character\nFloating cutout body parts: rig, timeline keys, swappable art and skins.",
+                "Frame Animation", "Cancel", "Parts Character");
+            if (kind == 1)
+                return;
+            int preset = 0;
+            if (kind == 2)
+            {
+                preset = EditorUtility.DisplayDialogComplex("Parts Character",
+                    "Floating Parts preset\nBody, Hand L, Hand R, Weapon and Idle / Walk clips.\n\n" +
+                    "Empty Rig\nNo parts yet — add parts and art yourself.",
+                    "Floating Parts", "Cancel", "Empty Rig");
+                if (preset == 1)
+                    return;
+            }
+            ResetEditingDocument();
+            if (kind == 2)
+            {
+                CreatePartsCharacter(floating: preset == 0);
+                _studioTab = StudioTab.Parts;
+                EnsurePartsSession();
+                _status = preset == 0
+                    ? "Created new Parts character (Floating Parts)"
+                    : "Created new empty Parts rig";
+            }
+            else
+            {
+                _studioTab = StudioTab.Clips;
+                _status = "Created new frame profile";
+            }
+            Repaint();
+        }
+
+        void ResetEditingDocument()
+        {
+            ClearImportPreview();
             _asset = null;
             _profile = new SpriteSheetProfile();
             _selectedSheet = 0;
@@ -1211,13 +1249,17 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedOnionFrame = -1;
             _previewTime = 0f;
             _playing = false;
+            _partsHasTempPose = false;
+            _partsPreviewTime = 0f;
+            _partsPlaying = false;
             ClearColliderSelection();
             _createSeparateProfileOnSave = false;
-            _status = "Created new profile";
-            Repaint();
         }
 
         internal ScriptableSpriteSheetProfile ProfileAsset => _asset;
+
+        /// <summary>The in-memory editing document (may differ from the asset on disk until save).</summary>
+        internal SpriteSheetProfile EditingProfile => _profile;
 
         internal List<Texture2D> ProfileSheetTextures()
         {
@@ -1246,10 +1288,54 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (asset == null)
                 return;
+            // Open replaces the editing document: resolve staged edits and unsaved
+            // work first. Import (part art) is the verb that adds to the document.
+            if (!TryResolveTempPoseForSwitch())
+                return;
+            if (!ConfirmReplaceEditingDocument())
+                return;
             LoadAsset(asset);
             _playing = false;
             ShowNotification(new GUIContent($"Loaded {asset.name}"));
             Repaint();
+        }
+
+        bool HasUnsavedProfileWork()
+        {
+            if (_profile == null)
+                return false;
+            if (_asset != null)
+                return EditorUtility.IsDirty(_asset);
+            // In-memory document: any authored content counts as unsaved work.
+            return (_profile.Sheets?.Count ?? 0) > 0 ||
+                   (_profile.Clips?.Count ?? 0) > 0 ||
+                   (_profile.PartsSlots?.Count ?? 0) > 0 ||
+                   (_profile.PartsClips?.Count ?? 0) > 0;
+        }
+
+        /// <summary>Save / Discard / Cancel before Open replaces the document.</summary>
+        bool ConfirmReplaceEditingDocument()
+        {
+            if (!HasUnsavedProfileWork())
+                return true;
+            string name = _asset != null ? _asset.name : "untitled profile";
+            int choice = EditorUtility.DisplayDialogComplex("Unsaved changes",
+                $"'{name}' has unsaved changes.\n\nSave before opening the other profile?",
+                "Save", "Cancel", "Discard");
+            if (choice == 1)
+                return false;
+            if (choice == 0)
+            {
+                if (!CanSaveProfile())
+                {
+                    _status = "Cannot save: no sheet texture assigned";
+                    EditorUtility.DisplayDialog("Cannot save",
+                        "This profile has no sheet texture, so it cannot be saved.\nDiscard it or cancel.", "OK");
+                    return false;
+                }
+                SaveProfile();
+            }
+            return true;
         }
 
         internal void BrowseAndLoadProfile()
@@ -1795,6 +1881,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     BeginClipRename(_selectedClip);
                     GUIUtility.ExitGUI();
                 }
+                DrawImportProvenanceLabel(clip.Import);
                 clip.Row = Mathf.Clamp(EditorGUILayout.IntField("Sheet Row", clip.Row), 0,
                     Mathf.Max(0, ClipSheetRows(clip) - 1));
                 using (new EditorGUILayout.HorizontalScope())

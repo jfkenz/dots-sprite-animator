@@ -59,6 +59,8 @@ namespace InvertLab.Sprites.DOTS
         public Vector2 LogicalWorldSize;
         public SpritePartPivotSource PivotSource = SpritePartPivotSource.SheetDefault;
         public Vector2 PivotOverride = new(0.5f, 0.5f);
+        /// <summary>Display-only provenance when this appearance was copied/created by an import.</summary>
+        public SpriteImportProvenance Import;
     }
 
     [Serializable]
@@ -76,10 +78,22 @@ namespace InvertLab.Sprites.DOTS
         public string AppearanceId = string.Empty;
     }
 
+    /// <summary>
+    /// Track channel. Pose = TRS motion (default; old JSON without the field
+    /// stays pose). Appearance = sprite swaps only; pose sampling ignores it,
+    /// appearance sampling reads it instead of ids mixed into pose keys.
+    /// </summary>
+    public enum SpritePartsTrackKind : byte
+    {
+        Pose = 0,
+        Appearance = 1,
+    }
+
     [Serializable]
     public class SpritePartsTrackDef
     {
         public string SlotId = string.Empty;
+        public SpritePartsTrackKind Kind;
         public List<SpritePartsKeyDef> Keys = new();
     }
 
@@ -92,6 +106,8 @@ namespace InvertLab.Sprites.DOTS
         public float Speed = 1f;
         public byte WrapMode = (byte)SpritePartsWrap.Loop;
         public List<SpritePartsTrackDef> Tracks = new();
+        /// <summary>Display-only provenance when this clip was copied from another profile.</summary>
+        public SpriteImportProvenance Import;
     }
 
     [Serializable]

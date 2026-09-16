@@ -186,6 +186,8 @@ namespace InvertLab.Sprites.DOTS
         public SpriteFacingDirection Facing = SpriteFacingDirection.None;
         public List<FrameSocketDef> Sockets = new();
         public List<SpriteClipEventMarker> EventMarkers = new();
+        /// <summary>Display-only provenance when this clip was copied from another profile.</summary>
+        public SpriteImportProvenance Import;
 
         /// <summary>Keep frame metadata aligned with the play-order frame list.</summary>
         public void EnsureFrameData()
@@ -1284,6 +1286,25 @@ namespace InvertLab.Sprites.DOTS
         }
     }
 
+    /// <summary>
+    /// Display-only import provenance stamped on copied items (sheets,
+    /// appearances, clips). Never resolved, refreshed or depended on at
+    /// runtime or re-import; deleting the source asset changes nothing.
+    /// Old data without it simply has null.
+    /// </summary>
+    [Serializable]
+    public class SpriteImportProvenance
+    {
+        /// <summary>Source profile asset GUID; empty when unknown.</summary>
+        public string SourceGuid = string.Empty;
+        /// <summary>Source asset path fallback; empty when unknown.</summary>
+        public string SourcePath = string.Empty;
+        /// <summary>Human-readable source item identity, e.g. "sheet 'Weapons' [0]".</summary>
+        public string SourceItem = string.Empty;
+        /// <summary>ISO-8601 UTC import time; empty when not recorded.</summary>
+        public string ImportedUtc = string.Empty;
+    }
+
     [System.Serializable]
     public class SpriteSheetDef
     {
@@ -1305,6 +1326,8 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Per-cell pivot overrides (normalized 0-1 inside the cell). Sparse:
         /// cells without an entry use the sheet <see cref="Pivot"/>.</summary>
         public List<SpriteCellPivot> CellPivots;
+        /// <summary>Display-only provenance when this sheet was copied from another profile.</summary>
+        public SpriteImportProvenance Import;
     }
 
     /// <summary>

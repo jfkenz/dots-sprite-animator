@@ -95,6 +95,10 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         bool CanSaveProfile()
         {
+            // Existing .asset can always be saved (Parts + Frames dirty state).
+            // New profiles need at least one sheet texture to choose the save folder.
+            if (_asset != null)
+                return true;
             return ResolveSaveTexture() != null;
         }
 
@@ -103,12 +107,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_profile == null)
                 return null;
             _profile.EnsureSheets(_selectedSheet);
-            if (_profile.Sheets != null && _profile.Sheets.Count > 0 &&
-                _profile.Sheets[0] != null && _profile.Sheets[0].Texture != null)
-                return _profile.Sheets[0].Texture;
+            // Prefer the active sheet, then any sheet with a texture (Parts art
+            // often lives on sheet 1+ while sheet 0 stays empty).
             var active = _profile.SheetAt(_selectedSheet);
             if (active?.Texture != null)
                 return active.Texture;
+            if (_profile.Sheets != null)
+            {
+                for (int i = 0; i < _profile.Sheets.Count; i++)
+                {
+                    var sheet = _profile.Sheets[i];
+                    if (sheet != null && sheet.Texture != null)
+                        return sheet.Texture;
+                }
+            }
             return _profile.Sheet;
         }
 
@@ -117,7 +129,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             Texture2D saveTex = ResolveSaveTexture();
             if (saveTex == null)
             {
-                _status = "Assign a sprite sheet before saving";
+                _status = "Assign a sprite sheet texture before saving a new profile (or Open an existing .asset).";
                 if (!quiet)
                     ShowNotification(new GUIContent(_status));
                 return;
@@ -210,12 +222,24 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void LoadAsset(ScriptableSpriteSheetProfile asset)
         {
+            ClearImportPreview();
             _asset = asset;
             _profile = asset.Data ?? new SpriteSheetProfile();
             if (asset.Data == null)
                 asset.Data = _profile;
             _sheetFoldInitialized = false;
             EnsureProfile();
+            // Open shows the profile's runtime workspace first; later tab switches
+            // are pure workspace changes and never touch AnimKind.
+            _studioTab = _profile.AnimKind == SpriteAnimKind.Parts
+                ? StudioTab.Parts
+                : StudioTab.Clips;
+            if (_studioTab == StudioTab.Parts)
+            {
+                _partsPlaying = false;
+                _partsPreviewTime = 0f;
+                EnsurePartsSession();
+            }
             if (_profile.Clips != null && _profile.Clips.Count > 0 && _profile.Clips[0] != null)
             {
                 _selectedClip = 0;

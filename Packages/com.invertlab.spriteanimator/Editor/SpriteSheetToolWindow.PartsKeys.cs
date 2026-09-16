@@ -126,6 +126,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void BeginPartsKeyDrag(int controlId, float trackWidth, float duration)
         {
+            if (ImportPreviewActive)
+            {
+                PauseForImportPreview("key edit");
+                return;
+            }
             _partsKeyDragging = true;
             _partsKeyDragUndoRecorded = false;
             _partsKeyHotControl = controlId;
@@ -147,6 +152,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DeleteSelectedPartsKeys()
         {
+            if (ImportPreviewActive)
+            {
+                PauseForImportPreview("key edit");
+                return;
+            }
             if (_partsSelectedKeys.Count == 0) return;
             RecordPartsUndo("Delete Parts Keys");
             var result = SpritePartsAuthoringOps.DeleteKeys(
@@ -161,6 +171,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void InsertPartsKeyAtTime(string slotId, float time)
         {
+            if (ImportPreviewActive)
+            {
+                PauseForImportPreview("key edit");
+                return;
+            }
             if (_profile == null || CurrentPartsClip == null || string.IsNullOrEmpty(slotId))
                 return;
             var pose = SampleLocalPoseForSlot(slotId, time);
@@ -216,6 +231,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void PastePartsKeysAtPlayhead()
         {
+            if (ImportPreviewActive)
+            {
+                PauseForImportPreview("key edit");
+                return;
+            }
             if (_partsKeyClipboard.Count == 0 || CurrentPartsClip == null) return;
             RecordPartsUndo("Paste Parts Keys");
             var created = new List<SpritePartsKeyDef>();
@@ -234,6 +254,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DuplicateSelectedPartsKeys()
         {
+            if (ImportPreviewActive)
+            {
+                PauseForImportPreview("key edit");
+                return;
+            }
             if (_partsSelectedKeys.Count == 0 || CurrentPartsClip == null) return;
             float frame = 1f / Mathf.Max(1f, _partsDisplayFps);
             RecordPartsUndo("Duplicate Parts Keys");
@@ -253,6 +278,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void NudgeSelectedPartsKeys(int frameDelta)
         {
+            if (ImportPreviewActive)
+            {
+                PauseForImportPreview("key edit");
+                return;
+            }
             if (_partsSelectedKeys.Count == 0 || CurrentPartsClip == null) return;
             float frame = 1f / Mathf.Max(1f, _partsDisplayFps);
             var keys = new List<SpritePartsKeyDef>(_partsSelectedKeys);

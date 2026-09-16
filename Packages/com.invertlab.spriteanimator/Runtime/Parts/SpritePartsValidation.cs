@@ -24,9 +24,8 @@ namespace InvertLab.Sprites.DOTS
             if (profile == null)
                 return Result.Fail("Profile is null.");
 
-            profile.EnsureSheets();
-            EnsureLists(profile);
-
+            // Read-only: peeks (CanSetAnimKind) and failed switches must not
+            // migrate legacy sheet fields or allocate Parts lists.
             if (profile.AnimKind != SpriteAnimKind.Parts)
                 return Result.Success();
 
@@ -120,7 +119,7 @@ namespace InvertLab.Sprites.DOTS
         static void ValidateSlots(SpriteSheetProfile profile, List<string> errors)
         {
             var slots = profile.PartsSlots;
-            if (slots.Count == 0)
+            if (slots == null || slots.Count == 0)
             {
                 errors.Add("Parts profile has no slots.");
                 return;
@@ -193,6 +192,8 @@ namespace InvertLab.Sprites.DOTS
         static void ValidateAppearances(SpriteSheetProfile profile, List<string> errors)
         {
             var apps = profile.PartsAppearances;
+            if (apps == null)
+                return;
             var ids = new Dictionary<string, int>(StringComparer.Ordinal);
             var hashes = new Dictionary<ulong, string>();
             int sheetCount = profile.Sheets?.Count ?? 0;
@@ -244,6 +245,8 @@ namespace InvertLab.Sprites.DOTS
         static void ValidateClips(SpriteSheetProfile profile, List<string> errors)
         {
             var clips = profile.PartsClips;
+            if (clips == null)
+                return;
             var clipIds = new Dictionary<string, int>(StringComparer.Ordinal);
             var hashes = new Dictionary<ulong, string>();
             var slotIds = BuildSlotSet(profile);
@@ -280,8 +283,12 @@ namespace InvertLab.Sprites.DOTS
                     clip.WrapMode != (byte)SpritePartsWrap.Once)
                     errors.Add($"Parts clip '{clip.Name}' WrapMode must be Loop or Once.");
 
-                clip.Tracks ??= new List<SpritePartsTrackDef>();
+                var tracks = clip.Tracks;
+                if (tracks == null)
+                    continue;
+                // One pose track and one appearance track per slot at most.
                 var trackSlots = new HashSet<string>(StringComparer.Ordinal);
+                var appearanceSlots = new HashSet<string>(StringComparer.Ordinal);
                 for (int t = 0; t < clip.Tracks.Count; t++)
                 {
                     var track = clip.Tracks[t];
@@ -290,14 +297,18 @@ namespace InvertLab.Sprites.DOTS
                         errors.Add($"Parts clip '{clip.Name}' track[{t}] is null.");
                         continue;
                     }
+                    bool isAppearance = track.Kind == SpritePartsTrackKind.Appearance;
                     string slotId = SpritePartIdUtility.Canonical(track.SlotId);
-                    if (!trackSlots.Add(slotId))
-                        errors.Add($"Parts clip '{clip.Name}' has duplicate track for slot '{slotId}'.");
+                    var used = isAppearance ? appearanceSlots : trackSlots;
+                    if (!used.Add(slotId))
+                        errors.Add($"Parts clip '{clip.Name}' has duplicate {(isAppearance ? "appearance" : "pose")} track for slot '{slotId}'.");
                     if (!slotIds.Contains(slotId))
                         errors.Add($"Parts clip '{clip.Name}' track slot '{slotId}' is missing from the rig.");
 
-                    track.Keys ??= new List<SpritePartsKeyDef>();
-                    for (int k = 0; k < track.Keys.Count; k++)
+                    var keys = track.Keys;
+                    if (keys == null)
+                        continue;
+                    for (int k = 0; k < keys.Count; k++)
                     {
                         var key = track.Keys[k];
                         if (key == null)
@@ -307,6 +318,18 @@ namespace InvertLab.Sprites.DOTS
                         }
                         if (!math.isfinite(key.Time) || key.Time < 0f || key.Time > clip.Duration + 1e-5f)
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key time {key.Time} must be in [0, Duration={clip.Duration}].");
+                        if (isAppearance)
+                        {
+                            // Appearance keys carry no pose: only timing and the
+                            // id need to be sane.
+                            if (!string.IsNullOrWhiteSpace(key.AppearanceId))
+                            {
+                                string aid = SpritePartIdUtility.Canonical(key.AppearanceId);
+                                if (FindAppearanceIndex(profile, aid) < 0)
+                                    errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] appearance '{aid}' is missing from the profile.");
+                            }
+                            continue;
+                        }
                         if (!IsFinite(key.Position) || !math.isfinite(key.Rotation) || !IsFinite(key.Scale))
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] has non-finite values.");
                         if (math.abs(key.Scale.x) < 1e-5f || math.abs(key.Scale.y) < 1e-5f)
@@ -327,6 +350,8 @@ namespace InvertLab.Sprites.DOTS
         static void ValidateSkins(SpriteSheetProfile profile, List<string> errors)
         {
             var skins = profile.PartsSkins;
+            if (skins == null)
+                return;
             var ids = new Dictionary<string, int>(StringComparer.Ordinal);
             var hashes = new Dictionary<ulong, string>();
             var slotIds = BuildSlotSet(profile);
@@ -350,10 +375,12 @@ namespace InvertLab.Sprites.DOTS
                 else
                     hashes[hash] = id;
 
-                skin.Bindings ??= new List<SpritePartsSkinBindingDef>();
-                for (int b = 0; b < skin.Bindings.Count; b++)
+                var bindings = skin.Bindings;
+                if (bindings == null)
+                    continue;
+                for (int b = 0; b < bindings.Count; b++)
                 {
-                    var binding = skin.Bindings[b];
+                    var binding = bindings[b];
                     if (binding == null) continue;
                     string slotId = SpritePartIdUtility.Canonical(binding.SlotId);
                     string appId = SpritePartIdUtility.Canonical(binding.AppearanceId);

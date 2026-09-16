@@ -147,6 +147,42 @@ namespace InvertLab.Sprites.DOTS
             return true;
         }
 
+        /// <summary>
+        /// Sample a transient clip (e.g. an import-preview clone) against a rig
+        /// profile without inserting the clip into the profile. Strictly
+        /// read-only on the profile. Caller must <see cref="DisposeSample"/>.
+        /// </summary>
+        public static bool TrySampleClipOnRig(
+            SpriteSheetProfile rigProfile,
+            SpritePartsClipDef transientClip,
+            float timeSeconds,
+            Allocator allocator,
+            out BlobAssetReference<SpritePartsSetBlob> blob,
+            out NativeArray<SpritePartsSampler.Pose> localPoses,
+            out NativeArray<float4x4> localToRoot,
+            out string error)
+        {
+            blob = default;
+            localPoses = default;
+            localToRoot = default;
+            error = null;
+            if (transientClip == null)
+            {
+                error = "Preview clip is null.";
+                return false;
+            }
+            var clips = new List<SpritePartsClipDef> { transientClip };
+            if (!SpritePartsClipConversion.TryBuildPoseEvaluationBlob(rigProfile, clips, allocator, out blob, out error))
+                return false;
+
+            int n = blob.Value.Slots.Length;
+            localPoses = new NativeArray<SpritePartsSampler.Pose>(n, allocator);
+            localToRoot = new NativeArray<float4x4>(n, allocator);
+            SpritePartsSampler.SampleAll(ref blob.Value, 0, timeSeconds, localPoses);
+            SpritePartsHierarchy.ComposeLocalToRoot(ref blob.Value, localPoses, localToRoot);
+            return true;
+        }
+
         public static void DisposeSample(
             BlobAssetReference<SpritePartsSetBlob> blob,
             NativeArray<SpritePartsSampler.Pose> localPoses,

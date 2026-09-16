@@ -103,8 +103,10 @@ namespace InvertLab.Sprites.DOTS
         }
 
         public static SpritePartsSetBuilder.ClipInput[] CreateClips(SpriteSheetProfile profile)
+            => CreateClips(profile.PartsClips);
+
+        public static SpritePartsSetBuilder.ClipInput[] CreateClips(IReadOnlyList<SpritePartsClipDef> list)
         {
-            var list = profile.PartsClips;
             var result = new SpritePartsSetBuilder.ClipInput[list.Count];
             for (int i = 0; i < list.Count; i++)
             {
@@ -132,6 +134,9 @@ namespace InvertLab.Sprites.DOTS
                     trackInputs[t] = new SpritePartsSetBuilder.TrackInput
                     {
                         SlotId = track.SlotId,
+                        Kind = (byte)(track.Kind == SpritePartsTrackKind.Appearance
+                            ? SpritePartsTrackKind.Appearance
+                            : SpritePartsTrackKind.Pose),
                         Keys = keyInputs,
                     };
                 }
@@ -206,6 +211,7 @@ namespace InvertLab.Sprites.DOTS
                 for (int i = 0; i < slots.Length; i++)
                     slots[i].DefaultAppearanceId = string.Empty;
                 var clips = CreateClips(profile);
+                BlankKeyAppearanceIdsForPose(clips);
                 blob = SpritePartsSetBuilder.Build(
                     allocator,
                     slots,
@@ -218,6 +224,78 @@ namespace InvertLab.Sprites.DOTS
             {
                 error = ex.Message;
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Pose-only blob for transient clips that are not part of the profile
+        /// (import previews). Strictly read-only: unlike the profile overload it
+        /// never normalizes or null-coalesces the profile, so the destination
+        /// rig is untouched. Precondition: the rig has canonical ids (the editor
+        /// maintains this); the builder canonicalizes inputs itself anyway.
+        /// The transient clip is sampled at blob clip index 0.
+        /// </summary>
+        public static bool TryBuildPoseEvaluationBlob(
+            SpriteSheetProfile profile,
+            IReadOnlyList<SpritePartsClipDef> clipsOverride,
+            Allocator allocator,
+            out BlobAssetReference<SpritePartsSetBlob> blob,
+            out string error)
+        {
+            blob = default;
+            error = null;
+            if (profile == null)
+            {
+                error = "Profile is null.";
+                return false;
+            }
+            if (profile.PartsSlots == null || profile.PartsSlots.Count == 0)
+            {
+                error = "Parts profile has no slots.";
+                return false;
+            }
+
+            try
+            {
+                var slots = CreateSlots(profile);
+                for (int i = 0; i < slots.Length; i++)
+                    slots[i].DefaultAppearanceId = string.Empty;
+                var clips = CreateClips(clipsOverride ?? profile.PartsClips);
+                BlankKeyAppearanceIdsForPose(clips);
+                blob = SpritePartsSetBuilder.Build(
+                    allocator,
+                    slots,
+                    System.Array.Empty<SpritePartsSetBuilder.AppearanceInput>(),
+                    clips,
+                    System.Array.Empty<SpritePartsSetBuilder.SkinInput>());
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Pose-only blobs carry no appearance table, so keyed appearance ids
+        /// cannot resolve there; they must hold instead of failing the build.
+        /// Editor art resolution uses the authoring-side string query
+        /// (SampleKeyedAppearanceId), never this blob. Runtime bake is unaffected.
+        /// </summary>
+        static void BlankKeyAppearanceIdsForPose(SpritePartsSetBuilder.ClipInput[] clips)
+        {
+            for (int i = 0; i < clips.Length; i++)
+            {
+                var tracks = clips[i].Tracks;
+                if (tracks == null) continue;
+                for (int t = 0; t < tracks.Length; t++)
+                {
+                    var keys = tracks[t].Keys;
+                    if (keys == null) continue;
+                    for (int k = 0; k < keys.Length; k++)
+                        keys[k].AppearanceId = string.Empty;
+                }
             }
         }
     }

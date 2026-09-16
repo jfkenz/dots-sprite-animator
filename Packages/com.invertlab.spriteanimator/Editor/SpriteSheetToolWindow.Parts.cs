@@ -34,6 +34,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] SpritePartsStudioMode _partsMode = SpritePartsStudioMode.Animate;
         [SerializeField] int _partsSelectedClip;
         [SerializeField] int _partsSelectedSlot = -1;
+        // Leaving Parts stashes the primary selected slot id + clip id; returning
+        // to Parts restores them by id (clears when the target no longer exists).
+        [SerializeField] string _partsLastSelectedSlotId;
+        [SerializeField] string _partsLastSelectedClipId;
+        // Leaving Frames stashes clip index + frame; returning restores if still valid.
+        [SerializeField] int _framesLastSelectedClip = -1;
+        [SerializeField] int _framesLastSelectedFrame = -1;
         [SerializeField] float _partsPreviewTime;
         [SerializeField] bool _partsPlaying;
         [SerializeField] bool _partsAutoKey = true;
@@ -52,6 +59,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] int _partsArtColumns = 1;
         [SerializeField] int _partsArtRows = 1;
         [SerializeField] int _partsArtCell;
+        // Per-workspace camera state: the live _previewZoom/_previewPan pair is
+        // swapped with these on every Frames/Parts tab switch so each workspace
+        // keeps its own zoom and pan.
+        [SerializeField] float _framesPreviewZoom = 1f;
+        [SerializeField] Vector2 _framesPreviewPan;
+        [SerializeField] float _partsCanvasZoom = 1f;
+        [SerializeField] Vector2 _partsCanvasPan;
 
         readonly Dictionary<string, string> _partsSkinPreviewOverrides = new(StringComparer.Ordinal);
         string _partsArtSyncedSlotId;
@@ -71,6 +85,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _partsScrubbing;
         const float PartsRotateHandleDistance = 26f;
         const float PartsHandleHit = 10f;
+        const float PartsScaleHandleHit = 14f; // Unity-like: grab knobs, not the body
         Vector2 _partsBrowserScroll;
         Vector2 _partsInspectorScroll;
         PartsBrowserFocus _partsBrowserFocus = PartsBrowserFocus.Tree;
@@ -104,31 +119,281 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
+        // Transient Parts clip import preview: a cloned clip sampled against
+        // this rig without ever entering the profile. Rest/rig data is never
+        // touched; editing is paused while the preview runs.
+        SpritePartsClipDef _importPreviewClip;
+        string _importPreviewSourceName;
+        string _importPreviewClipName;
+
+        bool ImportPreviewActive => _importPreviewClip != null;
+
+        internal bool ImportPreviewing => ImportPreviewActive;
+        internal float ImportPreviewTime => _partsPreviewTime;
+        internal float ImportPreviewDuration =>
+            ImportPreviewActive ? Mathf.Max(1e-3f, _importPreviewClip.Duration) : 0f;
+        internal bool ImportPreviewPlaying => _partsPlaying;
+
+        internal void StartImportPreview(
+            string sourceName, string clipName, SpritePartsClipDef transientClip)
+        {
+            if (transientClip == null) return;
+            _importPreviewClip = transientClip;
+            _importPreviewSourceName = sourceName ?? string.Empty;
+            _importPreviewClipName = clipName ?? string.Empty;
+            _partsHasTempPose = false;
+            _partsPreviewTime = 0f;
+            _partsPlaying = true;
+            _lastEditorTime = EditorApplication.timeSinceStartup;
+            _status = $"Previewing '{_importPreviewClipName}' from {_importPreviewSourceName} on this rig (motion copy, no retargeting)";
+            Repaint();
+        }
+
+        internal void SetImportPreviewPlaying(bool playing)
+        {
+            if (!ImportPreviewActive) return;
+            _partsPlaying = playing;
+            _lastEditorTime = EditorApplication.timeSinceStartup;
+            Repaint();
+        }
+
+        internal void SetImportPreviewTime(float time)
+        {
+            if (!ImportPreviewActive) return;
+            _partsPreviewTime = Mathf.Clamp(time, 0f, ImportPreviewDuration);
+            Repaint();
+        }
+
+        internal void ClearImportPreview(string status = null)
+        {
+            if (!ImportPreviewActive)
+                return;
+            _importPreviewClip = null;
+            _importPreviewSourceName = null;
+            _importPreviewClipName = null;
+            _partsPlaying = false;
+            if (!string.IsNullOrEmpty(status))
+                _status = status;
+            Repaint();
+        }
+
+        void PauseForImportPreview(string attempted)
+        {
+            _status = "Import preview active - editing paused. Commit or stop the preview first. (" + attempted + ")";
+        }
+
+
+        internal float PartsPreviewTime => _partsPreviewTime;
+        internal int PartsSelectedClipIndex => _partsSelectedClip;
+
         void DrawPartsStudioTabToggle(Rect toolbarRect)
         {
             float tabX = 460f;
-            var clipsRect = new Rect(tabX, 10f, 64f, 28f);
-            var partsRect = new Rect(tabX + 68f, 10f, 64f, 28f);
+            var clipsRect = new Rect(tabX, 10f, 68f, 28f);
+            var partsRect = new Rect(tabX + 72f, 10f, 64f, 28f);
             var clipsStyle = _studioTab == StudioTab.Clips ? _primaryStyle : _transportStyle;
             var partsStyle = _studioTab == StudioTab.Parts ? _primaryStyle : _transportStyle;
-            if (GUI.Button(clipsRect, new GUIContent("Clips", "Frame flipbook authoring."), clipsStyle))
+            if (GUI.Button(clipsRect, new GUIContent("Frames", "Frame flipbook authoring (frame clips)."), clipsStyle))
             {
-                if (_studioTab != StudioTab.Clips)
+                if (_studioTab != StudioTab.Clips && TryResolveTempPoseForSwitch())
                 {
-                    RecordWindowUndo("Switch to Clips tab");
+                    ClearImportPreview();
+                    RecordWindowUndo("Switch to Frames tab");
+                    SwapWorkspaceCameraState(toParts: false);
+                    StashPartsSelection();
                     _studioTab = StudioTab.Clips;
                     _partsPlaying = false;
+                    RestoreFramesSelection();
                 }
             }
             if (GUI.Button(partsRect, new GUIContent("Parts", "Cutout Parts rig / animate / skins."), partsStyle))
             {
-                if (_studioTab != StudioTab.Parts)
+                if (_studioTab != StudioTab.Parts && TryResolveTempPoseForSwitch())
                 {
+                    ClearImportPreview();
                     RecordWindowUndo("Switch to Parts tab");
+                    StashFramesSelection();
+                    SwapWorkspaceCameraState(toParts: true);
                     _studioTab = StudioTab.Parts;
                     _playing = false;
+                    RestorePartsSelectionById();
                     EnsurePartsSession();
                 }
+            }
+
+            // Runtime badge: the Frames/Parts buttons above only change the editor
+            // workspace. The profile's runtime mode is separate and explicit.
+            bool runtimeParts = _profile != null && _profile.AnimKind == SpriteAnimKind.Parts;
+            var badgeRect = new Rect(tabX + 142f, 15f, 120f, 18f);
+            GUI.Label(badgeRect, new GUIContent(
+                runtimeParts ? "Runtime: Parts" : "Runtime: Frames",
+                "Runtime playback mode stored on the profile. Switch it with 'Use Parts for Character' / 'Use Frames for Character' in the inactive workspace banner; switching workspaces never changes it."),
+                _mutedStyle);
+        }
+
+        /// <summary>Leaving Frames: remember clip index + frame for restore.</summary>
+        void StashFramesSelection()
+        {
+            _framesLastSelectedClip = _selectedClip;
+            _framesLastSelectedFrame = _selectedFrame;
+        }
+
+        /// <summary>Leaving Parts: remember primary slot + clip by stable id.</summary>
+        void StashPartsSelection()
+        {
+            var slot = CurrentPartsSlot;
+            _partsLastSelectedSlotId = slot != null
+                ? SpritePartIdUtility.Canonical(slot.SlotId, slot.Name)
+                : string.Empty;
+            var clip = CurrentPartsClip;
+            _partsLastSelectedClipId = clip != null
+                ? SpritePartIdUtility.Canonical(clip.ClipId, clip.Name)
+                : string.Empty;
+        }
+
+        /// <summary>Returning to Parts: restore stashed clip + slot by id.</summary>
+        void RestorePartsSelectionById()
+        {
+            if (_profile == null) return;
+            if (!string.IsNullOrEmpty(_partsLastSelectedClipId) && _profile.PartsClips != null)
+            {
+                int clipIndex = SpritePartsAuthoringOps.FindClipIndex(_profile, _partsLastSelectedClipId);
+                if (clipIndex >= 0)
+                    _partsSelectedClip = clipIndex;
+            }
+            if (_profile.PartsSlots == null || string.IsNullOrEmpty(_partsLastSelectedSlotId))
+            {
+                // Keep current slot clamp via EnsurePartsSession.
+            }
+            else
+            {
+                _partsSelectedSlot = SpritePartsAuthoringOps.FindSlotIndex(
+                    _profile, _partsLastSelectedSlotId);
+            }
+        }
+
+        /// <summary>
+        /// Returning to Frames: restore stashed clip + frame when still valid;
+        /// otherwise clamp into range.
+        /// </summary>
+        void RestoreFramesSelection()
+        {
+            if (_profile?.Clips == null || _profile.Clips.Count == 0)
+            {
+                _selectedClip = -1;
+                _selectedFrame = 0;
+                return;
+            }
+            int clip = _framesLastSelectedClip >= 0 ? _framesLastSelectedClip : _selectedClip;
+            _selectedClip = Mathf.Clamp(clip, 0, _profile.Clips.Count - 1);
+            var frames = _profile.Clips[_selectedClip]?.Frames;
+            int maxFrame = frames != null && frames.Length > 0 ? frames.Length - 1 : 0;
+            int frame = _framesLastSelectedFrame >= 0 ? _framesLastSelectedFrame : _selectedFrame;
+            _selectedFrame = Mathf.Clamp(frame, 0, maxFrame);
+        }
+
+        void SwapWorkspaceCameraState(bool toParts)
+        {
+            // Preview time is already per workspace: Frames uses _previewTime,
+            // Parts uses _partsPreviewTime. Only the shared zoom/pan pair is swapped.
+            if (toParts)
+            {
+                _framesPreviewZoom = _previewZoom;
+                _framesPreviewPan = _previewPan;
+                _previewZoom = _partsCanvasZoom;
+                _previewPan = _partsCanvasPan;
+            }
+            else
+            {
+                _partsCanvasZoom = _previewZoom;
+                _partsCanvasPan = _previewPan;
+                _previewZoom = _framesPreviewZoom;
+                _previewPan = _framesPreviewPan;
+            }
+        }
+
+        /// <summary>
+        /// Resolve a staged unkeyed pose before a workspace or document switch.
+        /// Key / Discard / Cancel; Cancel aborts the switch.
+        /// </summary>
+        bool TryResolveTempPoseForSwitch()
+        {
+            if (!_partsHasTempPose)
+                return true;
+            int choice = EditorUtility.DisplayDialogComplex("Unkeyed pose edit",
+                "An unkeyed pose edit is staged in Parts Animate. Key it into the clip, discard it, or cancel the switch?",
+                "Key Pose", "Cancel", "Discard");
+            if (choice == 0)
+            {
+                CommitKeyPose();
+                _partsHasTempPose = false;
+                return true;
+            }
+            if (choice == 2)
+            {
+                _partsHasTempPose = false;
+                _status = "Discarded temporary unkeyed pose";
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Explicit, Undoable runtime-mode change. Validates first so a rejected
+        /// switch records no Undo and changes nothing; the failure dialog names
+        /// the fix. Both data sets are always preserved.
+        /// </summary>
+        void SwitchRuntimeKind(SpriteAnimKind kind, string actionLabel)
+        {
+            if (_profile == null)
+                return;
+            if (!SpritePartsAuthoringOps.CanSetAnimKind(_profile, kind, out string reason))
+            {
+                _status = reason;
+                EditorUtility.DisplayDialog(actionLabel,
+                    reason + "\n\nNothing was changed. Fix the data listed above, then try again.", "OK");
+                return;
+            }
+            RecordPartsUndo(actionLabel);
+            var result = SpritePartsAuthoringOps.TrySetAnimKind(_profile, kind);
+            if (!result.Ok)
+            {
+                _status = result.Reason;
+                return;
+            }
+            SaveDirty();
+            _status = kind == SpriteAnimKind.Parts
+                ? "Runtime mode: Parts (frame clips kept, not baked)"
+                : "Runtime mode: Frames (Parts data kept, not baked)";
+            Repaint();
+        }
+
+        void CreatePartsCharacter(bool floating)
+        {
+            RecordPartsUndo(floating ? "Create Floating Parts Character" : "Create Empty Parts Rig");
+            if (floating)
+            {
+                SpritePartsAuthoringOps.ApplyFloatingPartsTemplate(_profile);
+                _partsSelectedClip = 0;
+                _partsSelectedSlot = 0;
+                _partsPreviewTime = 0f;
+                _partsSkinPreviewOverrides.Clear();
+                SaveDirty();
+                _status = "Created Floating Parts character";
+                return;
+            }
+            SpritePartsAuthoringOps.CreateEmptyPartsRig(_profile);
+            var check = SpritePartsValidation.Validate(_profile);
+            if (!check.Ok)
+            {
+                // Empty rig is not playable yet: keep Frames runtime until art exists.
+                _profile.AnimKind = SpriteAnimKind.Frame;
+                _status = "Empty Parts rig created. Add parts and art, then 'Use Parts for Character'.";
+            }
+            else
+            {
+                SaveDirty();
+                _status = "Created empty Parts rig";
             }
         }
 
@@ -156,7 +421,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (_studioTab != StudioTab.Parts || !_partsPlaying)
                 return;
-            var clip = CurrentPartsClip;
+            var clip = ImportPreviewActive ? _importPreviewClip : CurrentPartsClip;
             if (clip == null)
             {
                 _partsPlaying = false;
@@ -190,29 +455,27 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUILayout.Label("PARTS CLIPS", _sectionStyle);
             if (_profile.AnimKind != SpriteAnimKind.Parts)
             {
+                bool hasPartsData = (_profile.PartsSlots?.Count ?? 0) > 0 ||
+                                    (_profile.PartsClips?.Count ?? 0) > 0 ||
+                                    (_profile.PartsAppearances?.Count ?? 0) > 0;
                 EditorGUILayout.HelpBox(
-                    "This profile is a flipbook. Create Parts Rig to author a cutout (frame clips stay on the asset but will not bake).",
+                    "Preview only. Character currently uses Frames. Parts edits here are saved with the profile but do not bake until the runtime mode changes.",
                     MessageType.Info);
-                if (GUILayout.Button("Create Parts Character (Floating Parts)"))
+                if (hasPartsData)
                 {
-                    RecordPartsUndo("Create Floating Parts Character");
-                    SpritePartsAuthoringOps.ApplyFloatingPartsTemplate(_profile);
-                    _partsSelectedClip = 0;
-                    _partsSelectedSlot = 0;
-                    _partsPreviewTime = 0f;
-                    _partsSkinPreviewOverrides.Clear();
-                    SaveDirty();
-                    _status = "Created Floating Parts character";
+                    if (GUILayout.Button("Use Parts for Character", GUILayout.Height(22f)))
+                        SwitchRuntimeKind(SpriteAnimKind.Parts, "Use Parts for Character");
                 }
-                if (GUILayout.Button("Create Empty Parts Rig"))
+                else
                 {
-                    RecordPartsUndo("Create Empty Parts Rig");
-                    SpritePartsAuthoringOps.CreateEmptyPartsRig(_profile);
-                    SaveDirty();
+                    if (GUILayout.Button("Create Parts Character (Floating Parts)"))
+                        CreatePartsCharacter(floating: true);
+                    if (GUILayout.Button("Create Empty Parts Rig"))
+                        CreatePartsCharacter(floating: false);
                 }
-                EditorGUILayout.EndScrollView();
-                GUILayout.EndArea();
-                return;
+                GUILayout.Space(8f);
+                // Fall through: the Parts clip list and tree stay editable while
+                // the runtime mode is Frames.
             }
 
             for (int i = 0; i < _profile.PartsClips.Count; i++)
@@ -262,11 +525,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_profile.AnimKind != SpriteAnimKind.Parts)
             {
-                EditorGUILayout.HelpBox("Create a Parts Character from the left panel.", MessageType.None);
-                EditorGUIUtility.labelWidth = prevLabelWidth;
-                EditorGUILayout.EndScrollView();
-                GUILayout.EndArea();
-                return;
+                EditorGUILayout.HelpBox(
+                    "Preview only. Character currently uses Frames. Use 'Use Parts for Character' in the left panel to activate this rig.",
+                    MessageType.None);
             }
 
             var clip = CurrentPartsClip;
@@ -287,6 +548,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     clip.WrapMode = wrap;
                     SaveDirty();
                 }
+                DrawImportProvenanceLabel(clip.Import);
             }
 
             var slot = CurrentPartsSlot;
@@ -498,6 +760,28 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             EditorGUILayout.EndHorizontal();
 
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button(new GUIContent("From This Profile",
+                    "Bind art already in this profile: appearances, sheet cells, or one static frame of a frame clip."), GUILayout.Height(20f)))
+            {
+                var anchor = GUILayoutUtility.GetLastRect();
+                PopupWindow.Show(anchor, new SpritePartsArtPickerPopup(this, slot.SlotId));
+            }
+            if (GUILayout.Button(new GUIContent("Import from Profile...",
+                    "Copy art, frame clips, and Parts clips from another profile as local copies. Texture assets are reused."), GUILayout.Height(20f)))
+            {
+                var anchor = GUILayoutUtility.GetLastRect();
+                PopupWindow.Show(anchor, new SpriteProfileImportPopup(this));
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (GUILayout.Button(new GUIContent("Import Frame Sequence to Part...",
+                    "Bake a frame clip cell sequence into appearance keys on this slot. Pose stays at rest; empty pose track required."), GUILayout.Height(20f)))
+            {
+                var anchor = GUILayoutUtility.GetLastRect();
+                PopupWindow.Show(anchor, new SpritePartsFrameSequencePopup(this, slot.SlotId));
+            }
+
             if (Event.current.commandName == "ObjectSelectorClosed")
             {
                 var picked = EditorGUIUtility.GetObjectPickerObject() as Texture2D;
@@ -509,7 +793,33 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ApplyPartsSlotArt(slot, nextTex);
 
             if (!string.IsNullOrEmpty(slot.DefaultAppearanceId))
+            {
                 EditorGUILayout.LabelField("Appearance Id", slot.DefaultAppearanceId);
+                DrawImportProvenanceLabel(app?.Import);
+            }
+        }
+
+        /// <summary>
+        /// Display-only provenance line for imported/copied items. Never
+        /// resolves or refreshes anything; absent on old data.
+        /// </summary>
+        void DrawImportProvenanceLabel(SpriteImportProvenance provenance)
+        {
+            if (provenance == null ||
+                (string.IsNullOrEmpty(provenance.SourceItem) &&
+                 string.IsNullOrEmpty(provenance.SourceGuid) &&
+                 string.IsNullOrEmpty(provenance.SourcePath)))
+                return;
+            string origin = !string.IsNullOrEmpty(provenance.SourcePath)
+                ? provenance.SourcePath
+                : provenance.SourceGuid;
+            string when = string.IsNullOrEmpty(provenance.ImportedUtc)
+                ? string.Empty
+                : " | " + provenance.ImportedUtc;
+            EditorGUILayout.LabelField(
+                "Imported From",
+                provenance.SourceItem + (string.IsNullOrEmpty(origin) ? string.Empty : " | " + origin) + when,
+                EditorStyles.wordWrappedMiniLabel);
         }
 
         void ApplyPartsSlotArt(SpritePartSlotDef slot, Texture2D tex)
@@ -524,6 +834,178 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
             _status = $"Bound {tex.name} cell {result.CellIndex} -> {result.AppearanceId}";
+            SaveDirty();
+            Repaint();
+        }
+
+        /// <summary>
+        /// Import art from another profile into the open document. Adds content;
+        /// never replaces the editing document (that is Open job). One Undo
+        /// transaction; a failed apply changes nothing.
+        /// </summary>
+        internal void ImportArtFromProfile(
+            ScriptableSpriteSheetProfile sourceAsset, List<int> sheetIndices, List<int> appearanceIndices)
+        {
+            ImportFromProfile(sourceAsset, sheetIndices, appearanceIndices, null, null, null, null);
+        }
+
+        /// <summary>
+        /// Import art and/or clips from another profile. One Undo transaction;
+        /// a failed apply rolls the snapshot back. Conflict policy defaults to
+        /// unique copies; ReplaceExisting keeps destination ids/names and
+        /// overwrites content (previewed in the popup before commit).
+        /// </summary>
+        internal void ImportFromProfile(
+            ScriptableSpriteSheetProfile sourceAsset,
+            List<int> sheetIndices,
+            List<int> appearanceIndices,
+            List<int> frameClipIndices,
+            List<int> partsClipIndices,
+            Dictionary<string, string> slotMap,
+            HashSet<string> excludedSlots,
+            SpriteProfileImportConflictPolicy conflictPolicy = SpriteProfileImportConflictPolicy.UniqueCopy)
+        {
+            if (sourceAsset?.Data == null || _profile == null)
+                return;
+            if (ReferenceEquals(sourceAsset.Data, _profile))
+            {
+                _status = "Source profile is the open profile. Use 'From This Profile' instead.";
+                return;
+            }
+            ClearImportPreview();
+            var plan = SpriteProfileClipImport.PlanImport(
+                sourceAsset.Data, _profile,
+                sheetIndices, appearanceIndices,
+                frameClipIndices, partsClipIndices,
+                slotMap, excludedSlots, conflictPolicy);
+            if (!plan.Ok)
+            {
+                _status = plan.Reason;
+                EditorUtility.DisplayDialog("Import from Profile", plan.Reason, "OK");
+                return;
+            }
+            RecordPartsUndo("Import from " + sourceAsset.name);
+            string sourceAssetPath = AssetDatabase.GetAssetPath(sourceAsset);
+            var result = SpriteProfileClipImport.Apply(plan, sourceAsset.Data, _profile,
+                new SpriteProfileArtImport.ImportSourceInfo
+                {
+                    Guid = AssetDatabase.AssetPathToGUID(sourceAssetPath) ?? string.Empty,
+                    Path = sourceAssetPath ?? string.Empty,
+                });
+            if (!result.Ok)
+            {
+                Undo.PerformUndo();
+                _status = result.Reason ?? "Import failed";
+                return;
+            }
+            SaveDirty();
+            _status = "Imported from " + sourceAsset.name + ": " + result.Summary + ". Use 'From This Profile' to bind.";
+            Repaint();
+        }
+
+        /// <summary>
+        /// Bake a frame clip cell sequence into appearance keys on a Parts track.
+        /// </summary>
+        internal void ImportFrameSequenceToPart(
+            int frameClipIndex, int partsClipIndex, string slotId, float startTime, bool extendDuration,
+            int repeatCount = 1)
+        {
+            if (_profile == null) return;
+            var plan = SpritePartsFrameSequenceImport.PlanImport(
+                _profile, frameClipIndex, partsClipIndex, slotId, startTime, extendDuration, repeatCount);
+            if (!plan.Ok)
+            {
+                _status = plan.Reason;
+                EditorUtility.DisplayDialog("Import Frame Sequence to Part", plan.Reason, "OK");
+                return;
+            }
+            if (plan.ExcludedFeatures.Count > 0)
+            {
+                string details = string.Join(Environment.NewLine + "- ", plan.ExcludedFeatures.ToArray());
+                if (!EditorUtility.DisplayDialog(
+                    "Import Frame Sequence to Part",
+                    "This converts sprite appearance only." + Environment.NewLine + Environment.NewLine +
+                    "Not imported:" + Environment.NewLine + "- " + details + Environment.NewLine + Environment.NewLine +
+                    "Continue with art-only keys?",
+                    "Import Art Only", "Cancel"))
+                    return;
+            }
+            RecordPartsUndo("Import Frame Sequence to Part");
+            string ownAssetPath = _asset != null ? AssetDatabase.GetAssetPath(_asset) : string.Empty;
+            var result = SpritePartsFrameSequenceImport.Apply(plan, _profile,
+                new SpriteProfileArtImport.ImportSourceInfo
+                {
+                    Guid = string.IsNullOrEmpty(ownAssetPath)
+                        ? string.Empty
+                        : AssetDatabase.AssetPathToGUID(ownAssetPath) ?? string.Empty,
+                    Path = ownAssetPath ?? string.Empty,
+                });
+            if (!result.Ok)
+            {
+                Undo.PerformUndo();
+                _status = result.Reason ?? "Sequence import failed";
+                return;
+            }
+            SaveDirty();
+            _status = result.Summary;
+            Repaint();
+        }
+
+        internal void BindSlotAppearanceFromPicker(string slotId, string appearanceId)
+        {
+            if (_profile == null) return;
+            RecordPartsUndo("Bind Part Appearance");
+            var result = SpritePartsAuthoringOps.SetSlotDefaultAppearance(_profile, slotId, appearanceId);
+            if (!result.Ok)
+            {
+                _status = result.Reason;
+                return;
+            }
+            _status = $"Bound appearance '{result.AppearanceId}'";
+            SaveDirty();
+            Repaint();
+        }
+
+        /// <summary>
+        /// From This Profile batch mode: create one appearance per selected
+        /// cell (exact sheet+cell matches reused) in one Undo; optionally bind
+        /// the last selected cell's appearance as the slot's default art.
+        /// </summary>
+        internal void CreateAppearancesFromPicker(
+            string slotId, int sheetIndex, List<int> cells, bool bindLast)
+        {
+            if (_profile == null || cells == null || cells.Count == 0) return;
+            RecordPartsUndo("Batch Create Appearances");
+            var result = SpritePartsAuthoringOps.CreateAppearancesForCells(_profile, sheetIndex, cells);
+            if (!result.Ok)
+            {
+                _status = result.Reason;
+                return;
+            }
+            string bound = string.Empty;
+            if (bindLast && !string.IsNullOrEmpty(slotId) && result.AppearanceIds.Count > 0)
+            {
+                string lastId = result.AppearanceIds[result.AppearanceIds.Count - 1];
+                var bind = SpritePartsAuthoringOps.SetSlotDefaultAppearance(_profile, slotId, lastId);
+                if (bind.Ok)
+                    bound = ", bound '" + lastId + "' as default";
+            }
+            SaveDirty();
+            _status = $"Created {result.Created}, reused {result.Reused} appearance(s){bound}";
+            Repaint();
+        }
+
+        internal void BindSlotArtCellFromPicker(string slotId, int sheetIndex, int cellIndex, string statusLabel)
+        {
+            if (_profile == null) return;
+            RecordPartsUndo("Bind Part Art Cell");
+            var result = SpritePartsAuthoringOps.BindSlotArtFromCell(_profile, slotId, sheetIndex, cellIndex);
+            if (!result.Ok)
+            {
+                _status = result.Reason;
+                return;
+            }
+            _status = statusLabel;
             SaveDirty();
             Repaint();
         }
@@ -782,12 +1264,42 @@ namespace InvertLab.Sprites.DOTS.Editor
             var clip = CurrentPartsClip;
             int clipIndex = clip != null ? _partsSelectedClip : -1;
             float time = _partsPreviewTime;
-            if (!SpritePartsOnion.TrySampleCharacter(_profile, clipIndex, time, Allocator.Temp,
-                    out var blob, out var poses, out var matrices, out _))
+            bool importPreview = ImportPreviewActive;
+            bool sampled;
+            BlobAssetReference<SpritePartsSetBlob> blob;
+            NativeArray<SpritePartsSampler.Pose> poses;
+            NativeArray<float4x4> matrices;
+            if (importPreview)
+            {
+                sampled = SpritePartsOnion.TrySampleClipOnRig(
+                    _profile, _importPreviewClip, time, Allocator.Temp,
+                    out blob, out poses, out matrices, out _);
+            }
+            else
+            {
+                sampled = SpritePartsOnion.TrySampleCharacter(
+                    _profile, clipIndex, time, Allocator.Temp,
+                    out blob, out poses, out matrices, out _);
+            }
+            if (!sampled)
                 return;
 
             try
             {
+                if (importPreview)
+                {
+                    // Read-only preview: no onion (ghosts track the selected
+                    // profile clip), no handles, nothing pickable.
+                    DrawPartsPoseQuads(canvas, ref blob.Value, matrices,
+                        new Color(0.85f, 0.95f, 1f, 1f), pickable: false, sampleTime: time);
+                    var banner = new Rect(canvas.x + 8f, canvas.yMax - 30f, canvas.width - 16f, 22f);
+                    EditorGUI.DrawRect(banner, new Color(0.12f, 0.16f, 0.22f, 0.94f));
+                    GUI.Label(new Rect(banner.x + 6f, banner.y + 3f, banner.width - 12f, 16f),
+                        $" IMPORT PREVIEW: '{_importPreviewClipName}' from {_importPreviewSourceName} - motion copied onto this rig. Editing paused.",
+                        _mutedStyle);
+                    return;
+                }
+
                 bool drawOnion = _partsOnionEnabled &&
                                  _partsMode == SpritePartsStudioMode.Animate &&
                                  (!_partsPlaying || _partsOnionShowWhilePlaying);
@@ -1059,14 +1571,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             float hit = PartsHandleHit * PartsHandleHit;
             if (_partsCanvasTool == PartsCanvasTool.Scale)
             {
+                // Unity Scale: only corner/edge knobs. Body click selects, does not scale.
+                float scaleHit = PartsScaleHandleHit * PartsScaleHandleHit;
                 foreach (var kind in PartsGizmoHandleOrder)
                 {
                     if (kind == ColliderHandleKind.Rotate) continue;
-                    if ((mouse - PartsGizmoHandle(r, joint, guiDeg, kind)).sqrMagnitude <= hit)
+                    if ((mouse - PartsGizmoHandle(r, joint, guiDeg, kind)).sqrMagnitude <= scaleHit)
                         return kind;
                 }
+                Vector2 localScale = UnrotateAround(mouse, joint, guiDeg);
+                if (r.Contains(localScale))
+                    return ColliderHandleKind.Body; // select / no-op scale
+                return ColliderHandleKind.None;
             }
-            else if (_partsCanvasTool == PartsCanvasTool.Rotate)
+            if (_partsCanvasTool == PartsCanvasTool.Rotate)
             {
                 if ((mouse - PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.Rotate)).sqrMagnitude <= hit)
                     return ColliderHandleKind.Rotate;
@@ -1123,14 +1641,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawHandleKnob(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeR), true);
                 DrawHandleKnob(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeB), true);
                 DrawHandleKnob(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeL), true);
-                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerTL), 8f), MouseCursor.ResizeUpLeft);
-                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerTR), 8f), MouseCursor.ResizeUpRight);
-                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerBR), 8f), MouseCursor.ResizeUpLeft);
-                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerBL), 8f), MouseCursor.ResizeUpRight);
-                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeT), 8f), MouseCursor.ResizeVertical);
-                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeB), 8f), MouseCursor.ResizeVertical);
-                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeL), 8f), MouseCursor.ResizeHorizontal);
-                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeR), 8f), MouseCursor.ResizeHorizontal);
+                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerTL), 12f), MouseCursor.ResizeUpLeft);
+                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerTR), 12f), MouseCursor.ResizeUpRight);
+                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerBR), 12f), MouseCursor.ResizeUpLeft);
+                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerBL), 12f), MouseCursor.ResizeUpRight);
+                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeT), 12f), MouseCursor.ResizeVertical);
+                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeB), 12f), MouseCursor.ResizeVertical);
+                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeL), 12f), MouseCursor.ResizeHorizontal);
+                EditorGUIUtility.AddCursorRect(HandleCursorRect(PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.EdgeR), 12f), MouseCursor.ResizeHorizontal);
             }
             else if (_partsCanvasTool == PartsCanvasTool.Rotate)
             {
@@ -1168,6 +1686,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             if (_studioTab != StudioTab.Parts)
                 return;
+            if (ImportPreviewActive)
+            {
+                // Preview pose is not profile data; never write it anywhere.
+                _partsDragActive = false;
+                _partsDragSlotId = null;
+                return;
+            }
 
             var evt = Event.current;
             EventType raw = evt.rawType;
@@ -1289,9 +1814,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     int hit = HitTestPartsSlot(canvas, evt.mousePosition);
                     slotId = hit >= 0 ? SlotIdFromHit(hit) : null;
-                    // Move/Rotate/Scale: if hit-test misses (rotation/AABB quirks) but a part is
-                    // selected, still start a Body drag on the selection - matches user intent.
-                    if (string.IsNullOrEmpty(slotId) && CurrentPartsSlot != null)
+                    // Move/Rotate only: empty miss still Body-drags the selection.
+                    // Scale requires an explicit corner/edge knob (Unity-like).
+                    if (string.IsNullOrEmpty(slotId) && CurrentPartsSlot != null &&
+                        _partsCanvasTool != PartsCanvasTool.Scale)
                     {
                         slotId = CurrentPartsSlot.SlotId;
                         handle = ColliderHandleKind.Body;
@@ -1308,6 +1834,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                         _status = "Part is locked.";
                         evt.Use();
                     }
+                    else if (_partsCanvasTool == PartsCanvasTool.Scale &&
+                             (handle == ColliderHandleKind.None || handle == ColliderHandleKind.Body))
+                    {
+                        // Selected the part; wait for a scale knob grab.
+                        _status = "Scale (E): drag a corner or edge handle";
+                        evt.Use();
+                        Repaint();
+                    }
                     else
                     {
                         if (handle == ColliderHandleKind.None)
@@ -1322,8 +1856,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                         CapturePartsDragStartTransform(canvas, slot.SlotId);
                         string op = _partsCanvasTool == PartsCanvasTool.Rotate || handle == ColliderHandleKind.Rotate
                             ? "Rotate Parts"
-                            : _partsCanvasTool == PartsCanvasTool.Scale ||
-                              (handle != ColliderHandleKind.Body && handle != ColliderHandleKind.None)
+                            : (handle != ColliderHandleKind.Body && handle != ColliderHandleKind.None &&
+                               handle != ColliderHandleKind.Rotate)
                                 ? "Scale Parts"
                                 : "Move Parts";
                         BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
@@ -1410,11 +1944,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             var handle = _partsTransformHandle;
             bool rotate = handle == ColliderHandleKind.Rotate ||
                           (handle == ColliderHandleKind.Body && _partsCanvasTool == PartsCanvasTool.Rotate);
-            bool scaleKnob = handle != ColliderHandleKind.None &&
-                             handle != ColliderHandleKind.Body &&
-                             handle != ColliderHandleKind.Rotate;
-            bool scale = scaleKnob ||
-                         (handle == ColliderHandleKind.Body && _partsCanvasTool == PartsCanvasTool.Scale);
+            // Scale only from corner/edge knobs (Unity RectTransform / Scale tool style).
+            bool scale = handle != ColliderHandleKind.None &&
+                         handle != ColliderHandleKind.Body &&
+                         handle != ColliderHandleKind.Rotate;
 
             if (rotate)
             {
@@ -1433,20 +1966,26 @@ namespace InvertLab.Sprites.DOTS.Editor
                 float sy = _partsDragStartPose.Scale.y;
                 bool edgeX = handle == ColliderHandleKind.EdgeL || handle == ColliderHandleKind.EdgeR;
                 bool edgeY = handle == ColliderHandleKind.EdgeT || handle == ColliderHandleKind.EdgeB;
-                if (_partsLinkedScale || handle == ColliderHandleKind.Body)
+                bool corner = !edgeX && !edgeY;
+                if (_partsLinkedScale || corner)
                 {
                     float f = n.magnitude / Mathf.Max(1e-3f, s.magnitude);
-                    sx = Mathf.Max(0.01f, _partsDragStartPose.Scale.x * f);
-                    sy = Mathf.Max(0.01f, _partsDragStartPose.Scale.y * f);
+                    f = Mathf.Max(0.01f, f);
+                    float signX = sx < 0f ? -1f : 1f;
+                    float signY = sy < 0f ? -1f : 1f;
+                    sx = signX * Mathf.Max(0.01f, Mathf.Abs(_partsDragStartPose.Scale.x) * f);
+                    sy = signY * Mathf.Max(0.01f, Mathf.Abs(_partsDragStartPose.Scale.y) * f);
                 }
                 else
                 {
                     float fx = Mathf.Abs(s.x) < 1e-3f ? 1f : n.x / s.x;
                     float fy = Mathf.Abs(s.y) < 1e-3f ? 1f : n.y / s.y;
-                    fx = Mathf.Max(0.01f, Mathf.Abs(fx));
-                    fy = Mathf.Max(0.01f, Mathf.Abs(fy));
-                    if (!edgeY) sx = Mathf.Max(0.01f, _partsDragStartPose.Scale.x * fx);
-                    if (!edgeX) sy = Mathf.Max(0.01f, _partsDragStartPose.Scale.y * fy);
+                    float absFx = Mathf.Max(0.01f, Mathf.Abs(fx));
+                    float absFy = Mathf.Max(0.01f, Mathf.Abs(fy));
+                    float signX = sx < 0f ? -1f : 1f;
+                    float signY = sy < 0f ? -1f : 1f;
+                    if (!edgeY) sx = signX * Mathf.Max(0.01f, Mathf.Abs(_partsDragStartPose.Scale.x) * absFx);
+                    if (!edgeX) sy = signY * Mathf.Max(0.01f, Mathf.Abs(_partsDragStartPose.Scale.y) * absFy);
                 }
                 pose.Scale = new Vector2(sx, sy);
             }
@@ -1554,6 +2093,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void ApplyPartsPoseEdit(string slotId, SpritePartsAuthoringOps.PoseEdit pose)
         {
+            if (ImportPreviewActive)
+            {
+                PauseForImportPreview("pose edit");
+                return;
+            }
             if (_partsMode == SpritePartsStudioMode.Animate && !_partsAutoKey)
             {
                 _partsHasTempPose = true;
@@ -1712,15 +2256,12 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             var slot = CurrentPartsSlot;
             if (slot == null || CurrentPartsClip == null) return;
-            var pose = _partsHasTempPose &&
-                       SpritePartIdUtility.Canonical(_partsTempSlotId) ==
-                       SpritePartIdUtility.Canonical(slot.SlotId)
-                ? _partsTempPose
-                : SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
+            // Appearance channel only. Pose stays untouched; use Key Pose (+ Incl. Sprite)
+            // when both channels should write at the playhead.
             RecordPartsUndo("Key Parts Sprite");
             var result = SpritePartsAuthoringOps.WriteKeySprite(
                 _profile, _partsSelectedClip, slot.SlotId, _partsPreviewTime,
-                _partsKeyAppearanceId, pose, _partsDisplayFps);
+                _partsKeyAppearanceId, snapFps: _partsDisplayFps);
             SaveDirty();
             _status = result.WroteAppearance
                 ? (string.IsNullOrEmpty(_partsKeyAppearanceId)
@@ -1824,6 +2365,26 @@ namespace InvertLab.Sprites.DOTS.Editor
                 else
                 {
                     GUI.Label(trackRect, "  (inherits; no keys)", _mutedStyle);
+                }
+
+                // Independent appearance channel: sprite-swap keys drawn as
+                // smaller squares under the pose row. Display + tooltip only -
+                // they are edited through Key Sprite / sequence import.
+                var channel = SpritePartsAuthoringOps.FindAppearanceTrack(clip, slot.SlotId);
+                if (channel?.Keys != null)
+                {
+                    for (int k = 0; k < channel.Keys.Count; k++)
+                    {
+                        var key = channel.Keys[k];
+                        if (key == null) continue;
+                        float u = key.Time / duration;
+                        float kx = Mathf.Lerp(trackRect.x, trackRect.xMax, u);
+                        var r = new Rect(kx - 4f, rowY + rowH - 8f, 8f, 6f);
+                        EditorGUI.DrawRect(r, new Color(0.95f, 0.75f, 0.2f, 0.95f));
+                        if (r.Contains(evt.mousePosition))
+                            GUI.Label(r, new GUIContent(string.Empty,
+                                "Appearance key: " + key.AppearanceId + " (independent channel; pose untouched)"));
+                    }
                 }
             }
 

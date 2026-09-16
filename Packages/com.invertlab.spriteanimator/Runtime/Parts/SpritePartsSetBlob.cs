@@ -36,7 +36,10 @@ namespace InvertLab.Sprites.DOTS
         public float Duration;
         public float SpeedMultiplier;
         public byte WrapMode;
+        /// <summary>Dense slot -> pose track index (-1 = rest). Never an appearance track.</summary>
         public BlobArray<int> SlotTrackIndices;
+        /// <summary>Dense slot -> appearance track index (-1 = none; sampler then falls back to legacy pose-key ids).</summary>
+        public BlobArray<int> SlotAppearanceTrackIndices;
         public BlobArray<SpritePartsTrackBlob> Tracks;
     }
 
@@ -123,6 +126,8 @@ namespace InvertLab.Sprites.DOTS
         public struct TrackInput
         {
             public string SlotId;
+            /// <summary>0 = pose (default), 1 = appearance channel.</summary>
+            public byte Kind;
             public KeyInput[] Keys;
         }
 
@@ -259,40 +264,60 @@ namespace InvertLab.Sprites.DOTS
                     clip.WrapMode = wrap;
 
                     var tracks = src.Tracks ?? Array.Empty<TrackInput>();
-                    // Deduplicate / validate unique slot tracks
-                    var used = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+                    // One pose and one appearance track per slot at most. Pose
+                    // tracks are written first so SlotTrackIndices never points
+                    // at an appearance track.
+                    var usedPose = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+                    var usedAppearance = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
                     int trackCount = 0;
                     for (int t = 0; t < tracks.Length; t++)
                     {
                         string sid = SpritePartIdUtility.Canonical(tracks[t].SlotId);
                         if (!slotIndex.ContainsKey(sid))
                             throw new ArgumentException($"Clip '{name}' track slot '{sid}' missing.");
+                        bool isAppearance = tracks[t].Kind == (byte)SpritePartsTrackKind.Appearance;
+                        var used = isAppearance ? usedAppearance : usedPose;
                         if (!used.Add(sid))
-                            throw new ArgumentException($"Clip '{name}' duplicate track for '{sid}'.");
+                            throw new ArgumentException(
+                                $"Clip '{name}' duplicate {(isAppearance ? "appearance" : "pose")} track for '{sid}'.");
                         trackCount++;
                     }
 
                     var trackArr = builder.Allocate(ref clip.Tracks, trackCount);
                     var dense = builder.Allocate(ref clip.SlotTrackIndices, slots.Length);
+                    var denseAppearance = builder.Allocate(ref clip.SlotAppearanceTrackIndices, slots.Length);
                     for (int s = 0; s < slots.Length; s++)
+                    {
                         dense[s] = -1;
+                        denseAppearance[s] = -1;
+                    }
 
                     int write = 0;
-                    for (int t = 0; t < tracks.Length; t++)
+                    for (int pass = 0; pass < 2; pass++)
                     {
-                        var tr = tracks[t];
-                        string sid = SpritePartIdUtility.Canonical(tr.SlotId);
-                        int sIndex = slotIndex[sid];
-                        dense[sIndex] = write;
+                        bool appearancePass = pass == 1;
+                        for (int t = 0; t < tracks.Length; t++)
+                        {
+                            var tr = tracks[t];
+                            bool isAppearance = tr.Kind == (byte)SpritePartsTrackKind.Appearance;
+                            if (isAppearance != appearancePass) continue;
+                            string sid = SpritePartIdUtility.Canonical(tr.SlotId);
+                            int sIndex = slotIndex[sid];
+                            if (isAppearance)
+                                denseAppearance[sIndex] = write;
+                            else
+                                dense[sIndex] = write;
 
-                        var keys = NormalizeKeys(tr.Keys, duration, appIndex);
-                        var keyArr = builder.Allocate(ref trackArr[write].Keys, keys.Length);
-                        for (int k = 0; k < keys.Length; k++)
-                            keyArr[k] = keys[k];
+                            var keys = NormalizeKeys(tr.Keys, duration, appIndex,
+                                skipPoseValidation: isAppearance);
+                            var keyArr = builder.Allocate(ref trackArr[write].Keys, keys.Length);
+                            for (int k = 0; k < keys.Length; k++)
+                                keyArr[k] = keys[k];
 
-                        trackArr[write].SlotIndex = sIndex;
-                        trackArr[write].SlotIdHash = SpritePartIdUtility.Hash(sid);
-                        write++;
+                            trackArr[write].SlotIndex = sIndex;
+                            trackArr[write].SlotIdHash = SpritePartIdUtility.Hash(sid);
+                            write++;
+                        }
                     }
                 }
 
@@ -342,7 +367,8 @@ namespace InvertLab.Sprites.DOTS
         static SpritePartsKeyBlob[] NormalizeKeys(
             KeyInput[] keys,
             float duration,
-            System.Collections.Generic.Dictionary<string, int> appIndex)
+            System.Collections.Generic.Dictionary<string, int> appIndex,
+            bool skipPoseValidation = false)
         {
             if (keys == null || keys.Length == 0)
                 return Array.Empty<SpritePartsKeyBlob>();
@@ -353,7 +379,8 @@ namespace InvertLab.Sprites.DOTS
                 var k = keys[i];
                 if (!math.isfinite(k.Time) || k.Time < 0f || k.Time > duration + 1e-5f)
                     throw new ArgumentException($"Key time {k.Time} outside [0, {duration}].");
-                if (math.abs(k.Scale.x) < 1e-5f || math.abs(k.Scale.y) < 1e-5f)
+                if (!skipPoseValidation &&
+                    (math.abs(k.Scale.x) < 1e-5f || math.abs(k.Scale.y) < 1e-5f))
                     throw new ArgumentException("Key scale axes must be non-zero.");
                 byte ease = SpriteEase.IsValidMode(k.EaseMode) ? k.EaseMode : (byte)SpriteEaseMode.Linear;
                 int appearanceIndex = -1;
