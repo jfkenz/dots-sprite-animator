@@ -21,7 +21,10 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Collect onion sample times. Past negative deltas, future positive.
-        /// Loop wraps; Once omits out-of-range. Deduplicates identical times.
+        /// Out-of-range times clamp to [0, duration] (never wrap). Wrapping before t=0
+        /// on Loop used to sample the last→first seam blend, so Before ghosts at the
+        /// first frame looked like a mid pose between key 0 and the next key.
+        /// Once still omits ghosts wholly outside the clip. Deduplicates identical times.
         /// Returns empty while playing unless showWhilePlaying.
         /// </summary>
         public static List<GhostSample> CollectGhostTimes(
@@ -50,17 +53,14 @@ namespace InvertLab.Sprites.DOTS
             {
                 if (frameDelta == 0) return;
                 float raw = playhead + frameDelta / displayFps;
-                float sample;
+                // Onion is a timeline neighbor preview, not a loop preview. Always clamp
+                // into the clip so Before at t=0 stays on the first-frame pose.
                 if (wrapMode == (byte)SpritePartsWrap.Once)
                 {
                     if (raw < -1e-5f || raw > duration + 1e-5f)
                         return;
-                    sample = math.clamp(raw, 0f, duration);
                 }
-                else
-                {
-                    sample = SpritePartsSampler.WrapTime(raw, duration, wrapMode);
-                }
+                float sample = math.clamp(raw, 0f, duration);
 
                 int key = (int)math.round(sample * 1000f);
                 if (!seen.Add(key))

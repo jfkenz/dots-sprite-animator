@@ -52,10 +52,15 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] int _partsOnionSpacing = SpritePartsAuthoringOps.DefaultOnionSpacingFrames;
         [SerializeField] float _partsOnionOpacity = SpritePartsAuthoringOps.DefaultOnionOpacity;
         [SerializeField] float _partsDisplayFps = SpritePartsAuthoringOps.DefaultDisplayFps;
+        // Preview: wrap playhead at last key time instead of Duration.
+        [SerializeField] bool _partsLoopLastKey;
         [SerializeField] bool _partsOnionShowWhilePlaying;
         [SerializeField] PartsCanvasTool _partsCanvasTool = PartsCanvasTool.Move;
         [SerializeField] string _partsPreviewSkinId = "default";
         [SerializeField] bool _partsLinkedScale = true;
+        // Move axis locks (persistent). Shift still does Affinity-style dominant-axis constrain.
+        [SerializeField] bool _partsLockMoveX;
+        [SerializeField] bool _partsLockMoveY;
         [SerializeField] int _partsArtColumns = 1;
         [SerializeField] int _partsArtRows = 1;
         [SerializeField] int _partsArtCell;
@@ -72,6 +77,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         string _partsArtSyncedSlotId;
         bool _partsDragActive;
         string _partsDragSlotId;
+        // 0 = unset, 1 = horizontal (X), 2 = vertical (Y). Sticky for the current drag.
+        int _partsDragShiftAxis;
         Vector2 _partsDragStartMouse;
         Vector2 _partsDragStartJoint;
         float _partsDragStartGuiDeg;
@@ -97,6 +104,18 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _partsHasTempPose;
         string _partsTempSlotId;
         SpritePartsAuthoringOps.PoseEdit _partsTempPose;
+
+        // Inspector Transform section clipboard (Copy / Paste per-row or all).
+        bool _partsXformClipboardHasPos;
+        Vector2 _partsXformClipboardPos;
+        bool _partsXformClipboardHasRot;
+        float _partsXformClipboardRot;
+        bool _partsXformClipboardHasScale;
+        Vector2 _partsXformClipboardScale;
+
+        // Appearance pivot clipboard (normalized 0-1).
+        bool _partsPivotClipboardValid;
+        Vector2 _partsPivotClipboard = new(0.5f, 0.5f);
 
         SpritePartsClipDef CurrentPartsClip
         {
@@ -438,7 +457,17 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!(authored > 0f) || float.IsNaN(authored) || float.IsInfinity(authored))
                 authored = 1f;
             _partsPreviewTime += delta * Mathf.Max(0.05f, _speed) * authored;
-            if (clip.WrapMode == (byte)SpritePartsWrap.Once)
+            // Loop Last: wrap at last keyframe time back to first (preview only).
+            float lastKey = 0f;
+            if (_partsLoopLastKey && !ImportPreviewActive)
+                lastKey = GetPartsClipLastKeyTime(clip);
+            if (_partsLoopLastKey && !ImportPreviewActive && lastKey > 1e-5f)
+            {
+                float wrapEnd = Mathf.Max(1e-3f, lastKey);
+                if (_partsPreviewTime >= wrapEnd)
+                    _partsPreviewTime = SpritePartsSampler.WrapTime(_partsPreviewTime, wrapEnd, (byte)SpritePartsWrap.Loop);
+            }
+            else if (clip.WrapMode == (byte)SpritePartsWrap.Once)
             {
                 if (_partsPreviewTime >= duration)
                 {
@@ -588,10 +617,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             var slot = CurrentPartsSlot;
             if (slot != null)
             {
-                GUILayout.Space(6f);
-                GUILayout.Label("SELECTED PART", _sectionStyle);
                 bool partLocked = slot.EditorLocked ||
                     SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId);
+
+                // Transform first — most edited while posing.
+                GUILayout.Space(6f);
+                DrawPartsTransformInspector(slot, partLocked);
+
+                GUILayout.Space(6f);
+                GUILayout.Label("SELECTED PART", _sectionStyle);
                 using (new EditorGUI.DisabledScope(partLocked))
                 {
                     EditorGUI.BeginChangeCheck();
@@ -629,9 +663,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                     {
                         EditorGUI.BeginChangeCheck();
                         string parent = DrawParentPopup(slot);
-                        Vector2 restPos = EditorGUILayout.Vector2Field("Rest Position", slot.RestPosition);
-                        float restRot = EditorGUILayout.FloatField("Rest Rotation", slot.RestRotation);
-                        Vector2 restScale = EditorGUILayout.Vector2Field("Rest Scale", slot.RestScale);
                         string appearance = EditorGUILayout.TextField("Default Appearance Id", slot.DefaultAppearanceId);
                         if (EditorGUI.EndChangeCheck() && !_partsDragActive)
                         {
@@ -650,38 +681,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                                 if (!move.Ok)
                                     _status = move.Reason;
                             }
-                            slot.RestPosition = restPos;
-                            slot.RestRotation = restRot;
-                            slot.RestScale = restScale;
                             slot.DefaultAppearanceId = appearance;
                             SpritePartsValidation.CanonicalizeIds(_profile);
                             SaveDirty();
                         }
                     }
-                }
-                else if (_partsMode == SpritePartsStudioMode.Animate)
-                {
-                    var pose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
-                    using (new EditorGUI.DisabledScope(_partsDragActive))
-                    {
-                        EditorGUI.BeginChangeCheck();
-                        Vector2 pos = EditorGUILayout.Vector2Field("Position", pose.Position);
-                        float rot = EditorGUILayout.FloatField("Rotation", pose.Rotation);
-                        Vector2 scale = EditorGUILayout.Vector2Field("Scale", pose.Scale);
-                        if (EditorGUI.EndChangeCheck() && !_partsDragActive)
-                        {
-                            BeginPartsDragUndo("Edit Parts Key Pose");
-                            ApplyPartsPoseEdit(slot.SlotId, new SpritePartsAuthoringOps.PoseEdit
-                            {
-                                Position = pos, Rotation = rot, Scale = scale,
-                            });
-                            EndPartsDragUndo();
-                        }
-                    }
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("Transform tools off in Skins. Edit appearance bindings below.", MessageType.Info);
                 }
             }
 
@@ -710,6 +714,238 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsMode = (SpritePartsStudioMode)next;
             if (_partsMode == SpritePartsStudioMode.Skins)
                 _partsSkinPreviewOverrides.Clear();
+        }
+
+
+        /// <summary>
+        /// Unity-Transform-style Position / Rotation / Scale for the selected part.
+        /// Rig edits rest; Animate edits the sampled (or temp) pose. Each row has Copy / Paste / Reset.
+        /// </summary>
+        void DrawPartsTransformInspector(SpritePartSlotDef slot, bool partLocked)
+        {
+            if (slot == null) return;
+
+            GUILayout.Space(6f);
+            GUILayout.Label("TRANSFORM", _sectionStyle);
+
+            if (_partsMode == SpritePartsStudioMode.Skins)
+            {
+                EditorGUILayout.HelpBox(
+                    "Joint Position/Rotation/Scale are off in Skins. Pivot (art on joint) stays editable below.",
+                    MessageType.Info);
+                using (new EditorGUI.DisabledScope(partLocked))
+                    DrawPartsAppearancePivotInspector(slot);
+                return;
+            }
+
+            bool isRig = _partsMode == SpritePartsStudioMode.Rig;
+            string modeHint = isRig
+                ? "Rest pose (shared by every clip)"
+                : (_partsPlaying
+                    ? "Playing — transform fields locked (avoids baking keys while scrubbing)"
+                    : (_partsAutoKey
+                        ? "Clip pose at playhead (Auto Key ON)"
+                        : "Clip pose at playhead (Auto Key OFF = temp until Key Pose)"));
+            EditorGUILayout.LabelField(modeHint, EditorStyles.miniLabel);
+
+            var pose = isRig
+                ? new SpritePartsAuthoringOps.PoseEdit
+                {
+                    Position = slot.RestPosition,
+                    Rotation = slot.RestRotation,
+                    Scale = slot.RestScale,
+                }
+                : SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
+
+            var rest = new SpritePartsAuthoringOps.PoseEdit
+            {
+                Position = slot.RestPosition,
+                Rotation = slot.RestRotation,
+                Scale = slot.RestScale,
+            };
+
+            using (new EditorGUI.DisabledScope(partLocked || _partsDragActive || _partsPlaying))
+            {
+                // Header actions
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button(new GUIContent("Copy All", "Copy Position, Rotation, and Scale"), GUILayout.Height(18f)))
+                {
+                    _partsXformClipboardPos = pose.Position;
+                    _partsXformClipboardRot = pose.Rotation;
+                    _partsXformClipboardScale = pose.Scale;
+                    _partsXformClipboardHasPos = _partsXformClipboardHasRot = _partsXformClipboardHasScale = true;
+                    _status = "Copied transform";
+                }
+                using (new EditorGUI.DisabledScope(
+                           !_partsXformClipboardHasPos && !_partsXformClipboardHasRot && !_partsXformClipboardHasScale))
+                {
+                    if (GUILayout.Button(new GUIContent("Paste All", "Paste copied transform components"), GUILayout.Height(18f)))
+                    {
+                        var next = pose;
+                        if (_partsXformClipboardHasPos) next.Position = _partsXformClipboardPos;
+                        if (_partsXformClipboardHasRot) next.Rotation = _partsXformClipboardRot;
+                        if (_partsXformClipboardHasScale) next.Scale = _partsXformClipboardScale;
+                        CommitPartsTransformInspectorEdit(slot, next, isRig, "Paste Parts Transform");
+                    }
+                }
+                if (GUILayout.Button(new GUIContent("Reset All",
+                        isRig ? "Reset rest to 0 / 0 / 1" : "Reset pose to this part's rest"), GUILayout.Height(18f)))
+                {
+                    var next = isRig
+                        ? new SpritePartsAuthoringOps.PoseEdit
+                        {
+                            Position = Vector2.zero,
+                            Rotation = 0f,
+                            Scale = Vector2.one,
+                        }
+                        : rest;
+                    CommitPartsTransformInspectorEdit(slot, next, isRig, "Reset Parts Transform");
+                }
+                EditorGUILayout.EndHorizontal();
+
+                // Position
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.BeginChangeCheck();
+                Vector2 pos = EditorGUILayout.Vector2Field("Position", pose.Position);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    pose.Position = pos;
+                    CommitPartsTransformInspectorEdit(slot, pose, isRig, isRig ? "Edit Rest Position" : "Edit Key Position");
+                }
+                if (GUILayout.Button(new GUIContent("C", "Copy Position"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    _partsXformClipboardPos = pose.Position;
+                    _partsXformClipboardHasPos = true;
+                    _status = "Copied Position";
+                }
+                using (new EditorGUI.DisabledScope(!_partsXformClipboardHasPos))
+                {
+                    if (GUILayout.Button(new GUIContent("P", "Paste Position"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                    {
+                        pose.Position = _partsXformClipboardPos;
+                        CommitPartsTransformInspectorEdit(slot, pose, isRig, "Paste Position");
+                    }
+                }
+                if (GUILayout.Button(new GUIContent("R", isRig ? "Reset Position to 0,0" : "Reset Position to rest"),
+                        GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    pose.Position = isRig ? Vector2.zero : rest.Position;
+                    CommitPartsTransformInspectorEdit(slot, pose, isRig, "Reset Position");
+                }
+                EditorGUILayout.EndHorizontal();
+
+                // Rotation
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.BeginChangeCheck();
+                float rot = EditorGUILayout.FloatField("Rotation", pose.Rotation);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    pose.Rotation = rot;
+                    CommitPartsTransformInspectorEdit(slot, pose, isRig, isRig ? "Edit Rest Rotation" : "Edit Key Rotation");
+                }
+                if (GUILayout.Button(new GUIContent("C", "Copy Rotation"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    _partsXformClipboardRot = pose.Rotation;
+                    _partsXformClipboardHasRot = true;
+                    _status = "Copied Rotation";
+                }
+                using (new EditorGUI.DisabledScope(!_partsXformClipboardHasRot))
+                {
+                    if (GUILayout.Button(new GUIContent("P", "Paste Rotation"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                    {
+                        pose.Rotation = _partsXformClipboardRot;
+                        CommitPartsTransformInspectorEdit(slot, pose, isRig, "Paste Rotation");
+                    }
+                }
+                if (GUILayout.Button(new GUIContent("R", isRig ? "Reset Rotation to 0" : "Reset Rotation to rest"),
+                        GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    pose.Rotation = isRig ? 0f : rest.Rotation;
+                    CommitPartsTransformInspectorEdit(slot, pose, isRig, "Reset Rotation");
+                }
+                EditorGUILayout.EndHorizontal();
+
+                // Scale (+ link toggle outside change-check so toggling Link alone does not rewrite pose)
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.BeginChangeCheck();
+                Vector2 scale = EditorGUILayout.Vector2Field("Scale", pose.Scale);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    if (_partsLinkedScale)
+                    {
+                        float ax = Mathf.Abs(pose.Scale.x) > 1e-5f ? Mathf.Abs(pose.Scale.x) : 1f;
+                        float ay = Mathf.Abs(pose.Scale.y) > 1e-5f ? Mathf.Abs(pose.Scale.y) : 1f;
+                        bool xChanged = !Mathf.Approximately(scale.x, pose.Scale.x);
+                        bool yChanged = !Mathf.Approximately(scale.y, pose.Scale.y);
+                        if (xChanged && !yChanged)
+                        {
+                            float ratio = scale.x / ax;
+                            scale.y = Mathf.Sign(pose.Scale.y == 0f ? 1f : pose.Scale.y) * ay * Mathf.Abs(ratio);
+                        }
+                        else if (yChanged && !xChanged)
+                        {
+                            float ratio = scale.y / ay;
+                            scale.x = Mathf.Sign(pose.Scale.x == 0f ? 1f : pose.Scale.x) * ax * Mathf.Abs(ratio);
+                        }
+                    }
+                    pose.Scale = scale;
+                    CommitPartsTransformInspectorEdit(slot, pose, isRig, isRig ? "Edit Rest Scale" : "Edit Key Scale");
+                }
+                bool linked = GUILayout.Toggle(_partsLinkedScale, new GUIContent("Link", "Keep X/Y scale proportional when editing"),
+                    GUILayout.Width(40f));
+                if (linked != _partsLinkedScale)
+                    _partsLinkedScale = linked;
+                if (GUILayout.Button(new GUIContent("C", "Copy Scale"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    _partsXformClipboardScale = pose.Scale;
+                    _partsXformClipboardHasScale = true;
+                    _status = "Copied Scale";
+                }
+                using (new EditorGUI.DisabledScope(!_partsXformClipboardHasScale))
+                {
+                    if (GUILayout.Button(new GUIContent("P", "Paste Scale"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                    {
+                        pose.Scale = _partsXformClipboardScale;
+                        CommitPartsTransformInspectorEdit(slot, pose, isRig, "Paste Scale");
+                    }
+                }
+                if (GUILayout.Button(new GUIContent("R", isRig ? "Reset Scale to 1,1" : "Reset Scale to rest"),
+                        GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    pose.Scale = isRig ? Vector2.one : rest.Scale;
+                    CommitPartsTransformInspectorEdit(slot, pose, isRig, "Reset Scale");
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            // Pivot is art registration on the joint — shown here with TRS for one-stop editing.
+            using (new EditorGUI.DisabledScope(partLocked))
+                DrawPartsAppearancePivotInspector(slot);
+
+        }
+
+        void CommitPartsTransformInspectorEdit(
+            SpritePartSlotDef slot, SpritePartsAuthoringOps.PoseEdit pose, bool isRig, string undoName)
+        {
+            if (slot == null || _partsDragActive) return;
+            // Playing drives the fields every frame; committing would bake/flatten clip keys.
+            if (_partsPlaying) return;
+            if (isRig)
+            {
+                RecordPartsUndo(undoName);
+                slot.RestPosition = pose.Position;
+                slot.RestRotation = pose.Rotation;
+                slot.RestScale = pose.Scale;
+                SaveDirty();
+                _status = "Rig: updated rest pose (affects every clip)";
+            }
+            else
+            {
+                BeginPartsDragUndo(undoName);
+                ApplyPartsPoseEdit(slot.SlotId, pose);
+                EndPartsDragUndo();
+            }
+            Repaint();
         }
 
         void DrawPartsZOrderInspector(SpritePartSlotDef slot)
@@ -750,6 +986,114 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsArtRows = sheet != null ? Mathf.Max(1, sheet.Rows) : 1;
             int count = _partsArtColumns * _partsArtRows;
             _partsArtCell = count > 0 ? ((app.CellIndex % count) + count) % count : 0;
+        }
+
+
+        /// <summary>
+        /// Pivot is art-relative (where the sprite hangs on the joint). Edited from TRANSFORM
+        /// so registration sits next to Position/Rotation/Scale; data still lives on the appearance.
+        /// SheetDefault / Cell use sheet data; Override stores a normalized 0-1 UV.
+        /// </summary>
+        void DrawPartsAppearancePivotInspector(SpritePartSlotDef slot)
+        {
+            if (slot == null || _profile == null) return;
+
+            GUILayout.Space(6f);
+            EditorGUILayout.LabelField("Pivot", EditorStyles.boldLabel);
+
+            var app = SpritePartsAuthoringOps.FindAppearance(_profile, slot.DefaultAppearanceId);
+            if (app == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "Assign art under SPRITE / ART first. Pivot is stored on the appearance (where the sprite hangs on this joint).",
+                    MessageType.Info);
+                return;
+            }
+
+            var sheet = _profile.SheetAt(app.SheetIndex);
+
+
+            EditorGUI.BeginChangeCheck();
+            var source = (SpritePartPivotSource)EditorGUILayout.EnumPopup(
+                new GUIContent("Pivot Source",
+                    "Sheet Default = sheet pivot. Cell = per-cell pivot when authored. Override = custom 0-1 UV on this appearance."),
+                app.PivotSource);
+            if (EditorGUI.EndChangeCheck())
+            {
+                RecordPartsUndo("Set Appearance Pivot Source");
+                app.PivotSource = source;
+                SaveDirty();
+            }
+
+            var resolved = SpritePartsGeometry.ResolvePivot(sheet, app);
+            EditorGUILayout.LabelField(
+                "Resolved",
+                $"{resolved.x:0.###}, {resolved.y:0.###}  (0-1, bottom-left origin)");
+
+            using (new EditorGUI.DisabledScope(app.PivotSource != SpritePartPivotSource.Override))
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.BeginChangeCheck();
+                Vector2 ov = EditorGUILayout.Vector2Field(
+                    new GUIContent("Override", "Normalized pivot on the sprite quad. (0.5, 0.5) = center."),
+                    app.PivotOverride);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordPartsUndo("Set Appearance Pivot Override");
+                    app.PivotOverride = new Vector2(
+                        Mathf.Clamp01(ov.x),
+                        Mathf.Clamp01(ov.y));
+                    SaveDirty();
+                }
+                if (GUILayout.Button(new GUIContent("C", "Copy override pivot"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    _partsPivotClipboard = app.PivotOverride;
+                    _partsPivotClipboardValid = true;
+                    _status = "Copied pivot override";
+                }
+                using (new EditorGUI.DisabledScope(!_partsPivotClipboardValid))
+                {
+                    if (GUILayout.Button(new GUIContent("P", "Paste into override"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                    {
+                        RecordPartsUndo("Paste Appearance Pivot");
+                        app.PivotSource = SpritePartPivotSource.Override;
+                        app.PivotOverride = new Vector2(
+                            Mathf.Clamp01(_partsPivotClipboard.x),
+                            Mathf.Clamp01(_partsPivotClipboard.y));
+                        SaveDirty();
+                        _status = "Pasted pivot override";
+                    }
+                }
+                if (GUILayout.Button(new GUIContent("R", "Reset override to center (0.5, 0.5)"), GUILayout.Width(22f), GUILayout.Height(18f)))
+                {
+                    RecordPartsUndo("Reset Appearance Pivot");
+                    app.PivotSource = SpritePartPivotSource.Override;
+                    app.PivotOverride = new Vector2(0.5f, 0.5f);
+                    SaveDirty();
+                    _status = "Reset pivot override to center";
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (app.PivotSource != SpritePartPivotSource.Override)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button(
+                        new GUIContent("Make Override from Resolved",
+                            "Copy the current resolved pivot into Override so you can tweak it."),
+                        GUILayout.Height(18f)))
+                {
+                    RecordPartsUndo("Override Pivot from Resolved");
+                    app.PivotSource = SpritePartPivotSource.Override;
+                    app.PivotOverride = new Vector2(
+                        Mathf.Clamp01(resolved.x),
+                        Mathf.Clamp01(resolved.y));
+                    SaveDirty();
+                    _status = "Pivot source set to Override from resolved";
+                }
+                EditorGUILayout.EndHorizontal();
+            }
         }
 
         void DrawPartsArtInspector(SpritePartSlotDef slot)
@@ -1202,6 +1546,22 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsToolToggle(ref tx, ty, "W Rotate", PartsCanvasTool.Rotate);
             DrawPartsToolToggle(ref tx, ty, "E Scale", PartsCanvasTool.Scale);
             _partsLinkedScale = GUI.Toggle(new Rect(tx, ty, 70f, 20f), _partsLinkedScale, "Link XY");
+            tx += 74f;
+            bool lockX = GUI.Toggle(new Rect(tx, ty, 58f, 20f), _partsLockMoveX,
+                new GUIContent("Lock X", "Only vertical move (block X). Wins over Shift."));
+            tx += 60f;
+            bool lockY = GUI.Toggle(new Rect(tx, ty, 58f, 20f), _partsLockMoveY,
+                new GUIContent("Lock Y", "Only horizontal move (block Y). Wins over Shift."));
+            if (lockX != _partsLockMoveX)
+            {
+                _partsLockMoveX = lockX;
+                if (lockX) _partsLockMoveY = false;
+            }
+            if (lockY != _partsLockMoveY)
+            {
+                _partsLockMoveY = lockY;
+                if (lockY) _partsLockMoveX = false;
+            }
 
             // Onion controls
             float ox = rect.x + 12f;
@@ -1276,6 +1636,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             _partsDragActive = false;
             _partsDragSlotId = null;
+            _partsDragShiftAxis = 0;
             _partsCanvasHotControl = 0;
             if (GUIUtility.hotControl != 0)
                 GUIUtility.hotControl = 0;
@@ -1868,9 +2229,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             var evt = Event.current;
             EventType raw = evt.rawType;
 
-            // Missed MouseUp leaves us "dragging" forever; next MouseDown must free the grab
-            // without Use() so Q/W/E, tree chevrons, and splitters can receive the click.
-            if (raw == EventType.MouseDown)
+            // Missed MouseUp leaves us "dragging" forever. End on a real MouseDown only —
+            // never Event.rawType alone: during Layout/Repaint rawType can still be MouseDown
+            // from the press that STARTED the drag, which immediately killed Move/Rotate auto-key.
+            if (evt.type == EventType.MouseDown)
             {
                 EndPartsDragUndo();
                 ReleasePartsCanvasCapture();
@@ -2026,6 +2388,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             handle = ColliderHandleKind.Body;
                         _partsTransformHandle = handle;
                         _partsDragActive = true;
+                        _partsDragShiftAxis = 0;
                         _partsCanvasHotControl = controlId;
                         GUIUtility.hotControl = controlId;
                         _partsDragSlotId = slot.SlotId;
@@ -2177,6 +2540,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 // Frozen start world + mouse delta (never re-sample live matrices mid-drag).
                 float2 deltaWorld = CanvasToWorld(canvas, mouse) -
                                     CanvasToWorld(canvas, _partsDragStartMouse);
+                deltaWorld = ConstrainPartsMoveDelta(deltaWorld);
                 float2 newWorld = _partsDragStartWorld + deltaWorld;
                 if (!_partsDragHasParent)
                     pose.Position = new Vector2(newWorld.x, newWorld.y);
@@ -2281,6 +2645,41 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 SpritePartsOnion.DisposeSample(blob, poses, matrices);
             }
+        }
+
+        /// <summary>
+        /// Affinity-style Move constrain: Lock X/Y checkboxes win; else Shift picks
+        /// sticky dominant axis after a small threshold so the drag does not flicker.
+        /// </summary>
+        float2 ConstrainPartsMoveDelta(float2 deltaWorld)
+        {
+            if (_partsLockMoveX && _partsLockMoveY)
+                return float2.zero;
+            if (_partsLockMoveX)
+                return new float2(0f, deltaWorld.y);
+            if (_partsLockMoveY)
+                return new float2(deltaWorld.x, 0f);
+
+            bool shift = Event.current != null && Event.current.shift;
+            if (!shift)
+            {
+                _partsDragShiftAxis = 0;
+                return deltaWorld;
+            }
+
+            const float threshold = 4f; // world units; short nudges stay free briefly
+            if (_partsDragShiftAxis == 0)
+            {
+                float ax = math.abs(deltaWorld.x);
+                float ay = math.abs(deltaWorld.y);
+                if (ax < threshold && ay < threshold)
+                    return deltaWorld;
+                _partsDragShiftAxis = ax >= ay ? 1 : 2;
+            }
+
+            if (_partsDragShiftAxis == 1)
+                return new float2(deltaWorld.x, 0f);
+            return new float2(0f, deltaWorld.y);
         }
 
         void ApplyPartsPoseEdit(string slotId, SpritePartsAuthoringOps.PoseEdit pose)
@@ -2710,6 +3109,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CommitKeySprite();
             }
 
+            _partsLoopLastKey = GUI.Toggle(new Rect(rect.x + 562f, y, 78f, 18f), _partsLoopLastKey,
+                new GUIContent("Loop Last",
+                    "While playing, when the playhead reaches the last keyframe it wraps to the first frame (ignores trailing hold after the last key)."));
+            if (GUI.Button(new Rect(rect.x + 644f, y, 64f, 18f),
+                new GUIContent("Fit Dur",
+                    "Set Duration to the last keyframe time across all tracks."), EditorStyles.miniButton))
+            {
+                FitPartsDurationToLastKey();
+            }
+
             float timeLabelX = rect.xMax - 120f;
             GUI.Label(new Rect(timeLabelX, y, 110f, 18f),
                 $"t={_partsPreviewTime:F3}s", _mutedStyle);
@@ -2723,6 +3132,48 @@ namespace InvertLab.Sprites.DOTS.Editor
             float tracksHeight = rect.height - 54f;
             var tracksRect = new Rect(rect.x + 8f, tracksTop, rect.width - 16f, tracksHeight);
             DrawPartsTracks(tracksRect, clip, scrubControlId, keyControlId);
+        }
+
+        static float GetPartsClipLastKeyTime(SpritePartsClipDef clip)
+        {
+            if (clip?.Tracks == null) return 0f;
+            float last = 0f;
+            for (int t = 0; t < clip.Tracks.Count; t++)
+            {
+                var track = clip.Tracks[t];
+                if (track?.Keys == null) continue;
+                for (int k = 0; k < track.Keys.Count; k++)
+                {
+                    var key = track.Keys[k];
+                    if (key == null) continue;
+                    if (key.Time > last) last = key.Time;
+                }
+            }
+            return last;
+        }
+
+        void FitPartsDurationToLastKey()
+        {
+            var clip = CurrentPartsClip;
+            if (clip == null) return;
+            float last = GetPartsClipLastKeyTime(clip);
+            if (!(last > 1e-5f))
+            {
+                _status = "No keyframes to fit Duration";
+                return;
+            }
+            float next = Mathf.Max(1e-3f, last);
+            if (Mathf.Abs(clip.Duration - next) < 1e-5f)
+            {
+                _status = $"Duration already {next:F3}s (last key)";
+                return;
+            }
+            RecordPartsUndo("Fit Parts Duration to Last Key");
+            clip.Duration = next;
+            if (_partsPreviewTime > next)
+                _partsPreviewTime = next;
+            SaveDirty();
+            _status = $"Duration set to last key ({next:F3}s)";
         }
 
         void CommitKeyPose()
@@ -3429,13 +3880,21 @@ namespace InvertLab.Sprites.DOTS.Editor
             var clip = CurrentPartsClip;
             if (clip == null) return;
             float duration = Mathf.Max(1e-3f, clip.Duration);
+            float wrapEnd = duration;
+            if (_partsLoopLastKey)
+            {
+                float lastKey = GetPartsClipLastKeyTime(clip);
+                if (lastKey > 1e-5f)
+                    wrapEnd = Mathf.Max(1e-3f, lastKey);
+            }
             float step = 1f / Mathf.Max(1f, _partsDisplayFps);
             _partsPreviewTime = SpritePartsAuthoringOps.SnapTime(
-                _partsPreviewTime + direction * step, _partsDisplayFps, duration);
-            if (clip.WrapMode != (byte)SpritePartsWrap.Once)
-                _partsPreviewTime = SpritePartsSampler.WrapTime(_partsPreviewTime, duration, clip.WrapMode);
+                _partsPreviewTime + direction * step, _partsDisplayFps, wrapEnd);
+            if (_partsLoopLastKey || clip.WrapMode != (byte)SpritePartsWrap.Once)
+                _partsPreviewTime = SpritePartsSampler.WrapTime(_partsPreviewTime, wrapEnd,
+                    _partsLoopLastKey ? (byte)SpritePartsWrap.Loop : clip.WrapMode);
             else
-                _partsPreviewTime = Mathf.Clamp(_partsPreviewTime, 0f, duration);
+                _partsPreviewTime = Mathf.Clamp(_partsPreviewTime, 0f, wrapEnd);
             Repaint();
         }
     }
