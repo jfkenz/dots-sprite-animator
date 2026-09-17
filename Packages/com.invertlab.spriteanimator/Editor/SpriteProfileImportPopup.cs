@@ -43,6 +43,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             // Any exit (commit, cancel, focus loss) ends the rig preview.
             _host.ClearImportPreview();
+            // A text field mid-edit leaves the GLOBAL editing flag set when the
+            // popup closes; that would eat main-window hotkeys (Q/W/E) forever.
+            EditorGUIUtility.editingTextField = false;
         }
 
         public override void OnGUI(Rect rect)

@@ -6176,8 +6176,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                 !evt.control && !evt.command && !evt.alt &&
                 (evt.keyCode == KeyCode.Q || evt.keyCode == KeyCode.W || evt.keyCode == KeyCode.E))
             {
-                if (IsEditingAnyTextField())
+                if (IsRenamingAnything())
                     return;
+                if (EditorGUIUtility.editingTextField)
+                {
+                    // Block only while a control in THIS window is editing;
+                    // a stale global flag (e.g. left set by a closed popup's
+                    // field) must not eat the tool keys forever.
+                    if (GUIUtility.keyboardControl != 0)
+                        return;
+                    EditorGUIUtility.editingTextField = false;
+                }
                 ReleaseShortcutKeyboardFocus();
                 if (evt.keyCode == KeyCode.Q)
                     SetPartsCanvasTool(PartsCanvasTool.Move);

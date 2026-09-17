@@ -29,6 +29,13 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         public override Vector2 GetWindowSize() => new Vector2(360f, 290f);
 
+        public override void OnClose()
+        {
+            // Fields edited mid-close must not leave the global editing flag
+            // set; it would block main-window hotkeys (Q/W/E).
+            EditorGUIUtility.editingTextField = false;
+        }
+
         public override void OnGUI(Rect rect)
         {
             var profile = _host.EditingProfile;
