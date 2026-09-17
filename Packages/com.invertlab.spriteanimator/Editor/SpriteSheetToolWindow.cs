@@ -6289,15 +6289,24 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
-                // Parts hierarchy: Delete/Backspace when selection active and not renaming.
+                // Parts hierarchy: Delete/Backspace when a part is selected (Parts studio),
+                // even if AnimKind is still Frame (Parts data editable in preview). Without
+                // this, Delete falls through and is always Use()'d by RemoveSelectedFrames.
                 if (_studioTab == StudioTab.Parts &&
                     _profile != null &&
-                    _profile.AnimKind == SpriteAnimKind.Parts &&
                     string.IsNullOrEmpty(_partsRenameSlotId) &&
                     _partsSelectedSlotIds.Count > 0 &&
                     !EditorGUIUtility.editingTextField)
                 {
                     TryDeleteSelectedPartsFromHotkey();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                // On Parts studio, never let Delete fall through to frame-clip deletion.
+                if (_studioTab == StudioTab.Parts)
+                {
                     evt.Use();
                     Repaint();
                     return;

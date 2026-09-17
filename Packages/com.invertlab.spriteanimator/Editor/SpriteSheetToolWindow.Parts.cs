@@ -455,6 +455,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawPartsBrowser(Rect rect)
         {
             EnsurePartsSession();
+            Event bev = Event.current;
+            if (bev.type == EventType.MouseDown
+                && bev.button == 0
+                && rect.Contains(bev.mousePosition))
+                ReleasePartsCanvasCapture();
             HandlePartsRenameClickAway(Event.current);
             GUILayout.BeginArea(rect);
             _partsBrowserScroll = EditorGUILayout.BeginScrollView(_partsBrowserScroll);
@@ -517,6 +522,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawPartsInspector(Rect rect)
         {
             EnsurePartsSession();
+            Event iev = Event.current;
+            if (iev.type == EventType.MouseDown
+                && iev.button == 0
+                && rect.Contains(iev.mousePosition))
+                ReleasePartsCanvasCapture();
             GUILayout.BeginArea(rect);
             _partsInspectorScroll = EditorGUILayout.BeginScrollView(_partsInspectorScroll);
             GUILayout.Label("PARTS", _sectionStyle);
@@ -1179,6 +1189,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             // Tool row
             float tx = rect.x + 12f;
             float ty = rect.y + 34f;
+            // Tool strip sits above the canvas. A leftover canvas hotControl makes Toggle miss clicks.
+            {
+                Event tev = Event.current;
+                Rect toolStrip = new Rect(rect.x, rect.y, rect.width, 84f);
+                if (tev.type == EventType.MouseDown
+                    && tev.button == 0
+                    && toolStrip.Contains(tev.mousePosition))
+                    ReleasePartsCanvasCapture();
+            }
             DrawPartsToolToggle(ref tx, ty, "Q Move", PartsCanvasTool.Move);
             DrawPartsToolToggle(ref tx, ty, "W Rotate", PartsCanvasTool.Rotate);
             DrawPartsToolToggle(ref tx, ty, "E Scale", PartsCanvasTool.Scale);
@@ -1231,10 +1250,35 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_partsCanvasTool == tool) return;
             RecordWindowUndo("Change Parts Tool");
             _partsCanvasTool = tool;
+            // Switching tools mid-drag (or with a stale hotControl) must free the canvas grab
+            // so Q/W/E toggles and the left tree stay clickable.
+            ReleasePartsCanvasCapture();
             _status = tool == PartsCanvasTool.Move ? "Move (Q)"
                 : tool == PartsCanvasTool.Rotate ? "Rotate (W)"
                 : "Scale (E)";
             Repaint();
+        }
+
+        /// <summary>
+        /// Canvas drag owns GUIUtility.hotControl. If MouseUp is missed (or the user clicks
+        /// Q/W/E / tree / splitter while grab is still held), that hotControl swallows every
+        /// later GUI.Button/Toggle until something clears it. Call on MouseDown outside the
+        /// canvas, on tool switch, and when ending/cancelling a drag.
+        /// </summary>
+        void ReleasePartsCanvasCapture()
+        {
+            bool held =
+                _partsDragActive
+                || (_partsCanvasHotControl != 0 && GUIUtility.hotControl == _partsCanvasHotControl)
+                || (_partsCanvasHotControl != 0 && GUIUtility.hotControl == 0);
+            if (!held && GUIUtility.hotControl == 0 && !_partsDragActive)
+                return;
+
+            _partsDragActive = false;
+            _partsDragSlotId = null;
+            _partsCanvasHotControl = 0;
+            if (GUIUtility.hotControl != 0)
+                GUIUtility.hotControl = 0;
         }
 
         void CenterSelectedPartsSlot()
@@ -1816,13 +1860,24 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (ImportPreviewActive)
             {
                 // Preview pose is not profile data; never write it anywhere.
-                _partsDragActive = false;
-                _partsDragSlotId = null;
+                // Also free hotControl — leaving it stuck blocks Q/W/E and the tree.
+                ReleasePartsCanvasCapture();
                 return;
             }
 
             var evt = Event.current;
             EventType raw = evt.rawType;
+
+            // Missed MouseUp leaves us "dragging" forever; next MouseDown must free the grab
+            // without Use() so Q/W/E, tree chevrons, and splitters can receive the click.
+            if (raw == EventType.MouseDown)
+            {
+                EndPartsDragUndo();
+                ReleasePartsCanvasCapture();
+                Repaint();
+                return;
+            }
+
             if (raw != EventType.MouseDrag && raw != EventType.MouseUp &&
                 raw != EventType.MouseLeaveWindow &&
                 !(raw == EventType.KeyDown && evt.keyCode == KeyCode.Escape))
@@ -1843,7 +1898,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 previewRect.x + 10f, previewRect.y + 84f,
                 previewRect.width - 20f, previewRect.height - 96f);
 
-            if (GUIUtility.hotControl != controlId)
+            // Reclaim only while the pointer is still dragging / releasing.
+            if ((raw == EventType.MouseDrag || raw == EventType.MouseUp)
+                && GUIUtility.hotControl != controlId)
                 GUIUtility.hotControl = controlId;
             _partsCanvasHotControl = controlId;
 
@@ -1852,9 +1909,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ApplyPartsPoseEdit(_partsDragSlotId, _partsDragStartPose);
                 EndPartsDragUndo();
                 Undo.PerformUndo();
-                GUIUtility.hotControl = 0;
-                _partsCanvasHotControl = 0;
-                _partsDragActive = false;
+                ReleasePartsCanvasCapture();
                 _status = "Cancelled drag";
                 evt.Use();
                 Repaint();
@@ -1873,11 +1928,10 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (raw == EventType.MouseUp || raw == EventType.MouseLeaveWindow)
             {
-                GUIUtility.hotControl = 0;
-                _partsCanvasHotControl = 0;
+                string moved = _partsDragSlotId ?? "part";
                 EndPartsDragUndo();
-                _partsDragActive = false;
-                _status = "Moved " + (_partsDragSlotId ?? "part");
+                ReleasePartsCanvasCapture();
+                _status = "Moved " + moved;
                 evt.Use();
                 Repaint();
             }
