@@ -1926,6 +1926,13 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (evt.type == EventType.MouseDown && evt.button == 0 && canvas.Contains(evt.mousePosition))
             {
+                // Any outside click closes the preview popup (its OnClose clears
+                // the preview). A canvas click while a preview lingers therefore
+                // means the popup is already gone - end the preview and let this
+                // click work normally instead of swallowing every interaction.
+                if (ImportPreviewActive)
+                    ClearImportPreview("Import preview ended");
+
                 // Always release inspector float-field focus so Vector2Field cannot eat MouseDrag.
                 GUIUtility.keyboardControl = 0;
                 GUI.FocusControl(null);
