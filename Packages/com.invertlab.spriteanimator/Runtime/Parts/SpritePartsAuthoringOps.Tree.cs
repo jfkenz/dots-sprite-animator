@@ -373,7 +373,8 @@ namespace InvertLab.Sprites.DOTS
             SpriteSheetProfile profile,
             string slotId,
             out SpritePartSlotDef created,
-            bool mirrorHorizontal = false)
+            bool mirrorHorizontal = false,
+            bool mirrorVertical = false)
         {
             created = null;
             var result = new HierarchyEditResult();
@@ -432,7 +433,7 @@ namespace InvertLab.Sprites.DOTS
                 string stem;
                 if (isRoot)
                 {
-                    if (mirrorHorizontal)
+                    if (mirrorHorizontal || mirrorVertical)
                         stem = SuggestMirroredDisplayName(srcName);
                     else if (srcName.EndsWith(" Copy", StringComparison.Ordinal))
                         stem = srcName;
@@ -441,7 +442,8 @@ namespace InvertLab.Sprites.DOTS
                 }
                 else
                 {
-                    stem = mirrorHorizontal ? SuggestMirroredDisplayName(srcName) : srcName;
+                    stem = (mirrorHorizontal || mirrorVertical)
+                        ? SuggestMirroredDisplayName(srcName) : srcName;
                 }
 
                 string display = UniqueSiblingDisplayName(profile, parentNew, stem);
@@ -472,11 +474,17 @@ namespace InvertLab.Sprites.DOTS
 
                 if (isRoot)
                 {
-                    if (mirrorHorizontal)
+                    if (mirrorHorizontal || mirrorVertical)
                     {
-                        createdSlot.RestPosition = new Vector2(-createdSlot.RestPosition.x, createdSlot.RestPosition.y);
-                        createdSlot.RestScale = SanitizeScale(new Vector2(-createdSlot.RestScale.x, createdSlot.RestScale.y));
-                        createdSlot.RestRotation = -createdSlot.RestRotation;
+                        float sx = mirrorHorizontal ? -1f : 1f;
+                        float sy = mirrorVertical ? -1f : 1f;
+                        createdSlot.RestPosition = new Vector2(
+                            createdSlot.RestPosition.x * sx, createdSlot.RestPosition.y * sy);
+                        createdSlot.RestScale = SanitizeScale(new Vector2(
+                            createdSlot.RestScale.x * sx, createdSlot.RestScale.y * sy));
+                        // Odd reflection (H xor V) mirrors local rotation.
+                        if (mirrorHorizontal ^ mirrorVertical)
+                            createdSlot.RestRotation = -createdSlot.RestRotation;
                     }
                     else
                     {
@@ -529,12 +537,15 @@ namespace InvertLab.Sprites.DOTS
                                 AppearanceId = key.AppearanceId ?? string.Empty,
                             };
                             // Mirror clip keys only for the duplicated root slot.
-                            if (mirrorHorizontal &&
+                            if ((mirrorHorizontal || mirrorVertical) &&
                                 string.Equals(srcId, SpritePartIdUtility.Canonical(srcRoot.SlotId), StringComparison.Ordinal))
                             {
-                                copy.Position = new Vector2(-copy.Position.x, copy.Position.y);
-                                copy.Rotation = -copy.Rotation;
-                                copy.Scale = SanitizeScale(new Vector2(-copy.Scale.x, copy.Scale.y));
+                                float sx = mirrorHorizontal ? -1f : 1f;
+                                float sy = mirrorVertical ? -1f : 1f;
+                                copy.Position = new Vector2(copy.Position.x * sx, copy.Position.y * sy);
+                                copy.Scale = SanitizeScale(new Vector2(copy.Scale.x * sx, copy.Scale.y * sy));
+                                if (mirrorHorizontal ^ mirrorVertical)
+                                    copy.Rotation = -copy.Rotation;
                             }
                             dst.Keys.Add(copy);
                         }

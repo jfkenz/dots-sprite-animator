@@ -86,7 +86,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool _partsScrubbing;
         const float PartsRotateHandleDistance = 26f;
         const float PartsHandleHit = 10f;
-        const float PartsScaleHandleHit = 14f; // Unity-like: grab knobs, not the body
+        const float PartsScaleHandleHit = 20f; // Unity-like: grab knobs, not the body
         Vector2 _partsBrowserScroll;
         Vector2 _partsInspectorScroll;
         PartsBrowserFocus _partsBrowserFocus = PartsBrowserFocus.Tree;
@@ -615,7 +615,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsArtInspector(slot);
                 if (_partsMode == SpritePartsStudioMode.Rig)
                 {
-                    using (new EditorGUI.DisabledScope(partLocked))
+                    using (new EditorGUI.DisabledScope(partLocked || _partsDragActive))
                     {
                         EditorGUI.BeginChangeCheck();
                         string parent = DrawParentPopup(slot);
@@ -623,7 +623,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         float restRot = EditorGUILayout.FloatField("Rest Rotation", slot.RestRotation);
                         Vector2 restScale = EditorGUILayout.Vector2Field("Rest Scale", slot.RestScale);
                         string appearance = EditorGUILayout.TextField("Default Appearance Id", slot.DefaultAppearanceId);
-                        if (EditorGUI.EndChangeCheck())
+                        if (EditorGUI.EndChangeCheck() && !_partsDragActive)
                         {
                             RecordPartsUndo("Edit Parts Slot");
                             string newParent = parent ?? string.Empty;
@@ -671,7 +671,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 else
                 {
-                    EditorGUI.EndChangeCheck();
                     EditorGUILayout.HelpBox("Transform tools off in Skins. Edit appearance bindings below.", MessageType.Info);
                 }
             }
@@ -1288,17 +1287,22 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!locked)
             {
                 menu.AddItem(new GUIContent("Duplicate"), false, () => DuplicatePartsSlot(sid, false));
-                menu.AddItem(new GUIContent("Duplicate Mirrored"), false, () => DuplicatePartsSlot(sid, true));
+                menu.AddItem(new GUIContent("Duplicate Mirrored Horizontal"), false,
+                    () => DuplicatePartsSlot(sid, true, false));
+                menu.AddItem(new GUIContent("Duplicate Mirrored Vertical"), false,
+                    () => DuplicatePartsSlot(sid, false, true));
                 if (_partsMode != SpritePartsStudioMode.Skins)
                 {
-                    menu.AddItem(new GUIContent("Flip Horizontal"), false, () => FlipPartsSlot(sid, true, false));
-                    menu.AddItem(new GUIContent("Flip Vertical"), false, () => FlipPartsSlot(sid, false, true));
+                    menu.AddItem(new GUIContent("Mirror Horizontal (East-West)"), false,
+                        () => FlipPartsSlot(sid, true, false));
+                    menu.AddItem(new GUIContent("Mirror Vertical (North-South)"), false,
+                        () => FlipPartsSlot(sid, false, true));
                 }
             }
             else
             {
                 menu.AddDisabledItem(new GUIContent("Duplicate (locked)"));
-                menu.AddDisabledItem(new GUIContent("Flip (locked)"));
+                menu.AddDisabledItem(new GUIContent("Mirror (locked)"));
             }
             menu.AddSeparator("");
             menu.AddItem(new GUIContent("Tool/Move (Q)"), _partsCanvasTool == PartsCanvasTool.Move,
@@ -1308,6 +1312,41 @@ namespace InvertLab.Sprites.DOTS.Editor
             menu.AddItem(new GUIContent("Tool/Scale (E)"), _partsCanvasTool == PartsCanvasTool.Scale,
                 () => SetPartsCanvasTool(PartsCanvasTool.Scale));
             menu.ShowAsContext();
+        }
+
+
+        /// <summary>
+        /// Rig mode always evaluates rest (clipIndex -1). Animate uses the selected clip.
+        /// Sampling the selected clip while editing Rig hid rest-transform drags whenever keys exist.
+        /// </summary>
+        int PartsEvaluationClipIndex()
+        {
+            if (_partsMode == SpritePartsStudioMode.Rig)
+                return -1;
+            return CurrentPartsClip != null ? _partsSelectedClip : -1;
+        }
+
+        /// <summary>
+        /// Auto Key OFF stores a temp pose; push it into the live sample so the canvas moves.
+        /// </summary>
+        void ApplyTempPoseToSample(
+            ref SpritePartsSetBlob set,
+            NativeArray<SpritePartsSampler.Pose> localPoses,
+            NativeArray<float4x4> matrices)
+        {
+            if (!_partsHasTempPose || string.IsNullOrEmpty(_partsTempSlotId))
+                return;
+            if (!localPoses.IsCreated || !matrices.IsCreated)
+                return;
+            int idx = BlobSlotIndex(ref set, _partsTempSlotId);
+            if (idx < 0 || idx >= localPoses.Length || idx >= matrices.Length)
+                return;
+            var p = localPoses[idx];
+            p.Position = new float2(_partsTempPose.Position.x, _partsTempPose.Position.y);
+            p.Rotation = _partsTempPose.Rotation;
+            p.Scale = new float2(_partsTempPose.Scale.x, _partsTempPose.Scale.y);
+            localPoses[idx] = p;
+            SpritePartsHierarchy.ComposeLocalToRoot(ref set, localPoses, matrices);
         }
 
         void DrawPartsCanvasContents(Rect canvas)
@@ -1320,7 +1359,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             var clip = CurrentPartsClip;
-            int clipIndex = clip != null ? _partsSelectedClip : -1;
+            int clipIndex = PartsEvaluationClipIndex();
             float time = _partsPreviewTime;
             bool importPreview = ImportPreviewActive;
             bool sampled;
@@ -1348,7 +1387,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     // Read-only preview: no onion (ghosts track the selected
                     // profile clip), no handles, nothing pickable.
-                    DrawPartsPoseQuads(canvas, ref blob.Value, matrices,
+                    DrawPartsPoseQuads(canvas, ref blob.Value, poses, matrices,
                         new Color(0.85f, 0.95f, 1f, 1f), pickable: false, sampleTime: time);
                     var banner = new Rect(canvas.x + 8f, canvas.yMax - 30f, canvas.width - 16f, 22f);
                     EditorGUI.DrawRect(banner, new Color(0.12f, 0.16f, 0.22f, 0.94f));
@@ -1380,7 +1419,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             Color tint = ghost.IsPast
                                 ? new Color(0.35f, 0.55f, 1f, _partsOnionOpacity)
                                 : new Color(1f, 0.55f, 0.25f, _partsOnionOpacity);
-                            DrawPartsPoseQuads(canvas, ref gBlob.Value, gMats, tint, pickable: false, sampleTime: ghost.Time);
+                            DrawPartsPoseQuads(canvas, ref gBlob.Value, gPoses, gMats, tint, pickable: false, sampleTime: ghost.Time);
                             DrawOnionBadge(canvas, gMats, ghost);
                         }
                         finally
@@ -1390,8 +1429,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                     }
                 }
 
-                DrawPartsPoseQuads(canvas, ref blob.Value, matrices, Color.white, pickable: true, sampleTime: time);
-                DrawPartsTransformGizmo(canvas, ref blob.Value, matrices);
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
+                DrawPartsPoseQuads(canvas, ref blob.Value, poses, matrices, Color.white, pickable: true, sampleTime: time);
+                DrawPartsTransformGizmo(canvas, ref blob.Value, poses, matrices);
             }
             finally
             {
@@ -1428,7 +1468,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool TryGetPartsSlotDrawRect(
             Rect canvas, ref SpritePartsSetBlob set, NativeArray<float4x4> matrices,
             int slotIndex, float sampleTime, out Rect rect, out Vector2 joint, out float worldDeg,
-            out SpritePartAppearanceDef app, out SpriteSheetDef sheet)
+            out SpritePartAppearanceDef app, out SpriteSheetDef sheet,
+            NativeArray<SpritePartsSampler.Pose> poses = default)
         {
             rect = default;
             joint = default;
@@ -1438,6 +1479,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (slotIndex < 0 || slotIndex >= matrices.Length) return false;
             float4x4 m = matrices[slotIndex];
             joint = WorldToCanvas(canvas, m.c3.xy);
+            // Raw matrix angle (includes reflection). Gizmo/hit must match this basis.
             worldDeg = math.degrees(math.atan2(m.c0.y, m.c0.x));
             var slot = SlotDefFromBlob(ref set, slotIndex);
             app = ResolvePartsPreviewAppearance(slot, sampleTime);
@@ -1481,7 +1523,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         void DrawPartsPoseQuads(
-            Rect canvas, ref SpritePartsSetBlob set, NativeArray<float4x4> matrices,
+            Rect canvas, ref SpritePartsSetBlob set,
+            NativeArray<SpritePartsSampler.Pose> poses, NativeArray<float4x4> matrices,
             Color tint, bool pickable, float sampleTime)
         {
             // Draw by DrawRank ascending (back to front).
@@ -1502,33 +1545,36 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (SpritePartsAuthoringOps.SlotOrAncestorHidden(_profile, sid))
                     continue;
                 if (!TryGetPartsSlotDrawRect(canvas, ref set, matrices, i, sampleTime,
-                        out var r, out var joint, out float worldDeg, out var app, out var sheet))
+                        out var r, out var joint, out float worldDeg, out var app, out var sheet, poses))
                     continue;
 
+                // Pose scale signs: Mirror H = Scale.x < 0 (east-west), Mirror V = Scale.y < 0 (north-south).
+                // Use RAW worldDeg from the matrix (same as gizmo/hit). Do not +180 here — that
+                // desynced handles from the sprite and broke Move/Rotate/Scale.
+                float flipSx = 1f;
+                float flipSy = 1f;
+                if (poses.IsCreated && i < poses.Length)
+                {
+                    if (poses[i].Scale.x < 0f) flipSx = -1f;
+                    if (poses[i].Scale.y < 0f) flipSy = -1f;
+                }
+                else
+                {
+                    float2 c0b = matrices[i].c0.xy;
+                    float2 c1b = matrices[i].c1.xy;
+                    if (c0b.x * c1b.y - c0b.y * c1b.x < 0f)
+                        flipSx = -1f;
+                }
                 Matrix4x4 prev = GUI.matrix;
                 GUIUtility.RotateAroundPivot(-worldDeg, joint);
-                // Negative det (Flip H / mirrored dup) flips the sprite around the joint.
-                float2 c0 = matrices[i].c0.xy;
-                float2 c1 = matrices[i].c1.xy;
-                float det2 = c0.x * c1.y - c0.y * c1.x;
-                bool flipX = det2 < 0f;
-                if (flipX)
-                    GUIUtility.ScaleAroundPivot(new Vector2(-1f, 1f), joint);
+                if (flipSx < 0f || flipSy < 0f)
+                    GUIUtility.ScaleAroundPivot(new Vector2(flipSx, flipSy), joint);
                 Texture2D tex = sheet?.Texture;
                 if (tex != null && app != null)
                 {
-                    // Keep art colors. Selection is outline-only; onion uses tint.a.
+                    // Keep art colors. Selection outline is drawn by the transform gizmo
+                    // (Handles ignore GUI.matrix — drawing here caused a second unrotated box).
                     DrawPartsSheetCell(tex, sheet, sheet.Columns, sheet.Rows, app.CellIndex, r, tint);
-                    if (pickable && IsPartsBlobSlotSelected(ref set, i))
-                    {
-                        Handles.BeginGUI();
-                        Handles.color = new Color(0.2f, 0.9f, 0.35f, 0.9f);
-                        Handles.DrawAAPolyLine(2f,
-                            new Vector3(r.xMin, r.yMin), new Vector3(r.xMax, r.yMin),
-                            new Vector3(r.xMax, r.yMax), new Vector3(r.xMin, r.yMax),
-                            new Vector3(r.xMin, r.yMin));
-                        Handles.EndGUI();
-                    }
                 }
                 else
                 {
@@ -1538,18 +1584,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                     else if (pickable)
                         col = new Color(0.75f, 0.78f, 0.85f, tint.a);
                     EditorGUI.DrawRect(r, col);
-                    Handles.BeginGUI();
-                    Handles.color = new Color(0f, 0f, 0f, tint.a * 0.6f);
-                    Handles.DrawAAPolyLine(2f,
-                        new Vector3(r.xMin, r.yMin), new Vector3(r.xMax, r.yMin),
-                        new Vector3(r.xMax, r.yMax), new Vector3(r.xMin, r.yMax),
-                        new Vector3(r.xMin, r.yMin));
-                    Handles.EndGUI();
                 }
                 GUI.matrix = prev;
 
                 string name = set.Slots[i].Name.ToString();
-                GUI.Label(new Rect(r.x, r.yMax + 1f, r.width + 20f, 14f), name, _mutedStyle);
+                GUI.Label(new Rect(joint.x - 24f, joint.y + Mathf.Max(10f, r.height * 0.5f) + 2f, 80f, 14f),
+                    name, _mutedStyle);
             }
         }
 
@@ -1596,6 +1636,26 @@ namespace InvertLab.Sprites.DOTS.Editor
             return BlobSlotIndex(ref set, selected.SlotId);
         }
 
+        static Rect FlipRectAroundJoint(Rect r, Vector2 joint, bool flipX, bool flipY)
+        {
+            float xMin = r.xMin, xMax = r.xMax, yMin = r.yMin, yMax = r.yMax;
+            if (flipX)
+            {
+                float a = joint.x - (xMax - joint.x);
+                float b = joint.x + (joint.x - xMin);
+                xMin = Mathf.Min(a, b);
+                xMax = Mathf.Max(a, b);
+            }
+            if (flipY)
+            {
+                float a = joint.y - (yMax - joint.y);
+                float b = joint.y + (joint.y - yMin);
+                yMin = Mathf.Min(a, b);
+                yMax = Mathf.Max(a, b);
+            }
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
         bool TryGetSelectedPartsGizmo(Rect canvas, out Rect unrotated, out Vector2 joint, out float guiDeg)
         {
             unrotated = default;
@@ -1603,17 +1663,24 @@ namespace InvertLab.Sprites.DOTS.Editor
             guiDeg = 0f;
             if (CurrentPartsSlot == null || _profile?.PartsSlots == null)
                 return false;
-            if (!SpritePartsOnion.TrySampleCharacter(_profile, _partsSelectedClip, _partsPreviewTime,
+            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), _partsPreviewTime,
                     Allocator.Temp, out var blob, out var poses, out var matrices, out _))
                 return false;
             try
             {
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
                 int idx = SelectedPartsBlobIndex(ref blob.Value);
                 if (idx < 0 || idx >= matrices.Length) return false;
                 if (!TryGetPartsSlotDrawRect(canvas, ref blob.Value, matrices, idx,
-                        _partsPreviewTime, out unrotated, out joint, out float worldDeg, out _, out _))
+                        _partsPreviewTime, out unrotated, out joint, out float worldDeg, out _, out _, poses))
                     return false;
                 guiDeg = -worldDeg;
+                // Keep gizmo/hit aligned with DrawPartsPoseQuads ScaleAroundPivot flips.
+                if (poses.IsCreated && idx < poses.Length)
+                {
+                    unrotated = FlipRectAroundJoint(unrotated, joint,
+                        poses[idx].Scale.x < 0f, poses[idx].Scale.y < 0f);
+                }
                 return true;
             }
             finally
@@ -1654,12 +1721,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             return ColliderHandleKind.None;
         }
 
-        void DrawPartsTransformGizmo(Rect canvas, ref SpritePartsSetBlob set, NativeArray<float4x4> matrices)
+        void DrawPartsTransformGizmo(Rect canvas, ref SpritePartsSetBlob set,
+            NativeArray<SpritePartsSampler.Pose> poses, NativeArray<float4x4> matrices)
         {
             int sel = SelectedPartsBlobIndex(ref set);
             if (sel < 0 || sel >= matrices.Length) return;
             if (!TryGetPartsSlotDrawRect(canvas, ref set, matrices, sel, _partsPreviewTime,
-                    out var r, out var joint, out float worldDeg, out _, out _))
+                    out var r, out var joint, out float worldDeg, out _, out _, poses))
                 return;
             float guiDeg = -worldDeg;
             var outline = new Vector3[5];
@@ -1873,10 +1941,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     int hit = HitTestPartsSlot(canvas, evt.mousePosition);
                     slotId = hit >= 0 ? SlotIdFromHit(hit) : null;
-                    // Move/Rotate only: empty miss still Body-drags the selection.
-                    // Scale requires an explicit corner/edge knob (Unity-like).
-                    if (string.IsNullOrEmpty(slotId) && CurrentPartsSlot != null &&
-                        _partsCanvasTool != PartsCanvasTool.Scale)
+                    // Empty miss still Body-drags the selection (Move/Rotate/Scale-uniform).
+                    if (string.IsNullOrEmpty(slotId) && CurrentPartsSlot != null)
                     {
                         slotId = CurrentPartsSlot.SlotId;
                         handle = ColliderHandleKind.Body;
@@ -1893,14 +1959,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                         _status = "Part is locked.";
                         evt.Use();
                     }
-                    else if (_partsCanvasTool == PartsCanvasTool.Scale &&
-                             (handle == ColliderHandleKind.None || handle == ColliderHandleKind.Body))
-                    {
-                        // Selected the part; wait for a scale knob grab.
-                        _status = "Scale (E): drag a corner or edge handle";
-                        evt.Use();
-                        Repaint();
-                    }
                     else
                     {
                         if (handle == ColliderHandleKind.None)
@@ -1915,8 +1973,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                         CapturePartsDragStartTransform(canvas, slot.SlotId);
                         string op = _partsCanvasTool == PartsCanvasTool.Rotate || handle == ColliderHandleKind.Rotate
                             ? "Rotate Parts"
-                            : (handle != ColliderHandleKind.Body && handle != ColliderHandleKind.None &&
-                               handle != ColliderHandleKind.Rotate)
+                            : (_partsCanvasTool == PartsCanvasTool.Scale ||
+                               (handle != ColliderHandleKind.Body && handle != ColliderHandleKind.None &&
+                                handle != ColliderHandleKind.Rotate))
                                 ? "Scale Parts"
                                 : "Move Parts";
                         BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
@@ -1934,7 +1993,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (hitIndex < 0 || _profile?.PartsSlots == null) return null;
             // Prefer blob SlotId when sampling so order mismatches don't pick the wrong part.
-            if (SpritePartsOnion.TrySampleCharacter(_profile, _partsSelectedClip, _partsPreviewTime,
+            if (SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), _partsPreviewTime,
                     Allocator.Temp, out var blob, out var poses, out var matrices, out _))
             {
                 try
@@ -1970,16 +2029,17 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsDragStartWorld = default;
             _partsDragParentToRoot = float4x4.identity;
             _partsDragHasParent = false;
-            if (!SpritePartsOnion.TrySampleCharacter(_profile, _partsSelectedClip, _partsPreviewTime,
+            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), _partsPreviewTime,
                     Allocator.Temp, out var blob, out var poses, out var matrices, out _))
                 return;
             try
             {
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
                 int idx = BlobSlotIndex(ref blob.Value, slotId);
                 if (idx < 0 || idx >= matrices.Length) return;
                 _partsDragStartWorld = matrices[idx].c3.xy;
                 if (TryGetPartsSlotDrawRect(canvas, ref blob.Value, matrices, idx, _partsPreviewTime,
-                        out _, out var joint, out float worldDeg, out _, out _))
+                        out _, out var joint, out float worldDeg, out _, out _, poses))
                 {
                     _partsDragStartJoint = joint;
                     _partsDragStartGuiDeg = -worldDeg;
@@ -2003,10 +2063,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             var handle = _partsTransformHandle;
             bool rotate = handle == ColliderHandleKind.Rotate ||
                           (handle == ColliderHandleKind.Body && _partsCanvasTool == PartsCanvasTool.Rotate);
-            // Scale only from corner/edge knobs (Unity RectTransform / Scale tool style).
-            bool scale = handle != ColliderHandleKind.None &&
-                         handle != ColliderHandleKind.Body &&
-                         handle != ColliderHandleKind.Rotate;
+            // Scale from knobs, OR Body + Scale tool (uniform linked scale).
+            bool scale = (handle != ColliderHandleKind.None &&
+                          handle != ColliderHandleKind.Body &&
+                          handle != ColliderHandleKind.Rotate) ||
+                         (handle == ColliderHandleKind.Body && _partsCanvasTool == PartsCanvasTool.Scale);
 
             if (rotate)
             {
@@ -2026,7 +2087,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 bool edgeX = handle == ColliderHandleKind.EdgeL || handle == ColliderHandleKind.EdgeR;
                 bool edgeY = handle == ColliderHandleKind.EdgeT || handle == ColliderHandleKind.EdgeB;
                 bool corner = !edgeX && !edgeY;
-                if (_partsLinkedScale || corner)
+                bool bodyUniform = handle == ColliderHandleKind.Body &&
+                                   _partsCanvasTool == PartsCanvasTool.Scale;
+                if (_partsLinkedScale || corner || bodyUniform)
                 {
                     float f = n.magnitude / Mathf.Max(1e-3f, s.magnitude);
                     f = Mathf.Max(0.01f, f);
@@ -2069,11 +2132,12 @@ namespace InvertLab.Sprites.DOTS.Editor
         int HitTestPartsSlot(Rect canvas, Vector2 mouse)
         {
             // Sample live pose for hit tests (ghosts never pickable).
-            if (!SpritePartsOnion.TrySampleCharacter(_profile, _partsSelectedClip, _partsPreviewTime,
+            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), _partsPreviewTime,
                     Allocator.Temp, out var blob, out var poses, out var matrices, out _))
                 return -1;
             try
             {
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
                 int n = blob.Value.Slots.Length;
                 var order = new int[n];
                 var ranks = new int[n];
@@ -2090,10 +2154,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (SpritePartsAuthoringOps.SlotOrAncestorHidden(_profile, sid))
                         continue;
                     if (!TryGetPartsSlotDrawRect(canvas, ref blob.Value, matrices, i, _partsPreviewTime,
-                            out var r, out var joint, out float worldDeg, out _, out _))
+                            out var r, out var joint, out float worldDeg, out _, out _, poses))
                         continue;
                     float guiDeg = -worldDeg;
                     Vector2 local = UnrotateAround(mouse, joint, guiDeg);
+                    // Match DrawPartsPoseQuads ScaleAroundPivot flips so Body hit tracks the sprite.
+                    if (poses.IsCreated && i < poses.Length)
+                    {
+                        if (poses[i].Scale.x < 0f)
+                            local.x = joint.x - (local.x - joint.x);
+                        if (poses[i].Scale.y < 0f)
+                            local.y = joint.y - (local.y - joint.y);
+                    }
                     if (r.Contains(local))
                         return i;
                     // Forgiving AABB of the four rotated corners (covers pivot/sign quirks).
@@ -2129,7 +2201,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 SpritePartIdUtility.Canonical(_partsTempSlotId) == SpritePartIdUtility.Canonical(slotId))
                 return _partsTempPose;
 
-            if (!SpritePartsOnion.TrySampleCharacter(_profile, _partsSelectedClip, time, Allocator.Temp,
+            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), time, Allocator.Temp,
                     out var blob, out var poses, out var matrices, out _))
                 return fallback;
             try

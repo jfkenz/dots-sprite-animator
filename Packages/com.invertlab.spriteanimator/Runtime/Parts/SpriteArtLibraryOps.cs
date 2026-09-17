@@ -96,7 +96,7 @@ namespace InvertLab.Sprites.DOTS
                 if (!string.IsNullOrEmpty(guid))
                     return guid;
             }
-            return "instance:" + library.GetInstanceID();
+            return "instance:" + library.GetEntityId();
         }
 
         public static string PathOf(SpriteArtLibrary library)
@@ -108,7 +108,7 @@ namespace InvertLab.Sprites.DOTS
         }
 #else
         public static string IdentityOf(SpriteArtLibrary library)
-            => library == null ? string.Empty : "instance:" + library.GetInstanceID();
+            => library == null ? string.Empty : "instance:" + library.GetEntityId();
 
         public static string PathOf(SpriteArtLibrary library) => string.Empty;
 #endif

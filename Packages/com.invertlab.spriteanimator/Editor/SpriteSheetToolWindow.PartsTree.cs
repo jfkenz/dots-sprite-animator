@@ -643,27 +643,29 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!locked)
             {
                 menu.AddItem(new GUIContent("Duplicate"), false, () => DuplicatePartsSlot(id, false));
-                menu.AddItem(new GUIContent("Duplicate Mirrored (Horizontal)"), false,
-                    () => DuplicatePartsSlot(id, true));
+                menu.AddItem(new GUIContent("Duplicate Mirrored Horizontal"), false,
+                    () => DuplicatePartsSlot(id, true, false));
+                menu.AddItem(new GUIContent("Duplicate Mirrored Vertical"), false,
+                    () => DuplicatePartsSlot(id, false, true));
                 if (_partsMode != SpritePartsStudioMode.Skins)
                 {
-                    menu.AddItem(new GUIContent("Flip/Horizontal"), false,
+                    menu.AddItem(new GUIContent("Mirror Horizontal (East-West)"), false,
                         () => FlipPartsSlot(id, true, false));
-                    menu.AddItem(new GUIContent("Flip/Vertical"), false,
+                    menu.AddItem(new GUIContent("Mirror Vertical (North-South)"), false,
                         () => FlipPartsSlot(id, false, true));
                 }
                 else
                 {
-                    menu.AddDisabledItem(new GUIContent("Flip/Horizontal (not in Skins)"));
-                    menu.AddDisabledItem(new GUIContent("Flip/Vertical (not in Skins)"));
+                    menu.AddDisabledItem(new GUIContent("Mirror Horizontal (not in Skins)"));
+                    menu.AddDisabledItem(new GUIContent("Mirror Vertical (not in Skins)"));
                 }
             }
             else
             {
                 menu.AddDisabledItem(new GUIContent("Duplicate (Part is locked)"));
                 menu.AddDisabledItem(new GUIContent("Duplicate Mirrored (Part is locked)"));
-                menu.AddDisabledItem(new GUIContent("Flip/Horizontal (Part is locked)"));
-                menu.AddDisabledItem(new GUIContent("Flip/Vertical (Part is locked)"));
+                menu.AddDisabledItem(new GUIContent("Mirror Horizontal (Part is locked)"));
+                menu.AddDisabledItem(new GUIContent("Mirror Vertical (Part is locked)"));
             }
             menu.AddSeparator("");
             menu.AddItem(new GUIContent("Z-Order/Bring to Front"), false, () => MovePartsLayer(id, 0));
@@ -878,7 +880,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     var sel = CurrentPartsSlot;
                     if (sel != null)
-                        DuplicatePartsSlot(SpritePartIdUtility.Canonical(sel.SlotId), Event.current.shift);
+                        DuplicatePartsSlot(SpritePartIdUtility.Canonical(sel.SlotId), Event.current.shift, false);
                 }
             }
             if (GUILayout.Button("v", GUILayout.Width(22f)))
@@ -1171,11 +1173,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             _status = "Moved up one level";
             SelectPartsSlotId(slotId, false, false);
         }
-        void DuplicatePartsSlot(string slotId, bool mirrorHorizontal)
+        void DuplicatePartsSlot(string slotId, bool mirrorHorizontal, bool mirrorVertical = false)
         {
-            RecordPartsUndo(mirrorHorizontal ? "Duplicate Parts Mirrored" : "Duplicate Parts Slot");
+            string undo = mirrorHorizontal ? "Duplicate Parts Mirrored Horizontal"
+                : mirrorVertical ? "Duplicate Parts Mirrored Vertical"
+                : "Duplicate Parts Slot";
+            RecordPartsUndo(undo);
             var result = SpritePartsAuthoringOps.TryDuplicatePart(
-                _profile, slotId, out var created, mirrorHorizontal);
+                _profile, slotId, out var created, mirrorHorizontal, mirrorVertical);
             if (!result.Ok || created == null)
             {
                 _status = result.Reason ?? "Duplicate failed";
@@ -1183,7 +1188,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             SaveDirty();
             SelectPartsSlotId(created.SlotId, false, false);
-            _status = (mirrorHorizontal ? "Mirrored " : "Duplicated ") +
+            _status = (mirrorHorizontal ? "Mirrored H " : mirrorVertical ? "Mirrored V " : "Duplicated ") +
                       (created.Name ?? created.SlotId) +
                       (result.DeletedSlotCount > 1 ? (" +" + (result.DeletedSlotCount - 1) + " children") : "");
             Repaint();
@@ -1191,8 +1196,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void FlipPartsSlot(string slotId, bool flipX, bool flipY)
         {
-            RecordPartsUndo(flipX && flipY ? "Flip Parts Both"
-                : flipX ? "Flip Parts Horizontal" : "Flip Parts Vertical");
+            RecordPartsUndo(flipX && flipY ? "Mirror Parts Both"
+                : flipX ? "Mirror Parts Horizontal" : "Mirror Parts Vertical");
             var result = SpritePartsAuthoringOps.TryFlipPart(_profile, slotId, flipX, flipY);
             if (!result.Ok)
             {
@@ -1202,7 +1207,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             SaveDirty();
             string axis = flipX && flipY ? "H+V" : flipX ? "Horizontal" : "Vertical";
             var slot = SpritePartsAuthoringOps.FindSlot(_profile, slotId);
-            _status = "Flipped " + axis + " " + (slot?.Name ?? slotId) +
+            _status = "Mirrored " + axis + " " + (slot?.Name ?? slotId) +
                       (result.AffectedClipCount > 0
                           ? $" ({result.AffectedClipCount} clip tracks)"
                           : " (rest only)");

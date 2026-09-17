@@ -172,8 +172,7 @@ namespace InvertLab.Sprites.DOTS.Tests
             Object.DestroyImmediate(_library);
             _library = null;
 
-            bool built = SpritePartsClipConversion.TryBuildBlob(
-                dest, Allocator.Temp, out var blob, out string error, resolver: null);
+            bool built = SpritePartsClipConversion.TryBuildBlob(dest, Allocator.Temp, out var blob, out string error);
             Assert.IsTrue(built, error);
             try
             {
