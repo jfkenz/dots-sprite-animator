@@ -287,6 +287,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty("FlipX"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("FlipY"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("CharacterOrder"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("LinkedStaticBody"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("PlayOnEnable"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("PlaybackTimeScale"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("Tint"));

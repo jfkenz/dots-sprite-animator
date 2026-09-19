@@ -15,6 +15,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             Clips = 0,
             Parts = 1,
+            Static = 2,
         }
 
         enum PartsCanvasTool
@@ -221,18 +222,21 @@ namespace InvertLab.Sprites.DOTS.Editor
             float tabX = 460f;
             var clipsRect = new Rect(tabX, 10f, 68f, 28f);
             var partsRect = new Rect(tabX + 72f, 10f, 64f, 28f);
+            var staticRect = new Rect(tabX + 140f, 10f, 64f, 28f);
             var clipsStyle = _studioTab == StudioTab.Clips ? _primaryStyle : _transportStyle;
             var partsStyle = _studioTab == StudioTab.Parts ? _primaryStyle : _transportStyle;
+            var staticStyle = _studioTab == StudioTab.Static ? _primaryStyle : _transportStyle;
             if (GUI.Button(clipsRect, new GUIContent("Frames", "Frame flipbook authoring (frame clips)."), clipsStyle))
             {
                 if (_studioTab != StudioTab.Clips && TryResolveTempPoseForSwitch())
                 {
                     ClearImportPreview();
                     RecordWindowUndo("Switch to Frames tab");
-                    SwapWorkspaceCameraState(toParts: false);
+                    StashWorkspaceCamera(_studioTab);
                     StashPartsSelection();
                     _studioTab = StudioTab.Clips;
                     _partsPlaying = false;
+                    RestoreWorkspaceCamera(StudioTab.Clips);
                     RestoreFramesSelection();
                 }
             }
@@ -242,22 +246,45 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     ClearImportPreview();
                     RecordWindowUndo("Switch to Parts tab");
+                    StashWorkspaceCamera(_studioTab);
                     StashFramesSelection();
-                    SwapWorkspaceCameraState(toParts: true);
                     _studioTab = StudioTab.Parts;
                     _playing = false;
+                    RestoreWorkspaceCamera(StudioTab.Parts);
                     RestorePartsSelectionById();
                     EnsurePartsSession();
                 }
             }
+            if (GUI.Button(staticRect, new GUIContent("Static", "Single-cell static body: pivot, size, draw rank."), staticStyle))
+            {
+                if (_studioTab != StudioTab.Static && TryResolveTempPoseForSwitch())
+                {
+                    ClearImportPreview();
+                    RecordWindowUndo("Switch to Static tab");
+                    StashWorkspaceCamera(_studioTab);
+                    StashFramesSelection();
+                    StashPartsSelection();
+                    _studioTab = StudioTab.Static;
+                    _playing = false;
+                    _partsPlaying = false;
+                    RestoreWorkspaceCamera(StudioTab.Static);
+                    EnsureStaticSession();
+                }
+            }
 
-            // Runtime badge: the Frames/Parts buttons above only change the editor
-            // workspace. The profile's runtime mode is separate and explicit.
-            bool runtimeParts = _profile != null && _profile.AnimKind == SpriteAnimKind.Parts;
-            var badgeRect = new Rect(tabX + 142f, 15f, 120f, 18f);
+            // Runtime badge: workspace tabs do not change AnimKind.
+            string runtimeLabel = _profile == null
+                ? "Runtime: —"
+                : _profile.AnimKind switch
+                {
+                    SpriteAnimKind.Parts => "Runtime: Parts",
+                    SpriteAnimKind.Static => "Runtime: Static",
+                    _ => "Runtime: Frames",
+                };
+            var badgeRect = new Rect(tabX + 210f, 15f, 130f, 18f);
             GUI.Label(badgeRect, new GUIContent(
-                runtimeParts ? "Runtime: Parts" : "Runtime: Frames",
-                "Runtime playback mode stored on the profile. Switch it with 'Use Parts for Character' / 'Use Frames for Character' in the inactive workspace banner; switching workspaces never changes it."),
+                runtimeLabel,
+                "Runtime mode stored on the profile. Switch with 'Use … for Character' in each workspace; tab switches never change it."),
                 _mutedStyle);
         }
 
@@ -322,26 +349,6 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedFrame = Mathf.Clamp(frame, 0, maxFrame);
         }
 
-        void SwapWorkspaceCameraState(bool toParts)
-        {
-            // Preview time is already per workspace: Frames uses _previewTime,
-            // Parts uses _partsPreviewTime. Only the shared zoom/pan pair is swapped.
-            if (toParts)
-            {
-                _framesPreviewZoom = _previewZoom;
-                _framesPreviewPan = _previewPan;
-                _previewZoom = _partsCanvasZoom;
-                _previewPan = _partsCanvasPan;
-            }
-            else
-            {
-                _partsCanvasZoom = _previewZoom;
-                _partsCanvasPan = _previewPan;
-                _previewZoom = _framesPreviewZoom;
-                _previewPan = _framesPreviewPan;
-            }
-        }
-
         /// <summary>
         /// Resolve a staged unkeyed pose before a workspace or document switch.
         /// Key / Discard / Cancel; Cancel aborts the switch.
@@ -392,9 +399,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
             SaveDirty();
-            _status = kind == SpriteAnimKind.Parts
-                ? "Runtime mode: Parts (frame clips kept, not baked)"
-                : "Runtime mode: Frames (Parts data kept, not baked)";
+            _status = kind switch
+            {
+                SpriteAnimKind.Parts => "Runtime mode: Parts (other data kept, not baked)",
+                SpriteAnimKind.Static => "Runtime mode: Static (use Sprite Static Authoring)",
+                _ => "Runtime mode: Frames (other data kept, not baked)",
+            };
             Repaint();
         }
 
@@ -568,6 +578,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsModeToolbar();
             GUILayout.Space(8f);
             DrawArtLibrariesInspector();
+            DrawPartsLinkedStaticProfile();
             GUILayout.Space(4f);
             float prevLabelWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = Mathf.Max(72f, Mathf.Min(96f, rect.width * 0.38f));

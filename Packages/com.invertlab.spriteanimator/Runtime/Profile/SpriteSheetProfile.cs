@@ -1390,6 +1390,14 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsSkinDef> PartsSkins = new();
         public string PartsDefaultClipId = string.Empty;
         public string PartsDefaultSkinId = string.Empty;
+        /// <summary>Static body sprite when <see cref="AnimKind"/> is Static.</summary>
+        public SpriteStaticSpriteDef StaticSprite = new();
+        /// <summary>
+        /// Optional linked static body profile (AnimKind Static) for Parts feet rigs.
+        /// Stored as asset GUID; resolved in the editor or at bake via
+        /// <see cref="SpriteProfileLinkOps"/>.
+        /// </summary>
+        public string LinkedStaticProfileGuid = string.Empty;
         /// <summary>
         /// Shared art libraries this profile may pull from. Empty = local art only.
         /// Bake flattens library art into the blob; play mode never resolves these.
@@ -1431,6 +1439,16 @@ namespace InvertLab.Sprites.DOTS
         {
             if (TimelineHitPolygon == null || TimelineHitPolygon.Length < 3)
                 TimelineHitPolygon = CreateRegularHitPolygon(DefaultTimelineHitPolygonVertices);
+        }
+
+        /// <summary>Ensure static sprite defaults. Does not convert AnimKind.</summary>
+        public void EnsureStaticSprite()
+        {
+            StaticSprite ??= new SpriteStaticSpriteDef();
+            StaticSprite.SizeUnits = Mathf.Max(0.001f, StaticSprite.SizeUnits);
+            StaticSprite.DrawRank = Mathf.Clamp(
+                StaticSprite.DrawRank, 0, SpritePartIdUtility.MaxParts - 1);
+            LinkedStaticProfileGuid ??= string.Empty;
         }
 
         /// <summary>Null-coalesce Parts lists and upgrade schema. Does not convert AnimKind.</summary>

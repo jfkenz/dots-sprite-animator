@@ -51,6 +51,11 @@ namespace InvertLab.Sprites.DOTS
 
         public Color Tint = Color.white;
 
+        [Header("Parts layering")]
+        [Tooltip("When set, bake depth uses the same index space as this Parts character: " +
+                 "drawIndex = CharacterOrder×64 + profile Static Draw Rank.")]
+        public SpritePartsCharacterAuthoring PartsSortAnchor;
+
         [Header("Facing")]
         [Tooltip("Mirror left-right.")]
         public bool FlipX;
@@ -529,6 +534,22 @@ namespace InvertLab.Sprites.DOTS
                 AddComponent(entity, new SpriteAnimEnabled());
                 // the GameObject preview must not double-render the baked sprite
                 AddComponent<DisableRendering>(entity);
+
+                ApplyPartsLinkedSortDepth(authoring, entity);
+            }
+
+            static void ApplyPartsLinkedSortDepth(SpriteStaticAuthoring authoring, Entity entity)
+            {
+                var anchor = authoring.PartsSortAnchor;
+                if (anchor == null)
+                    return;
+                var data = authoring.Profile != null ? authoring.Profile.Data : null;
+                data?.EnsureStaticSprite();
+                int rank = data?.StaticSprite?.DrawRank ?? 0;
+                rank = Mathf.Clamp(rank, 0, SpritePartIdUtility.MaxParts - 1);
+                float depth = SpriteProfileLinkOps.CharacterSortDepth(anchor.CharacterOrder, rank);
+                SetComponent(entity, new SpriteSortDepth { Value = depth });
+                SetComponent(entity, new SpriteSortStatic());
             }
         }
     }

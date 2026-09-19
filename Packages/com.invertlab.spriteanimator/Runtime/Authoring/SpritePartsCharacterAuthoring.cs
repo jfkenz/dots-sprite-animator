@@ -34,6 +34,9 @@ namespace InvertLab.Sprites.DOTS
         [Tooltip("Character Order for Parts draw groups: drawIndex = order*64 + partRank.")]
         public int CharacterOrder;
 
+        [Tooltip("Optional static body in the same sort space (set Parts Sort Anchor on Sprite Static Authoring).")]
+        public SpriteStaticAuthoring LinkedStaticBody;
+
         public bool PlayOnEnable = true;
 
         [Tooltip("Per-character playback multiplier. Multiplies the Parts clip Time Scale. " +
@@ -66,6 +69,8 @@ namespace InvertLab.Sprites.DOTS
             if (Profile != null && Profile.Data != null
                 && Profile.Data.AnimKind == SpriteAnimKind.Parts)
                 Profile.Data.EnsurePartsRig();
+            if (LinkedStaticBody != null && LinkedStaticBody.PartsSortAnchor != this)
+                LinkedStaticBody.PartsSortAnchor = this;
         }
 
         // Scene footprint only — MeshRenderer preview fights Entities Graphics / BRG.

@@ -567,6 +567,22 @@ namespace InvertLab.Sprites.DOTS
             if (profile.AnimKind == kind)
                 return new KindSwitchResult { Ok = true };
 
+            if (kind == SpriteAnimKind.Static)
+            {
+                profile.EnsureSheets();
+                profile.EnsureStaticSprite();
+                if (!SpriteStaticAuthoringOps.TryFindSheetWithTexture(profile, out _))
+                {
+                    return new KindSwitchResult
+                    {
+                        Reason = "Static runtime needs a profile sheet with a texture. " +
+                                 "Assign a sheet in the Static or Frames workspace first.",
+                    };
+                }
+                profile.AnimKind = SpriteAnimKind.Static;
+                return new KindSwitchResult { Ok = true };
+            }
+
             if (kind == SpriteAnimKind.Parts)
             {
                 var previous = profile.AnimKind;
