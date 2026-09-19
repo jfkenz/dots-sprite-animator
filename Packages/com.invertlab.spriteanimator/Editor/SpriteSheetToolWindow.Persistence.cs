@@ -238,15 +238,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             EnsureProfile();
             // Open shows the profile's runtime workspace first; later tab switches
             // are pure workspace changes and never touch AnimKind.
-            _studioTab = _profile.AnimKind == SpriteAnimKind.Parts
-                ? StudioTab.Parts
-                : StudioTab.Clips;
+            _studioTab = _profile.AnimKind switch
+            {
+                SpriteAnimKind.Parts => StudioTab.Parts,
+                SpriteAnimKind.Static => StudioTab.Static,
+                _ => StudioTab.Clips,
+            };
             if (_studioTab == StudioTab.Parts)
             {
                 _partsPlaying = false;
                 _partsPreviewTime = 0f;
                 EnsurePartsSession();
             }
+            else if (_studioTab == StudioTab.Static)
+                EnsureStaticSession();
             if (_profile.Clips != null && _profile.Clips.Count > 0 && _profile.Clips[0] != null)
             {
                 _selectedClip = 0;

@@ -9,6 +9,7 @@ namespace InvertLab.Sprites.DOTS
     {
         Frame = 0,
         Parts = 1,
+        Static = 2,
     }
 
     public enum SpritePartsWrap : byte

@@ -759,6 +759,12 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void ConfirmSheetCellPicker()
         {
+            if (_studioTab == StudioTab.Static && _sheetCellPickerSelection.Count > 0)
+            {
+                ApplyStaticCellPickerSelection(_sheetCellPickerSelection[0]);
+                CloseSheetCellPicker();
+                return;
+            }
             var clip = CurrentClip;
             if (clip == null || _sheetCellPickerSelection.Count == 0)
             {

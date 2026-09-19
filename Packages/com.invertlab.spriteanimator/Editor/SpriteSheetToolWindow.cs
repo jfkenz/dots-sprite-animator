@@ -749,6 +749,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawTimelineSplitter(timelineSplitter);
                 DrawPartsTimeline(timelineRect, partsScrubControlId, partsKeyControlId);
             }
+            else if (_studioTab == StudioTab.Static)
+            {
+                DrawStaticBrowser(clipsRect);
+                DrawStaticInspector(inspectorRect);
+                DrawStaticPreview(previewRect, partsCanvasControlId);
+                DrawPanelSplitter(leftSplitter, true, workRect.width);
+                DrawPanelSplitter(rightSplitter, false, workRect.width);
+                DrawTimelineSplitter(timelineSplitter);
+                DrawStaticTimeline(timelineRect);
+            }
             else
             {
                 DrawClipBrowser(clipsRect);

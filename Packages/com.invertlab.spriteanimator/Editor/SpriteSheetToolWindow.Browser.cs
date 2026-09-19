@@ -39,6 +39,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                         "Use Frames for Character", EditorStyles.miniButton))
                     SwitchRuntimeKind(SpriteAnimKind.Frame, "Use Frames for Character");
             }
+            else if (_profile.AnimKind == SpriteAnimKind.Static)
+            {
+                bannerH = 48f;
+                var bannerRect = new Rect(rect.x + 8f, rect.y + 50f, rect.width - 16f, bannerH);
+                EditorGUI.DrawRect(bannerRect, new Color(0.13f, 0.17f, 0.22f, 1f));
+                GUI.Label(new Rect(bannerRect.x + 8f, bannerRect.y + 4f, bannerRect.width - 16f, 16f),
+                    "Preview only. Runtime is Static (Sprite Static Authoring).", _mutedStyle);
+                if (GUI.Button(new Rect(bannerRect.x + 8f, bannerRect.y + 23f, 190f, 20f),
+                        "Use Frames for Character", EditorStyles.miniButton))
+                    SwitchRuntimeKind(SpriteAnimKind.Frame, "Use Frames for Character");
+            }
 
             const float cardPad = 8f;
             const float headerH = 24f;
