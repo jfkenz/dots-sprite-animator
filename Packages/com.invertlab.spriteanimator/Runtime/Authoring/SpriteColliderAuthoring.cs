@@ -26,13 +26,14 @@ namespace InvertLab.Sprites.DOTS
     }
 
     /// <summary>
-    /// Owns collider scope/method for an animated sprite. Same GameObject as
-    /// <see cref="SpriteAnimSetAuthoring"/>. Unity Physics features live in the
-    /// optional InvertLab.SpriteAnimator.UnityPhysics assembly.
+    /// Owns collider scope/method for an animated sprite. Frame sprites keep
+    /// this next to <see cref="SpriteAnimSetAuthoring"/> (the authoring bundle
+    /// adds the set). Parts characters may have this without a frame set.
+    /// Unity Physics features live in the optional
+    /// InvertLab.SpriteAnimator.UnityPhysics assembly.
     /// </summary>
     [AddComponentMenu("DOTS Sprite Animator/Sprite Collider Authoring")]
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(SpriteAnimSetAuthoring))]
     public class SpriteColliderAuthoring : MonoBehaviour
     {
         [Header("Detection")]
@@ -99,7 +100,11 @@ namespace InvertLab.Sprites.DOTS
         }
 
 #if UNITY_EDITOR
-        void Reset() => ApplyToAnimSet();
+        void Reset()
+        {
+            SpriteAuthoringBundle.Ensure(gameObject);
+            ApplyToAnimSet();
+        }
 
         void OnValidate()
         {

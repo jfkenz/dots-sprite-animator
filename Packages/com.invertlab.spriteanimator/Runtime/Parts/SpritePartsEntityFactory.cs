@@ -107,10 +107,13 @@ namespace InvertLab.Sprites.DOTS
                     SlotIndex = i,
                     ParentSlotIndex = slot.ParentSlotIndex,
                     SlotIdHash = slot.SlotIdHash,
+                    Hidden = slot.Hidden,
                 });
                 em.AddComponentData(part, new SpritePartsOwner { Root = root });
                 em.AddComponentData(part, new SpritePartRenderDepth { Value = 0f });
                 em.AddComponentData(part, new SpriteAnimEnabled());
+                if (slot.Hidden != 0)
+                    em.SetComponentEnabled<SpriteAnimEnabled>(part, false);
                 em.AddComponentData(part, new SpriteTint { Value = tint4 });
                 em.AddComponentData(part, new SpriteFlip { X = 0, Y = 0, Pivot = new float2(0.5f, 0.5f) });
 

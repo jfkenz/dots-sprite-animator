@@ -19,6 +19,8 @@ namespace InvertLab.Sprites.DOTS
         {
             float dt = SystemAPI.Time.DeltaTime;
             var em = state.EntityManager;
+            using var commands = new EntityCommandBuffer(Allocator.Temp);
+            using var pending = new NativeList<Entity>(16, Allocator.Temp);
             foreach (var (playerRef, setRef, entity) in
                      SystemAPI.Query<RefRW<SpritePartsPlayer>, RefRO<SpritePartsSetRef>>()
                               .WithEntityAccess())
@@ -43,14 +45,29 @@ namespace InvertLab.Sprites.DOTS
                 player.Playing = tick.Playing;
                 player.Completed = tick.AlreadyCompleted;
                 if (tick.CompletedThisTick != 0 && !em.HasComponent<SpritePartsCompleted>(entity))
-                    em.AddComponentData(entity, new SpritePartsCompleted());
-
-                ApplyPoseImmediate(em, entity, ref set, player.ClipIndex, player.TimeSeconds);
+                    commands.AddComponent(entity, new SpritePartsCompleted());
+                pending.Add(entity);
             }
+
+            // Pose writes can add PostTransformMatrix. Do that after the query
+            // enumerator is gone, and only through the ECB.
+            for (int i = 0; i < pending.Length; i++)
+            {
+                var entity = pending[i];
+                if (!em.HasComponent<SpritePartsSetRef>(entity) || !em.HasComponent<SpritePartsPlayer>(entity))
+                    continue;
+                var blob = em.GetComponentData<SpritePartsSetRef>(entity).Set;
+                if (!blob.IsCreated)
+                    continue;
+                var player = em.GetComponentData<SpritePartsPlayer>(entity);
+                ref var set = ref blob.Value;
+                ApplyPoseImmediate(em, entity, ref set, player.ClipIndex, player.TimeSeconds, commands);
+            }
+            commands.Playback(em);
         }
 
         static void ApplyPoseImmediate(EntityManager em, Entity root, ref SpritePartsSetBlob set,
-            int clipIndex, float time)
+            int clipIndex, float time, EntityCommandBuffer commands)
         {
             if (!em.HasBuffer<SpritePartLink>(root))
                 return;
@@ -64,13 +81,13 @@ namespace InvertLab.Sprites.DOTS
                 if (slotIndex < 0 || slotIndex >= set.Slots.Length)
                     continue;
                 SpritePartsSampler.SampleSlot(ref set, clipIndex, slotIndex, time, out var pose);
-                SpritePartsPoseUtility.ApplyPartTransform(em, part, pose);
+                SpritePartsPoseUtility.ApplyPartTransform(em, part, pose, commands);
                 int sampledApp = SpritePartsSampler.SampleAppearanceIndex(
                     ref set, clipIndex, slotIndex, time);
                 SpriteParts.ApplySampledAppearance(
-                    em, root, part, slotIndex, sampledApp, ref set);
+                    em, root, part, slotIndex, sampledApp, ref set, commands);
             }
-            SpritePartsPoseUtility.ApplyFacing(em, root);
+            SpritePartsPoseUtility.ApplyFacing(em, root, commands);
         }
     }
 
@@ -141,13 +158,18 @@ namespace InvertLab.Sprites.DOTS
             float margin = math.max(0f, settings.MarginUnits);
             var em = state.EntityManager;
 
-            foreach (var (ltw, depth, enabled, entity) in
+            foreach (var (ltw, depth, slot, enabled, entity) in
                      SystemAPI.Query<RefRO<LocalToWorld>, RefRO<SpritePartRenderDepth>,
-                         EnabledRefRW<SpriteAnimEnabled>>()
-                              .WithAll<SpritePartSlot, SpriteAnimFrame>()
+                         RefRO<SpritePartSlot>, EnabledRefRW<SpriteAnimEnabled>>()
+                              .WithAll<SpriteAnimFrame>()
                               .WithOptions(EntityQueryOptions.IgnoreComponentEnabledState)
                               .WithEntityAccess())
             {
+                if (slot.ValueRO.Hidden != 0)
+                {
+                    enabled.ValueRW = false;
+                    continue;
+                }
                 float3 position = ltw.ValueRO.Value.c3.xyz;
                 // Use rendered depth for bounds center z.
                 position.z = depth.ValueRO.Value;

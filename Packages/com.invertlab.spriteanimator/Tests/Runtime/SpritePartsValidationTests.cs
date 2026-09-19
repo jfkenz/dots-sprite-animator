@@ -68,7 +68,7 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
-        public void RejectsCycleAndMissingParent()
+        public void MissingParentIsCoerced_CycleStillFails()
         {
             var profile = MinimalValid();
             profile.PartsSlots.Add(new SpritePartSlotDef
@@ -81,13 +81,31 @@ namespace InvertLab.Sprites.DOTS.Tests
                 RestScale = Vector2.one,
             });
             var missing = SpritePartsValidation.Validate(profile);
-            Assert.IsFalse(missing.Ok);
-            StringAssert.Contains("missing", string.Join(" ", missing.Errors).ToLowerInvariant());
+            Assert.IsTrue(missing.Ok, string.Join(" | ", missing.Errors));
+            Assert.IsTrue(SpritePartsClipConversion.TryBuildBlob(
+                profile, Unity.Collections.Allocator.Temp, out var blob, out var err), err);
+            try
+            {
+                Assert.AreEqual(-1, blob.Value.Slots[1].ParentSlotIndex);
+            }
+            finally
+            {
+                if (blob.IsCreated) blob.Dispose();
+            }
 
             profile.PartsSlots[1].ParentSlotId = "hand";
             var cycle = SpritePartsValidation.Validate(profile);
             Assert.IsFalse(cycle.Ok);
             StringAssert.Contains("cycle", string.Join(" ", cycle.Errors).ToLowerInvariant());
+        }
+
+        [Test]
+        public void EmptySlotsPassValidation()
+        {
+            var profile = MinimalValid();
+            profile.PartsSlots.Clear();
+            var result = SpritePartsValidation.Validate(profile);
+            Assert.IsTrue(result.Ok, string.Join(" | ", result.Errors));
         }
 
         [Test]

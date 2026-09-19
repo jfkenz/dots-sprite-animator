@@ -54,7 +54,11 @@ namespace InvertLab.Sprites.DOTS
         public Vector2 RestScale = Vector2.one;
         public string DefaultAppearanceId = string.Empty;
         public int DrawRank;
-        /// <summary>Editor eye toggle / selection-preview only. Bake still includes the slot.</summary>
+        /// <summary>
+        /// When false the part is not drawn in the baked scene (eye off in the Parts tree).
+        /// The joint still exists so children keep their hierarchy.
+        /// Ancestor hide also hides this part.
+        /// </summary>
         public bool Enabled = true;
         /// <summary>Editor-only lock. Locked parts cannot be transformed, renamed, deleted or dragged.</summary>
         public bool EditorLocked;

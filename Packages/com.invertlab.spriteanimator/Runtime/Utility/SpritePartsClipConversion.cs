@@ -74,20 +74,32 @@ namespace InvertLab.Sprites.DOTS
         public static SpritePartsSetBuilder.SlotInput[] CreateSlots(SpriteSheetProfile profile)
         {
             var list = profile.PartsSlots;
+            if (list == null || list.Count == 0)
+                return Array.Empty<SpritePartsSetBuilder.SlotInput>();
             var result = new SpritePartsSetBuilder.SlotInput[list.Count];
             for (int i = 0; i < list.Count; i++)
             {
                 var s = list[i];
+                string defaultApp = s.DefaultAppearanceId;
+                if (!string.IsNullOrWhiteSpace(defaultApp)
+                    && SpritePartsValidation.FindAppearanceIndex(profile, defaultApp) < 0)
+                    defaultApp = string.Empty;
+                string parentId = s.ParentSlotId;
+                if (!string.IsNullOrWhiteSpace(parentId)
+                    && SpritePartsAuthoringOps.FindSlot(profile, parentId) == null)
+                    parentId = string.Empty;
                 result[i] = new SpritePartsSetBuilder.SlotInput
                 {
                     Name = s.Name,
                     SlotId = s.SlotId,
-                    ParentSlotId = s.ParentSlotId,
+                    ParentSlotId = parentId,
                     RestPosition = new float2(s.RestPosition.x, s.RestPosition.y),
                     RestRotation = s.RestRotation,
                     RestScale = new float2(s.RestScale.x, s.RestScale.y),
-                    DefaultAppearanceId = s.DefaultAppearanceId,
+                    DefaultAppearanceId = defaultApp,
                     DrawRank = s.DrawRank,
+                    Hidden = SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
+                        ? (byte)1 : (byte)0,
                 };
             }
             return result;
@@ -120,24 +132,39 @@ namespace InvertLab.Sprites.DOTS
         }
 
         public static SpritePartsSetBuilder.ClipInput[] CreateClips(SpriteSheetProfile profile)
-            => CreateClips(profile.PartsClips);
+            => CreateClips(profile.PartsClips, profile);
 
         public static SpritePartsSetBuilder.ClipInput[] CreateClips(IReadOnlyList<SpritePartsClipDef> list)
+            => CreateClips(list, null);
+
+        public static SpritePartsSetBuilder.ClipInput[] CreateClips(
+            IReadOnlyList<SpritePartsClipDef> list, SpriteSheetProfile profile)
         {
+            if (list == null)
+                return Array.Empty<SpritePartsSetBuilder.ClipInput>();
             var result = new SpritePartsSetBuilder.ClipInput[list.Count];
             for (int i = 0; i < list.Count; i++)
             {
                 var clip = list[i];
                 var tracks = clip.Tracks ?? new List<SpritePartsTrackDef>();
-                var trackInputs = new SpritePartsSetBuilder.TrackInput[tracks.Count];
+                var kept = new List<SpritePartsSetBuilder.TrackInput>(tracks.Count);
                 for (int t = 0; t < tracks.Count; t++)
                 {
                     var track = tracks[t];
+                    if (profile != null
+                        && SpritePartsAuthoringOps.FindSlot(profile, track.SlotId) == null)
+                        continue;
                     var keys = track.Keys ?? new List<SpritePartsKeyDef>();
                     var keyInputs = new SpritePartsSetBuilder.KeyInput[keys.Count];
                     for (int k = 0; k < keys.Count; k++)
                     {
                         var key = keys[k];
+                        string appearanceId = key.AppearanceId;
+                        if (profile != null
+                            && !string.IsNullOrWhiteSpace(appearanceId)
+                            && SpritePartsValidation.FindAppearanceIndex(
+                                profile, SpritePartIdUtility.Canonical(appearanceId)) < 0)
+                            appearanceId = string.Empty;
                         keyInputs[k] = new SpritePartsSetBuilder.KeyInput
                         {
                             Time = key.Time,
@@ -145,17 +172,17 @@ namespace InvertLab.Sprites.DOTS
                             Rotation = key.Rotation,
                             Scale = new float2(key.Scale.x, key.Scale.y),
                             EaseMode = key.EaseMode,
-                            AppearanceId = key.AppearanceId,
+                            AppearanceId = appearanceId,
                         };
                     }
-                    trackInputs[t] = new SpritePartsSetBuilder.TrackInput
+                    kept.Add(new SpritePartsSetBuilder.TrackInput
                     {
                         SlotId = track.SlotId,
                         Kind = (byte)(track.Kind == SpritePartsTrackKind.Appearance
                             ? SpritePartsTrackKind.Appearance
                             : SpritePartsTrackKind.Pose),
                         Keys = keyInputs,
-                    };
+                    });
                 }
 
                 result[i] = new SpritePartsSetBuilder.ClipInput
@@ -165,7 +192,7 @@ namespace InvertLab.Sprites.DOTS
                     Duration = clip.Duration,
                     SpeedMultiplier = clip.Speed,
                     WrapMode = clip.WrapMode,
-                    Tracks = trackInputs,
+                    Tracks = kept.ToArray(),
                 };
             }
             return result;
@@ -174,24 +201,32 @@ namespace InvertLab.Sprites.DOTS
         public static SpritePartsSetBuilder.SkinInput[] CreateSkins(SpriteSheetProfile profile)
         {
             var list = profile.PartsSkins;
+            if (list == null)
+                return Array.Empty<SpritePartsSetBuilder.SkinInput>();
             var result = new SpritePartsSetBuilder.SkinInput[list.Count];
             for (int i = 0; i < list.Count; i++)
             {
                 var skin = list[i];
                 var bindings = skin.Bindings ?? new List<SpritePartsSkinBindingDef>();
-                var bindInputs = new SpritePartsSetBuilder.SkinBindingInput[bindings.Count];
+                var kept = new List<SpritePartsSetBuilder.SkinBindingInput>(bindings.Count);
                 for (int b = 0; b < bindings.Count; b++)
                 {
-                    bindInputs[b] = new SpritePartsSetBuilder.SkinBindingInput
+                    var bind = bindings[b];
+                    if (SpritePartsAuthoringOps.FindSlot(profile, bind.SlotId) == null)
+                        continue;
+                    if (SpritePartsValidation.FindAppearanceIndex(
+                            profile, SpritePartIdUtility.Canonical(bind.AppearanceId)) < 0)
+                        continue;
+                    kept.Add(new SpritePartsSetBuilder.SkinBindingInput
                     {
-                        SlotId = bindings[b].SlotId,
-                        AppearanceId = bindings[b].AppearanceId,
-                    };
+                        SlotId = bind.SlotId,
+                        AppearanceId = bind.AppearanceId,
+                    });
                 }
                 result[i] = new SpritePartsSetBuilder.SkinInput
                 {
                     SkinId = skin.SkinId,
-                    Bindings = bindInputs,
+                    Bindings = kept.ToArray(),
                 };
             }
             return result;
@@ -277,7 +312,7 @@ namespace InvertLab.Sprites.DOTS
                 var slots = CreateSlots(profile);
                 for (int i = 0; i < slots.Length; i++)
                     slots[i].DefaultAppearanceId = string.Empty;
-                var clips = CreateClips(clipsOverride ?? profile.PartsClips);
+                var clips = CreateClips(clipsOverride ?? profile.PartsClips, profile);
                 BlankKeyAppearanceIdsForPose(clips);
                 blob = SpritePartsSetBuilder.Build(
                     allocator,

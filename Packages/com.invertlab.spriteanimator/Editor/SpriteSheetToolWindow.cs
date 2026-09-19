@@ -78,6 +78,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             EdgeB,
             EdgeL,
             Rotate,
+            AxisX,
+            AxisY,
+            FreeMove,
+            RotateX,
+            RotateY,
+            RotateZ,
+            RotateSphere,
         }
 
         readonly struct OnionGhostLayout
@@ -6566,7 +6573,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             if (_asset != null)
             {
-                _asset.Data = _profile;
+                SyncWorkingProfileToAsset();
                 return;
             }
             if (_undoProxy == null)

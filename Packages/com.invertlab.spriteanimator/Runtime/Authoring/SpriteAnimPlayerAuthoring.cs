@@ -108,6 +108,8 @@ namespace InvertLab.Sprites.DOTS
 
         public bool Play(int clipIndex, bool force = false, float crossfadeSeconds = 0f)
         {
+            if (SpritePartsCharacterAuthoring.OwnsAnimation(gameObject))
+                return false;
             var set = GetComponent<SpriteAnimSetAuthoring>();
             if (set == null || set.Clips == null ||
                 clipIndex < 0 || clipIndex >= set.Clips.Length)
@@ -696,6 +698,8 @@ namespace InvertLab.Sprites.DOTS
 
         void Tick(float dt)
         {
+            if (SpritePartsCharacterAuthoring.OwnsAnimation(gameObject))
+                return;
             if (!isActiveAndEnabled)
                 return;
 
@@ -868,11 +872,11 @@ namespace InvertLab.Sprites.DOTS
             if (_adding || gameObject == null || Application.isPlaying)
                 return;
 
-            // static-sprite context: keep only the sort authoring — dragging
-            // the animation stack (Set + Player) onto a static prop is never
-            // intended. (During RequireComponent races the static authoring
-            // may briefly be absent; mutual exclusion cleans that up after.)
-            if (gameObject.GetComponent<SpriteStaticAuthoring>() != null)
+            // Static and Parts characters must not pull the frame Set+Player stack.
+            // Sort.Reset used to call Ensure, which added SpriteAnimPlayerAuthoring
+            // onto Parts GOs and failed SubScene bake.
+            if (gameObject.GetComponent<SpriteStaticAuthoring>() != null
+                || gameObject.GetComponent<SpritePartsCharacterAuthoring>() != null)
             {
                 AddIfMissing<SpriteSortAuthoring>(gameObject);
                 return;

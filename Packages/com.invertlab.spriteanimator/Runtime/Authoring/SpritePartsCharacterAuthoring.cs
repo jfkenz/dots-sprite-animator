@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -36,15 +36,44 @@ namespace InvertLab.Sprites.DOTS
 
         public bool PlayOnEnable = true;
 
+        [Tooltip("Per-character playback multiplier. Multiplies the Parts clip Time Scale. " +
+                 "1 = normal, 2 = twice as fast, 0.5 = half speed, 0 = paused, negative = reverse.")]
+        public float PlaybackTimeScale = 1f;
+
+        public static bool OwnsAnimation(GameObject gameObject)
+        {
+            var parts = gameObject.GetComponent<SpritePartsCharacterAuthoring>();
+            return parts != null && parts.Profile != null && parts.Profile.Data != null &&
+                   parts.Profile.Data.AnimKind == SpriteAnimKind.Parts;
+        }
+
         [Tooltip("Optional tint applied to every part.")]
         public Color Tint = Color.white;
 
+        /// <summary>
+        /// Editor bump so live conversion rebakes after a profile save/reload
+        /// even when the Profile reference itself did not change.
+        /// </summary>
+        [HideInInspector] public int EditorProfileSyncRevision;
+
 #if UNITY_EDITOR
+        void Reset() => SpritePartsAuthoringBundle.Ensure(gameObject);
+
         void OnValidate()
         {
-            // Never delete components here â€” conflict repair is Undoable via inspector/menu.
-            if (Profile != null && Profile.Data != null)
+            // Never DestroyImmediate / AddComponent here — defer via delayCall.
+            SpritePartsAuthoringBundle.EnsureDeferred(gameObject);
+            if (Profile != null && Profile.Data != null
+                && Profile.Data.AnimKind == SpriteAnimKind.Parts)
                 Profile.Data.EnsurePartsRig();
+        }
+
+        // Scene footprint only — MeshRenderer preview fights Entities Graphics / BRG.
+        void OnDrawGizmos()
+        {
+            Gizmos.color = new Color(0.3f, 0.85f, 1f, 0.9f);
+            Gizmos.matrix = transform.localToWorldMatrix;
+            Gizmos.DrawWireCube(Vector3.zero, new Vector3(1f, 1f, 0.01f));
         }
 #endif
 
@@ -56,11 +85,12 @@ namespace InvertLab.Sprites.DOTS
                 var profile = profileAsset != null ? profileAsset.Data : null;
                 if (profile == null)
                     return;
+                // Frames runtime mode is a valid profile state, not a bake failure.
+                // Live conversion rebakes constantly, so the inspector reports it
+                // instead of the console.
                 if (profile.AnimKind != SpriteAnimKind.Parts)
                 {
-                    Debug.LogError(
-                        $"[SpritePartsCharacterAuthoring] '{authoring.name}': Profile.AnimKind is {profile.AnimKind}, expected Parts.",
-                        authoring);
+                    DependsOn(profileAsset);
                     return;
                 }
                 if (!SpriteBatchSpawner.LayoutXy)
@@ -72,6 +102,7 @@ namespace InvertLab.Sprites.DOTS
                 }
 
                 DependsOn(profileAsset);
+                _ = authoring.EditorProfileSyncRevision;
 #if UNITY_EDITOR
                 if (profile.ArtLibraries != null)
                 {
@@ -88,6 +119,8 @@ namespace InvertLab.Sprites.DOTS
 #endif
                 profile.EnsureSheets();
                 profile.EnsurePartsRig();
+                if (profile.PartsSlots == null || profile.PartsSlots.Count == 0)
+                    return;
 
                 if (!SpritePartsClipConversion.TryBuildBlob(profile, Allocator.Persistent,
                         out var partsBlob, out string blobError))
@@ -98,14 +131,9 @@ namespace InvertLab.Sprites.DOTS
                     return;
                 }
 
-                // Frame player on same GO is a repairable authoring error â€” do not bake frame path.
-                var framePlayer = GetComponent<SpriteAnimPlayerAuthoring>();
-                if (framePlayer != null)
-                {
-                    Debug.LogError(
-                        $"[SpritePartsCharacterAuthoring] '{authoring.name}': Parts profile plus frame player is invalid. Use Fix Parts Authoring Conflict.",
-                        authoring);
-                }
+                // Track leftovers so stripping Set/Player retriggers bake. Parts owns this entity.
+                GetComponent<SpriteAnimPlayerAuthoring>();
+                GetComponent<SpriteAnimSetAuthoring>();
 
                 var root = GetEntity(TransformUsageFlags.Dynamic);
                 // No drawn sprite / no frame player on gameplay root.
@@ -124,7 +152,10 @@ namespace InvertLab.Sprites.DOTS
                 {
                     ClipIndex = math.max(0, startClip),
                     TimeSeconds = 0f,
-                    SpeedMultiplier = 1f,
+                    SpeedMultiplier = float.IsNaN(authoring.PlaybackTimeScale) ||
+                                      float.IsInfinity(authoring.PlaybackTimeScale)
+                        ? 1f
+                        : authoring.PlaybackTimeScale,
                     Playing = authoring.PlayOnEnable ? (byte)1 : (byte)0,
                     Completed = 0,
                 };
@@ -185,10 +216,13 @@ namespace InvertLab.Sprites.DOTS
                         SlotIndex = i,
                         ParentSlotIndex = slot.ParentSlotIndex,
                         SlotIdHash = slot.SlotIdHash,
+                        Hidden = slot.Hidden,
                     });
                     AddComponent(part, new SpritePartsOwner { Root = root });
                     AddComponent(part, new SpritePartRenderDepth { Value = 0f });
                     AddComponent(part, new SpriteAnimEnabled());
+                    if (slot.Hidden != 0)
+                        SetComponentEnabled<SpriteAnimEnabled>(part, false);
                     AddComponent(part, new SpriteTint
                     {
                         Value = new float4(authoring.Tint.r, authoring.Tint.g, authoring.Tint.b, authoring.Tint.a),
@@ -353,4 +387,138 @@ namespace InvertLab.Sprites.DOTS
             }
         }
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// Related authoring when you add Sprite Parts Character.
+    /// Adds Sort only — MeshRenderer quads are not used (Preview shaders lack
+    /// DOTS_INSTANCING_ON and Entities Graphics / BRG reject them).
+    /// </summary>
+    public static class SpritePartsAuthoringBundle
+    {
+        static readonly string[] PreviewMeshNames =
+        {
+            "InvertLab Parts Preview Quad",
+            "InvertLab Preview Quad",
+        };
+        static readonly string[] PreviewMaterialNames =
+        {
+            "InvertLab Parts Preview",
+            "InvertLab Sprite Preview",
+            "Default-Particle",
+        };
+        static bool _adding;
+
+        public static void EnsureDeferred(GameObject gameObject)
+        {
+            if (gameObject == null || Application.isPlaying)
+                return;
+            var go = gameObject;
+            EditorApplication.delayCall += () =>
+            {
+                if (go != null)
+                    Ensure(go);
+            };
+        }
+
+        public static void Ensure(GameObject gameObject)
+        {
+            if (_adding || gameObject == null || Application.isPlaying)
+                return;
+
+            _adding = true;
+            try
+            {
+                // Strip leftover MeshFilter/MeshRenderer previews from earlier builds.
+                StripLegacyPreviewMesh(gameObject);
+                StripConflictingFrameAuthoring(gameObject);
+                if (gameObject.GetComponent<SpriteSortAuthoring>() == null)
+                    Undo.AddComponent<SpriteSortAuthoring>(gameObject);
+            }
+            finally
+            {
+                _adding = false;
+            }
+        }
+
+        public static bool HasFrameAuthoringConflict(GameObject gameObject)
+        {
+            if (gameObject == null || gameObject.GetComponent<SpritePartsCharacterAuthoring>() == null)
+                return false;
+            return gameObject.GetComponent<SpriteAnimPlayerAuthoring>() != null
+                || gameObject.GetComponent<SpriteAnimSetAuthoring>() != null;
+        }
+
+        public static int StripConflictingFrameAuthoring(GameObject gameObject)
+        {
+            if (gameObject == null)
+                return 0;
+            int removed = 0;
+            var player = gameObject.GetComponent<SpriteAnimPlayerAuthoring>();
+            if (player != null)
+            {
+                Undo.DestroyObjectImmediate(player);
+                removed++;
+            }
+            var set = gameObject.GetComponent<SpriteAnimSetAuthoring>();
+            if (set != null)
+            {
+                Undo.DestroyObjectImmediate(set);
+                removed++;
+            }
+            return removed;
+        }
+
+        static bool IsLegacyPreview(GameObject gameObject, out MeshFilter filter, out MeshRenderer renderer)
+        {
+            filter = gameObject.GetComponent<MeshFilter>();
+            renderer = gameObject.GetComponent<MeshRenderer>();
+            if (filter != null && filter.sharedMesh != null)
+            {
+                string meshName = filter.sharedMesh.name;
+                for (int i = 0; i < PreviewMeshNames.Length; i++)
+                {
+                    if (meshName == PreviewMeshNames[i])
+                        return true;
+                }
+            }
+            if (renderer != null && renderer.sharedMaterial != null)
+            {
+                string matName = renderer.sharedMaterial.name;
+                for (int i = 0; i < PreviewMaterialNames.Length; i++)
+                {
+                    if (matName == PreviewMaterialNames[i] ||
+                        matName.StartsWith(PreviewMaterialNames[i]))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        static void StripLegacyPreviewMesh(GameObject gameObject)
+        {
+            if (!IsLegacyPreview(gameObject, out var filter, out var renderer))
+                return;
+
+            // Hide immediately so BRG stops drawing; destroy on next editor tick
+            // (DestroyObjectImmediate is illegal during OnValidate).
+            if (renderer != null)
+                renderer.enabled = false;
+
+            var go = gameObject;
+            EditorApplication.delayCall += () =>
+            {
+                if (go == null)
+                    return;
+                if (!IsLegacyPreview(go, out var f2, out var r2))
+                    return;
+                if (r2 != null)
+                    Undo.DestroyObjectImmediate(r2);
+                if (f2 != null)
+                    Undo.DestroyObjectImmediate(f2);
+            };
+        }
+    }
+#endif
+
 }

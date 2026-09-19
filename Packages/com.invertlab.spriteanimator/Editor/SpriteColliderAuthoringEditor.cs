@@ -49,16 +49,25 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             var authoring = (SpriteColliderAuthoring)target;
             var set = authoring.GetComponent<SpriteAnimSetAuthoring>();
+            var parts = authoring.GetComponent<SpritePartsCharacterAuthoring>();
             EditorGUILayout.Space();
 
-            if (set == null)
+            if (set == null && parts == null)
             {
-                EditorGUILayout.HelpBox("Requires a Sprite Anim Set Authoring on this object.",
+                EditorGUILayout.HelpBox(
+                    "Requires either Sprite Anim Set Authoring (Frames) or Sprite Parts Character Authoring.",
                     MessageType.Warning);
                 return;
             }
 
-            var data = set.Profile != null ? set.Profile.Data : null;
+            var profileAsset = set != null ? set.Profile : parts.Profile;
+            var data = profileAsset != null ? profileAsset.Data : null;
+            if (data == null)
+            {
+                EditorGUILayout.HelpBox("Assign a profile to the character authoring component.",
+                    MessageType.Warning);
+                return;
+            }
             byte mask = authoring.ResolveLifetimeMask(data);
             string detected = data != null && data.Hitboxes != null && data.Hitboxes.Count > 0
                 ? DescribeMask(mask)
@@ -138,9 +147,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                         Undo.RegisterFullObjectHierarchyUndo(a.gameObject, "Bake Unity Physics Colliders");
                         a.Method = SpriteColliderMethod.UnityPhysics;
                         a.ApplyToAnimSet();
-                        float sizeUnits = set != null ? set.SizeUnits : 1f;
                         var setA = a.GetComponent<SpriteAnimSetAuthoring>();
-                        var dataA = setA != null && setA.Profile != null ? setA.Profile.Data : null;
+                        var partsA = a.GetComponent<SpritePartsCharacterAuthoring>();
+                        var profileA = setA != null ? setA.Profile : partsA != null ? partsA.Profile : null;
+                        var dataA = profileA != null ? profileA.Data : null;
                         float su = setA != null ? setA.SizeUnits : 1f;
                         int n = (int)_bakeMethod.Invoke(null, new object[] { a.transform, dataA, su });
                         EditorUtility.SetDirty(a);

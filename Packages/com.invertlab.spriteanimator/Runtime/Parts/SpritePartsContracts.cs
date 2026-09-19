@@ -38,6 +38,8 @@ namespace InvertLab.Sprites.DOTS
         public int SlotIndex;
         public int ParentSlotIndex;
         public ulong SlotIdHash;
+        /// <summary>1 = profile hide (eye off or hidden ancestor). Never drawn.</summary>
+        public byte Hidden;
     }
 
     public struct SpritePartAppearanceState : IComponentData

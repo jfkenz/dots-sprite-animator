@@ -133,6 +133,50 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void HiddenSlotCopiesToBlob()
+        {
+            var profile = Profile();
+            profile.PartsSlots[1].Enabled = false;
+            Assert.IsTrue(SpritePartsClipConversion.TryBuildBlob(profile, Allocator.Temp,
+                out var blob, out var error), error);
+            try
+            {
+                Assert.AreEqual(0, blob.Value.Slots[0].Hidden);
+                Assert.AreEqual(1, blob.Value.Slots[1].Hidden);
+            }
+            finally { blob.Dispose(); }
+
+            profile = Profile();
+            profile.PartsSlots[0].Enabled = false;
+            Assert.IsTrue(SpritePartsClipConversion.TryBuildBlob(profile, Allocator.Temp,
+                out blob, out error), error);
+            try
+            {
+                Assert.AreEqual(1, blob.Value.Slots[0].Hidden);
+                Assert.AreEqual(1, blob.Value.Slots[1].Hidden);
+            }
+            finally { blob.Dispose(); }
+        }
+
+        [Test]
+        public void DeletingBodySlotStillBuilds()
+        {
+            var profile = Profile();
+            profile.PartsSlots.RemoveAt(0);
+            Assert.IsTrue(SpritePartsValidation.Validate(profile).Ok,
+                string.Join(" | ", SpritePartsValidation.Validate(profile).Errors));
+            Assert.IsTrue(SpritePartsClipConversion.TryBuildBlob(profile, Allocator.Temp,
+                out var blob, out var error), error);
+            try
+            {
+                Assert.AreEqual(1, blob.Value.Slots.Length);
+                Assert.AreEqual(-1, blob.Value.Slots[0].ParentSlotIndex);
+                Assert.AreEqual(0, blob.Value.Clips[0].Tracks.Length);
+            }
+            finally { blob.Dispose(); }
+        }
+
+        [Test]
         public void ContractTypesAreIComponentData()
         {
             Assert.IsTrue(typeof(IComponentData).IsAssignableFrom(typeof(SpritePartsPlayer)));

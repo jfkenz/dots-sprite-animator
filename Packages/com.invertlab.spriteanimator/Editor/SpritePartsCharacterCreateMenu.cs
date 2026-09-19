@@ -113,7 +113,6 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             var parts = go.GetComponent<SpritePartsCharacterAuthoring>();
             var set = go.GetComponent<SpriteAnimSetAuthoring>();
-            var player = go.GetComponent<SpriteAnimPlayerAuthoring>();
             var profile = parts != null ? parts.Profile : set != null ? set.Profile : null;
             bool isParts = profile != null && profile.Data != null && profile.Data.AnimKind == SpriteAnimKind.Parts;
             if (!isParts)
@@ -127,12 +126,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 parts = Undo.AddComponent<SpritePartsCharacterAuthoring>(go);
             if (parts.Profile == null && set != null)
                 parts.Profile = set.Profile;
-            if (player != null)
-                Undo.DestroyObjectImmediate(player);
+            SpritePartsAuthoringBundle.StripConflictingFrameAuthoring(go);
             Undo.CollapseUndoOperations(group);
             EditorUtility.DisplayDialog(
                 "Fix Parts Authoring Conflict",
-                "Ensured SpritePartsCharacterAuthoring and removed frame SpriteAnimPlayerAuthoring via Undoable Fix. OnValidate did not delete components.",
+                "Ensured SpritePartsCharacterAuthoring and removed frame Set/Player authoring.",
                 "OK");
         }
 

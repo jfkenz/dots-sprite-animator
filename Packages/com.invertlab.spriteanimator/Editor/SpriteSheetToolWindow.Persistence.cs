@@ -89,7 +89,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_asset == null || _profile == null)
                 return;
             if (!ReferenceEquals(_asset.Data, _profile))
+            {
+                // The profile inspector may change the runtime mode while this
+                // window survives a domain reload with a serialized working copy.
+                // Preserve that external choice instead of writing the stale copy
+                // back over it on the next Parts edit/save.
+                if (_asset.Data != null)
+                    _profile.AnimKind = _asset.Data.AnimKind;
                 _asset.Data = _profile;
+            }
             EditorUtility.SetDirty(_asset);
         }
 
@@ -150,9 +158,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 AssetDatabase.CreateAsset(_asset, assetPath);
             }
             _createSeparateProfileOnSave = false;
-            if (!ReferenceEquals(_asset.Data, _profile))
-                _asset.Data = _profile;
-            EditorUtility.SetDirty(_asset);
+            SyncWorkingProfileToAsset();
             AssetDatabase.SaveAssets();
             // After save, stay bound to whatever nested Data the SO retained.
             if (_asset.Data != null)
@@ -179,6 +185,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 NoteProfileSaved(auto: false);
             }
             SpriteSheetProfileRecents.Remember(_asset);
+            SpritePartsSceneSync.RefreshCharactersUsing(_asset);
         }
 
         static string UniqueProfileAssetPath(string directory, string sheetName)

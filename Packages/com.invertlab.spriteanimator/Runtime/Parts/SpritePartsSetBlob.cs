@@ -25,6 +25,8 @@ namespace InvertLab.Sprites.DOTS
         public float2 RestScale;
         public int DefaultAppearanceIndex;
         public int DrawRank;
+        /// <summary>1 = do not draw this part (profile Enabled=false or hidden ancestor).</summary>
+        public byte Hidden;
     }
 
     public struct SpritePartsClipBlob
@@ -99,6 +101,7 @@ namespace InvertLab.Sprites.DOTS
             public float2 RestScale;
             public string DefaultAppearanceId;
             public int DrawRank;
+            public byte Hidden;
         }
 
         public struct AppearanceInput
@@ -119,7 +122,7 @@ namespace InvertLab.Sprites.DOTS
             public float Rotation;
             public float2 Scale;
             public byte EaseMode;
-            /// <summary>Empty = hold (-1). Non-empty must exist in Appearances.</summary>
+            /// <summary>Empty = hold (-1). Unknown ids also hold.</summary>
             public string AppearanceId;
         }
 
@@ -221,6 +224,7 @@ namespace InvertLab.Sprites.DOTS
                             : src.RestScale,
                         DefaultAppearanceIndex = defaultApp,
                         DrawRank = src.DrawRank,
+                        Hidden = src.Hidden,
                     };
                 }
 
@@ -274,7 +278,7 @@ namespace InvertLab.Sprites.DOTS
                     {
                         string sid = SpritePartIdUtility.Canonical(tracks[t].SlotId);
                         if (!slotIndex.ContainsKey(sid))
-                            throw new ArgumentException($"Clip '{name}' track slot '{sid}' missing.");
+                            continue;
                         bool isAppearance = tracks[t].Kind == (byte)SpritePartsTrackKind.Appearance;
                         var used = isAppearance ? usedAppearance : usedPose;
                         if (!used.Add(sid))
@@ -302,7 +306,8 @@ namespace InvertLab.Sprites.DOTS
                             bool isAppearance = tr.Kind == (byte)SpritePartsTrackKind.Appearance;
                             if (isAppearance != appearancePass) continue;
                             string sid = SpritePartIdUtility.Canonical(tr.SlotId);
-                            int sIndex = slotIndex[sid];
+                            if (!slotIndex.TryGetValue(sid, out int sIndex))
+                                continue;
                             if (isAppearance)
                                 denseAppearance[sIndex] = write;
                             else
@@ -388,7 +393,7 @@ namespace InvertLab.Sprites.DOTS
                 {
                     string aid = SpritePartIdUtility.Canonical(k.AppearanceId);
                     if (appIndex == null || !appIndex.TryGetValue(aid, out appearanceIndex))
-                        throw new ArgumentException($"Key appearance '{aid}' is missing from the profile.");
+                        appearanceIndex = -1;
                 }
                 list.Add((i, new SpritePartsKeyBlob
                 {

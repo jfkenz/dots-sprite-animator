@@ -122,10 +122,7 @@ namespace InvertLab.Sprites.DOTS
         {
             var slots = profile.PartsSlots;
             if (slots == null || slots.Count == 0)
-            {
-                errors.Add("Parts profile has no slots.");
                 return;
-            }
             if (slots.Count > SpritePartIdUtility.MaxParts)
                 errors.Add($"Parts supports at most {SpritePartIdUtility.MaxParts} slots (found {slots.Count}).");
 
@@ -172,23 +169,13 @@ namespace InvertLab.Sprites.DOTS
                     continue;
                 string parent = SpritePartIdUtility.Canonical(slot.ParentSlotId);
                 if (!ids.ContainsKey(parent))
-                    errors.Add($"Slot '{id}' ParentSlotId '{parent}' is missing.");
+                    continue;
                 else if (parent == id)
                     errors.Add($"Slot '{id}' cannot parent to itself.");
             }
 
             if (HasCycle(slots, ids))
                 errors.Add("Parts slot hierarchy contains a cycle.");
-
-            for (int i = 0; i < slots.Count; i++)
-            {
-                var slot = slots[i];
-                if (slot == null || string.IsNullOrWhiteSpace(slot.DefaultAppearanceId))
-                    continue;
-                string appId = SpritePartIdUtility.Canonical(slot.DefaultAppearanceId);
-                if (FindAppearanceIndex(profile, appId) < 0)
-                    errors.Add($"Slot '{SpritePartIdUtility.Canonical(slot.SlotId, slot.Name)}' default appearance '{appId}' is missing.");
-            }
         }
 
         static void ValidateAppearances(SpriteSheetProfile profile, List<string> errors)
@@ -305,7 +292,7 @@ namespace InvertLab.Sprites.DOTS
                     if (!used.Add(slotId))
                         errors.Add($"Parts clip '{clip.Name}' has duplicate {(isAppearance ? "appearance" : "pose")} track for slot '{slotId}'.");
                     if (!slotIds.Contains(slotId))
-                        errors.Add($"Parts clip '{clip.Name}' track slot '{slotId}' is missing from the rig.");
+                        continue;
 
                     var keys = track.Keys;
                     if (keys == null)
@@ -321,29 +308,13 @@ namespace InvertLab.Sprites.DOTS
                         if (!math.isfinite(key.Time) || key.Time < 0f || key.Time > clip.Duration + 1e-5f)
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key time {key.Time} must be in [0, Duration={clip.Duration}].");
                         if (isAppearance)
-                        {
-                            // Appearance keys carry no pose: only timing and the
-                            // id need to be sane.
-                            if (!string.IsNullOrWhiteSpace(key.AppearanceId))
-                            {
-                                string aid = SpritePartIdUtility.Canonical(key.AppearanceId);
-                                if (FindAppearanceIndex(profile, aid) < 0)
-                                    errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] appearance '{aid}' is missing from the profile.");
-                            }
                             continue;
-                        }
                         if (!IsFinite(key.Position) || !math.isfinite(key.Rotation) || !IsFinite(key.Scale))
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] has non-finite values.");
                         if (math.abs(key.Scale.x) < 1e-5f || math.abs(key.Scale.y) < 1e-5f)
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] scale axes must be non-zero.");
                         if (!SpriteEase.IsValidMode(key.EaseMode))
                             errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] has invalid EaseMode.");
-                        if (!string.IsNullOrWhiteSpace(key.AppearanceId))
-                        {
-                            string aid = SpritePartIdUtility.Canonical(key.AppearanceId);
-                            if (FindAppearanceIndex(profile, aid) < 0)
-                                errors.Add($"Parts clip '{clip.Name}' track '{slotId}' key[{k}] appearance '{aid}' is missing from the profile.");
-                        }
                     }
                 }
             }
@@ -387,9 +358,9 @@ namespace InvertLab.Sprites.DOTS
                     string slotId = SpritePartIdUtility.Canonical(binding.SlotId);
                     string appId = SpritePartIdUtility.Canonical(binding.AppearanceId);
                     if (!slotIds.Contains(slotId))
-                        errors.Add($"Skin '{id}' binding slot '{slotId}' is missing.");
+                        continue;
                     if (FindAppearanceIndex(profile, appId) < 0)
-                        errors.Add($"Skin '{id}' appearance '{appId}' is missing.");
+                        continue;
                 }
             }
         }
@@ -407,7 +378,7 @@ namespace InvertLab.Sprites.DOTS
             return set;
         }
 
-        static int FindAppearanceIndex(SpriteSheetProfile profile, string appearanceId)
+        public static int FindAppearanceIndex(SpriteSheetProfile profile, string appearanceId)
         {
             if (profile.PartsAppearances == null) return -1;
             for (int i = 0; i < profile.PartsAppearances.Count; i++)

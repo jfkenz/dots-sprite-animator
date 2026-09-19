@@ -51,9 +51,12 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] int _partsOnionAfter = SpritePartsAuthoringOps.DefaultOnionAfter;
         [SerializeField] int _partsOnionSpacing = SpritePartsAuthoringOps.DefaultOnionSpacingFrames;
         [SerializeField] float _partsOnionOpacity = SpritePartsAuthoringOps.DefaultOnionOpacity;
+        [SerializeField] bool _partsShowArt = true;
+        [SerializeField] bool _partsShowDebug = true;
         [SerializeField] float _partsDisplayFps = SpritePartsAuthoringOps.DefaultDisplayFps;
         // Preview: wrap playhead at last key time instead of Duration.
         [SerializeField] bool _partsLoopLastKey;
+        [SerializeField] int _partsFrameStep = 1;
         [SerializeField] bool _partsOnionShowWhilePlaying;
         [SerializeField] PartsCanvasTool _partsCanvasTool = PartsCanvasTool.Move;
         [SerializeField] string _partsPreviewSkinId = "default";
@@ -61,6 +64,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         // Move axis locks (persistent). Shift still does Affinity-style dominant-axis constrain.
         [SerializeField] bool _partsLockMoveX;
         [SerializeField] bool _partsLockMoveY;
+        [SerializeField] bool _partsGizmoLocal;
+        float2 _partsDragAxisWorld;
         [SerializeField] int _partsArtColumns = 1;
         [SerializeField] int _partsArtRows = 1;
         [SerializeField] int _partsArtCell;
@@ -454,7 +459,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             float duration = Mathf.Max(1e-3f, clip.Duration);
             float authored = clip.Speed;
-            if (!(authored > 0f) || float.IsNaN(authored) || float.IsInfinity(authored))
+            if (float.IsNaN(authored) || float.IsInfinity(authored))
                 authored = 1f;
             _partsPreviewTime += delta * Mathf.Max(0.05f, _speed) * authored;
             // Loop Last: wrap at last keyframe time back to first (preview only).
@@ -583,7 +588,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUI.BeginChangeCheck();
                 string name = EditorGUILayout.TextField("Clip Name", clip.Name);
                 float duration = EditorGUILayout.FloatField("Duration", clip.Duration);
-                float speed = EditorGUILayout.FloatField("Speed", clip.Speed);
+                float timeScale = EditorGUILayout.FloatField(
+                    new GUIContent("Time Scale",
+                        "Parts playback multiplier. 1 = normal, 2 = twice as fast, 0.5 = half speed, 0 = paused, negative = reverse."),
+                    clip.Speed);
                 byte wrap = (byte)EditorGUILayout.Popup("Wrap", clip.WrapMode,
                     new[] { "Loop", "Once" });
                 if (EditorGUI.EndChangeCheck())
@@ -591,7 +599,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                     RecordPartsUndo("Edit Parts Clip");
                     clip.Name = name;
                     clip.Duration = Mathf.Max(1e-3f, duration);
-                    clip.Speed = speed;
+                    clip.Speed = float.IsNaN(timeScale) || float.IsInfinity(timeScale)
+                        ? 1f
+                        : timeScale;
                     clip.WrapMode = wrap;
                     SaveDirty();
                 }
@@ -708,12 +718,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUILayout.ExpandWidth(true));
             if (next == current)
                 return;
-            RecordWindowUndo("Change Parts Mode");
-            if (_partsHasTempPose)
-                ResolveOrWarnTempPose();
-            _partsMode = (SpritePartsStudioMode)next;
-            if (_partsMode == SpritePartsStudioMode.Skins)
-                _partsSkinPreviewOverrides.Clear();
+            SwitchPartsMode((SpritePartsStudioMode)next, "Change Parts Mode");
         }
 
 
@@ -1500,6 +1505,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         SpritePartIdUtility.Canonical(app);
                     _status = "Skin preview (unsaved)";
                 }
+                DrawPartsAppearancePixelsPerUnit(currentApp);
             }
 
             if (GUILayout.Button("Save Skin"))
@@ -1525,6 +1531,43 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
+        void DrawPartsAppearancePixelsPerUnit(string appearanceId)
+        {
+            var appearance = SpritePartsAuthoringOps.FindAppearance(_profile, appearanceId);
+            var sheet = appearance != null ? _profile.SheetAt(appearance.SheetIndex) : null;
+            if (sheet == null)
+                return;
+
+            float current = SpriteSheetProfile.GetPixelsPerUnit(sheet);
+            EditorGUI.BeginChangeCheck();
+            float next = Mathf.Max(SpriteSheetProfile.MinPixelsPerUnit,
+                EditorGUILayout.FloatField(
+                    new GUIContent("Pixels / Unit",
+                        "Size of the selected part in world units. Higher values draw it smaller; lower values draw it larger. Shared by appearances using this sheet."),
+                    current));
+            if (EditorGUI.EndChangeCheck() && !Mathf.Approximately(next, current))
+            {
+                RecordPartsUndo("Set Parts Pixels Per Unit");
+                sheet.PixelsPerUnit = next;
+                SaveDirty();
+                _status = $"Parts sheet '{sheet.Name}' set to {next:g} PPU. Save Profile to update the scene.";
+            }
+
+            if (appearance.LogicalWorldSize != Vector2.zero)
+            {
+                EditorGUILayout.HelpBox(
+                    "This appearance has an explicit World Size, so Pixels / Unit does not control its size.",
+                    MessageType.Info);
+            }
+            else if (SpriteSheetProfile.TryGetActiveCellPixels(
+                         sheet, appearance.CellIndex, out float cellW, out float cellH))
+            {
+                EditorGUILayout.LabelField(
+                    "Scene Size",
+                    $"{cellW / next:0.###} × {cellH / next:0.###} units");
+            }
+        }
+
         void DrawPartsPreview(Rect rect, int partsCanvasControlId)
         {
             EnsurePartsSession();
@@ -1545,6 +1588,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsToolToggle(ref tx, ty, "Q Move", PartsCanvasTool.Move);
             DrawPartsToolToggle(ref tx, ty, "W Rotate", PartsCanvasTool.Rotate);
             DrawPartsToolToggle(ref tx, ty, "E Scale", PartsCanvasTool.Scale);
+            if (_partsCanvasTool == PartsCanvasTool.Move || _partsCanvasTool == PartsCanvasTool.Rotate)
+            {
+                _partsGizmoLocal = GUI.Toggle(new Rect(tx, ty, 58f, 20f), _partsGizmoLocal,
+                    new GUIContent(_partsGizmoLocal ? "Local" : "Global",
+                        "Gizmo space. Local follows the part; Global uses world axes."));
+                tx += 62f;
+            }
             _partsLinkedScale = GUI.Toggle(new Rect(tx, ty, 70f, 20f), _partsLinkedScale, "Link XY");
             tx += 74f;
             bool lockX = GUI.Toggle(new Rect(tx, ty, 58f, 20f), _partsLockMoveX,
@@ -1563,13 +1613,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (lockY) _partsLockMoveX = false;
             }
 
-            // Onion controls
+            // Onion amount stays in the header; show/hide toggles sit on the canvas.
             float ox = rect.x + 12f;
             float oy = rect.y + 58f;
             using (new EditorGUI.DisabledScope(_partsMode == SpritePartsStudioMode.Rig))
             {
-                _partsOnionEnabled = GUI.Toggle(new Rect(ox, oy, 70f, 18f), _partsOnionEnabled, "Onion");
-                ox += 74f;
                 GUI.Label(new Rect(ox, oy, 44f, 18f), "Before", _mutedStyle);
                 ox += 46f;
                 _partsOnionBefore = Mathf.Clamp(Mathf.RoundToInt(
@@ -1581,11 +1629,55 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GUI.HorizontalSlider(new Rect(ox, oy + 4f, 40f, 14f), _partsOnionAfter, 0f, 3f)), 0, 3);
             }
 
+            DrawPartsCanvasZoomToolbar(rect);
+
             var canvas = new Rect(rect.x + 10f, rect.y + 84f, rect.width - 20f, rect.height - 96f);
+            var overlay = PartsCanvasVisibilityOverlayRect(canvas);
+            Event overlayEvt = Event.current;
+            if (overlayEvt.type == EventType.MouseDown
+                && overlayEvt.button == 0
+                && overlay.Contains(overlayEvt.mousePosition))
+                ReleasePartsCanvasCapture();
+
             EditorGUI.DrawRect(canvas, new Color(0.07f, 0.08f, 0.1f));
-            // Input first so Layout/Repaint still paint contents after Use().
-            HandlePartsCanvasInput(canvas, partsCanvasControlId);
-            DrawPartsCanvasContents(canvas);
+            // Input in window space; draw clipped so art cannot spill into the timeline.
+            if (!overlay.Contains(Event.current.mousePosition) || _partsDragActive)
+                HandlePartsCanvasInput(canvas, partsCanvasControlId);
+            GUI.BeginClip(canvas);
+            try
+            {
+                DrawPartsCanvasContents(new Rect(0f, 0f, canvas.width, canvas.height));
+            }
+            finally
+            {
+                GUI.EndClip();
+            }
+
+            DrawPartsCanvasVisibilityOverlay(overlay);
+        }
+
+        static Rect PartsCanvasVisibilityOverlayRect(Rect canvas)
+        {
+            const float pad = 8f;
+            const float h = 24f;
+            const float w = 188f;
+            return new Rect(canvas.xMax - w - pad, canvas.yMax - h - pad, w, h);
+        }
+
+        void DrawPartsCanvasVisibilityOverlay(Rect overlay)
+        {
+            EditorGUI.DrawRect(overlay, new Color(0.08f, 0.09f, 0.12f, 0.92f));
+            float x = overlay.x + 2f;
+            float y = overlay.y + 1f;
+            using (new EditorGUI.DisabledScope(_partsMode == SpritePartsStudioMode.Rig))
+            {
+                DrawPartsVisibilityToggle(ref x, y, 62f, ref _partsOnionEnabled,
+                    "Onion", "Show previous/next pose ghosts on the canvas.");
+            }
+            DrawPartsVisibilityToggle(ref x, y, 44f, ref _partsShowArt,
+                "Art", "Show or hide the current pose sprites.");
+            DrawPartsVisibilityToggle(ref x, y, 58f, ref _partsShowDebug,
+                "Debug", "Show or hide part names, onion labels, and transform gizmos.");
         }
 
         void DrawPartsToolToggle(ref float x, float y, string label, PartsCanvasTool tool)
@@ -1605,9 +1697,79 @@ namespace InvertLab.Sprites.DOTS.Editor
             x += w + 4f;
         }
 
+        void DrawPartsVisibilityToggle(ref float x, float y, float width, ref bool value,
+            string label, string tooltip)
+        {
+            var r = new Rect(x, y, width, 22f);
+            if (value)
+            {
+                EditorGUI.DrawRect(r, new Color(0.18f, 0.48f, 0.52f, 0.95f));
+                EditorGUI.DrawRect(new Rect(r.x, r.yMax - 2f, r.width, 2f), new Color(0.35f, 0.85f, 0.9f, 1f));
+            }
+            var style = value ? _primaryStyle : _partsTabStyle;
+            value = GUI.Toggle(r, value, new GUIContent(label, tooltip), style);
+            x += width + 4f;
+        }
+
+        double _partsSkinsTransformWarnAt;
+
+        /// <summary>
+        /// Skins is art/pivot only (Unity Materials-panel style). Offer a jump to
+        /// Rig or Animate when the user reaches for Move/Rotate/Scale.
+        /// </summary>
+        void WarnSkinsTransformBlocked(string attempt)
+        {
+            // Avoid stacking dialogs if Q/W/E and canvas click fire together.
+            double now = EditorApplication.timeSinceStartup;
+            if (now - _partsSkinsTransformWarnAt < 0.35)
+            {
+                _status = "Skins: move/rotate/scale off - switch to Rig or Animate.";
+                return;
+            }
+            _partsSkinsTransformWarnAt = now;
+            _status = "Skins: move/rotate/scale off - switch to Rig or Animate.";
+            string body =
+                "Move, Rotate, and Scale only work in Rig (rest pose) or Animate (clip keys).\n\n" +
+                "Skins is for art libraries, skin bindings, and pivot - like Unity renderer/materials panels," +
+                " not Scene transform tools.";
+            if (!string.IsNullOrEmpty(attempt))
+                body += "\n\nTried: " + attempt;
+            body += "\n\nSwitch mode?";
+            int choice = EditorUtility.DisplayDialogComplex(
+                "Transform tools unavailable in Skins",
+                body,
+                "Go to Animate",
+                "Cancel",
+                "Go to Rig");
+            if (choice == 0)
+                SwitchPartsMode(SpritePartsStudioMode.Animate, "Switch to Animate");
+            else if (choice == 2)
+                SwitchPartsMode(SpritePartsStudioMode.Rig, "Switch to Rig");
+        }
+
+        void SwitchPartsMode(SpritePartsStudioMode mode, string undoLabel)
+        {
+            if (_partsMode == mode) return;
+            RecordWindowUndo(undoLabel);
+            if (_partsHasTempPose)
+                ResolveOrWarnTempPose();
+            _partsMode = mode;
+            if (_partsMode == SpritePartsStudioMode.Skins)
+                _partsSkinPreviewOverrides.Clear();
+            _status = mode == SpritePartsStudioMode.Animate
+                ? "Animate: transform tools enabled"
+                : mode == SpritePartsStudioMode.Rig
+                    ? "Rig: transform tools enabled"
+                    : "Skins";
+            Repaint();
+        }
+
         void SetPartsCanvasTool(PartsCanvasTool tool)
         {
             if (_partsCanvasTool == tool) return;
+            if (_partsMode == SpritePartsStudioMode.Skins)
+                WarnSkinsTransformBlocked(tool == PartsCanvasTool.Move ? "Move (Q)"
+                    : tool == PartsCanvasTool.Rotate ? "Rotate (W)" : "Scale (E)");
             RecordWindowUndo("Change Parts Tool");
             _partsCanvasTool = tool;
             // Switching tools mid-drag (or with a stale hotControl) must free the canvas grab
@@ -1640,6 +1802,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsCanvasHotControl = 0;
             if (GUIUtility.hotControl != 0)
                 GUIUtility.hotControl = 0;
+            // Auto Key already wrote keys during drag; drop the live overlay.
+            if (_partsMode == SpritePartsStudioMode.Animate && _partsAutoKey && _partsHasTempPose)
+                _partsHasTempPose = false;
         }
 
         void CenterSelectedPartsSlot()
@@ -1793,7 +1958,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     // Read-only preview: no onion (ghosts track the selected
                     // profile clip), no handles, nothing pickable.
                     DrawPartsPoseQuads(canvas, ref blob.Value, poses, matrices,
-                        new Color(0.85f, 0.95f, 1f, 1f), pickable: false, sampleTime: time);
+                        new Color(0.85f, 0.95f, 1f, 1f), pickable: false,
+                        sampleTime: time, drawArt: true);
                     var banner = new Rect(canvas.x + 8f, canvas.yMax - 30f, canvas.width - 16f, 22f);
                     EditorGUI.DrawRect(banner, new Color(0.12f, 0.16f, 0.22f, 0.94f));
                     GUI.Label(new Rect(banner.x + 6f, banner.y + 3f, banner.width - 12f, 16f),
@@ -1824,8 +1990,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                             Color tint = ghost.IsPast
                                 ? new Color(0.35f, 0.55f, 1f, _partsOnionOpacity)
                                 : new Color(1f, 0.55f, 0.25f, _partsOnionOpacity);
-                            DrawPartsPoseQuads(canvas, ref gBlob.Value, gPoses, gMats, tint, pickable: false, sampleTime: ghost.Time);
-                            DrawOnionBadge(canvas, gMats, ghost);
+                            DrawPartsPoseQuads(canvas, ref gBlob.Value, gPoses, gMats, tint,
+                                pickable: false, sampleTime: ghost.Time, drawArt: true);
+                            if (_partsShowDebug)
+                                DrawOnionBadge(canvas, gMats, ghost);
                         }
                         finally
                         {
@@ -1835,8 +2003,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
 
                 ApplyTempPoseToSample(ref blob.Value, poses, matrices);
-                DrawPartsPoseQuads(canvas, ref blob.Value, poses, matrices, Color.white, pickable: true, sampleTime: time);
-                DrawPartsTransformGizmo(canvas, ref blob.Value, poses, matrices);
+                DrawPartsPoseQuads(canvas, ref blob.Value, poses, matrices, Color.white,
+                    pickable: true, sampleTime: time, drawArt: _partsShowArt);
+                if (_partsShowDebug)
+                    DrawPartsTransformGizmo(canvas, ref blob.Value, poses, matrices);
             }
             finally
             {
@@ -1930,7 +2100,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawPartsPoseQuads(
             Rect canvas, ref SpritePartsSetBlob set,
             NativeArray<SpritePartsSampler.Pose> poses, NativeArray<float4x4> matrices,
-            Color tint, bool pickable, float sampleTime)
+            Color tint, bool pickable, float sampleTime, bool drawArt)
         {
             // Draw by DrawRank ascending (back to front).
             int n = set.Slots.Length;
@@ -1975,13 +2145,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (flipSx < 0f || flipSy < 0f)
                     GUIUtility.ScaleAroundPivot(new Vector2(flipSx, flipSy), joint);
                 Texture2D tex = sheet?.Texture;
-                if (tex != null && app != null)
+                if (drawArt && tex != null && app != null)
                 {
                     // Keep art colors. Selection outline is drawn by the transform gizmo
                     // (Handles ignore GUI.matrix — drawing here caused a second unrotated box).
                     DrawPartsSheetCell(tex, sheet, sheet.Columns, sheet.Rows, app.CellIndex, r, tint);
                 }
-                else
+                else if (drawArt)
                 {
                     var col = tint;
                     if (pickable && IsPartsBlobSlotSelected(ref set, i))
@@ -1992,9 +2162,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 GUI.matrix = prev;
 
-                string name = set.Slots[i].Name.ToString();
-                GUI.Label(new Rect(joint.x - 24f, joint.y + Mathf.Max(10f, r.height * 0.5f) + 2f, 80f, 14f),
-                    name, _mutedStyle);
+                if (_partsShowDebug && pickable)
+                {
+                    string name = set.Slots[i].Name.ToString();
+                    GUI.Label(new Rect(joint.x - 24f,
+                            joint.y + Mathf.Max(10f, r.height * 0.5f) + 2f, 80f, 14f),
+                        name, _mutedStyle);
+                }
             }
         }
 
@@ -2100,9 +2274,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!TryGetSelectedPartsGizmo(canvas, out var r, out var joint, out float guiDeg))
                 return ColliderHandleKind.None;
             float hit = PartsHandleHit * PartsHandleHit;
+            float worldDeg = -guiDeg;
+
             if (_partsCanvasTool == PartsCanvasTool.Scale)
             {
-                // Unity Scale: only corner/edge knobs. Body click selects, does not scale.
                 float scaleHit = PartsScaleHandleHit * PartsScaleHandleHit;
                 foreach (var kind in PartsGizmoHandleOrder)
                 {
@@ -2112,19 +2287,200 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 Vector2 localScale = UnrotateAround(mouse, joint, guiDeg);
                 if (r.Contains(localScale))
-                    return ColliderHandleKind.Body; // select / no-op scale
+                    return ColliderHandleKind.Body;
                 return ColliderHandleKind.None;
             }
+
+            if (_partsCanvasTool == PartsCanvasTool.Move)
+            {
+                float worldLen = 0.55f / Mathf.Max(0.25f, _previewZoom);
+                float2 ax = PartsGizmoAxisX(worldDeg);
+                float2 ay = PartsGizmoAxisY(worldDeg);
+                Vector2 xTip = PartsAxisTipGui(canvas, joint, ax, worldLen);
+                Vector2 yTip = PartsAxisTipGui(canvas, joint, ay, worldLen);
+                if ((mouse - xTip).sqrMagnitude <= hit) return ColliderHandleKind.AxisX;
+                if ((mouse - yTip).sqrMagnitude <= hit) return ColliderHandleKind.AxisY;
+                if (DistPointToSegment(mouse, joint, xTip) <= 7f) return ColliderHandleKind.AxisX;
+                if (DistPointToSegment(mouse, joint, yTip) <= 7f) return ColliderHandleKind.AxisY;
+                float s = 8f;
+                if (new Rect(joint.x - s, joint.y - s, s * 2f, s * 2f).Contains(mouse))
+                    return ColliderHandleKind.FreeMove;
+                Vector2 localMove = UnrotateAround(mouse, joint, guiDeg);
+                if (r.Contains(localMove))
+                    return ColliderHandleKind.Body;
+                return ColliderHandleKind.None;
+            }
+
             if (_partsCanvasTool == PartsCanvasTool.Rotate)
             {
+                float rr = 56f;
+                float orient = _partsGizmoLocal ? -worldDeg : 0f;
+                if (DistPointToCircle(mouse, joint, rr + 7f) <= 8f)
+                    return ColliderHandleKind.RotateSphere;
+                if (DistPointToCircle(mouse, joint, rr) <= 8f)
+                    return ColliderHandleKind.RotateZ;
+                if (DistPointToEllipse(mouse, joint, rr, 0.38f, orient) <= 8f)
+                    return ColliderHandleKind.RotateX;
+                if (DistPointToEllipse(mouse, joint, rr, 0.38f, orient + 90f) <= 8f)
+                    return ColliderHandleKind.RotateY;
                 if ((mouse - PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.Rotate)).sqrMagnitude <= hit)
                     return ColliderHandleKind.Rotate;
+                Vector2 localR = UnrotateAround(mouse, joint, guiDeg);
+                if (r.Contains(localR))
+                    return ColliderHandleKind.Body;
+                return ColliderHandleKind.None;
             }
+
             Vector2 local = UnrotateAround(mouse, joint, guiDeg);
             if (r.Contains(local))
                 return ColliderHandleKind.Body;
             return ColliderHandleKind.None;
         }
+
+
+        
+        float2 PartsGizmoAxisX(float worldDeg)
+        {
+            if (!_partsGizmoLocal)
+                return new float2(1f, 0f);
+            float rad = worldDeg * Mathf.Deg2Rad;
+            return new float2(Mathf.Cos(rad), Mathf.Sin(rad));
+        }
+
+        float2 PartsGizmoAxisY(float worldDeg)
+        {
+            if (!_partsGizmoLocal)
+                return new float2(0f, 1f);
+            float rad = worldDeg * Mathf.Deg2Rad;
+            return new float2(-Mathf.Sin(rad), Mathf.Cos(rad));
+        }
+
+        Vector2 PartsAxisTipGui(Rect canvas, Vector2 jointGui, float2 axisWorld, float worldLen)
+        {
+            float2 origin = CanvasToWorld(canvas, jointGui);
+            return WorldToCanvas(canvas, origin + axisWorld * worldLen);
+        }
+
+        static float DistPointToSegment(Vector2 p, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / Mathf.Max(1e-4f, ab.sqrMagnitude));
+            return (p - (a + ab * t)).magnitude;
+        }
+
+        static float DistPointToCircle(Vector2 p, Vector2 center, float radius)
+        {
+            return Mathf.Abs((p - center).magnitude - radius);
+        }
+
+        static float DistPointToEllipse(Vector2 p, Vector2 center, float radius, float squash, float guiDeg)
+        {
+            float best = float.MaxValue;
+            float rad = guiDeg * Mathf.Deg2Rad;
+            float c = Mathf.Cos(rad);
+            float s = Mathf.Sin(rad);
+            Vector2 prev = Vector2.zero;
+            for (int i = 0; i <= 32; i++)
+            {
+                float a = (Mathf.PI * 2f) * (i / 32f);
+                float lx = Mathf.Cos(a) * radius;
+                float ly = Mathf.Sin(a) * radius * squash;
+                Vector2 cur = center + new Vector2(lx * c - ly * s, lx * s + ly * c);
+                if (i > 0)
+                {
+                    Vector2 ab = cur - prev;
+                    float t = Mathf.Clamp01(Vector2.Dot(p - prev, ab) / Mathf.Max(1e-4f, ab.sqrMagnitude));
+                    float d = (p - (prev + ab * t)).magnitude;
+                    if (d < best) best = d;
+                }
+                prev = cur;
+            }
+            return best;
+        }
+
+        void DrawPartsArrowGui(Vector2 from, Vector2 to, Color color, float head)
+        {
+            // Unity Scene View style: opaque stem + filled cone tip (not wire outline).
+            Color solid = color;
+            solid.a = 1f;
+            Handles.color = solid;
+            Vector2 dir = to - from;
+            float len = dir.magnitude;
+            if (len < 1f) return;
+            dir /= len;
+            // Shorten stem so it meets the base of the filled head.
+            Vector2 stemEnd = to - dir * (head * 0.72f);
+            Handles.DrawAAPolyLine(4.5f, from, stemEnd);
+            Vector2 n = new Vector2(-dir.y, dir.x);
+            Vector3 p0 = to;
+            Vector3 p1 = to - dir * head + n * (head * 0.5f);
+            Vector3 p2 = to - dir * head - n * (head * 0.5f);
+            Handles.DrawAAConvexPolygon(p0, p1, p2);
+        }
+
+        void DrawPartsMoveAxisGizmo(Rect canvas, Vector2 joint, float worldDeg)
+        {
+            // Match Unity Move tool: screen-aligned Global X=red / Y=green, Local follows part.
+            float worldLen = 0.65f / Mathf.Max(0.25f, _previewZoom);
+            float2 ax = PartsGizmoAxisX(worldDeg);
+            float2 ay = PartsGizmoAxisY(worldDeg);
+            Vector2 xTip = PartsAxisTipGui(canvas, joint, ax, worldLen);
+            Vector2 yTip = PartsAxisTipGui(canvas, joint, ay, worldLen);
+            // Handles.*AxisColor = exact Unity editor axis palette.
+            DrawPartsArrowGui(joint, yTip, Handles.yAxisColor, 12f);
+            DrawPartsArrowGui(joint, xTip, Handles.xAxisColor, 12f);
+            float s = 5.5f;
+            Handles.DrawSolidRectangleWithOutline(
+                new Vector3[]
+                {
+                    joint + new Vector2(-s, -s), joint + new Vector2(s, -s),
+                    joint + new Vector2(s, s), joint + new Vector2(-s, s)
+                },
+                new Color(Handles.centerColor.r, Handles.centerColor.g, Handles.centerColor.b, 0.55f),
+                new Color(Handles.centerColor.r, Handles.centerColor.g, Handles.centerColor.b, 0.95f));
+        }
+
+        void DrawPartsGizmoEllipse(Vector2 center, float radius, float squash, float guiDeg, Color color, int segments = 48)
+        {
+            Handles.color = color;
+            float rad = guiDeg * Mathf.Deg2Rad;
+            float c = Mathf.Cos(rad);
+            float s = Mathf.Sin(rad);
+            var pts = new Vector3[segments + 1];
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = (Mathf.PI * 2f) * (i / (float)segments);
+                float lx = Mathf.Cos(a) * radius;
+                float ly = Mathf.Sin(a) * radius * squash;
+                float gx = lx * c - ly * s;
+                float gy = lx * s + ly * c;
+                pts[i] = new Vector3(center.x + gx, center.y + gy, 0f);
+            }
+            Handles.DrawAAPolyLine(2.4f, pts);
+        }
+
+        void DrawPartsRotateSphereGizmo(Vector2 joint, float worldDeg)
+        {
+            float r = 56f;
+            float orient = _partsGizmoLocal ? -worldDeg : 0f;
+            Handles.color = new Color(1f, 1f, 1f, 0.4f);
+            Handles.DrawWireDisc(joint, Vector3.forward, r + 7f);
+            Handles.color = new Color(0.25f, 0.5f, 1f, 0.98f);
+            Handles.DrawWireDisc(joint, Vector3.forward, r);
+            DrawPartsGizmoEllipse(joint, r, 0.38f, orient, new Color(0.95f, 0.25f, 0.2f, 0.92f));
+            DrawPartsGizmoEllipse(joint, r, 0.38f, orient + 90f, new Color(0.25f, 0.85f, 0.3f, 0.92f));
+            Vector2 knob = joint + new Vector2(0f, -r);
+            if (_partsGizmoLocal)
+            {
+                float rad = orient * Mathf.Deg2Rad;
+                knob = joint + new Vector2(Mathf.Sin(rad) * r, -Mathf.Cos(rad) * r);
+            }
+            Handles.color = new Color(0.35f, 0.6f, 1f, 1f);
+            Handles.DrawSolidDisc(knob, Vector3.forward, 5f);
+            Handles.color = Color.white;
+            Handles.DrawWireDisc(knob, Vector3.forward, 6.5f);
+        }
+
 
         void DrawPartsTransformGizmo(Rect canvas, ref SpritePartsSetBlob set,
             NativeArray<SpritePartsSampler.Pose> poses, NativeArray<float4x4> matrices)
@@ -2147,7 +2503,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.BeginGUI();
             Handles.color = new Color(0.35f, 0.9f, 0.45f, 0.95f);
             Handles.DrawAAPolyLine(1.8f, outline);
-            if (_partsCanvasTool == PartsCanvasTool.Rotate)
+            // Sphere gizmo replaces the old stem/knob outside Skins.
+            if (_partsCanvasTool == PartsCanvasTool.Rotate && _partsMode == SpritePartsStudioMode.Skins)
             {
                 Handles.color = Color.white;
                 Handles.DrawAAPolyLine(1.6f, top, rotate);
@@ -2159,7 +2516,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.DrawWireDisc(joint, Vector3.forward, 6f);
             Handles.DrawAAPolyLine(1.2f, joint + new Vector2(-5f, 0f), joint + new Vector2(5f, 0f));
             Handles.DrawAAPolyLine(1.2f, joint + new Vector2(0f, -5f), joint + new Vector2(0f, 5f));
-            Handles.EndGUI();
+            
+            if (_partsCanvasTool == PartsCanvasTool.Move && _partsMode != SpritePartsStudioMode.Skins)
+                DrawPartsMoveAxisGizmo(canvas, joint, worldDeg);
+            if (_partsCanvasTool == PartsCanvasTool.Rotate && _partsMode != SpritePartsStudioMode.Skins)
+                DrawPartsRotateSphereGizmo(joint, worldDeg);
+Handles.EndGUI();
 
             if (_partsMode == SpritePartsStudioMode.Skins) return;
 
@@ -2299,9 +2661,322 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
+
+        void DrawPartsCanvasZoomToolbar(Rect previewRect)
+        {
+            float z = Mathf.Clamp(_previewZoom, (float)0.1, (float)8);
+            if (!Mathf.Approximately(z, _previewZoom))
+            {
+                _previewZoom = z;
+                _partsCanvasZoom = z;
+            }
+
+            var canvas = new Rect(
+                previewRect.x + 10f, previewRect.y + 84f,
+                previewRect.width - 20f, previewRect.height - 96f);
+            var row = new Rect(previewRect.x + 10f, previewRect.y + 58f, previewRect.width - 20f, 20f);
+            Vector2 mid = canvas.center;
+            float x = row.xMax - 168f;
+            if (GUI.Button(new Rect(x, row.y, 28f, 18f),
+                    new GUIContent("-", "Zoom out (-)"), EditorStyles.miniButtonLeft))
+                PartsCanvasZoomToward(mid, mid, 1f / 1.15f);
+            x += 28f;
+            if (GUI.Button(new Rect(x, row.y, 56f, 18f),
+                    new GUIContent(string.Format("{0}%", Mathf.RoundToInt(_previewZoom * 100f)), "Actual size 100% (1)"),
+                    EditorStyles.miniButtonMid))
+                PartsCanvasResetView();
+            x += 56f;
+            if (GUI.Button(new Rect(x, row.y, 28f, 18f),
+                    new GUIContent("+", "Zoom in (+)"), EditorStyles.miniButtonMid))
+                PartsCanvasZoomToward(mid, mid, 1.15f);
+            x += 28f;
+            if (GUI.Button(new Rect(x, row.y, 40f, 18f),
+                    new GUIContent("Fit", "Fit all in view (F). Shift+F = selection"),
+                    EditorStyles.miniButtonRight))
+                PartsCanvasFit(canvas, selectionOnly: false);
+        }
+
+        void PartsCanvasResetView()
+        {
+            _previewZoom = 1f;
+            _previewPan = Vector2.zero;
+            _partsCanvasZoom = 1f;
+            _partsCanvasPan = Vector2.zero;
+            Repaint();
+        }
+
+        void PartsCanvasZoomToward(Vector2 canvasRectCenter, Vector2 mouseGui, float factor)
+        {
+            float oldZ = Mathf.Max((float)0.0001, _previewZoom);
+            float newZ = Mathf.Clamp(oldZ * factor, (float)0.1, (float)8);
+            if (Mathf.Approximately(oldZ, newZ))
+                return;
+            Vector2 fromCenter = mouseGui - canvasRectCenter;
+            Vector2 world = (fromCenter - _previewPan) / (64f * oldZ);
+            _previewPan = fromCenter - world * (64f * newZ);
+            _previewZoom = newZ;
+            _partsCanvasZoom = newZ;
+            _partsCanvasPan = _previewPan;
+            Repaint();
+        }
+
+        void PartsCanvasFit(Rect canvas, bool selectionOnly)
+        {
+            if (canvas.width < 8f || canvas.height < 8f)
+                return;
+            Rect content = default;
+            if (!TryGetPartsViewGuiBounds(canvas, selectionOnly, out content) && selectionOnly)
+                TryGetPartsViewGuiBounds(canvas, selectionOnly: false, out content);
+            if (content.width < 1f || content.height < 1f)
+            {
+                PartsCanvasResetView();
+                return;
+            }
+
+            const float pad = 28f;
+            float availW = Mathf.Max(8f, canvas.width - pad * 2f);
+            float availH = Mathf.Max(8f, canvas.height - pad * 2f);
+            float factor = Mathf.Min(availW / content.width, availH / content.height);
+            factor = Mathf.Clamp(factor, (float)0.05, (float)32);
+            Vector2 focus = content.center;
+            PartsCanvasZoomToward(canvas.center, focus, factor);
+            _previewPan += canvas.center - focus;
+            _partsCanvasPan = _previewPan;
+            Repaint();
+        }
+
+        void PartsCanvasCenter(Rect canvas, bool preferSelection)
+        {
+            Rect content = default;
+            bool have = preferSelection && TryGetPartsViewGuiBounds(canvas, selectionOnly: true, out content);
+            if (!have)
+                have = TryGetPartsViewGuiBounds(canvas, selectionOnly: false, out content);
+            Vector2 target;
+            if (have && content.width >= 1f && content.height >= 1f)
+                target = content.center;
+            else
+                target = WorldToCanvas(canvas, new float2(0f, 0f));
+            _previewPan += canvas.center - target;
+            _partsCanvasPan = _previewPan;
+            Repaint();
+        }
+
+        bool TryGetPartsViewGuiBounds(Rect canvas, bool selectionOnly, out Rect bounds)
+        {
+            bounds = default;
+            if (_profile?.PartsSlots == null || _profile.PartsSlots.Count == 0)
+                return false;
+
+            int clipIndex = PartsEvaluationClipIndex();
+            float time = _partsPreviewTime;
+            bool importPreview = ImportPreviewActive;
+            bool sampled;
+            BlobAssetReference<SpritePartsSetBlob> blob;
+            NativeArray<SpritePartsSampler.Pose> poses;
+            NativeArray<float4x4> matrices;
+            if (importPreview)
+            {
+                sampled = SpritePartsOnion.TrySampleClipOnRig(
+                    _profile, _importPreviewClip, time, Allocator.Temp,
+                    out blob, out poses, out matrices, out _);
+            }
+            else
+            {
+                sampled = SpritePartsOnion.TrySampleCharacter(
+                    _profile, clipIndex, time, Allocator.Temp,
+                    out blob, out poses, out matrices, out _);
+            }
+            if (!sampled)
+                return false;
+
+            try
+            {
+                ref var set = ref blob.Value;
+                int sel = SelectedPartsBlobIndex(ref set);
+                bool any = false;
+                float minX = 0f, minY = 0f, maxX = 0f, maxY = 0f;
+                for (int i = 0; i < set.Slots.Length; i++)
+                {
+                    if (selectionOnly && i != sel)
+                        continue;
+                    string sid = set.Slots[i].SlotId.ToString();
+                    if (SpritePartsAuthoringOps.SlotOrAncestorHidden(_profile, sid))
+                        continue;
+                    if (!TryGetPartsSlotDrawRect(canvas, ref set, matrices, i, time,
+                            out var r, out var joint, out float worldDeg, out _, out _, poses))
+                        continue;
+
+                    bool flipX = false, flipY = false;
+                    if (poses.IsCreated && i < poses.Length)
+                    {
+                        if (poses[i].Scale.x < 0f) flipX = true;
+                        if (poses[i].Scale.y < 0f) flipY = true;
+                    }
+
+                    EncapsulatePartsGuiQuad(
+                        r, joint, -worldDeg, flipX, flipY,
+                        ref any, ref minX, ref minY, ref maxX, ref maxY);
+                }
+
+                if (!any)
+                    return false;
+                bounds = Rect.MinMaxRect(minX, minY, maxX, maxY);
+                return bounds.width > 0.5f && bounds.height > 0.5f;
+            }
+            finally
+            {
+                SpritePartsOnion.DisposeSample(blob, poses, matrices);
+            }
+        }
+
+        static void EncapsulatePartsGuiQuad(
+            Rect r, Vector2 joint, float guiDeg, bool flipX, bool flipY,
+            ref bool any, ref float minX, ref float minY, ref float maxX, ref float maxY)
+        {
+            float rad = guiDeg * Mathf.Deg2Rad;
+            float c = Mathf.Cos(rad);
+            float s = Mathf.Sin(rad);
+            var corners = new Vector2[]
+            {
+                new Vector2(r.xMin, r.yMin),
+                new Vector2(r.xMax, r.yMin),
+                new Vector2(r.xMax, r.yMax),
+                new Vector2(r.xMin, r.yMax),
+            };
+            for (int i = 0; i < 4; i++)
+            {
+                Vector2 q = corners[i];
+                if (flipX) q.x = joint.x - (q.x - joint.x);
+                if (flipY) q.y = joint.y - (q.y - joint.y);
+                Vector2 d = q - joint;
+                Vector2 w = joint + new Vector2(d.x * c - d.y * s, d.x * s + d.y * c);
+                if (!any)
+                {
+                    minX = maxX = w.x;
+                    minY = maxY = w.y;
+                    any = true;
+                }
+                else
+                {
+                    minX = Mathf.Min(minX, w.x);
+                    minY = Mathf.Min(minY, w.y);
+                    maxX = Mathf.Max(maxX, w.x);
+                    maxY = Mathf.Max(maxY, w.y);
+                }
+            }
+        }
+
+        bool HandlePartsCanvasHotkeys(Rect canvas, Event evt)
+        {
+            if (evt.type != EventType.KeyDown)
+                return false;
+            if (EditorGUIUtility.editingTextField)
+                return false;
+            if (evt.control || evt.command)
+                return false;
+
+            switch (evt.keyCode)
+            {
+                case KeyCode.F:
+                    PartsCanvasFit(canvas, selectionOnly: evt.shift);
+                    evt.Use();
+                    return true;
+                case KeyCode.Home:
+                case KeyCode.Period:
+                    PartsCanvasCenter(canvas, preferSelection: true);
+                    evt.Use();
+                    return true;
+                case KeyCode.Alpha1:
+                case KeyCode.Keypad1:
+                    if (evt.shift) return false;
+                    PartsCanvasResetView();
+                    evt.Use();
+                    return true;
+                case KeyCode.Equals:
+                case KeyCode.Plus:
+                case KeyCode.KeypadPlus:
+                    PartsCanvasZoomToward(canvas.center, canvas.center, 1.15f);
+                    evt.Use();
+                    return true;
+                case KeyCode.Minus:
+                case KeyCode.KeypadMinus:
+                    PartsCanvasZoomToward(canvas.center, canvas.center, 1f / 1.15f);
+                    evt.Use();
+                    return true;
+                case KeyCode.LeftBracket:
+                    JumpPartsPlayheadToNeighborKey(-1);
+                    evt.Use();
+                    return true;
+                case KeyCode.RightBracket:
+                    JumpPartsPlayheadToNeighborKey(1);
+                    evt.Use();
+                    return true;
+                case KeyCode.LeftArrow:
+                    StepPartsPlayhead(-1, _partsFrameStep);
+                    evt.Use();
+                    return true;
+                case KeyCode.RightArrow:
+                    StepPartsPlayhead(1, _partsFrameStep);
+                    evt.Use();
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
+        bool HandlePartsCanvasNavigation(Rect canvas, Event evt, int controlId)
+        {
+            if (evt.type == EventType.ScrollWheel && canvas.Contains(evt.mousePosition))
+            {
+                float factor = evt.delta.y > 0f ? (1f / 1.1f) : 1.1f;
+                PartsCanvasZoomToward(canvas.center, evt.mousePosition, factor);
+                evt.Use();
+                return true;
+            }
+
+            bool panButton = evt.button == 2 || (evt.button == 0 && evt.alt);
+            if (evt.type == EventType.MouseDown && panButton && canvas.Contains(evt.mousePosition))
+            {
+                _previewPanning = true;
+                _previewPanStartMouse = evt.mousePosition;
+                _previewPanStartOffset = _previewPan;
+                GUIUtility.hotControl = controlId;
+                evt.Use();
+                return true;
+            }
+
+            if (_previewPanning && GUIUtility.hotControl == controlId)
+            {
+                if (evt.type == EventType.MouseDrag)
+                {
+                    _previewPan = _previewPanStartOffset + (evt.mousePosition - _previewPanStartMouse);
+                    _partsCanvasPan = _previewPan;
+                    evt.Use();
+                    Repaint();
+                    return true;
+                }
+                if (evt.type == EventType.MouseUp || evt.rawType == EventType.MouseUp)
+                {
+                    _previewPanning = false;
+                    if (GUIUtility.hotControl == controlId)
+                        GUIUtility.hotControl = 0;
+                    evt.Use();
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         void HandlePartsCanvasInput(Rect canvas, int controlId)
         {
             Event evt = Event.current;
+
+            // Design-app camera keys when pointer is over the canvas (ignore text fields).
+            if (canvas.Contains(evt.mousePosition) && HandlePartsCanvasHotkeys(canvas, evt))
+                return;
+
             bool ours = _partsDragActive &&
                         (GUIUtility.hotControl == controlId ||
                          GUIUtility.hotControl == _partsCanvasHotControl ||
@@ -2310,14 +2985,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!canvas.Contains(evt.mousePosition) && !ours && !_partsDragActive)
                 return;
 
-            // Middle / alt pan reuses preview pan.
-            if (evt.type == EventType.ScrollWheel && canvas.Contains(evt.mousePosition))
-            {
-                _previewZoom = Mathf.Clamp(_previewZoom * (1f - evt.delta.y * 0.08f), 0.25f, 8f);
-                evt.Use();
-                Repaint();
+            // Canvas camera: scroll zooms toward cursor; MMB / Alt+LMB pans.
+            if (HandlePartsCanvasNavigation(canvas, evt, controlId))
                 return;
-            }
 
             if (evt.type == EventType.ContextClick && canvas.Contains(evt.mousePosition))
             {
@@ -2334,7 +3004,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             if (_partsMode == SpritePartsStudioMode.Skins)
-                return; // transform tools off
+            {
+                if (evt.type == EventType.MouseDown && evt.button == 0 && canvas.Contains(evt.mousePosition))
+                {
+                // Alt+LMB is canvas pan (HandlePartsCanvasNavigation).
+                if (evt.alt)
+                    return;
+
+                    WarnSkinsTransformBlocked("canvas drag");
+                    evt.Use();
+                }
+                return;
+            }
 
             // Active drag is owned by HandleActivePartsCanvasDrag (runs first in OnGUI).
             if (_partsDragActive)
@@ -2395,11 +3076,28 @@ namespace InvertLab.Sprites.DOTS.Editor
                         _partsDragStartMouse = evt.mousePosition;
                         _partsDragStartPose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
                         CapturePartsDragStartTransform(canvas, slot.SlotId);
-                        string op = _partsCanvasTool == PartsCanvasTool.Rotate || handle == ColliderHandleKind.Rotate
+                        if (handle == ColliderHandleKind.AxisX || handle == ColliderHandleKind.AxisY)
+                        {
+                            float wd = -_partsDragStartGuiDeg;
+                            _partsDragAxisWorld = handle == ColliderHandleKind.AxisX
+                                ? PartsGizmoAxisX(wd) : PartsGizmoAxisY(wd);
+                        }
+                        else
+                            _partsDragAxisWorld = default;
+                        bool isRotateHandle =
+                            handle == ColliderHandleKind.Rotate ||
+                            handle == ColliderHandleKind.RotateX ||
+                            handle == ColliderHandleKind.RotateY ||
+                            handle == ColliderHandleKind.RotateZ ||
+                            handle == ColliderHandleKind.RotateSphere;
+                        bool isAxisMove =
+                            handle == ColliderHandleKind.AxisX || handle == ColliderHandleKind.AxisY;
+                        bool isFreeMove = handle == ColliderHandleKind.FreeMove;
+                        string op = _partsCanvasTool == PartsCanvasTool.Rotate || isRotateHandle
                             ? "Rotate Parts"
-                            : (_partsCanvasTool == PartsCanvasTool.Scale ||
-                               (handle != ColliderHandleKind.Body && handle != ColliderHandleKind.None &&
-                                handle != ColliderHandleKind.Rotate))
+                            : (_partsCanvasTool == PartsCanvasTool.Scale && !isAxisMove && !isFreeMove) ||
+                              (handle != ColliderHandleKind.Body && handle != ColliderHandleKind.None &&
+                               !isRotateHandle && !isAxisMove && !isFreeMove)
                                 ? "Scale Parts"
                                 : "Move Parts";
                         BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
@@ -2486,11 +3184,23 @@ namespace InvertLab.Sprites.DOTS.Editor
             var pose = _partsDragStartPose;
             var handle = _partsTransformHandle;
             bool rotate = handle == ColliderHandleKind.Rotate ||
+                          handle == ColliderHandleKind.RotateX ||
+                          handle == ColliderHandleKind.RotateY ||
+                          handle == ColliderHandleKind.RotateZ ||
+                          handle == ColliderHandleKind.RotateSphere ||
                           (handle == ColliderHandleKind.Body && _partsCanvasTool == PartsCanvasTool.Rotate);
+            bool axisMove = handle == ColliderHandleKind.AxisX || handle == ColliderHandleKind.AxisY;
             // Scale from knobs, OR Body + Scale tool (uniform linked scale).
             bool scale = (handle != ColliderHandleKind.None &&
                           handle != ColliderHandleKind.Body &&
-                          handle != ColliderHandleKind.Rotate) ||
+                          handle != ColliderHandleKind.FreeMove &&
+                          handle != ColliderHandleKind.Rotate &&
+                          handle != ColliderHandleKind.RotateX &&
+                          handle != ColliderHandleKind.RotateY &&
+                          handle != ColliderHandleKind.RotateZ &&
+                          handle != ColliderHandleKind.RotateSphere &&
+                          handle != ColliderHandleKind.AxisX &&
+                          handle != ColliderHandleKind.AxisY) ||
                          (handle == ColliderHandleKind.Body && _partsCanvasTool == PartsCanvasTool.Scale);
 
             if (rotate)
@@ -2535,12 +3245,37 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 pose.Scale = new Vector2(sx, sy);
             }
+            else if (axisMove)
+            {
+                float2 deltaWorld = CanvasToWorld(canvas, mouse) -
+                                    CanvasToWorld(canvas, _partsDragStartMouse);
+                float2 axis = handle == ColliderHandleKind.AxisX
+                    ? PartsGizmoAxisX(-_partsDragStartGuiDeg)
+                    : PartsGizmoAxisY(-_partsDragStartGuiDeg);
+                if (math.lengthsq(_partsDragAxisWorld) > 1e-6f)
+                    axis = math.normalizesafe(_partsDragAxisWorld);
+                else
+                    axis = math.normalizesafe(axis);
+                float amount = math.dot(deltaWorld, axis);
+                deltaWorld = axis * amount;
+                float2 newWorld = _partsDragStartWorld + deltaWorld;
+                if (!_partsDragHasParent)
+                    pose.Position = new Vector2(newWorld.x, newWorld.y);
+                else
+                {
+                    float4x4 inv = math.inverse(_partsDragParentToRoot);
+                    float4 local = math.mul(inv, new float4(newWorld.x, newWorld.y, 0f, 1f));
+                    pose.Position = new Vector2(local.x, local.y);
+                }
+            }
             else
             {
                 // Frozen start world + mouse delta (never re-sample live matrices mid-drag).
                 float2 deltaWorld = CanvasToWorld(canvas, mouse) -
                                     CanvasToWorld(canvas, _partsDragStartMouse);
-                deltaWorld = ConstrainPartsMoveDelta(deltaWorld);
+                // Center FreeMove = Unity plane handle: any XY (skip Lock X/Y + Shift sticky).
+                if (handle != ColliderHandleKind.FreeMove)
+                    deltaWorld = ConstrainPartsMoveDelta(deltaWorld);
                 float2 newWorld = _partsDragStartWorld + deltaWorld;
                 if (!_partsDragHasParent)
                     pose.Position = new Vector2(newWorld.x, newWorld.y);
@@ -2682,6 +3417,36 @@ namespace InvertLab.Sprites.DOTS.Editor
             return new float2(0f, deltaWorld.y);
         }
 
+        /// <summary>
+        /// Animate needs a clip to write keys. Creates a default Idle clip when
+        /// the profile has none so canvas drags are not silently rejected.
+        /// </summary>
+        bool EnsurePartsClipForAnimate()
+        {
+            if (_profile == null) return false;
+            _profile.EnsurePartsRig();
+            if (_profile.PartsClips == null)
+                _profile.PartsClips = new System.Collections.Generic.List<SpritePartsClipDef>();
+            if (_profile.PartsClips.Count == 0)
+            {
+                RecordPartsUndo("Create Parts Clip");
+                _profile.PartsClips.Add(new SpritePartsClipDef
+                {
+                    Name = "Idle",
+                    ClipId = "idle",
+                    Duration = 1f,
+                    Speed = 1f,
+                    WrapMode = (byte)SpritePartsWrap.Loop,
+                });
+                _partsSelectedClip = 0;
+                SaveDirty();
+                _status = "Created Idle clip for Animate";
+            }
+            if (_partsSelectedClip < 0 || _partsSelectedClip >= _profile.PartsClips.Count)
+                _partsSelectedClip = 0;
+            return CurrentPartsClip != null;
+        }
+
         void ApplyPartsPoseEdit(string slotId, SpritePartsAuthoringOps.PoseEdit pose)
         {
             if (ImportPreviewActive)
@@ -2689,12 +3454,46 @@ namespace InvertLab.Sprites.DOTS.Editor
                 PauseForImportPreview("pose edit");
                 return;
             }
-            if (_partsMode == SpritePartsStudioMode.Animate && !_partsAutoKey)
+
+            // Animate: always keep a live temp overlay so the canvas moves even when
+            // Auto Key is on (key->blob sample can lag / reject without a clip).
+            if (_partsMode == SpritePartsStudioMode.Animate)
             {
+                if (!EnsurePartsClipForAnimate())
+                {
+                    _partsHasTempPose = true;
+                    _partsTempSlotId = slotId;
+                    _partsTempPose = pose;
+                    return;
+                }
+
                 _partsHasTempPose = true;
                 _partsTempSlotId = slotId;
                 _partsTempPose = pose;
-                _status = "Temporary pose (Auto Key OFF) - Key Pose to commit";
+                if (!_partsAutoKey)
+                {
+                    _status = "Temporary pose (Auto Key OFF) - Key Pose to commit";
+                    return;
+                }
+
+                var keyResult = SpritePartsAuthoringOps.ApplyPoseEdit(
+                    _profile, _partsMode, _partsSelectedClip, slotId, _partsPreviewTime, pose, true,
+                    _partsDisplayFps);
+                if (keyResult.Rejected)
+                {
+                    _status = keyResult.Reason;
+                    return; // temp overlay still active so the drag remains visible
+                }
+                if (!_partsDragActive)
+                {
+                    _partsHasTempPose = false;
+                    SaveDirty();
+                    _status = keyResult.InsertedRestAnchorAtZero
+                        ? "Animate: keyed pose (with rest anchor at 0)"
+                        : "Animate: keyed pose";
+                }
+                else if (_asset != null)
+                    EditorUtility.SetDirty(_asset);
                 return;
             }
 
@@ -2717,7 +3516,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _status = "Rig: updated rest pose (affects every clip)";
                 else if (result.WroteKey)
                     _status = result.InsertedRestAnchorAtZero
-                        ? "Animate: keyed pose (+ rest anchor at 0)"
+                        ? "Animate: keyed pose (with rest anchor at 0)"
                         : "Animate: keyed pose";
             }
         }
@@ -3073,6 +3872,19 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawPartsTimeline(Rect rect, int scrubControlId, int keyControlId)
         {
+            if (HandlePartsTimelineHotkeys())
+                return;
+
+            // A missed canvas MouseUp can leave its passive hotControl alive and
+            // swallow clicks on timeline text fields. Reclaim header clicks before
+            // drawing Duration, Display FPS, Sprite Key, and Time Scale.
+            var headerRect = new Rect(rect.x, rect.y, rect.width, 48f);
+            var headerEvent = Event.current;
+            if (headerEvent.type == EventType.MouseDown &&
+                headerEvent.button == 0 &&
+                headerRect.Contains(headerEvent.mousePosition))
+                ReleasePartsCanvasCapture();
+
             EnsurePartsSession();
             EditorGUI.DrawRect(rect, new Color(0.09f, 0.1f, 0.12f));
             var clip = CurrentPartsClip;
@@ -3119,6 +3931,27 @@ namespace InvertLab.Sprites.DOTS.Editor
                 FitPartsDurationToLastKey();
             }
 
+
+            float navX = rect.x + 712f;
+            if (GUI.Button(new Rect(navX, y, 22f, 18f),
+                new GUIContent("[", "Previous keyframe ([)"), EditorStyles.miniButtonLeft))
+                JumpPartsPlayheadToNeighborKey(-1);
+            navX += 22f;
+            if (GUI.Button(new Rect(navX, y, 22f, 18f),
+                new GUIContent("]", "Next keyframe (])"), EditorStyles.miniButtonRight))
+                JumpPartsPlayheadToNeighborKey(1);
+            navX += 28f;
+            _partsFrameStep = Mathf.Clamp(
+                EditorGUI.IntField(new Rect(navX, y, 28f, 18f), _partsFrameStep), 1, 120);
+            navX += 30f;
+            if (GUI.Button(new Rect(navX, y, 22f, 18f),
+                new GUIContent("<", "Step back N frames (Left Arrow)"), EditorStyles.miniButtonLeft))
+                StepPartsPlayhead(-1, _partsFrameStep);
+            navX += 22f;
+            if (GUI.Button(new Rect(navX, y, 22f, 18f),
+                new GUIContent(">", "Step forward N frames (Right Arrow)"), EditorStyles.miniButtonRight))
+                StepPartsPlayhead(1, _partsFrameStep);
+
             float timeLabelX = rect.xMax - 120f;
             GUI.Label(new Rect(timeLabelX, y, 110f, 18f),
                 $"t={_partsPreviewTime:F3}s", _mutedStyle);
@@ -3127,6 +3960,25 @@ namespace InvertLab.Sprites.DOTS.Editor
             float appY = y + 20f;
             GUI.Label(new Rect(rect.x + 8f, appY, 70f, 16f), "Sprite Key", _mutedStyle);
             DrawPartsAppearancePopup(new Rect(rect.x + 80f, appY, 220f, 16f));
+            if (clip != null)
+            {
+                GUI.Label(
+                    new Rect(rect.x + 314f, appY, 72f, 16f),
+                    new GUIContent("Time Scale",
+                        "Parts playback multiplier. 1 = normal, 2 = twice as fast, 0.5 = half speed, 0 = paused, negative = reverse."),
+                    _mutedStyle);
+                EditorGUI.BeginChangeCheck();
+                float timeScale = EditorGUI.FloatField(
+                    new Rect(rect.x + 386f, appY, 48f, 16f), clip.Speed);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordPartsUndo("Set Parts Time Scale");
+                    clip.Speed = float.IsNaN(timeScale) || float.IsInfinity(timeScale)
+                        ? 1f
+                        : timeScale;
+                    SaveDirty();
+                }
+            }
 
             float tracksTop = rect.y + 48f;
             float tracksHeight = rect.height - 54f;
@@ -3875,7 +4727,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             BeginPartsClipRename(_partsSelectedClip);
         }
 
-        void StepPartsPlayhead(int direction)
+        
+        void StepPartsPlayhead(int direction, int frames = 1)
         {
             var clip = CurrentPartsClip;
             if (clip == null) return;
@@ -3887,7 +4740,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (lastKey > 1e-5f)
                     wrapEnd = Mathf.Max(1e-3f, lastKey);
             }
-            float step = 1f / Mathf.Max(1f, _partsDisplayFps);
+            int n = Mathf.Max(1, frames);
+            float step = n / Mathf.Max(1f, _partsDisplayFps);
             _partsPreviewTime = SpritePartsAuthoringOps.SnapTime(
                 _partsPreviewTime + direction * step, _partsDisplayFps, wrapEnd);
             if (_partsLoopLastKey || clip.WrapMode != (byte)SpritePartsWrap.Once)
@@ -3895,7 +4749,123 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _partsLoopLastKey ? (byte)SpritePartsWrap.Loop : clip.WrapMode);
             else
                 _partsPreviewTime = Mathf.Clamp(_partsPreviewTime, 0f, wrapEnd);
+            _partsPlaying = false;
             Repaint();
         }
+
+        static void CollectPartsKeyTimes(SpritePartsClipDef clip, List<float> dst)
+        {
+            dst.Clear();
+            if (clip == null || clip.Tracks == null) return;
+            for (int ti = 0; ti < clip.Tracks.Count; ti++)
+            {
+                var track = clip.Tracks[ti];
+                if (track == null || track.Keys == null) continue;
+                for (int k = 0; k < track.Keys.Count; k++)
+                {
+                    var key = track.Keys[k];
+                    if (key == null) continue;
+                    float time = key.Time;
+                    bool found = false;
+                    for (int i = 0; i < dst.Count; i++)
+                    {
+                        if (Mathf.Abs(dst[i] - time) <= 1e-4f)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                        dst.Add(time);
+                }
+            }
+            dst.Sort();
+        }
+
+        void JumpPartsPlayheadToNeighborKey(int direction)
+        {
+            var clip = CurrentPartsClip;
+            if (clip == null) return;
+            var times = new List<float>(64);
+            CollectPartsKeyTimes(clip, times);
+            if (times.Count == 0)
+            {
+                _status = "No keyframes";
+                return;
+            }
+
+            float t = _partsPreviewTime;
+            const float eps = 1e-4f;
+            if (direction < 0)
+            {
+                float best = float.NaN;
+                for (int i = 0; i < times.Count; i++)
+                {
+                    if (times[i] < t - eps)
+                        best = times[i];
+                }
+                if (float.IsNaN(best))
+                {
+                    _status = "Already at first key";
+                    return;
+                }
+                _partsPreviewTime = best;
+            }
+            else
+            {
+                float best = float.NaN;
+                for (int i = 0; i < times.Count; i++)
+                {
+                    if (times[i] > t + eps)
+                    {
+                        best = times[i];
+                        break;
+                    }
+                }
+                if (float.IsNaN(best))
+                {
+                    _status = "Already at last key";
+                    return;
+                }
+                _partsPreviewTime = best;
+            }
+
+            _partsPlaying = false;
+            _status = string.Format("t={0:F3}s", _partsPreviewTime);
+            Repaint();
+        }
+
+        bool HandlePartsTimelineHotkeys()
+        {
+            Event evt = Event.current;
+            if (evt.type != EventType.KeyDown)
+                return false;
+            if (EditorGUIUtility.editingTextField)
+                return false;
+            if (evt.control || evt.command)
+                return false;
+            switch (evt.keyCode)
+            {
+                case KeyCode.LeftBracket:
+                    JumpPartsPlayheadToNeighborKey(-1);
+                    evt.Use();
+                    return true;
+                case KeyCode.RightBracket:
+                    JumpPartsPlayheadToNeighborKey(1);
+                    evt.Use();
+                    return true;
+                case KeyCode.LeftArrow:
+                    StepPartsPlayhead(-1, _partsFrameStep);
+                    evt.Use();
+                    return true;
+                case KeyCode.RightArrow:
+                    StepPartsPlayhead(1, _partsFrameStep);
+                    evt.Use();
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
     }
 }

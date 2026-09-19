@@ -225,7 +225,7 @@ namespace InvertLab.Sprites.DOTS
             if (!IsAppearanceGeometryValid(ref app))
                 return false;
 
-            ApplyAppearanceBlob(em, root, part, appIndex, ref app);
+            ApplyAppearanceBlob(em, root, part, appIndex, ref app, 0, default, false);
             return true;
         }
 
@@ -266,8 +266,8 @@ namespace InvertLab.Sprites.DOTS
             else
                 em.SetComponentData(part, state);
 
-            WriteFrame(em, part, geo.CellIndex, geo.FrameOffset, geo.FrameScale);
-            WriteSheetBinding(em, part, sheetEntity);
+            WriteFrame(em, part, geo.CellIndex, geo.FrameOffset, geo.FrameScale, default, false);
+            WriteSheetBinding(em, part, sheetEntity, default, false);
             return true;
         }
 
@@ -315,7 +315,7 @@ namespace InvertLab.Sprites.DOTS
                 if (!TryFindLinkPart(links, slotIndex, out Entity part))
                     continue;
                 ref var app = ref set.Appearances[appIndex];
-                ApplyAppearanceBlob(em, root, part, appIndex, ref app);
+                ApplyAppearanceBlob(em, root, part, appIndex, ref app, 0, default, false);
             }
 
             var active = new SpritePartsActiveSkin { SkinIdHash = skin.SkinIdHash };
@@ -364,7 +364,7 @@ namespace InvertLab.Sprites.DOTS
                 if (appIndex < 0 || appIndex >= set.Appearances.Length)
                     continue;
                 ref var app = ref set.Appearances[appIndex];
-                ApplyAppearanceBlob(em, root, part, appIndex, ref app);
+                ApplyAppearanceBlob(em, root, part, appIndex, ref app, 0, default, false);
             }
 
             var active = new SpritePartsActiveSkin { SkinIdHash = 0 };
@@ -413,6 +413,16 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static void ApplySampledAppearance(
             EntityManager em, Entity root, Entity part, int slotIndex, int sampledAppIndex, ref SpritePartsSetBlob set)
+            => ApplySampledAppearance(em, root, part, slotIndex, sampledAppIndex, ref set, default, false);
+
+        internal static void ApplySampledAppearance(
+            EntityManager em, Entity root, Entity part, int slotIndex, int sampledAppIndex,
+            ref SpritePartsSetBlob set, EntityCommandBuffer commands)
+            => ApplySampledAppearance(em, root, part, slotIndex, sampledAppIndex, ref set, commands, true);
+
+        static void ApplySampledAppearance(
+            EntityManager em, Entity root, Entity part, int slotIndex, int sampledAppIndex,
+            ref SpritePartsSetBlob set, EntityCommandBuffer commands, bool deferred)
         {
             if (part == Entity.Null || !em.Exists(part))
                 return;
@@ -431,7 +441,7 @@ namespace InvertLab.Sprites.DOTS
                 ref var app = ref set.Appearances[sampledAppIndex];
                 if (!IsAppearanceGeometryValid(ref app))
                     return;
-                ApplyAppearanceBlob(em, root, part, sampledAppIndex, ref app, keyedOverride: 1);
+                ApplyAppearanceBlob(em, root, part, sampledAppIndex, ref app, 1, commands, deferred);
                 return;
             }
 
@@ -475,11 +485,11 @@ namespace InvertLab.Sprites.DOTS
             ref var restoreApp = ref set.Appearances[restore];
             if (!IsAppearanceGeometryValid(ref restoreApp))
                 return;
-            ApplyAppearanceBlob(em, root, part, restore, ref restoreApp, keyedOverride: 0);
+            ApplyAppearanceBlob(em, root, part, restore, ref restoreApp, 0, commands, deferred);
         }
         static void ApplyAppearanceBlob(
             EntityManager em, Entity root, Entity part, int appIndex, ref SpritePartAppearanceBlob app,
-            byte keyedOverride = 0)
+            byte keyedOverride, EntityCommandBuffer commands, bool deferred)
         {
             var state = new SpritePartAppearanceState
             {
@@ -493,11 +503,11 @@ namespace InvertLab.Sprites.DOTS
                 KeyedOverride = keyedOverride,
             };
             if (!em.HasComponent<SpritePartAppearanceState>(part))
-                em.AddComponentData(part, state);
+                SpritePartsPoseUtility.AddComponent(em, part, state, commands, deferred);
             else
                 em.SetComponentData(part, state);
 
-            WriteFrame(em, part, app.CellIndex, app.FrameOffset, app.FrameScale);
+            WriteFrame(em, part, app.CellIndex, app.FrameOffset, app.FrameScale, commands, deferred);
 
             Entity sheet = Entity.Null;
             if (em.HasBuffer<SpritePartSheetEntry>(root))
@@ -512,10 +522,11 @@ namespace InvertLab.Sprites.DOTS
                     }
                 }
             }
-            WriteSheetBinding(em, part, sheet);
+            WriteSheetBinding(em, part, sheet, commands, deferred);
         }
 
-        static void WriteFrame(EntityManager em, Entity part, int cell, float2 offset, float2 scale)
+        static void WriteFrame(EntityManager em, Entity part, int cell, float2 offset, float2 scale,
+            EntityCommandBuffer commands, bool deferred)
         {
             var frame = em.HasComponent<SpriteAnimFrame>(part)
                 ? em.GetComponentData<SpriteAnimFrame>(part)
@@ -525,12 +536,13 @@ namespace InvertLab.Sprites.DOTS
             frame.Scale = scale;
             frame.Rotation = 0f;
             if (!em.HasComponent<SpriteAnimFrame>(part))
-                em.AddComponentData(part, frame);
+                SpritePartsPoseUtility.AddComponent(em, part, frame, commands, deferred);
             else
                 em.SetComponentData(part, frame);
         }
 
-        static void WriteSheetBinding(EntityManager em, Entity part, Entity sheet)
+        static void WriteSheetBinding(EntityManager em, Entity part, Entity sheet,
+            EntityCommandBuffer commands, bool deferred)
         {
             if (em.HasComponent<SpriteSheetBinding>(part))
             {
@@ -540,7 +552,8 @@ namespace InvertLab.Sprites.DOTS
             }
             else
             {
-                em.AddComponentData(part, new SpriteSheetBinding { Sheet = sheet });
+                SpritePartsPoseUtility.AddComponent(em, part, new SpriteSheetBinding { Sheet = sheet },
+                    commands, deferred);
             }
         }
 
@@ -573,6 +586,15 @@ namespace InvertLab.Sprites.DOTS
     /// <summary>Immediate pose/facing writers used by controls and systems.</summary>
     public static class SpritePartsPoseUtility
     {
+        internal static void AddComponent<T>(EntityManager em, Entity entity, T value,
+            EntityCommandBuffer commands, bool deferred) where T : unmanaged, IComponentData
+        {
+            if (deferred)
+                commands.AddComponent(entity, value);
+            else
+                em.AddComponentData(entity, value);
+        }
+
         public static void ApplyPose(EntityManager em, Entity root)
         {
             if (!SpriteParts.IsPartsRoot(em, root))
@@ -600,6 +622,14 @@ namespace InvertLab.Sprites.DOTS
         }
 
         public static void ApplyPartTransform(EntityManager em, Entity part, in SpritePartsSampler.Pose pose)
+            => ApplyPartTransform(em, part, pose, default, false);
+
+        public static void ApplyPartTransform(EntityManager em, Entity part, in SpritePartsSampler.Pose pose,
+            EntityCommandBuffer commands)
+            => ApplyPartTransform(em, part, pose, commands, true);
+
+        static void ApplyPartTransform(EntityManager em, Entity part, in SpritePartsSampler.Pose pose,
+            EntityCommandBuffer commands, bool deferred)
         {
             if (!em.HasComponent<LocalTransform>(part))
                 return;
@@ -611,12 +641,18 @@ namespace InvertLab.Sprites.DOTS
 
             var scaleMatrix = SpritePartsPlayback.ScaleMatrix(pose.Scale.x, pose.Scale.y);
             if (!em.HasComponent<PostTransformMatrix>(part))
-                em.AddComponentData(part, new PostTransformMatrix { Value = scaleMatrix });
+                AddComponent(em, part, new PostTransformMatrix { Value = scaleMatrix }, commands, deferred);
             else
                 em.SetComponentData(part, new PostTransformMatrix { Value = scaleMatrix });
         }
 
         public static void ApplyFacing(EntityManager em, Entity root)
+            => ApplyFacing(em, root, default, false);
+
+        public static void ApplyFacing(EntityManager em, Entity root, EntityCommandBuffer commands)
+            => ApplyFacing(em, root, commands, true);
+
+        static void ApplyFacing(EntityManager em, Entity root, EntityCommandBuffer commands, bool deferred)
         {
             if (!em.HasComponent<SpritePartsFacing>(root))
                 return;
@@ -628,7 +664,7 @@ namespace InvertLab.Sprites.DOTS
             if (visual == Entity.Null || !em.Exists(visual))
                 return;
             if (!em.HasComponent<PostTransformMatrix>(visual))
-                em.AddComponentData(visual, new PostTransformMatrix { Value = matrix });
+                AddComponent(em, visual, new PostTransformMatrix { Value = matrix }, commands, deferred);
             else
                 em.SetComponentData(visual, new PostTransformMatrix { Value = matrix });
         }

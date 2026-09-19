@@ -401,6 +401,8 @@ namespace InvertLab.Sprites.DOTS
 
         public void ApplyQuadPreview(int clipIndex, int frameIndex)
         {
+            if (SpritePartsCharacterAuthoring.OwnsAnimation(gameObject))
+                return;
             var filter = GetComponent<MeshFilter>();
             var renderer = GetComponent<MeshRenderer>();
             if (filter == null || renderer == null)
@@ -1324,6 +1326,14 @@ namespace InvertLab.Sprites.DOTS
         {
             public override void Bake(SpriteAnimSetAuthoring authoring)
             {
+                // Track both component and profile for incremental baking ownership changes.
+                var parts = GetComponent<SpritePartsCharacterAuthoring>();
+                if (parts != null && parts.Profile != null)
+                {
+                    DependsOn(parts.Profile);
+                    if (parts.Profile.Data != null && parts.Profile.Data.AnimKind == SpriteAnimKind.Parts)
+                        return;
+                }
                 var profile = authoring.Profile != null ? authoring.Profile.Data : null;
                 // Exactly one baker by Profile.AnimKind. Parts owned by SpritePartsCharacterAuthoring.
                 if (profile != null && profile.AnimKind == SpriteAnimKind.Parts)

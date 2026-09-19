@@ -517,5 +517,39 @@ namespace InvertLab.Sprites.DOTS.Tests
                 Object.DestroyImmediate(host);
             }
         }
+
+        [Test]
+        public void PartsCharacter_DoesNotAddFramePlayerOrSet()
+        {
+            var host = new GameObject("PartsAuthoringBundleTest");
+            try
+            {
+                host.AddComponent<SpritePartsCharacterAuthoring>();
+                Assert.NotNull(host.GetComponent<SpriteSortAuthoring>());
+                Assert.Null(host.GetComponent<SpriteAnimPlayerAuthoring>());
+                Assert.Null(host.GetComponent<SpriteAnimSetAuthoring>());
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void ColliderOnPartsCharacter_DoesNotRequireFrameSet()
+        {
+            var host = new GameObject("PartsColliderBundleTest");
+            try
+            {
+                host.AddComponent<SpritePartsCharacterAuthoring>();
+                host.AddComponent<SpriteColliderAuthoring>();
+                Assert.Null(host.GetComponent<SpriteAnimPlayerAuthoring>());
+                Assert.Null(host.GetComponent<SpriteAnimSetAuthoring>());
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
     }
 }

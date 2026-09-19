@@ -9,10 +9,43 @@ namespace InvertLab.Sprites.DOTS.Tests
 {
     public sealed class SpritePartsRuntimeSlice3Tests
     {
+        [Test]
+        public void PlayerSystem_DefersMissingMatricesAndCompletionAcrossMultipleRoots()
+        {
+            using var world = new World("Parts structural regression");
+            var em = world.EntityManager;
+            var blob = BuildNestedRig((byte)SpritePartsWrap.Once, 0.1f);
+            var a = SpritePartsEntityFactory.Create(em, blob, float3.zero, playing: true);
+            var b = SpritePartsEntityFactory.Create(em, blob, float3.zero, playing: true);
+            try
+            {
+                foreach (var part in a.Parts) em.RemoveComponent<PostTransformMatrix>(part);
+                em.RemoveComponent<PostTransformMatrix>(a.VisualRoot);
+                world.SetTime(new Unity.Core.TimeData(1, 0.2f));
+                var system = world.GetOrCreateSystem<SpritePartsPlayerSystem>();
+                Assert.DoesNotThrow(() => system.Update(world.Unmanaged));
+                foreach (var part in a.Parts)
+                    Assert.IsTrue(em.HasComponent<PostTransformMatrix>(part));
+                Assert.IsTrue(em.HasComponent<PostTransformMatrix>(a.VisualRoot));
+                Assert.IsTrue(em.HasComponent<SpritePartsCompleted>(a.Root));
+                Assert.IsTrue(em.HasComponent<SpritePartsCompleted>(b.Root));
+                Assert.AreEqual(0, em.GetComponentData<SpritePartsPlayer>(b.Root).Playing);
+                Assert.DoesNotThrow(() => system.Update(world.Unmanaged));
+            }
+            finally
+            {
+                a.Parts.Dispose();
+                b.Parts.Dispose();
+                em.DestroyEntity(em.UniversalQuery);
+                blob.Dispose();
+            }
+        }
+
         BlobAssetReference<SpritePartsSetBlob> BuildNestedRig(
             byte wrap = (byte)SpritePartsWrap.Loop,
             float duration = 1f,
-            float clipSpeed = 1f)
+            float clipSpeed = 1f,
+            int hiddenSlotIndex = -1)
         {
             var appearances = new[]
             {
@@ -68,6 +101,8 @@ namespace InvertLab.Sprites.DOTS.Tests
                     DefaultAppearanceId = "weapon.art", DrawRank = 2,
                 },
             };
+            if (hiddenSlotIndex >= 0 && hiddenSlotIndex < slots.Length)
+                slots[hiddenSlotIndex].Hidden = 1;
             var tracks = new[]
             {
                 new SpritePartsSetBuilder.TrackInput
@@ -326,6 +361,82 @@ namespace InvertLab.Sprites.DOTS.Tests
             }
             finally
             {
+                World.DefaultGameObjectInjectionWorld = previous;
+                blob.Dispose();
+            }
+        }
+
+        [Test]
+        public void Factory_HiddenSlotDisablesDraw()
+        {
+            var blob = BuildNestedRig(hiddenSlotIndex: 1);
+            var previous = World.DefaultGameObjectInjectionWorld;
+            using var world = new World("Parts hidden factory");
+            World.DefaultGameObjectInjectionWorld = world;
+            try
+            {
+                var em = world.EntityManager;
+                var created = SpritePartsEntityFactory.Create(em, blob, float3.zero, playing: false);
+                try
+                {
+                    Assert.AreEqual(0, em.GetComponentData<SpritePartSlot>(created.Parts[0]).Hidden);
+                    Assert.IsTrue(em.IsComponentEnabled<SpriteAnimEnabled>(created.Parts[0]));
+                    Assert.AreEqual(1, em.GetComponentData<SpritePartSlot>(created.Parts[1]).Hidden);
+                    Assert.IsFalse(em.IsComponentEnabled<SpriteAnimEnabled>(created.Parts[1]));
+                }
+                finally { created.Parts.Dispose(); }
+            }
+            finally
+            {
+                World.DefaultGameObjectInjectionWorld = previous;
+                blob.Dispose();
+            }
+        }
+
+        [Test]
+        public void CullingKeepsHiddenPartsDisabled()
+        {
+            var blob = BuildNestedRig(hiddenSlotIndex: 1);
+            var previous = World.DefaultGameObjectInjectionWorld;
+            using var world = new World("Parts hidden cull");
+            World.DefaultGameObjectInjectionWorld = world;
+            var host = new GameObject("Parts cull camera");
+            bool previousLayout = SpriteBatchSpawner.LayoutXy;
+            try
+            {
+                SpriteBatchSpawner.LayoutXy = true;
+                host.tag = "MainCamera";
+                var camera = host.AddComponent<Camera>();
+                camera.orthographic = true;
+                camera.orthographicSize = 20f;
+                host.transform.SetPositionAndRotation(new Vector3(0, 0, -10), Quaternion.identity);
+
+                var em = world.EntityManager;
+                world.GetOrCreateSystem<SpriteAnimCullingSystem>();
+                using (var settings = em.CreateEntityQuery(typeof(SpriteCullSettings)))
+                {
+                    if (settings.IsEmptyIgnoreFilter)
+                    {
+                        em.AddComponentData(em.CreateEntity(),
+                            new SpriteCullSettings { MarginUnits = 8f, MaxDistanceSq = 0f });
+                    }
+                }
+                var created = SpritePartsEntityFactory.Create(em, blob, float3.zero, playing: false);
+                try
+                {
+                    var hidden = created.Parts[1];
+                    var culler = world.GetOrCreateSystem<SpritePartsCullingSystem>();
+                    culler.Update(world.Unmanaged);
+                    em.CompleteAllTrackedJobs();
+                    Assert.IsFalse(em.IsComponentEnabled<SpriteAnimEnabled>(hidden));
+                    Assert.IsTrue(em.IsComponentEnabled<SpriteAnimEnabled>(created.Parts[0]));
+                }
+                finally { created.Parts.Dispose(); }
+            }
+            finally
+            {
+                SpriteBatchSpawner.LayoutXy = previousLayout;
+                Object.DestroyImmediate(host);
                 World.DefaultGameObjectInjectionWorld = previous;
                 blob.Dispose();
             }
