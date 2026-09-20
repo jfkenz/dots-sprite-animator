@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
@@ -55,6 +56,12 @@ namespace InvertLab.Sprites.DOTS
         /// even when the Profile reference itself did not change.
         /// </summary>
         [HideInInspector] public int EditorProfileSyncRevision;
+
+        [Tooltip("Baked gameplay overrides. Weight 0 disables. LookAt uses Target in the chosen Space.")]
+        public SpritePartsOverrideAuthoring[] Overrides = Array.Empty<SpritePartsOverrideAuthoring>();
+
+        [Tooltip("Masked clip layers applied after the base clip and before gameplay overrides. Empty Slot Ids = all slots.")]
+        public SpritePartsLayerAuthoring[] Layers = Array.Empty<SpritePartsLayerAuthoring>();
 
 #if UNITY_EDITOR
         void Reset() => SpritePartsAuthoringBundle.Ensure(gameObject);
@@ -151,18 +158,24 @@ namespace InvertLab.Sprites.DOTS
                 AddComponent(root, new SpritePartsEnabled());
 
                 int startClip = ResolveStartClip(ref partsBlob.Value, profile, authoring.StartingClipName);
-                var player = new SpritePartsPlayer
-                {
-                    ClipIndex = math.max(0, startClip),
-                    TimeSeconds = 0f,
-                    SpeedMultiplier = float.IsNaN(authoring.PlaybackTimeScale) ||
-                                      float.IsInfinity(authoring.PlaybackTimeScale)
-                        ? 1f
-                        : authoring.PlaybackTimeScale,
-                    Playing = authoring.PlayOnEnable ? (byte)1 : (byte)0,
-                    Completed = 0,
-                };
+                var player = SpritePartsPoseWriter.DefaultPlayer(math.max(0, startClip), authoring.PlayOnEnable);
+                player.SpeedMultiplier = float.IsNaN(authoring.PlaybackTimeScale) ||
+                                         float.IsInfinity(authoring.PlaybackTimeScale)
+                    ? 1f
+                    : authoring.PlaybackTimeScale;
                 AddComponent(root, player);
+                var ovBuf = AddBuffer<SpritePartsPoseOverride>(root);
+                AddBuffer<SpritePartBasePose>(root);
+                AddBuffer<SpritePartFinalPose>(root);
+                AddBuffer<SpritePartPoseSource>(root);
+                var layerBuf = AddBuffer<SpritePartsAnimLayer>(root);
+                AddBuffer<SpritePartSocketBinding>(root);
+                AddBuffer<SpritePartSocketWorld>(root);
+                AddBuffer<SpritePartHitboxBinding>(root);
+                AddBuffer<SpritePartHitboxWorld>(root);
+                AddComponent(root, new SpritePartsPoseDiagnostics { PreviousClipIndex = -1 });
+                BakeOverrides(authoring, ovBuf, ref partsBlob.Value);
+                BakeLayers(authoring, layerBuf, ref partsBlob.Value);
 
                 // Visual root for facing (does not count toward 32 parts).
                 var visualRoot = CreateAdditionalEntity(TransformUsageFlags.Dynamic);
@@ -347,6 +360,77 @@ namespace InvertLab.Sprites.DOTS
                 return result;
             }
 
+            static void BakeOverrides(
+                SpritePartsCharacterAuthoring authoring,
+                DynamicBuffer<SpritePartsPoseOverride> buf,
+                ref SpritePartsSetBlob set)
+            {
+                if (authoring.Overrides == null)
+                    return;
+                for (int i = 0; i < authoring.Overrides.Length; i++)
+                {
+                    var src = authoring.Overrides[i];
+                    if (src == null || !src.Enabled)
+                        continue;
+                    int slot = SpritePartsPlayback.FindSlotIndexById(ref set, src.SlotId);
+                    if (slot < 0)
+                        continue;
+                    float2 scale = src.Scale.sqrMagnitude <= 1e-8f
+                        ? new float2(1f, 1f)
+                        : new float2(src.Scale.x, src.Scale.y);
+                    buf.Add(new SpritePartsPoseOverride
+                    {
+                        Id = src.Id,
+                        SlotIndex = slot,
+                        Channels = (byte)(src.Channels == 0 ? SpritePartsPoseChannel.All : src.Channels),
+                        Mode = (byte)src.Mode,
+                        Space = (byte)src.Space,
+                        Priority = src.Priority,
+                        Weight = math.saturate(src.Weight),
+                        Position = src.Position,
+                        Rotation = src.Rotation,
+                        Scale = scale,
+                        Target = src.Target,
+                    });
+                }
+            }
+
+            static void BakeLayers(
+                SpritePartsCharacterAuthoring authoring,
+                DynamicBuffer<SpritePartsAnimLayer> buf,
+                ref SpritePartsSetBlob set)
+            {
+                if (authoring.Layers == null)
+                    return;
+                for (int i = 0; i < authoring.Layers.Length; i++)
+                {
+                    var src = authoring.Layers[i];
+                    if (src == null || !src.Enabled || string.IsNullOrWhiteSpace(src.ClipName))
+                        continue;
+                    int clip = SpritePartsPlayback.FindClipIndexByName(ref set, src.ClipName);
+                    if (clip < 0)
+                        clip = SpritePartsPlayback.FindClipIndexById(ref set, src.ClipName);
+                    if (clip < 0)
+                        continue;
+                    uint mask = 0;
+                    if (src.SlotIds != null)
+                    {
+                        for (int s = 0; s < src.SlotIds.Length; s++)
+                        {
+                            int slot = SpritePartsPlayback.FindSlotIndexById(ref set, src.SlotIds[s]);
+                            if (slot >= 0 && slot < 32)
+                                mask |= 1u << slot;
+                        }
+                    }
+                    buf.Add(new SpritePartsAnimLayer
+                    {
+                        ClipIndex = clip,
+                        Weight = math.saturate(src.Weight),
+                        SlotMask = mask,
+                    });
+                }
+            }
+
             static int ResolveStartClip(ref SpritePartsSetBlob set, SpriteSheetProfile profile, string startingName)
             {
                 if (!string.IsNullOrWhiteSpace(startingName))
@@ -389,6 +473,32 @@ namespace InvertLab.Sprites.DOTS
                 return result;
             }
         }
+    }
+
+    [Serializable]
+    public class SpritePartsOverrideAuthoring
+    {
+        public bool Enabled = true;
+        public int Id = 1;
+        public string SlotId;
+        public SpritePartsPoseMode Mode = SpritePartsPoseMode.Replace;
+        public SpritePartsPoseSpace Space = SpritePartsPoseSpace.Local;
+        public SpritePartsPoseChannel Channels = SpritePartsPoseChannel.All;
+        public int Priority;
+        [Range(0f, 1f)] public float Weight = 1f;
+        public Vector2 Position;
+        public float Rotation;
+        public Vector2 Scale = Vector2.one;
+        public Vector2 Target;
+    }
+
+    [Serializable]
+    public class SpritePartsLayerAuthoring
+    {
+        public bool Enabled = true;
+        public string ClipName;
+        [Range(0f, 1f)] public float Weight = 1f;
+        public string[] SlotIds = Array.Empty<string>();
     }
 
 #if UNITY_EDITOR

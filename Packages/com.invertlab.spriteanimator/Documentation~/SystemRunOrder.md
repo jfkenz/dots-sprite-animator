@@ -13,22 +13,34 @@ Top-level groups (Unity Entities). Timescale / fixed step apply as usual.
 `
 InitializationSystemGroup
 SimulationSystemGroup          ← most Invert Lab gameplay / animation systems
+  ├─ FixedStepSimulationSystemGroup (OrderFirst)
+  │    └─ PhysicsSystemGroup    ← optional Unity Physics
   ├─ (early / OrderFirst systems)
   ├─ TransformSystemGroup
   └─ (late / OrderLast systems)
-FixedStepSimulationSystemGroup ← Unity Physics lives here
-  └─ PhysicsSystemGroup
 PresentationSystemGroup
 `
 
 Invert Lab animation clocks and CPU/GPU flipbook updates run in **SimulationSystemGroup**.
 Unity Physics (optional package) runs in **FixedStepSimulationSystemGroup → PhysicsSystemGroup**.
+FixedStepSimulationSystemGroup is a child of SimulationSystemGroup; it may run
+zero or multiple fixed steps during one simulation update.
 
 Those are **different clocks**. Frame hitboxes update with the anim player (Simulation). Overlaps against Character Physics bodies should run **after physics exports the world** (AfterPhysics), typically via UnityPhysicsOverlapBridge.
 
 ---
 
 ## Invert Lab — SimulationSystemGroup
+
+### Parts integration
+
+Write root movement and Parts overrides before `SpritePartsPlayerSystem`. It runs
+after `SpriteSortDepthSystem` and before `TransformSystemGroup`. Read exported Parts
+sockets and hitboxes after `SpritePartsPlayerSystem`. `SpritePartsRenderDepthSystem`
+runs after transforms, followed by Parts culling and instance rendering.
+
+See [Parts gameplay integration](PartsGameplay.md) for ownership, aiming, layers,
+and physics handoff details.
 
 ### Ordered chain (explicit edges)
 

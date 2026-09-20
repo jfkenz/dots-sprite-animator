@@ -6,6 +6,16 @@
 
 # Samples map
 
+## Cutout Parts demo
+
+Add **DOTS Sprite Animator / Cutout Parts Demo** to an empty GameObject in a DOTS
+project to create a small generated-art character at runtime. Its buttons pause
+playback, swap weapons, reset skins, and flip facing. Buttons are available with
+either input backend; background mouse/touch shortcuts require the legacy Input
+Manager. Clicking the control panel does not trigger those background shortcuts.
+
+For gameplay code, see [Parts gameplay integration](PartsGameplay.md).
+
 Samples ship inside the package as an optional `Samples~` folder. They are **not** in your project until you import them.
 
 ## How to import

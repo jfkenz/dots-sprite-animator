@@ -68,6 +68,12 @@ namespace InvertLab.Sprites.DOTS
         public static float2 TransformPoint(float4x4 m, float2 p)
             => math.mul(m, new float4(p.x, p.y, 0f, 1f)).xy;
 
+        public static float2 InverseTransformPoint(float4x4 m, float2 p)
+        {
+            float4 local = math.mul(math.inverse(m), new float4(p.x, p.y, 0f, 1f));
+            return local.xy;
+        }
+
         public static float ExtractRotationDeg(float4x4 m)
         {
             float2 x = math.normalizesafe(m.c0.xy, new float2(1f, 0f));

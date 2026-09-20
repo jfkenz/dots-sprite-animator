@@ -11,6 +11,14 @@ namespace InvertLab.Sprites.DOTS
         public float SpeedMultiplier;
         public byte Playing;
         public byte Completed;
+        /// <summary>Explicit pause also freezes an unfinished fade after a Once clip completes.</summary>
+        public byte Paused;
+        /// <summary>-1 when not blending. Outgoing clip holds last Once pose if it ends mid-fade.</summary>
+        public int PreviousClipIndex;
+        public float PreviousTimeSeconds;
+        public float BlendDuration;
+        public float BlendElapsed;
+        public byte SpriteSwitch;
     }
 
     public struct SpritePartsSetRef : IComponentData

@@ -142,8 +142,7 @@ namespace InvertLab.Sprites.DOTS
             int n = blob.Value.Slots.Length;
             localPoses = new NativeArray<SpritePartsSampler.Pose>(n, allocator);
             localToRoot = new NativeArray<float4x4>(n, allocator);
-            SpritePartsSampler.SampleAll(ref blob.Value, clipIndex, timeSeconds, localPoses);
-            SpritePartsHierarchy.ComposeLocalToRoot(ref blob.Value, localPoses, localToRoot);
+            SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot);
             return true;
         }
 
@@ -178,8 +177,7 @@ namespace InvertLab.Sprites.DOTS
             int n = blob.Value.Slots.Length;
             localPoses = new NativeArray<SpritePartsSampler.Pose>(n, allocator);
             localToRoot = new NativeArray<float4x4>(n, allocator);
-            SpritePartsSampler.SampleAll(ref blob.Value, 0, timeSeconds, localPoses);
-            SpritePartsHierarchy.ComposeLocalToRoot(ref blob.Value, localPoses, localToRoot);
+            SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, 0, timeSeconds, localPoses, localToRoot);
             return true;
         }
 

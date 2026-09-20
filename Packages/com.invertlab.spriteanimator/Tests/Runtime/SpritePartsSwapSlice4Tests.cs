@@ -445,7 +445,9 @@ namespace InvertLab.Sprites.DOTS.Tests
                     Assert.IsFalse(SpriteGpuEligibility.IsGpuEligible(em, created.Root, out var reason));
                     Assert.That(reason.ToString(), Does.Contain("Parts"));
                     Assert.IsFalse(SpriteAnims.TryToGpu(em, created.Root));
-                    Assert.IsFalse(SpriteAnims.Play(em, created.Root, "Walk", force: false, crossfadeSeconds: 0.1f));
+                    Assert.IsTrue(SpriteAnims.Play(em, created.Root, "Walk", force: false, crossfadeSeconds: 0.1f),
+                        "Parts supports crossfade requests while remaining CPU-pose driven.");
+                    Assert.IsTrue(em.HasComponent<SpritePartsPlayer>(created.Root));
                 }
                 finally { created.Parts.Dispose(); }
             }

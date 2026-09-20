@@ -95,6 +95,19 @@ namespace InvertLab.Sprites.DOTS
             return -1;
         }
 
+        public static int FindSlotIndexById(ref SpritePartsSetBlob set, string slotId)
+        {
+            if (string.IsNullOrEmpty(slotId))
+                return -1;
+            ulong hash = SpritePartIdUtility.Hash(SpritePartIdUtility.Canonical(slotId));
+            for (int i = 0; i < set.Slots.Length; i++)
+            {
+                if (set.Slots[i].SlotIdHash == hash)
+                    return i;
+            }
+            return -1;
+        }
+
         public static int FindAppearanceIndex(ref SpritePartsSetBlob set, string appearanceId)
         {
             if (string.IsNullOrEmpty(appearanceId))

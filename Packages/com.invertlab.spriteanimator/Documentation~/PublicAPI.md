@@ -2,6 +2,9 @@
 
 Use these entry points in gameplay. Prefer them over digging into systems or blob internals.
 
+For Parts crossfades, aiming, recoil, layers, sockets, and physics ownership, see
+[Parts gameplay integration](PartsGameplay.md).
+
 ## Authoring (Inspector)
 
 | Type | Role |

@@ -283,12 +283,16 @@ namespace InvertLab.Sprites.DOTS.Tests
                 {
                     Entity root = created.Root;
                     Assert.IsTrue(SpriteAnims.Play(em, root, "Walk"));
-                    // Crossfade unsupported — no state change.
                     var before = em.GetComponentData<SpritePartsPlayer>(root);
-                    Assert.IsFalse(SpriteAnims.Play(em, root, "Walk", force: false, crossfadeSeconds: 0.2f));
-                    var after = em.GetComponentData<SpritePartsPlayer>(root);
-                    Assert.AreEqual(before.TimeSeconds, after.TimeSeconds, 1e-6f);
-                    Assert.AreEqual(before.ClipIndex, after.ClipIndex);
+                    Assert.IsTrue(SpriteAnims.Play(em, root, "Walk", force: false, crossfadeSeconds: 0.2f));
+                    var same = em.GetComponentData<SpritePartsPlayer>(root);
+                    Assert.AreEqual(before.TimeSeconds, same.TimeSeconds, 1e-6f);
+                    Assert.AreEqual(before.ClipIndex, same.ClipIndex);
+                    Assert.IsTrue(SpriteAnims.Play(em, root, "OnceClip", force: false, crossfadeSeconds: 0.2f));
+                    var faded = em.GetComponentData<SpritePartsPlayer>(root);
+                    Assert.AreEqual(1, faded.ClipIndex);
+                    Assert.AreEqual(0, faded.PreviousClipIndex);
+                    Assert.AreEqual(0.2f, faded.BlendDuration, 1e-5f);
 
                     SpriteAnims.Pause(em, root);
                     Assert.AreEqual(0, em.GetComponentData<SpritePartsPlayer>(root).Playing);

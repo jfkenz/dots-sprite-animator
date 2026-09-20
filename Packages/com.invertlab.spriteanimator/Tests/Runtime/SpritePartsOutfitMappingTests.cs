@@ -149,7 +149,17 @@ namespace InvertLab.Sprites.DOTS.Tests
 
             var result = SpritePartsOutfitMapping.Apply(plan, source, dest);
             Assert.IsTrue(result.Ok, result.Reason);
-            Assert.AreEqual("body.c", SpritePartsAuthoringOps.FindSlot(dest, "body").DefaultAppearanceId);
+            // These profiles have different textures. Safe import must retain
+            // the destination art and bind a renamed copy of the source art.
+            string appliedId = SpritePartsAuthoringOps.FindSlot(dest, "body").DefaultAppearanceId;
+            Assert.AreNotEqual("body.c", appliedId);
+            var applied = SpritePartsAuthoringOps.FindAppearance(dest, appliedId);
+            Assert.IsNotNull(applied);
+            Assert.AreSame(source.Sheets[0].Texture, dest.Sheets[applied.SheetIndex].Texture);
+            Assert.AreEqual(3, applied.CellIndex);
+            var original = SpritePartsAuthoringOps.FindAppearance(dest, "body.c");
+            Assert.AreEqual(0, original.SheetIndex);
+            Assert.AreEqual(3, original.CellIndex);
             Assert.AreEqual(headBefore, SpritePartsAuthoringOps.FindSlot(dest, "head").DefaultAppearanceId,
                 "Unmapped Head slot must stay unchanged.");
         }

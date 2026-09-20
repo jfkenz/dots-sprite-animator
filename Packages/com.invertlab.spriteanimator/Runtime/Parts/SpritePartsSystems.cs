@@ -33,18 +33,12 @@ namespace InvertLab.Sprites.DOTS
                 if (player.ClipIndex < 0 || player.ClipIndex >= set.Clips.Length)
                     continue;
 
-                ref var clip = ref set.Clips[player.ClipIndex];
                 byte already = player.Completed;
                 if (em.HasComponent<SpritePartsCompleted>(entity))
                     already = 1;
-
-                var tick = SpritePartsPlayback.Tick(
-                    player.TimeSeconds, player.SpeedMultiplier, clip.SpeedMultiplier,
-                    clip.Duration, clip.WrapMode, player.Playing, already, dt);
-                player.TimeSeconds = tick.TimeSeconds;
-                player.Playing = tick.Playing;
-                player.Completed = tick.AlreadyCompleted;
-                if (tick.CompletedThisTick != 0 && !em.HasComponent<SpritePartsCompleted>(entity))
+                player.Completed = already;
+                SpritePartsPoseWriter.TickClocks(ref player, ref set, dt);
+                if (player.Completed != 0 && !em.HasComponent<SpritePartsCompleted>(entity))
                     commands.AddComponent(entity, new SpritePartsCompleted());
                 pending.Add(entity);
             }
@@ -56,38 +50,44 @@ namespace InvertLab.Sprites.DOTS
                 var entity = pending[i];
                 if (!em.HasComponent<SpritePartsSetRef>(entity) || !em.HasComponent<SpritePartsPlayer>(entity))
                     continue;
-                var blob = em.GetComponentData<SpritePartsSetRef>(entity).Set;
-                if (!blob.IsCreated)
-                    continue;
-                var player = em.GetComponentData<SpritePartsPlayer>(entity);
-                ref var set = ref blob.Value;
-                ApplyPoseImmediate(em, entity, ref set, player.ClipIndex, player.TimeSeconds, commands);
+                SpritePartsPoseWriter.Apply(em, entity, commands, true);
             }
             commands.Playback(em);
         }
+    }
 
-        static void ApplyPoseImmediate(EntityManager em, Entity root, ref SpritePartsSetBlob set,
-            int clipIndex, float time, EntityCommandBuffer commands)
+    [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [UpdateAfter(typeof(SpritePartsPlayerSystem))]
+    [UpdateBefore(typeof(TransformSystemGroup))]
+    public partial struct SpritePartsPoseDiagnosticsSystem : ISystem
+    {
+        public void OnUpdate(ref SystemState state)
         {
-            if (!em.HasBuffer<SpritePartLink>(root))
-                return;
-            var links = em.GetBuffer<SpritePartLink>(root);
-            for (int i = 0; i < links.Length; i++)
+            foreach (var (diag, entity) in
+                     SystemAPI.Query<RefRW<SpritePartsPoseDiagnostics>>()
+                              .WithAll<SpritePartsPlayer>()
+                              .WithEntityAccess())
             {
-                var part = links[i].Part;
-                if (part == Entity.Null || !em.Exists(part))
+                byte flags = diag.ValueRO.Flags;
+                byte logged = diag.ValueRO.LoggedFlags;
+                byte fresh = (byte)(flags & ~logged);
+                if (fresh == 0)
                     continue;
-                int slotIndex = links[i].SlotIndex;
-                if (slotIndex < 0 || slotIndex >= set.Slots.Length)
-                    continue;
-                SpritePartsSampler.SampleSlot(ref set, clipIndex, slotIndex, time, out var pose);
-                SpritePartsPoseUtility.ApplyPartTransform(em, part, pose, commands);
-                int sampledApp = SpritePartsSampler.SampleAppearanceIndex(
-                    ref set, clipIndex, slotIndex, time);
-                SpriteParts.ApplySampledAppearance(
-                    em, root, part, slotIndex, sampledApp, ref set, commands);
+                if ((fresh & SpritePartsPoseDiagnostics.MissingVisualRoot) != 0)
+                    Debug.LogError(
+                        "[Parts] Missing Visual Root. Apply Runtime Mode / rebake the Parts character.",
+                        null);
+                if ((fresh & SpritePartsPoseDiagnostics.LinkMismatch) != 0)
+                    Debug.LogError(
+                        "[Parts] Slot link count does not match the baked rig.",
+                        null);
+                if ((fresh & SpritePartsPoseDiagnostics.GameplayWroteTransform) != 0)
+                    Debug.LogError(
+                        "[Parts] Gameplay wrote a part LocalTransform. Use SpriteParts.SetOverride instead.",
+                        null);
+                diag.ValueRW.LoggedFlags = (byte)(logged | fresh);
+                _ = entity;
             }
-            SpritePartsPoseUtility.ApplyFacing(em, root, commands);
         }
     }
 
@@ -125,7 +125,7 @@ namespace InvertLab.Sprites.DOTS
                 depth.ValueRW.Value = SpriteSortDepth.FromIndex(drawIndex);
 
                 // Keep joint local z at 0 (no SpriteSortDepth accumulation).
-                if (em.HasComponent<LocalTransform>(entity))
+                if (!em.HasComponent<SpritePartPhysicsOwned>(entity) && em.HasComponent<LocalTransform>(entity))
                 {
                     var lt = em.GetComponentData<LocalTransform>(entity);
                     if (lt.Position.z != 0f)

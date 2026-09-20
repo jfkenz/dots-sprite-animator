@@ -326,7 +326,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                     MessageType.Warning);
                 if (GUILayout.Button("Use Parts For This Character"))
                     SwitchProfileToParts(authoring);
+                return;
             }
+            EditorGUILayout.HelpBox(
+                "Pose writer owns part transforms, sockets, and hitboxes. Gameplay uses SpriteParts.SetOverride.\n" +
+                "Spaces: Local/Parent = parent-local TRS. Character = gameplay-root XY. World = scene XY. " +
+                "LookAt Target is in the chosen space. Scale is always parent-local.",
+                MessageType.Info);
         }
 
         static void SwitchProfileToParts(SpritePartsCharacterAuthoring authoring)
@@ -352,6 +358,109 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty("PlayOnEnable"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("PlaybackTimeScale"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("Tint"));
+            DrawPoseAuthoring((SpritePartsCharacterAuthoring)target);
+        }
+
+        void DrawPoseAuthoring(SpritePartsCharacterAuthoring authoring)
+        {
+            var profile = authoring.Profile != null ? authoring.Profile.Data : null;
+            if (profile != null)
+                profile.EnsurePartsRig();
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Pose Overrides", EditorStyles.boldLabel);
+            var overrides = serializedObject.FindProperty("Overrides");
+            if (overrides == null)
+                return;
+            EditorGUI.indentLevel++;
+            int count = Mathf.Max(0, overrides.arraySize);
+            int nextCount = EditorGUILayout.IntField("Size", count);
+            if (nextCount != count)
+                overrides.arraySize = Mathf.Max(0, nextCount);
+            for (int i = 0; i < overrides.arraySize; i++)
+            {
+                var el = overrides.GetArrayElementAtIndex(i);
+                EditorGUILayout.BeginVertical("box");
+                EditorGUILayout.PropertyField(el.FindPropertyRelative("Enabled"));
+                EditorGUILayout.PropertyField(el.FindPropertyRelative("Id"));
+                DrawSlotPopup(el.FindPropertyRelative("SlotId"), profile);
+                EditorGUILayout.PropertyField(el.FindPropertyRelative("Mode"));
+                EditorGUILayout.PropertyField(el.FindPropertyRelative("Space"));
+                var channelsProp = el.FindPropertyRelative("Channels");
+                var channels = (SpritePartsPoseChannel)channelsProp.intValue;
+                channels = (SpritePartsPoseChannel)EditorGUILayout.EnumFlagsField("Channels", channels);
+                channelsProp.intValue = (int)channels;
+                EditorGUILayout.PropertyField(el.FindPropertyRelative("Priority"));
+                EditorGUILayout.PropertyField(el.FindPropertyRelative("Weight"));
+                var mode = (SpritePartsPoseMode)el.FindPropertyRelative("Mode").enumValueIndex;
+                if (mode == SpritePartsPoseMode.LookAt)
+                    EditorGUILayout.PropertyField(el.FindPropertyRelative("Target"));
+                else
+                {
+                    EditorGUILayout.PropertyField(el.FindPropertyRelative("Position"));
+                    EditorGUILayout.PropertyField(el.FindPropertyRelative("Rotation"));
+                    EditorGUILayout.PropertyField(el.FindPropertyRelative("Scale"));
+                }
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("Recoil"))
+                    ApplyPreset(el, SpritePartsPoseMode.Add, SpritePartsPoseChannel.Position, new Vector2(0f, 0.15f), 0f, false);
+                if (GUILayout.Button("Bob"))
+                    ApplyPreset(el, SpritePartsPoseMode.Add, SpritePartsPoseChannel.Position, new Vector2(0f, 0.08f), 0f, false);
+                if (GUILayout.Button("LookAt"))
+                    ApplyPreset(el, SpritePartsPoseMode.LookAt, SpritePartsPoseChannel.Rotation, Vector2.zero, 0f, true);
+                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.EndVertical();
+            }
+            EditorGUI.indentLevel--;
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Animation Layers", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("Layers"), true);
+        }
+
+        static void ApplyPreset(SerializedProperty el, SpritePartsPoseMode mode, SpritePartsPoseChannel channels,
+            Vector2 position, float rotation, bool lookAt)
+        {
+            el.FindPropertyRelative("Enabled").boolValue = true;
+            el.FindPropertyRelative("Mode").enumValueIndex = (int)mode;
+            el.FindPropertyRelative("Channels").intValue = (int)channels;
+            el.FindPropertyRelative("Weight").floatValue = 1f;
+            el.FindPropertyRelative("Space").enumValueIndex = lookAt
+                ? (int)SpritePartsPoseSpace.Character
+                : (int)SpritePartsPoseSpace.Local;
+            if (lookAt)
+                el.FindPropertyRelative("Target").vector2Value = new Vector2(2f, 0f);
+            else
+            {
+                el.FindPropertyRelative("Position").vector2Value = position;
+                el.FindPropertyRelative("Rotation").floatValue = rotation;
+            }
+        }
+
+        static void DrawSlotPopup(SerializedProperty slotIdProp, SpriteSheetProfile profile)
+        {
+            var slots = profile?.PartsSlots;
+            if (slots == null || slots.Count == 0)
+            {
+                EditorGUILayout.PropertyField(slotIdProp, new GUIContent("Slot Id"));
+                return;
+            }
+            var labels = new string[slots.Count + 1];
+            labels[0] = "(select slot)";
+            int current = 0;
+            string currentId = slotIdProp.stringValue ?? string.Empty;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                string id = slots[i] != null ? slots[i].SlotId : string.Empty;
+                string name = slots[i] != null ? slots[i].Name : string.Empty;
+                labels[i + 1] = string.IsNullOrEmpty(name) ? id : $"{name} ({id})";
+                if (!string.IsNullOrEmpty(currentId) &&
+                    string.Equals(id, currentId, System.StringComparison.OrdinalIgnoreCase))
+                    current = i + 1;
+            }
+            int next = EditorGUILayout.Popup("Slot", current, labels);
+            if (next != current)
+                slotIdProp.stringValue = next <= 0 ? string.Empty : slots[next - 1].SlotId;
         }
 
         void DrawClipPopup(SpritePartsCharacterAuthoring authoring, SpriteSheetProfile profile)

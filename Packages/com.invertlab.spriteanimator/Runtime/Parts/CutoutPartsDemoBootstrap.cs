@@ -17,7 +17,7 @@ namespace InvertLab.Sprites.DOTS
         EntityManager _em;
         Entity _root;
         BlobAssetReference<SpritePartsSetBlob> _blob;
-        NativeArray<Entity> _parts;
+        static readonly Rect ControlsRect = new Rect(16, 16, 360, 260);
         readonly List<Texture2D> _textures = new();
         readonly List<Entity> _sheetEntities = new();
         bool _paused;
@@ -41,7 +41,8 @@ namespace InvertLab.Sprites.DOTS
             var created = SpritePartsEntityFactory.Create(_em, _blob, new float3(0f, 0f, 0f),
                 characterOrder: 1, flipX: false, playing: true, clipIndex: 0);
             _root = created.Root;
-            _parts = created.Parts;
+            // Factory returns a Temp lookup; linked entities own the actual joints.
+            created.Parts.Dispose();
             RegisterDemoSheets();
             SpriteParts.Play(_em, _root, "Walk");
             SpriteParts.ApplySkin(_em, _root, "weapon.sword");
@@ -49,30 +50,39 @@ namespace InvertLab.Sprites.DOTS
 
         void Update()
         {
-            if (_root == Entity.Null || !_em.Exists(_root))
+            if (_world == null || !_world.IsCreated || _root == Entity.Null || !_em.Exists(_root))
                 return;
 
-            // Pointer / touch first — no Input System package required.
+            // Legacy polling is unavailable with Active Input Handling = Input
+            // System only. The OnGUI buttons require no input package dependency.
+#if ENABLE_LEGACY_INPUT_MANAGER
             if (Input.GetMouseButtonDown(0) || (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began))
             {
                 var pos = Input.touchCount > 0
                     ? (Vector2)Input.GetTouch(0).position
                     : (Vector2)Input.mousePosition;
+                if (ControlsRect.Contains(new Vector2(pos.x, Screen.height - pos.y)))
+                    return;
                 // Left half: swap weapon. Right half: flip facing.
                 if (pos.x < Screen.width * 0.5f)
                     ToggleWeapon();
                 else
                     ToggleFacing();
             }
+#endif
         }
 
         void OnGUI()
         {
-            if (_root == Entity.Null || !_em.Exists(_root))
+            if (_world == null || !_world.IsCreated || _root == Entity.Null || !_em.Exists(_root))
                 return;
-            GUILayout.BeginArea(new Rect(16, 16, 360, 260), GUI.skin.box);
+            GUILayout.BeginArea(ControlsRect, GUI.skin.box);
             GUILayout.Label("Cutout Parts Demo (pure DOTS)");
+#if ENABLE_LEGACY_INPUT_MANAGER
             GUILayout.Label("Walk playing. Tap left: swap weapon. Tap right: flip.");
+#else
+            GUILayout.Label("Use buttons to pause, swap weapons, and flip.");
+#endif
             GUILayout.Label($"Weapon: {(_weaponMode == 0 ? "sword.iron" : "spear.oak")}");
             if (GUILayout.Button(_paused ? "Resume Walk" : "Pause Walk"))
             {
@@ -129,6 +139,7 @@ namespace InvertLab.Sprites.DOTS
                 UseCellCrops = 0,
             });
             _em.AddComponentObject(e, new SpriteSheetAsset { Texture = tex });
+            _sheetEntities.Add(e);
             return e;
         }
 
@@ -299,10 +310,16 @@ namespace InvertLab.Sprites.DOTS
 
         void OnDestroy()
         {
-            if (_world != null && _world.IsCreated && _root != Entity.Null && _em.Exists(_root))
-                _em.DestroyEntity(_root);
-            if (_parts.IsCreated)
-                _parts.Dispose();
+            if (_world != null && _world.IsCreated)
+            {
+                if (_root != Entity.Null && _em.Exists(_root))
+                    _em.DestroyEntity(_root);
+                for (int i = 0; i < _sheetEntities.Count; i++)
+                    if (_em.Exists(_sheetEntities[i]))
+                        _em.DestroyEntity(_sheetEntities[i]);
+            }
+            _sheetEntities.Clear();
+            _root = Entity.Null;
             if (_blob.IsCreated)
                 _blob.Dispose();
             for (int i = 0; i < _textures.Count; i++)

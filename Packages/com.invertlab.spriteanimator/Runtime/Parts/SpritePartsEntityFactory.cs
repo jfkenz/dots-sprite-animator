@@ -48,14 +48,8 @@ namespace InvertLab.Sprites.DOTS
                 Value = float4x4.TRS(position, quaternion.identity, new float3(1f)),
             });
             em.AddComponentData(root, new SpritePartsSetRef { Set = setBlob });
-            em.AddComponentData(root, new SpritePartsPlayer
-            {
-                ClipIndex = math.clamp(clipIndex, 0, math.max(0, set.Clips.Length - 1)),
-                TimeSeconds = 0f,
-                SpeedMultiplier = 1f,
-                Playing = playing ? (byte)1 : (byte)0,
-                Completed = 0,
-            });
+            em.AddComponentData(root, SpritePartsPoseWriter.DefaultPlayer(
+                math.clamp(clipIndex, 0, math.max(0, set.Clips.Length - 1)), playing));
             em.AddComponentData(root, new SpritePartsDrawGroup { CharacterOrder = characterOrder });
             em.AddComponentData(root, new SpritePartsFacing
             {
@@ -176,6 +170,9 @@ namespace InvertLab.Sprites.DOTS
             group.Add(new LinkedEntityGroup { Value = visual });
             for (int i = 0; i < parts.Length; i++)
                 group.Add(new LinkedEntityGroup { Value = parts[i] });
+
+            SpritePartsPoseWriter.EnsureBuffers(em, root);
+            SpritePartsPoseWriter.Apply(em, root);
 
             return new CreateResult
             {

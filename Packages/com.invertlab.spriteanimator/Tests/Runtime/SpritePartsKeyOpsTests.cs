@@ -47,9 +47,12 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.IsTrue(SpritePartsAuthoringOps.WriteKeyPose(profile, walk, "body", 0.1f, pose).WroteKey);
             Assert.IsTrue(SpritePartsAuthoringOps.WriteKeyPose(profile, walk, "body", 0.5f, pose).WroteKey);
             var track = SpritePartsAuthoringOps.FindTrack(profile.PartsClips[walk], "body");
-            Assert.AreEqual(2, track.Keys.Count);
-            var a = track.Keys[0];
-            var b = track.Keys[1];
+            // The first key after t=0 also inserts the rig's rest pose at zero.
+            Assert.AreEqual(3, track.Keys.Count);
+            var anchor = track.Keys[0];
+            Assert.AreEqual(0f, anchor.Time);
+            var a = track.Keys[1];
+            var b = track.Keys[2];
             float startA = a.Time;
             float delta = b.Time - startA;
             var result = SpritePartsAuthoringOps.MoveKeys(
@@ -58,7 +61,16 @@ namespace InvertLab.Sprites.DOTS.Tests
                 new List<float> { startA },
                 delta, 30f, snap: false);
             Assert.IsTrue(result.Ok, result.Reason);
-            Assert.AreEqual(1, track.Keys.Count);
+            Assert.AreEqual(2, track.Keys.Count);
+            Assert.AreSame(anchor, track.Keys[0]);
+            Assert.IsTrue(track.Keys.Contains(a), "The dragged key wins a collision.");
+            Assert.IsFalse(track.Keys.Contains(b));
+            Assert.AreEqual(0.5f, a.Time, 1e-5f);
+            result = SpritePartsAuthoringOps.MoveKeys(profile, walk,
+                new List<SpritePartsKeyDef> { a }, new List<float> { a.Time },
+                100f, 30f, snap: false);
+            Assert.IsTrue(result.Ok, result.Reason);
+            Assert.AreEqual(profile.PartsClips[walk].Duration, a.Time, 1e-5f);
         }
 
         [Test]

@@ -18,21 +18,20 @@ namespace InvertLab.Sprites.DOTS
         {
             if (!IsPartsRoot(em, e))
                 return false;
-            if (crossfadeSeconds > 0f)
-                return false; // unsupported on Parts — no state change
-            ref var set = ref em.GetComponentData<SpritePartsSetRef>(e).Set.Value;
+            var blob = em.GetComponentData<SpritePartsSetRef>(e).Set;
+            if (!blob.IsCreated)
+                return false;
+            ref var set = ref blob.Value;
             int index = SpritePartsPlayback.FindClipIndexByName(ref set, clipName);
             if (index < 0)
                 return false;
-            return Play(em, e, index, force, 0f);
+            return Play(em, e, index, force, crossfadeSeconds);
         }
 
         public static bool Play(EntityManager em, Entity e, int clipIndex, bool force = false,
             float crossfadeSeconds = 0f)
         {
             if (!IsPartsRoot(em, e))
-                return false;
-            if (crossfadeSeconds > 0f)
                 return false;
             var blob = em.GetComponentData<SpritePartsSetRef>(e).Set;
             if (!blob.IsCreated)
@@ -52,15 +51,33 @@ namespace InvertLab.Sprites.DOTS
                 if (player.Playing == 0 && !completed && player.ClipIndex == clipIndex)
                 {
                     player.Playing = 1;
+                    player.Paused = 0;
                     em.SetComponentData(e, player);
                     return true;
                 }
+            }
+
+            float fade = math.max(0f, crossfadeSeconds);
+            if (fade > 1e-8f && player.ClipIndex != clipIndex && player.ClipIndex >= 0)
+            {
+                player.PreviousClipIndex = player.ClipIndex;
+                player.PreviousTimeSeconds = player.TimeSeconds;
+                player.BlendDuration = fade;
+                player.BlendElapsed = 0f;
+            }
+            else
+            {
+                player.PreviousClipIndex = -1;
+                player.PreviousTimeSeconds = 0f;
+                player.BlendDuration = 0f;
+                player.BlendElapsed = 0f;
             }
 
             player.ClipIndex = clipIndex;
             player.TimeSeconds = 0f;
             player.Playing = 1;
             player.Completed = 0;
+            player.Paused = 0;
             if (!(player.SpeedMultiplier > 0f) && player.SpeedMultiplier == 0f)
                 player.SpeedMultiplier = 1f;
             if (!math.isfinite(player.SpeedMultiplier))
@@ -77,18 +94,19 @@ namespace InvertLab.Sprites.DOTS
             if (!IsPartsRoot(em, e)) return;
             var player = em.GetComponentData<SpritePartsPlayer>(e);
             player.Playing = 0;
+            player.Paused = 1;
             em.SetComponentData(e, player);
         }
 
         public static void Resume(EntityManager em, Entity e)
         {
             if (!IsPartsRoot(em, e)) return;
-            if (em.HasComponent<SpritePartsCompleted>(e))
-                return;
             var player = em.GetComponentData<SpritePartsPlayer>(e);
-            if (player.Completed != 0)
-                return;
-            player.Playing = 1;
+            player.Paused = 0;
+            // Completion stops the incoming clip, but its crossfade may still
+            // need to finish. Resume that fade without restarting the clip.
+            if (player.Completed == 0 && !em.HasComponent<SpritePartsCompleted>(e))
+                player.Playing = 1;
             em.SetComponentData(e, player);
         }
 
@@ -99,6 +117,11 @@ namespace InvertLab.Sprites.DOTS
             player.Playing = 0;
             player.TimeSeconds = 0f;
             player.Completed = 0;
+            player.Paused = 1;
+            player.PreviousClipIndex = -1;
+            player.PreviousTimeSeconds = 0f;
+            player.BlendDuration = 0f;
+            player.BlendElapsed = 0f;
             em.SetComponentData(e, player);
             if (em.HasComponent<SpritePartsCompleted>(e))
                 em.RemoveComponent<SpritePartsCompleted>(e);
@@ -112,6 +135,11 @@ namespace InvertLab.Sprites.DOTS
             player.TimeSeconds = 0f;
             player.Playing = 1;
             player.Completed = 0;
+            player.Paused = 0;
+            player.PreviousClipIndex = -1;
+            player.PreviousTimeSeconds = 0f;
+            player.BlendDuration = 0f;
+            player.BlendElapsed = 0f;
             em.SetComponentData(e, player);
             if (em.HasComponent<SpritePartsCompleted>(e))
                 em.RemoveComponent<SpritePartsCompleted>(e);
@@ -202,6 +230,167 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
             return false;
+        }
+
+        public static void SetSpriteSwitch(EntityManager em, Entity root, SpritePartsSpriteSwitch rule)
+        {
+            if (!IsPartsRoot(em, root)) return;
+            var player = em.GetComponentData<SpritePartsPlayer>(root);
+            player.SpriteSwitch = (byte)rule;
+            em.SetComponentData(root, player);
+        }
+
+        public static void SetOverride(EntityManager em, Entity root, in SpritePartsPoseOverride value)
+        {
+            if (!IsPartsRoot(em, root)) return;
+            SpritePartsPoseWriter.EnsureBuffers(em, root);
+            var buf = em.GetBuffer<SpritePartsPoseOverride>(root);
+            for (int i = 0; i < buf.Length; i++)
+            {
+                if (buf[i].Id == value.Id)
+                {
+                    buf[i] = value;
+                    return;
+                }
+            }
+            buf.Add(value);
+        }
+
+        public static void ClearOverride(EntityManager em, Entity root, int id)
+        {
+            if (!IsPartsRoot(em, root) || !em.HasBuffer<SpritePartsPoseOverride>(root))
+                return;
+            var buf = em.GetBuffer<SpritePartsPoseOverride>(root);
+            for (int i = buf.Length - 1; i >= 0; i--)
+            {
+                if (buf[i].Id == id)
+                    buf.RemoveAt(i);
+            }
+        }
+
+        public static void ClearOverrides(EntityManager em, Entity root)
+        {
+            if (!IsPartsRoot(em, root) || !em.HasBuffer<SpritePartsPoseOverride>(root))
+                return;
+            em.GetBuffer<SpritePartsPoseOverride>(root).Clear();
+        }
+
+        public static void SetLayer(EntityManager em, Entity root, int clipIndex, float weight, uint slotMask = 0)
+        {
+            if (!IsPartsRoot(em, root)) return;
+            SpritePartsPoseWriter.EnsureBuffers(em, root);
+            var buf = em.GetBuffer<SpritePartsAnimLayer>(root);
+            var layer = new SpritePartsAnimLayer
+            {
+                ClipIndex = clipIndex,
+                Weight = math.saturate(weight),
+                SlotMask = slotMask,
+            };
+            for (int i = 0; i < buf.Length; i++)
+            {
+                if (buf[i].ClipIndex == clipIndex)
+                {
+                    buf[i] = layer;
+                    return;
+                }
+            }
+            buf.Add(layer);
+        }
+
+        public static void ClearLayer(EntityManager em, Entity root, int clipIndex)
+        {
+            if (!IsPartsRoot(em, root) || !em.HasBuffer<SpritePartsAnimLayer>(root))
+                return;
+            var buf = em.GetBuffer<SpritePartsAnimLayer>(root);
+            for (int i = buf.Length - 1; i >= 0; i--)
+            {
+                if (buf[i].ClipIndex == clipIndex)
+                    buf.RemoveAt(i);
+            }
+        }
+
+        public static void ClearLayers(EntityManager em, Entity root)
+        {
+            if (!IsPartsRoot(em, root) || !em.HasBuffer<SpritePartsAnimLayer>(root))
+                return;
+            em.GetBuffer<SpritePartsAnimLayer>(root).Clear();
+        }
+
+        public static bool BindSocket(EntityManager em, Entity root, string socketId, string slotId,
+            float2 localOffset, float localRotationDeg = 0f)
+        {
+            if (!TryGetSlot(em, root, slotId, out _))
+                return false;
+            SpritePartsPoseWriter.EnsureBuffers(em, root);
+            ulong hash = SpritePartIdUtility.Hash(SpritePartIdUtility.Canonical(socketId, "socket"));
+            int slot = SlotIndex(em, root, slotId);
+            var buf = em.GetBuffer<SpritePartSocketBinding>(root);
+            var binding = new SpritePartSocketBinding
+            {
+                SocketIdHash = hash,
+                SlotIndex = slot,
+                LocalOffset = localOffset,
+                LocalRotation = localRotationDeg,
+            };
+            for (int i = 0; i < buf.Length; i++)
+            {
+                if (buf[i].SocketIdHash == hash)
+                {
+                    buf[i] = binding;
+                    return true;
+                }
+            }
+            buf.Add(binding);
+            return true;
+        }
+
+        public static bool BindHitbox(EntityManager em, Entity root, string slotId,
+            float2 localCenter, float2 localSize, float localRotationDeg = 0f, byte kind = 0)
+        {
+            if (!TryGetSlot(em, root, slotId, out _))
+                return false;
+            SpritePartsPoseWriter.EnsureBuffers(em, root);
+            em.GetBuffer<SpritePartHitboxBinding>(root).Add(new SpritePartHitboxBinding
+            {
+                SlotIndex = SlotIndex(em, root, slotId),
+                LocalCenter = localCenter,
+                LocalSize = localSize,
+                LocalRotation = localRotationDeg,
+                Kind = kind,
+            });
+            return true;
+        }
+
+        public static bool TryGetSocketWorld(EntityManager em, Entity root, string socketId,
+            out float2 worldPosition, out float worldRotationDeg)
+        {
+            worldPosition = float2.zero;
+            worldRotationDeg = 0f;
+            if (!IsPartsRoot(em, root) || !em.HasBuffer<SpritePartSocketWorld>(root))
+                return false;
+            ulong hash = SpritePartIdUtility.Hash(SpritePartIdUtility.Canonical(socketId, "socket"));
+            var buf = em.GetBuffer<SpritePartSocketWorld>(root);
+            for (int i = 0; i < buf.Length; i++)
+            {
+                if (buf[i].SocketIdHash != hash)
+                    continue;
+                worldPosition = buf[i].WorldPosition;
+                worldRotationDeg = buf[i].WorldRotation;
+                return true;
+            }
+            return false;
+        }
+
+        static int SlotIndex(EntityManager em, Entity root, string slotId)
+        {
+            ulong hash = SpritePartIdUtility.Hash(SpritePartIdUtility.Canonical(slotId));
+            var links = em.GetBuffer<SpritePartLink>(root);
+            for (int i = 0; i < links.Length; i++)
+            {
+                if (links[i].SlotIdHash == hash)
+                    return links[i].SlotIndex;
+            }
+            return -1;
         }
 
         /// <summary>
@@ -597,28 +786,7 @@ namespace InvertLab.Sprites.DOTS
 
         public static void ApplyPose(EntityManager em, Entity root)
         {
-            if (!SpriteParts.IsPartsRoot(em, root))
-                return;
-            var blob = em.GetComponentData<SpritePartsSetRef>(root).Set;
-            if (!blob.IsCreated || !em.HasBuffer<SpritePartLink>(root))
-                return;
-            var player = em.GetComponentData<SpritePartsPlayer>(root);
-            ref var set = ref blob.Value;
-            int clip = player.ClipIndex;
-            float time = player.TimeSeconds;
-            var links = em.GetBuffer<SpritePartLink>(root);
-            for (int i = 0; i < links.Length; i++)
-            {
-                var part = links[i].Part;
-                if (part == Entity.Null || !em.Exists(part))
-                    continue;
-                int slotIndex = links[i].SlotIndex;
-                if (slotIndex < 0 || slotIndex >= set.Slots.Length)
-                    continue;
-                SpritePartsSampler.SampleSlot(ref set, clip, slotIndex, time, out var pose);
-                ApplyPartTransform(em, part, pose);
-            }
-            ApplyFacing(em, root);
+            SpritePartsPoseWriter.Apply(em, root);
         }
 
         public static void ApplyPartTransform(EntityManager em, Entity part, in SpritePartsSampler.Pose pose)
@@ -628,7 +796,7 @@ namespace InvertLab.Sprites.DOTS
             EntityCommandBuffer commands)
             => ApplyPartTransform(em, part, pose, commands, true);
 
-        static void ApplyPartTransform(EntityManager em, Entity part, in SpritePartsSampler.Pose pose,
+        internal static void ApplyPartTransform(EntityManager em, Entity part, in SpritePartsSampler.Pose pose,
             EntityCommandBuffer commands, bool deferred)
         {
             if (!em.HasComponent<LocalTransform>(part))
@@ -652,7 +820,7 @@ namespace InvertLab.Sprites.DOTS
         public static void ApplyFacing(EntityManager em, Entity root, EntityCommandBuffer commands)
             => ApplyFacing(em, root, commands, true);
 
-        static void ApplyFacing(EntityManager em, Entity root, EntityCommandBuffer commands, bool deferred)
+        internal static void ApplyFacing(EntityManager em, Entity root, EntityCommandBuffer commands, bool deferred)
         {
             if (!em.HasComponent<SpritePartsFacing>(root))
                 return;
