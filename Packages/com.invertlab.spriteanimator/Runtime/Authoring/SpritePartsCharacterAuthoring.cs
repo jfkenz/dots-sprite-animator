@@ -81,6 +81,9 @@ namespace InvertLab.Sprites.DOTS
         {
             public override void Bake(SpritePartsCharacterAuthoring authoring)
             {
+                if (GetComponent<SpriteStaticAuthoring>() != null)
+                    return; // Static baker reports the explicit repair requirement.
+
                 var profileAsset = authoring.Profile;
                 var profile = profileAsset != null ? profileAsset.Data : null;
                 if (profile == null)

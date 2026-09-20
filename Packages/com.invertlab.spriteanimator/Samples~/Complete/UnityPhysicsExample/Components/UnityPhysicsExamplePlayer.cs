@@ -14,7 +14,7 @@ namespace InvertLab.Sprites.DOTS
     /// </summary>
     /// <summary>
     /// Unity Physics variant of the example player: transform movement and
-    /// J attacks â€” the slash window is computed with SpriteHitboxQuery and
+    /// J attacks - the slash window is computed with SpriteHitboxQuery and
     /// enemies are detected with a Unity Physics OverlapAabb query against
     /// their baked hurtbox colliders.
     /// </summary>
@@ -299,7 +299,7 @@ namespace InvertLab.Sprites.DOTS
                 return;
             _helpStyle ??= new GUIStyle(GUI.skin.label) { fontSize = 14 };
             GUI.Label(new Rect(12f, 12f, 320f, 40f),
-                "A / D move   â€¢   J attack (Unity Physics)", _helpStyle);
+                "A / D move   *   J attack (Unity Physics)", _helpStyle);
         }
     }
 }

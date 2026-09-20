@@ -48,7 +48,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             var ordered = new List<int>(_selectedClips);
             ordered.Sort();
-            // Duplicate high→low so inserts after each index don't scramble remaining sources.
+            // Duplicate high->low so inserts after each index don't scramble remaining sources.
             for (int i = ordered.Count - 1; i >= 0; i--)
             {
                 _selectedClip = ordered[i];
@@ -553,8 +553,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     ? "Every row already has a clip"
                     : "No occupied rows left to turn into clips")
                 : $"Created {created} clip{Plural(created)} from rows"
-                    + (skippedExisting > 0 ? $"  •  skipped {skippedExisting} existing" : string.Empty)
-                    + (skippedEmpty > 0 ? $"  •  skipped {skippedEmpty} empty" : string.Empty);
+                    + (skippedExisting > 0 ? $"  *  skipped {skippedExisting} existing" : string.Empty)
+                    + (skippedEmpty > 0 ? $"  *  skipped {skippedEmpty} empty" : string.Empty);
             Repaint();
         }
 
@@ -628,8 +628,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     ? "Every column already has a clip"
                     : "No occupied columns left to turn into clips")
                 : $"Created {created} clip{Plural(created)} from columns"
-                    + (skippedExisting > 0 ? $"  •  skipped {skippedExisting} existing" : string.Empty)
-                    + (skippedEmpty > 0 ? $"  •  skipped {skippedEmpty} empty" : string.Empty);
+                    + (skippedExisting > 0 ? $"  *  skipped {skippedExisting} existing" : string.Empty)
+                    + (skippedEmpty > 0 ? $"  *  skipped {skippedEmpty} empty" : string.Empty);
             Repaint();
         }
 
@@ -870,8 +870,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _previewTime = PreviewTimeForAuthoredTime(clip, AuthoredStartTime(clip, insert));
             SaveDirty();
             _status = add == 1
-                ? $"Added 1 frame from the sheet  •  {clip.Frames.Length} total"
-                : $"Added {add} frames from the sheet  •  {clip.Frames.Length} total";
+                ? $"Added 1 frame from the sheet  *  {clip.Frames.Length} total"
+                : $"Added {add} frames from the sheet  *  {clip.Frames.Length} total";
             Repaint();
         }
 
@@ -1015,8 +1015,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             SyncWorkingProfileToAsset();
             SaveDirty();
             _status = remove.Count == 1
-                ? $"Removed frame {FirstRemovedIndex(remove) + 1}  •  {clip.Frames.Length} remaining"
-                : $"Removed {remove.Count} frames  •  {clip.Frames.Length} remaining";
+                ? $"Removed frame {FirstRemovedIndex(remove) + 1}  *  {clip.Frames.Length} remaining"
+                : $"Removed {remove.Count} frames  *  {clip.Frames.Length} remaining";
             Repaint();
         }
 
@@ -1061,7 +1061,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             int removed = before - clip.Frames.Length;
             _status = removed == 0
                 ? "A clip must keep at least one frame"
-                : $"Deleted {removed} empty frame{(removed == 1 ? string.Empty : "s")}  •  {clip.Frames.Length} remaining";
+                : $"Deleted {removed} empty frame{(removed == 1 ? string.Empty : "s")}  *  {clip.Frames.Length} remaining";
         }
 
         int CountEmptyFrames(SpriteClipDef clip)

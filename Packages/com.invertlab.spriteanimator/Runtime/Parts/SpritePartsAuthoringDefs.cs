@@ -4,11 +4,12 @@ using UnityEngine;
 
 namespace InvertLab.Sprites.DOTS
 {
-    /// <summary>Frame flipbook vs cutout Parts. Old assets default to Frame (0).</summary>
+    /// <summary>Frame flipbook, cutout Parts, or one static cell. Old assets default to Frame (0).</summary>
     public enum SpriteAnimKind : byte
     {
         Frame = 0,
         Parts = 1,
+        Static = 2,
     }
 
     public enum SpritePartsWrap : byte
@@ -62,8 +63,27 @@ namespace InvertLab.Sprites.DOTS
         public bool Enabled = true;
         /// <summary>Editor-only lock. Locked parts cannot be transformed, renamed, deleted or dragged.</summary>
         public bool EditorLocked;
+        /// <summary>
+        /// Sibling selection group. Empty = ungrouped. Not a motion parent:
+        /// members keep ParentSlotId and their own tracks.
+        /// </summary>
+        public string GroupId = string.Empty;
         /// <summary>Optional outfit role for Apply Outfit. None = ignored by role mapping.</summary>
         public SpritePartSemanticRole SemanticRole;
+    }
+
+    /// <summary>
+    /// Editor-only sibling folder. Members must share one ParentSlotId.
+    /// Does not bake into runtime and does not create a joint.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsGroupDef
+    {
+        public string Name = "Group";
+        public string GroupId = "group";
+        public bool Enabled = true;
+        /// <summary>Editor-only. Locks every member (same as locking each part).</summary>
+        public bool EditorLocked;
     }
 
     /// <summary>Art binding relative to a joint. Swap changes this; motion keys stay.</summary>

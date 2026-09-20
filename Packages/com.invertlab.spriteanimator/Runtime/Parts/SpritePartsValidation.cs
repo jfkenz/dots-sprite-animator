@@ -42,6 +42,7 @@ namespace InvertLab.Sprites.DOTS
         {
             if (profile == null) return;
             profile.PartsSlots ??= new List<SpritePartSlotDef>();
+            profile.PartsGroups ??= new List<SpritePartsGroupDef>();
             profile.PartsAppearances ??= new List<SpritePartAppearanceDef>();
             profile.PartsClips ??= new List<SpritePartsClipDef>();
             profile.PartsSkins ??= new List<SpritePartsSkinDef>();
@@ -68,6 +69,19 @@ namespace InvertLab.Sprites.DOTS
                     slot.ParentSlotId = string.Empty;
                 if (!string.IsNullOrWhiteSpace(slot.DefaultAppearanceId))
                     slot.DefaultAppearanceId = SpritePartIdUtility.Canonical(slot.DefaultAppearanceId);
+                if (!string.IsNullOrWhiteSpace(slot.GroupId))
+                    slot.GroupId = SpritePartIdUtility.Canonical(slot.GroupId, "group");
+                else
+                    slot.GroupId = string.Empty;
+            }
+            profile.PartsGroups ??= new List<SpritePartsGroupDef>();
+            for (int g = 0; g < profile.PartsGroups.Count; g++)
+            {
+                var group = profile.PartsGroups[g];
+                if (group == null) continue;
+                group.GroupId = SpritePartIdUtility.Canonical(group.GroupId, group.Name);
+                if (string.IsNullOrWhiteSpace(group.Name))
+                    group.Name = "Group";
             }
             for (int i = 0; i < profile.PartsAppearances.Count; i++)
             {

@@ -38,11 +38,11 @@ namespace InvertLab.Sprites.DOTS
         public bool FlipY;
 
         [Header("Playback follow-ups")]
-        [Tooltip("Default crossfade seconds when Play(crossfadeSeconds:0). Blend goes 1→0; no dual draw.")]
+        [Tooltip("Default crossfade seconds when Play(crossfadeSeconds:0). Blend goes 1->0; no dual draw.")]
         [Min(0f)]
         public float CrossfadeDuration;
 
-        [Tooltip("1→0 during crossfade. Sample from gameplay / shaders.")]
+        [Tooltip("1->0 during crossfade. Sample from gameplay / shaders.")]
         public float Blend;
 
         [HideInInspector] [SerializeField] float _time;

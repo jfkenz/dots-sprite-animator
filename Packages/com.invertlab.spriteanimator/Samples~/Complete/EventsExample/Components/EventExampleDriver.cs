@@ -24,7 +24,7 @@ namespace InvertLab.Sprites.DOTS
         [Min(0)] public int WalkClipIndex = 1;
         [Min(0)] public int AttackClipIndex = 13;
 
-        [Tooltip("When enabled, cycles Idle → Walk → Attack automatically.")]
+        [Tooltip("When enabled, cycles Idle -> Walk -> Attack automatically.")]
         public bool AutoCycle;
 
         [Min(0.25f)] public float AutoWalkSeconds = 2.5f;
@@ -195,7 +195,7 @@ namespace InvertLab.Sprites.DOTS
             string mode = AutoCycle ? "AUTO" : "MANUAL";
             GUI.Box(
                 new Rect(16f, 140f, 420f, 78f),
-                $"Controls [{mode}]\nA/D or ←/→ walk · J / Space attack · T auto-cycle\nWalk fires Footstep · Attack fires Attack",
+                $"Controls [{mode}]\nA/D or left/right walk * J / Space attack * T auto-cycle\nWalk fires Footstep * Attack fires Attack",
                 _helpStyle);
         }
 

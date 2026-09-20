@@ -65,7 +65,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             if (!CanSaveProfile())
                 return;
-            // Require a bound asset that Unity considers dirty — do not create
+            // Require a bound asset that Unity considers dirty - do not create
             // a new .asset from autosave alone.
             if (_asset == null || !EditorUtility.IsDirty(_asset))
                 return;
@@ -147,7 +147,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             WriteActiveSheetFromLegacy();
             string texturePath = AssetDatabase.GetAssetPath(saveTex);
             string directory = Path.GetDirectoryName(texturePath)?.Replace('\\', '/');
-            // Bind an existing .asset without LoadAsset — LoadAsset would replace
+            // Bind an existing .asset without LoadAsset - LoadAsset would replace
             // _profile with disk Data and discard in-memory frame deletions.
             if (_asset == null && !_createSeparateProfileOnSave)
                 TryBindExistingAssetWithoutReload();
@@ -155,6 +155,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 string assetPath = UniqueProfileAssetPath(directory, saveTex.name);
                 _asset = CreateInstance<ScriptableSpriteSheetProfile>();
+                // This is a new asset, so its default runtime mode must not
+                // override the mode chosen for the editing document.
+                _asset.Data = _profile;
                 AssetDatabase.CreateAsset(_asset, assetPath);
             }
             _createSeparateProfileOnSave = false;
@@ -168,7 +171,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             string jsonPath = savedPath.Replace(".asset", ".json");
             File.WriteAllText(jsonPath, _profile.ToJson());
             // Do not ImportAsset the sidecar: reimport refresh can reload the
-            // related .asset and resurface a stale Frames length (8 after 8→7).
+            // related .asset and resurface a stale Frames length (8 after 8->7).
 
             var clip = CurrentClip;
             int frames = clip?.Frames?.Length ?? 0;
@@ -179,13 +182,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             else
             {
                 _status = clip != null
-                    ? $"Saved {_asset.name}  •  {clip.Name}: {frames} frames"
+                    ? $"Saved {_asset.name}  *  {clip.Name}: {frames} frames"
                     : $"Saved {_asset.name}";
                 ShowNotification(new GUIContent("Profile saved"));
                 NoteProfileSaved(auto: false);
             }
             SpriteSheetProfileRecents.Remember(_asset);
             SpritePartsSceneSync.RefreshCharactersUsing(_asset);
+            foreach (var still in UnityEngine.Object.FindObjectsByType<SpriteStaticAuthoring>(FindObjectsInactive.Include))
+                if (still.Profile == _asset) still.UpdatePreview();
         }
 
         static string UniqueProfileAssetPath(string directory, string sheetName)
@@ -230,6 +235,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         void LoadAsset(ScriptableSpriteSheetProfile asset)
         {
             ClearImportPreview();
+            ClearProfileRename();
             _asset = asset;
             _profile = asset.Data ?? new SpriteSheetProfile();
             if (asset.Data == null)
@@ -238,15 +244,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             EnsureProfile();
             // Open shows the profile's runtime workspace first; later tab switches
             // are pure workspace changes and never touch AnimKind.
-            _studioTab = _profile.AnimKind == SpriteAnimKind.Parts
-                ? StudioTab.Parts
-                : StudioTab.Clips;
+            _studioTab = _profile.AnimKind switch
+            {
+                SpriteAnimKind.Parts => StudioTab.Parts,
+                SpriteAnimKind.Static => StudioTab.Static,
+                _ => StudioTab.Clips,
+            };
             if (_studioTab == StudioTab.Parts)
             {
                 _partsPlaying = false;
                 _partsPreviewTime = 0f;
                 EnsurePartsSession();
             }
+            else if (_studioTab == StudioTab.Static)
+                EnsureStaticSession();
             if (_profile.Clips != null && _profile.Clips.Count > 0 && _profile.Clips[0] != null)
             {
                 _selectedClip = 0;
@@ -347,6 +358,216 @@ namespace InvertLab.Sprites.DOTS.Editor
                 result.Add(box);
             return result;
         }
+
+
+        void DrawToolbarProfileTitle(Rect toolbarRect, float leftBound, float rightBound)
+        {
+            _ = toolbarRect;
+            float gap = rightBound - leftBound;
+            if (gap < 100f)
+            {
+                _hasProfileNameRect = false;
+                _profileNameHovered = false;
+                return;
+            }
+
+            float width = Mathf.Min(340f, gap - 24f);
+            float x = leftBound + (gap - width) * 0.5f;
+            var nameRect = new Rect(x, 12f, width, 24f);
+            _profileNameRect = nameRect;
+            _hasProfileNameRect = true;
+
+            var e = Event.current;
+            _profileNameHovered = nameRect.Contains(e.mousePosition);
+
+            if (_renamingProfile && _asset != null)
+            {
+                // Click outside the field commits (OS-style), even on Parts where
+                // the clip-browser rename key handler never runs.
+                if (e.type == EventType.MouseDown && e.button == 0 &&
+                    !nameRect.Contains(e.mousePosition))
+                {
+                    CommitProfileRename();
+                    // Don't Use() - let the click reach whatever was under it.
+                    return;
+                }
+
+                DrawInlineRenameField(nameRect, ProfileRenameControl,
+                    ref _renameProfileValue, ref _focusProfileRename, EditorStyles.toolbarTextField);
+
+                // Enter / Esc while the toolbar field has focus (Parts tab safe).
+                if (e.type == EventType.KeyDown)
+                {
+                    if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+                    {
+                        CommitProfileRename();
+                        e.Use();
+                    }
+                    else if (e.keyCode == KeyCode.Escape)
+                    {
+                        CancelProfileRename();
+                        e.Use();
+                    }
+                }
+                return;
+            }
+
+            string label;
+            string tip;
+            if (_asset == null)
+            {
+                label = "Unsaved profile";
+                tip = "Save Profile once to create a .asset, then double-click or press F2 to rename.";
+            }
+            else
+            {
+                bool dirty = EditorUtility.IsDirty(_asset);
+                label = dirty ? _asset.name + "  *" : _asset.name;
+                string path = AssetDatabase.GetAssetPath(_asset);
+                tip = string.IsNullOrEmpty(path)
+                    ? "Double-click or F2 to rename."
+                    : path + "\nDouble-click or F2 to rename.";
+            }
+
+            var style = new GUIStyle(EditorStyles.boldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                clipping = TextClipping.Clip,
+            };
+            if (_asset == null)
+                style.normal.textColor = new Color(0.55f, 0.6f, 0.66f, 1f);
+            GUI.Label(nameRect, new GUIContent(label, tip), style);
+
+            if (_asset != null &&
+                e.type == EventType.MouseDown && e.button == 0 &&
+                nameRect.Contains(e.mousePosition) && e.clickCount >= 2)
+            {
+                BeginProfileRename();
+                e.Use();
+            }
+        }
+
+        void BeginProfileRename()
+        {
+            if (_asset == null)
+            {
+                _status = "Save the profile once before renaming the .asset.";
+                ShowNotification(new GUIContent(_status));
+                return;
+            }
+
+            CommitAllRenames();
+            _renamingProfile = true;
+            _renameProfileOriginal = _asset.name;
+            _renameProfileValue = _asset.name;
+            _focusProfileRename = true;
+            Repaint();
+        }
+
+        void CommitProfileRename()
+        {
+            if (!_renamingProfile)
+                return;
+
+            if (_asset == null)
+            {
+                ClearProfileRename();
+                return;
+            }
+
+            string desired = SanitizeProfileAssetName(_renameProfileValue);
+            if (string.IsNullOrEmpty(desired))
+            {
+                _status = "Profile name cannot be empty.";
+                ClearProfileRename();
+                Repaint();
+                return;
+            }
+
+            if (string.Equals(desired, _asset.name, StringComparison.Ordinal))
+            {
+                ClearProfileRename();
+                return;
+            }
+
+            string oldPath = AssetDatabase.GetAssetPath(_asset);
+            if (string.IsNullOrEmpty(oldPath))
+            {
+                _status = "Cannot rename: profile is not a project asset yet.";
+                ClearProfileRename();
+                return;
+            }
+
+            string oldJson = Path.ChangeExtension(oldPath, ".json");
+            string error = AssetDatabase.RenameAsset(oldPath, desired);
+            if (!string.IsNullOrEmpty(error))
+            {
+                _status = "Rename failed: " + error;
+                ShowNotification(new GUIContent(_status));
+                ClearProfileRename();
+                Repaint();
+                return;
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            // Keep the optional JSON sidecar next to the renamed .asset.
+            string newPath = AssetDatabase.GetAssetPath(_asset);
+            if (!string.IsNullOrEmpty(oldJson) && File.Exists(oldJson) && !string.IsNullOrEmpty(newPath))
+            {
+                string newJson = Path.ChangeExtension(newPath, ".json");
+                if (!string.Equals(oldJson, newJson, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        if (File.Exists(newJson))
+                            File.Delete(newJson);
+                        File.Move(oldJson, newJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning("[DOTS Sprite Animator] Renamed profile asset but sidecar JSON move failed: " + ex.Message);
+                    }
+                }
+            }
+
+            SpriteSheetProfileRecents.Remember(_asset);
+            _status = $"Renamed profile to '{_asset.name}'";
+            ClearProfileRename();
+            Repaint();
+        }
+
+        void CancelProfileRename()
+        {
+            if (_renamingProfile)
+                _status = $"Kept profile name '{_renameProfileOriginal}'";
+            ClearProfileRename();
+        }
+
+        void ClearProfileRename()
+        {
+            _renamingProfile = false;
+            _renameProfileValue = string.Empty;
+            _renameProfileOriginal = string.Empty;
+            _focusProfileRename = false;
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        static string SanitizeProfileAssetName(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return string.Empty;
+            string name = raw.Trim();
+            foreach (char c in Path.GetInvalidFileNameChars())
+                name = name.Replace(c.ToString(), string.Empty);
+            name = name.Replace('/', ' ').Replace('\\', ' ').Trim();
+            while (name.Contains("  "))
+                name = name.Replace("  ", " ");
+            return name;
+        }
+
 
     }
 }

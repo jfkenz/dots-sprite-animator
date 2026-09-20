@@ -37,10 +37,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Repaint();
                 });
                 if (!string.IsNullOrEmpty(_selectedSocketName))
-                    menu.AddItem(new GUIContent("Socket frames…"), false, () =>
+                    menu.AddItem(new GUIContent("Socket frames..."), false, () =>
                         OpenSocketInheritPanel(CurrentClip, _selectedSocketName, _selectedFrame));
                 else
-                    menu.AddDisabledItem(new GUIContent("Socket frames…"));
+                    menu.AddDisabledItem(new GUIContent("Socket frames..."));
                 menu.DropDown(viewRect);
             }
 
@@ -81,17 +81,17 @@ namespace InvertLab.Sprites.DOTS.Editor
             var state = EvaluatePreview(clip, _previewTime);
             _socketSampleFraction = _draggingSocket ? 0f : state.Fraction;
             string frameText = clip == null ? "No clip" :
-                $"Frame {state.Frame + 1}/{clip.Frames.Length}   •   {_previewTime:F2}s";
+                $"Frame {state.Frame + 1}/{clip.Frames.Length}   *   {_previewTime:F2}s";
             if (clip != null)
                 frameText += _previewOffsetMode == PreviewOffsetMode.Authored
-                    ? $"   •   offset {clip.OnionOffsets[state.Frame]} px"
-                    : "   •   centered view";
+                    ? $"   *   offset {clip.OnionOffsets[state.Frame]} px"
+                    : "   *   centered view";
             if (_colliderCreationMode != ColliderCreationMode.None)
-                frameText += $"   •   {_colliderCreationMode} tool armed";
+                frameText += $"   *   {_colliderCreationMode} tool armed";
             else if (_socketPlacementArmed)
-                frameText += "   •   Socket tool armed";
+                frameText += "   *   Socket tool armed";
             if (_colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
-                frameText += $"   •   {_polygonDraftUV.Count} vertices";
+                frameText += $"   *   {_polygonDraftUV.Count} vertices";
             GUI.Label(new Rect(rect.x + 12f, rect.y + 61f, rect.width - 24f, 16f), new GUIContent(frameText, frameText), _mutedStyle);
 
             HandlePreviewNavigationInput(canvas);
@@ -237,7 +237,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     if (_pivotLocked)
                     {
-                        _status = "Pivot is locked — unlock in the inspector (lock icon) to drag";
+                        _status = "Pivot is locked - unlock in the inspector (lock icon) to drag";
                         Event.current.Use();
                         Repaint();
                     }
@@ -433,7 +433,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.DrawRect(new Rect(pivot.x - 0.5f, pivot.y - 6f, 1f, 12f), box);
 
             ResolveClipSheetCell(clip, frame, out int column, out int row, out int index);
-            string sizeText = $"{cellW:0.#} × {cellH:0.#} px   •   {worldW:0.###} × {worldH:0.###} u";
+            string sizeText = $"{cellW:0.#} x {cellH:0.#} px   *   {worldW:0.###} x {worldH:0.###} u";
             string cellText = FormatSheetCellFull(column, row, index);
             var label = new Rect(spriteRect.x, spriteRect.y - 32f, 248f, 30f);
             if (label.y < 2f)
@@ -443,7 +443,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 new GUIContent(sizeText, "Pixel size of this sheet cell, and world size (pixels / PPU)."),
                 _mutedStyle);
             GUI.Label(new Rect(label.x + 4f, label.y + 13f, label.width - 6f, 14f),
-                new GUIContent(cellText, "Sheet location of this frame. Index is row-major: row × columns + column."),
+                new GUIContent(cellText, "Sheet location of this frame. Index is row-major: row x columns + column."),
                 _mutedStyle);
         }
 

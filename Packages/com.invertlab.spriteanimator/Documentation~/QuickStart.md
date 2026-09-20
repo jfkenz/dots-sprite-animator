@@ -24,15 +24,25 @@ and the Unity Physics example additionally requires `com.unity.physics`.
 ## 2) Create a profile
 
 1. Open **Window > DOTS Sprite Animator**.
-2. Click **New Profile**.
-3. Assign your spritesheet texture, rows, and columns.
-4. Add or load clips (accordion UI; edit FPS, wrap, interrupt, priority).
+2. Click **New Profile**, then choose **Static Sprite**, **Frame Animation**, or **Parts Character**.
+3. Assign your image. Static starts with **Whole Image**; choose **Sheet Cell** only for a sliced spritesheet.
+4. For Frames, configure rows/columns and add clips. For Parts, build the rig and key its poses. Static needs no clips.
 5. Click **Save Profile**.
 
 The profile saves as:
 
 - <SheetName>_profile.asset
 - <SheetName>_profile.json
+
+### Place a static sprite
+
+1. Open an ECS SubScene for editing. If several are open, select an object inside the target SubScene.
+2. In **Static**, choose an image, then **Whole Image** or a sheet cell.
+3. Click **Create Scene Object**. This saves the profile and creates configured static authoring in the SubScene.
+4. Position the object in Scene view. Its preview remains visible while SubScene live baking hides ordinary authoring renderers.
+5. Enter Play to use the baked sprite. **Show Sprite In Scene** controls the editing preview, not runtime visibility.
+
+Use **Apply to Selected Object** to convert an existing object with Undo. Workspace tabs only change the editing view; an inactive workspace offers **Use Static for Character** to change the profile's runtime mode.
 
 ## 3) Author animation data
 

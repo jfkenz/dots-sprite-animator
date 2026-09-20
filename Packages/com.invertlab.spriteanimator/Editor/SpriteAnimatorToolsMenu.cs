@@ -65,8 +65,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 "needed only for Method = UnityPhysics / Unity Physics sample");
 
             string title = ok
-                ? "DOTS Sprite Animator — Validation Succeeded"
-                : "DOTS Sprite Animator — Validation Failed";
+                ? "DOTS Sprite Animator - Validation Succeeded"
+                : "DOTS Sprite Animator - Validation Failed";
             string body = message.ToString().Trim();
             if (string.IsNullOrWhiteSpace(body))
                 body = ok ? "Package dependencies are installed." : "Validation failed.";
@@ -100,11 +100,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     if (packages[i].name != id)
                         continue;
-                    message.AppendLine($"[OPTIONAL OK] {id} ({packages[i].version}) — {why}");
+                    message.AppendLine($"[OPTIONAL OK] {id} ({packages[i].version}) - {why}");
                     return;
                 }
             }
-            message.AppendLine($"[OPTIONAL] {id} not installed — {why}. Core animation and Query/Unity2D work without it.");
+            message.AppendLine($"[OPTIONAL] {id} not installed - {why}. Core animation and Query/Unity2D work without it.");
         }
 
         static bool RequirePackage(string id, StringBuilder message)

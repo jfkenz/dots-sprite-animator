@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Unity.Collections;
+using Unity.Entities;
 using Unity.Mathematics;
 using UnityEditor;
 using UnityEngine;
@@ -166,11 +167,72 @@ namespace InvertLab.Sprites.DOTS.Editor
                     s_PreviewMaterial.SetPass(0);
                     Graphics.DrawMeshNow(s_PreviewQuad, root * ToMatrix(matrices[i]) * art);
                 }
+
+                DrawRootGuide(root, authoring.transform.position, profile, blob, matrices, clipIndex, skin);
             }
             finally
             {
                 SpritePartsOnion.DisposeSample(blob, poses, matrices);
             }
+        }
+
+        static void DrawRootGuide(
+            Matrix4x4 root, Vector3 origin, SpriteSheetProfile profile,
+            BlobAssetReference<SpritePartsSetBlob> blob,
+            NativeArray<float4x4> matrices, int clipIndex,
+            Dictionary<string, string> skin)
+        {
+            Vector3 T(float x, float y) => root.MultiplyPoint3x4(new Vector3(x, y, 0f));
+            var cyan = new Color(0.35f, 0.85f, 0.9f, 0.95f);
+            Vector3[] box =
+            {
+                T(-0.5f, -0.5f), T(0.5f, -0.5f), T(0.5f, 0.5f), T(-0.5f, 0.5f), T(-0.5f, -0.5f),
+            };
+            Handles.color = cyan;
+            Handles.DrawAAPolyLine(3f, box);
+            Handles.color = new Color(0.85f, 0.32f, 0.32f, 0.95f);
+            Handles.DrawLine(T(-0.5f, 0f), T(0.5f, 0f));
+            Handles.color = new Color(0.32f, 0.82f, 0.42f, 0.95f);
+            Handles.DrawLine(T(0f, -0.5f), T(0f, 0.5f));
+            Handles.color = cyan;
+            Handles.DrawSolidDisc(origin, Vector3.forward, HandleUtility.GetHandleSize(origin) * 0.04f);
+            Handles.Label(T(0.08f, 0.08f), "Root");
+
+            float2 center;
+            float2 size;
+            bool stored = SpritePartsAuthoringOps.HasStoredRootBounds(profile);
+            if (stored)
+            {
+                center = new float2(profile.PartsRootBoundsCenter.x, profile.PartsRootBoundsCenter.y);
+                size = new float2(profile.PartsRootBoundsSize.x, profile.PartsRootBoundsSize.y);
+            }
+            else if (blob.IsCreated &&
+                     SpritePartsAuthoringOps.TryEncapsulateWorldAabb(
+                         profile, skin, ref blob.Value, matrices, clipIndex, 0f,
+                         out var min, out var max))
+            {
+                center = 0.5f * (min + max);
+                size = max - min;
+            }
+            else
+            {
+                return;
+            }
+
+            float2 half = size * 0.5f;
+            Vector3[] bounds =
+            {
+                T(center.x - half.x, center.y - half.y),
+                T(center.x + half.x, center.y - half.y),
+                T(center.x + half.x, center.y + half.y),
+                T(center.x - half.x, center.y + half.y),
+                T(center.x - half.x, center.y - half.y),
+            };
+            Handles.color = stored
+                ? new Color(1f, 0.38f, 0.32f, 0.95f)
+                : new Color(1f, 0.55f, 0.2f, 0.55f);
+            Handles.DrawAAPolyLine(stored ? 3f : 2f, bounds);
+            Handles.Label(T(center.x - half.x, center.y + half.y), stored ? "Bounds" : "Bounds (Fit to store)");
         }
 
         static int ResolvePreviewClip(SpriteSheetProfile profile, string startingName)

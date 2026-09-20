@@ -8,7 +8,7 @@ namespace InvertLab.Sprites.DOTS.Editor
     /// <summary>
     /// From-This-Profile art picker for one Part slot: existing appearances,
     /// sheet cells, and static frames of frame clips. A frame clip supplies one
-    /// chosen cell — "Use This Frame" — and never implies the clip is playing.
+    /// chosen cell - "Use This Frame" - and never implies the clip is playing.
     /// </summary>
     sealed class SpritePartsArtPickerPopup : PopupWindowContent
     {
@@ -57,7 +57,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 anyAppearance = true;
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Label(
-                    $"{app.Name}  ·  '{SpritePartIdUtility.Canonical(app.AppearanceId, app.Name)}'  ·  {sheet.Name} cell {app.CellIndex}",
+                    $"{app.Name}  *  '{SpritePartIdUtility.Canonical(app.AppearanceId, app.Name)}'  *  {sheet.Name} cell {app.CellIndex}",
                     EditorStyles.miniLabel,
                     GUILayout.ExpandWidth(true), GUILayout.MinWidth(80f));
                 if (GUILayout.Button("Bind", GUILayout.Width(70f)))
@@ -148,7 +148,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             const int perRow = 8;
             const float cellSize = 30f;
 
-            GUILayout.Label($"{sheet.Name} ({columns}×{rows}, {sheet.PixelsPerUnit} PPU)", EditorStyles.miniLabel);
+            GUILayout.Label($"{sheet.Name} ({columns}x{rows}, {sheet.PixelsPerUnit} PPU)", EditorStyles.miniLabel);
             int fullRows = (cells + perRow - 1) / perRow;
             for (int r = 0; r < fullRows; r++)
             {

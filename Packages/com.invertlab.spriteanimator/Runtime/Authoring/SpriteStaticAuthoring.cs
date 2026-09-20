@@ -23,8 +23,21 @@ namespace InvertLab.Sprites.DOTS
                  "and grid come from here (profiles without clips work fine).")]
         public ScriptableSpriteSheetProfile Profile;
 
-        [Tooltip("Show this sprite: edit-mode preview quad + baked render in play mode. " +
-                 "OFF hides it everywhere without removing the component.")]
+        [Tooltip("Use the cell selected in the profile Static workspace. OFF preserves per-object overrides.")]
+        public bool UseProfileDefaultCell;
+        public int EffectiveSheetIndex => UseProfileDefaultCell && Profile != null && Profile.Data != null
+            ? Profile.Data.StaticSheetIndex : SheetIndex;
+        public int EffectiveRow => UseProfileDefaultCell && Profile != null && Profile.Data != null
+            ? Profile.Data.StaticRow : Row;
+        public int EffectiveColumn => UseProfileDefaultCell && Profile != null && Profile.Data != null
+            ? Profile.Data.StaticColumn : Column;
+
+        public bool HasAuthoringConflict => GetComponent<SpriteAnimSetAuthoring>() != null ||
+            GetComponent<SpriteAnimPlayerAuthoring>() != null || GetComponent<SpritePartsCharacterAuthoring>() != null;
+
+
+        [Tooltip("Show the edit-mode preview quad in the Scene view. " +
+                 "Runtime baking is unchanged; disable the GameObject to exclude it from baking.")]
         public bool ShowSpriteInScene = true;
 
         [Tooltip("Which sheet of the profile (0 = first). Adjusted by the picker's sheet buttons.")]
@@ -45,7 +58,7 @@ namespace InvertLab.Sprites.DOTS
         public bool OverridePivot;
 
         [Tooltip("Anchor inside the cell (0-1 per axis). (0.5, 0.5) = center, (0.5, 0) = " +
-                 "bottom-center — the transform position sits on this point, and rotation " +
+                 "bottom-center - the transform position sits on this point, and rotation " +
                  "and scaling pivot from it. Only used with Override Pivot ON.")]
         public Vector2 Pivot = new Vector2(0.5f, 0.5f);
 
@@ -67,6 +80,7 @@ namespace InvertLab.Sprites.DOTS
                  "(cropped content when the profile uses Cropped layout, else the full " +
                  "cell). Re-synced on every change; removed when OFF.")]
         public bool AddUnityBoxCollider;
+        [SerializeField, HideInInspector] bool _ownsUnityBoxCollider;
 
         /// <summary>
         /// Effective pivot for this instance: the profile's pivot (resolved
@@ -79,13 +93,13 @@ namespace InvertLab.Sprites.DOTS
             if (!OverridePivot && data != null)
             {
                 data.EnsureSheets();
-                var sheetDef = data.SheetAt(Mathf.Max(0, SheetIndex));
+                var sheetDef = data.SheetAt(Mathf.Max(0, EffectiveSheetIndex));
                 if (sheetDef != null)
                 {
                     // per-cell override wins over the sheet pivot
-                    int slot = Mathf.Clamp(Row, 0, Mathf.Max(1, sheetDef.Rows) - 1)
+                    int slot = Mathf.Clamp(EffectiveRow, 0, Mathf.Max(1, sheetDef.Rows) - 1)
                                * Mathf.Max(1, sheetDef.Columns)
-                               + Mathf.Clamp(Column, 0, Mathf.Max(1, sheetDef.Columns) - 1);
+                               + Mathf.Clamp(EffectiveColumn, 0, Mathf.Max(1, sheetDef.Columns) - 1);
                     if (SpriteSheetProfile.TryGetCellPivot(sheetDef, slot, out var cellPivot))
                     {
                         pivot = cellPivot;
@@ -118,7 +132,7 @@ namespace InvertLab.Sprites.DOTS
                 return false;
 
             data.EnsureSheets();
-            var sheetDef = data.SheetAt(Mathf.Max(0, SheetIndex));
+            var sheetDef = data.SheetAt(Mathf.Max(0, EffectiveSheetIndex));
             if (sheetDef == null)
             {
                 texture = data.Sheet;
@@ -127,7 +141,7 @@ namespace InvertLab.Sprites.DOTS
                 return texture != null;
             }
 
-            texture = sheetDef.Texture != null ? sheetDef.Texture : data.Sheet;
+            texture = sheetDef.Texture;
             cols = Mathf.Max(1, sheetDef.Columns);
             rows = Mathf.Max(1, sheetDef.Rows);
             if (sheetDef.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped &&
@@ -147,11 +161,15 @@ namespace InvertLab.Sprites.DOTS
             {
                 if (!ResolveSheet(out _, out int cols, out int rows, out _))
                     return 0;
-                return Mathf.Clamp(Row, 0, rows - 1) * cols + Mathf.Clamp(Column, 0, cols - 1);
+                return Mathf.Clamp(EffectiveRow, 0, rows - 1) * cols + Mathf.Clamp(EffectiveColumn, 0, cols - 1);
             }
         }
 
         const string PreviewMaterialName = "SpriteStaticPreviewMaterial";
+#if UNITY_EDITOR
+        Mesh _previewMesh;
+        Material _previewMaterial;
+#endif
 
         // scene objects get OnEnable on play-entry: kill the editor preview
         // so it cannot double-render on top of the baked DOTS sprite
@@ -164,10 +182,28 @@ namespace InvertLab.Sprites.DOTS
                 if (renderer != null)
                     renderer.enabled = false;
             }
+            else
+                UnityEditor.EditorApplication.delayCall += RefreshPreviewAfterReload;
 #endif
         }
 
 #if UNITY_EDITOR
+        void RefreshPreviewAfterReload()
+        {
+            if (this != null && !Application.isPlaying) UpdatePreview();
+        }
+
+        void OnDisable()
+        {
+            UnityEditor.EditorApplication.delayCall -= RefreshPreviewAfterReload;
+        }
+
+        void OnDestroy()
+        {
+            if (_previewMesh != null) DestroyImmediate(_previewMesh);
+            if (_previewMaterial != null) DestroyImmediate(_previewMaterial);
+        }
+
         void Reset()
         {
             if (GetComponent<MeshFilter>() == null)
@@ -229,37 +265,10 @@ namespace InvertLab.Sprites.DOTS
         void OnValidate()
         {
 #if UNITY_EDITOR
-            // static and animated authoring are mutually exclusive — both
-            // bakers would add duplicate components to the same entity
-            var set = GetComponent<SpriteAnimSetAuthoring>();
-            var player = GetComponent<SpriteAnimPlayerAuthoring>();
-            var colliderAuthoring = GetComponent<SpriteColliderAuthoring>();
-            if (set != null || player != null || colliderAuthoring != null)
-            {
-                Debug.LogError(
-                    $"[{nameof(SpriteStaticAuthoring)}] '{name}': cannot coexist with animated " +
-                    $"authoring (set={(set != null)} player={(player != null)} " +
-                    $"collider={(colliderAuthoring != null)}) — removing the animated components.",
-                    set != null ? (Object)set : (Object)player);
-                UnityEditor.EditorApplication.delayCall += () =>
-                {
-                    if (this == null)
-                        return;
-                    if (colliderAuthoring != null)
-                        UnityEditor.Undo.DestroyObjectImmediate(colliderAuthoring);
-                    if (player != null)
-                        UnityEditor.Undo.DestroyObjectImmediate(player);
-                    if (set != null)
-                        UnityEditor.Undo.DestroyObjectImmediate(set);
-                };
-                return; // animated stack is going away; skip preview work
-            }
+            // Conflicts are repaired only by the explicit, Undoable editor action.
+            if (HasAuthoringConflict)
+                return;
 #endif
-
-            if (Profile == null)
-                Debug.LogWarning(
-                    $"[SpriteStaticAuthoring] '{name}': assign a Profile (Window > DOTS Sprite " +
-                    "Animator).", this);
 
             if (!Application.isPlaying)
             {
@@ -324,8 +333,9 @@ namespace InvertLab.Sprites.DOTS
             var box = GetComponent<BoxCollider2D>();
             if (!AddUnityBoxCollider)
             {
-                if (box != null)
+                if (box != null && _ownsUnityBoxCollider)
                     UnityEditor.Undo.DestroyObjectImmediate(box);
+                _ownsUnityBoxCollider = false;
                 return;
             }
 
@@ -333,7 +343,10 @@ namespace InvertLab.Sprites.DOTS
                 return;
 
             if (box == null)
+            {
                 box = UnityEditor.Undo.AddComponent<BoxCollider2D>(gameObject);
+                _ownsUnityBoxCollider = true;
+            }
             box.size = size;
             box.offset = offset;
         }
@@ -345,6 +358,7 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public void UpdatePreview()
         {
+            if (HasAuthoringConflict) return;
             var filter = GetComponent<MeshFilter>();
             var renderer = GetComponent<MeshRenderer>();
             if (filter == null || renderer == null)
@@ -366,16 +380,21 @@ namespace InvertLab.Sprites.DOTS
             if (shader == null)
                 return;
 
-            var mat = renderer.sharedMaterial;
-            if (mat == null || mat.shader != shader || mat.name != PreviewMaterialName)
+            if (_previewMaterial == null || _previewMaterial.shader != shader)
             {
-                mat = new Material(shader)
+                if (_previewMaterial != null) DestroyImmediate(_previewMaterial);
+                _previewMaterial = new Material(shader)
                 {
                     name = PreviewMaterialName,
                     hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild,
                 };
-                renderer.sharedMaterial = mat;
             }
+            var mat = _previewMaterial;
+            renderer.sharedMaterial = mat;
+            renderer.SetPropertyBlock(null); // A converted Frames object may carry an old crop/tint.
+            mat.enableInstancing = false;
+            mat.SetVector("_CropST", new Vector4(1f, 1f, 0f, 0f));
+            mat.SetVector("_Flip", new Vector4(0f, 0f, 0.5f, 0.5f));
             mat.mainTexture = texture;
             mat.color = Tint; // preview shader's _Color
 
@@ -386,8 +405,8 @@ namespace InvertLab.Sprites.DOTS
         Mesh BuildPreviewMesh(Texture2D texture, int cols, int rows)
         {
             float aspect = (texture.width / (float)cols) / Mathf.Max(1f, texture.height / (float)rows);
-            int col = Mathf.Clamp(Column, 0, cols - 1);
-            int row = Mathf.Clamp(Row, 0, rows - 1);
+            int col = Mathf.Clamp(EffectiveColumn, 0, cols - 1);
+            int row = Mathf.Clamp(EffectiveRow, 0, rows - 1);
 
             // cell rect in sheet UV (bottom-left origin)
             float u0 = col / (float)cols;
@@ -407,7 +426,10 @@ namespace InvertLab.Sprites.DOTS
             if (FlipX) ox = -ox;
             if (FlipY) oy = -oy;
 
-            var mesh = new Mesh { name = "SpriteStaticPreviewQuad" };
+            if (_previewMesh == null)
+                _previewMesh = new Mesh { name = "SpriteStaticPreviewQuad", hideFlags = HideFlags.DontSave };
+            var mesh = _previewMesh;
+            mesh.Clear();
             mesh.vertices = new[]
             {
                 new Vector3(ox - w * 0.5f, oy - h * 0.5f, 0f),
@@ -434,6 +456,19 @@ namespace InvertLab.Sprites.DOTS
         /// before it can leak into a subscene bake (same guard the anim set
         /// preview uses).
         /// </summary>
+        public void PreparePreviewForSceneSave()
+        {
+            var filter = GetComponent<MeshFilter>();
+            var renderer = GetComponent<MeshRenderer>();
+            if (filter != null) SanitizePreview(filter);
+            if (renderer != null && renderer.sharedMaterial != null &&
+                renderer.sharedMaterial.name == PreviewMaterialName)
+            {
+                renderer.sharedMaterial = null;
+                renderer.SetPropertyBlock(null);
+            }
+        }
+
         static void SanitizePreview(MeshFilter filter)
         {
             var mesh = filter.sharedMesh;
@@ -441,7 +476,7 @@ namespace InvertLab.Sprites.DOTS
             // nothing, and touching builtin resources here polluted edit-mode
             // test runs (GUILayout errors from the runner context)
             if (mesh != null && (mesh.hideFlags & HideFlags.DontSave) != 0)
-                filter.sharedMesh = Resources.GetBuiltinResource<Mesh>("New-Quad.fbx");
+                filter.sharedMesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
         }
 #endif
 
@@ -449,6 +484,13 @@ namespace InvertLab.Sprites.DOTS
         {
             public override void Bake(SpriteStaticAuthoring authoring)
             {
+                if (GetComponent<SpriteAnimSetAuthoring>() != null ||
+                    GetComponent<SpriteAnimPlayerAuthoring>() != null ||
+                    GetComponent<SpritePartsCharacterAuthoring>() != null)
+                {
+                    Debug.LogError("Static/animated authoring conflict. Use Apply Runtime Mode in the animator window.", authoring);
+                    return;
+                }
                 if (authoring.Profile != null)
                     DependsOn(authoring.Profile);
 
@@ -489,7 +531,9 @@ namespace InvertLab.Sprites.DOTS
                 // ---- static sprite entity ----
                 // manual transform so SizeUnits (not the GameObject scale)
                 // defines the sprite size
-                var entity = GetEntity(TransformUsageFlags.None);
+                // None lets TransformBaking remove our LocalTransform, so the
+                // custom sprite renderer cannot match this entity at runtime.
+                var entity = GetEntity(TransformUsageFlags.ManualOverride);
                 var tr = authoring.transform;
                 AddComponent(entity, LocalTransform.FromPositionRotationScale(
                     tr.position, tr.rotation, authoring.SizeUnits));
@@ -499,15 +543,18 @@ namespace InvertLab.Sprites.DOTS
                 });
                 AddComponent(entity, new SpriteSheetBinding { Sheet = sheetEntity });
 
-                int slot = Mathf.Clamp(authoring.Row, 0, rows - 1) * cols
-                           + Mathf.Clamp(authoring.Column, 0, cols - 1);
+                int slot = Mathf.Clamp(authoring.EffectiveRow, 0, rows - 1) * cols
+                           + Mathf.Clamp(authoring.EffectiveColumn, 0, cols - 1);
                 // pivot rides as the frame offset: (0.5,0.5) = centered, and
                 // the pack job mirrors it under flip (SpriteFlipUtility)
                 float aspect = cellAspect > 0.01f ? cellAspect : 1f;
                 authoring.ResolvePivot(out var bakedPivot);
+                // XY packer transforms the offset through LocalToWorld (which already
+                // contains SizeUnits). The legacy XZ packer consumes world-unit offsets.
+                float offsetScale = SpriteBatchSpawner.LayoutXy ? 1f : authoring.SizeUnits;
                 var pivotOffset = new float2(
-                    (0.5f - Mathf.Clamp01(bakedPivot.x)) * aspect * authoring.SizeUnits,
-                    (0.5f - Mathf.Clamp01(bakedPivot.y)) * authoring.SizeUnits);
+                    (0.5f - Mathf.Clamp01(bakedPivot.x)) * aspect * offsetScale,
+                    (0.5f - Mathf.Clamp01(bakedPivot.y)) * offsetScale);
                 AddComponent(entity, new SpriteAnimFrame
                 {
                     Slot = slot,

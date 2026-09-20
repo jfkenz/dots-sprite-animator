@@ -78,7 +78,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             bool renamingEvent = _renamingEventId != 0 && _renamingEventId == definition.Id;
             if (renamingEvent)
             {
-                // EVENT TYPES list owns EventRenameControl — a second field with the
+                // EVENT TYPES list owns EventRenameControl - a second field with the
                 // same control name steals focus every frame (same class as clip rename).
                 EditorGUILayout.LabelField("Event Name", _renameEventValue);
             }
@@ -195,11 +195,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             SectionLabel(independentView
                 ? "INDEPENDENT MOTION"
-                : $"SOCKET — FRAME ATTACHED — FRAME {_selectedFrame + 1}");
+                : $"SOCKET - FRAME ATTACHED - FRAME {_selectedFrame + 1}");
             var names = VisibleSocketNames(clip, independentView);
             int visibleSelected = CountSelectedSocketNames(names);
             GUILayout.Label(
-                $"{names.Count} {(independentView ? "independent track" : "frame-attached socket")}{Plural(names.Count)} • {visibleSelected} selected",
+                $"{names.Count} {(independentView ? "independent track" : "frame-attached socket")}{Plural(names.Count)} * {visibleSelected} selected",
                 _mutedStyle);
             if (independentView)
                 DrawIndependentTimelineSettings();
@@ -212,7 +212,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button(sectionArmed
-                        ? "Click Preview to Place…"
+                        ? "Click Preview to Place..."
                             : independentView ? "Add Motion Track" : "Add Frame Socket"))
                 {
                     if (sectionArmed)
@@ -255,7 +255,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     using (new EditorGUI.DisabledScope(names.Count == 0))
                     {
-                        if (GUILayout.Button(new GUIContent("Delete This Clip…",
+                        if (GUILayout.Button(new GUIContent("Delete This Clip...",
                                 "Remove every Frame-Attached socket from this clip only. Independent Motion tracks remain.")))
                             DeleteAllFrameAttachedSockets(clip);
                     }
@@ -264,14 +264,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     using (new EditorGUI.DisabledScope(names.Count == 0))
                     {
-                        if (GUILayout.Button(new GUIContent("Delete Independent…",
+                        if (GUILayout.Button(new GUIContent("Delete Independent...",
                                 "Remove every Independent Motion track and its legacy clip keys.")))
                             DeleteAllIndependentSockets();
                     }
                 }
                 using (new EditorGUI.DisabledScope(!HasAnySocketData()))
                 {
-                    if (GUILayout.Button(new GUIContent("Delete All — All Clips…",
+                    if (GUILayout.Button(new GUIContent("Delete All - All Clips...",
                             "Profile-wide reset: remove Frame-Attached sockets, Independent Motion tracks, and socket catalog entries from every clip.")))
                         DeleteAllSocketsAcrossProfile();
                 }
@@ -326,7 +326,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 GUILayout.Space(6f);
                 GUILayout.Label(
-                    $"{visibleSelected} selected  •  right-click for Transform / Pattern",
+                    $"{visibleSelected} selected  *  right-click for Transform / Pattern",
                     _mutedStyle);
             }
             DrawQuickMotionPresets(clip, independentView, names);
@@ -347,7 +347,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             int selectedCount = _independentMotionEditKeys.Count;
             GUILayout.Space(8f);
             SectionLabel(selectedCount > 1
-                ? $"MOTION KEY  •  {selectedCount} SELECTED"
+                ? $"MOTION KEY  *  {selectedCount} SELECTED"
                 : "MOTION KEY");
             if (selectedCount > 1)
                 GUILayout.Label(
@@ -558,7 +558,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUILayout.Space(6f);
             GUILayout.Label("APPLY TO OTHER KEYS", _sectionStyle);
             GUILayout.Label(
-                "Apply the current key's setting to the selection or every key on this track. A key list is not needed — the timeline already picks keys.",
+                "Apply the current key's setting to the selection or every key on this track. A key list is not needed - the timeline already picks keys.",
                 _mutedStyle);
             int trackCount = track.Keys?.Count ?? 0;
             using (new EditorGUI.DisabledScope(selectedCount <= 1))
@@ -566,7 +566,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button(
-                            new GUIContent("Ease → Selected",
+                            new GUIContent("Ease -> Selected",
                                 "Copy this timing ease onto the selected keys only."),
                             EditorStyles.miniButton))
                         ApplyIndependentMotionField(
@@ -574,7 +574,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             IndependentMotionApplyScope.Selected,
                             ease: ResolvedEaseMode(key));
                     if (GUILayout.Button(
-                            new GUIContent("Path → Selected",
+                            new GUIContent("Path -> Selected",
                                 "Copy this position path onto the selected keys only."),
                             EditorStyles.miniButton))
                         ApplyIndependentMotionField(
@@ -582,7 +582,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             IndependentMotionApplyScope.Selected,
                             pathMode: ResolvedPathMode(key));
                     if (GUILayout.Button(
-                            new GUIContent("Rotation → Selected",
+                            new GUIContent("Rotation -> Selected",
                                 "Copy this rotation mode onto the selected keys only."),
                             EditorStyles.miniButton))
                         ApplyIndependentMotionField(
@@ -596,7 +596,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button(
-                            new GUIContent("Ease → Track",
+                            new GUIContent("Ease -> Track",
                                 "Copy this timing ease onto every key on this track."),
                             EditorStyles.miniButton))
                         ApplyIndependentMotionField(
@@ -604,7 +604,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             IndependentMotionApplyScope.Track,
                             ease: ResolvedEaseMode(key));
                     if (GUILayout.Button(
-                            new GUIContent("Path → Track",
+                            new GUIContent("Path -> Track",
                                 "Copy this position path onto every key on this track."),
                             EditorStyles.miniButton))
                         ApplyIndependentMotionField(
@@ -612,7 +612,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             IndependentMotionApplyScope.Track,
                             pathMode: ResolvedPathMode(key));
                     if (GUILayout.Button(
-                            new GUIContent("Rotation → Track",
+                            new GUIContent("Rotation -> Track",
                                 "Copy this rotation mode onto every key on this track."),
                             EditorStyles.miniButton))
                         ApplyIndependentMotionField(
@@ -1135,7 +1135,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                     if (editingIndependent)
                         GUILayout.Label(
-                            "Independent Motion • player-pivot anchored • character clip timing does not affect this track.",
+                            "Independent Motion * player-pivot anchored * character clip timing does not affect this track.",
                             _mutedWrapStyle);
                     else if (!onFrame)
                         GUILayout.Label("No key on this frame yet. Drag or edit to add one.", _mutedStyle);
@@ -1235,13 +1235,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (catalogItem != null && catalogItem.UsesOwnClock)
                     {
                         GUILayout.Label(
-                            $"Shared timeline speed: {_profile.IndependentMotionSpeed:0.##}×",
+                            $"Shared timeline speed: {_profile.IndependentMotionSpeed:0.##}x",
                             _mutedStyle);
                     }
 
                     _socketOrbitTilt = EditorGUILayout.Popup(
                         new GUIContent("Orbit Tilt",
-                            "Apply this tilt to the selected socket. 0° is horizontal, 90° is vertical."),
+                            "Apply this tilt to the selected socket. 0 deg is horizontal, 90 deg is vertical."),
                         Mathf.Clamp(_socketOrbitTilt, 0, SocketOrbitTiltLabels.Length - 1),
                         SocketOrbitTiltLabels);
                     if (DrawOrbitCreateRow(
@@ -1279,7 +1279,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             key.LocalAngle = nextAngle;
                             key.LocalScale = new Vector2(scaleX, scaleY);
                         }
-                        _status = $"Socket {name}  ({offsetX:0.##}, {offsetY:0.##})  {nextAngle:0.##}°  scale {scaleX:0.##},{scaleY:0.##}";
+                        _status = $"Socket {name}  ({offsetX:0.##}, {offsetY:0.##})  {nextAngle:0.##} deg  scale {scaleX:0.##},{scaleY:0.##}";
                     }
 
                     var independentDrawKey = editingIndependent
@@ -1339,7 +1339,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     }
 
                     if (!editingIndependent && GUILayout.Button(new GUIContent(
-                            "Apply to Frames…",
+                            "Apply to Frames...",
                             "Open the frame list to copy position, rotation, and/or scale onto other frames.")))
                     {
                         OpenSocketInheritPanel(clip, name, _selectedFrame);
@@ -1526,8 +1526,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
 
             _status = _socketInheritNames.Count == 1
-                ? $"Socket {_socketInheritNames[0]}  — pick frames to inherit pose"
-                : $"{_socketInheritNames.Count} sockets  — pick frames to inherit pose";
+                ? $"Socket {_socketInheritNames[0]}  - pick frames to inherit pose"
+                : $"{_socketInheritNames.Count} sockets  - pick frames to inherit pose";
             if (exitGui)
                 GUIUtility.ExitGUI();
         }
@@ -1608,7 +1608,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawBorder(rect, AccentColor, 1f);
             bool locked = IsSocketLocked(_selectedSocketName);
             GUI.Label(new Rect(rect.x + 8f, rect.y + 4f, rect.width - 52f, 18f),
-                $"SOCKET  {_selectedSocketName}" + (locked ? "  •  LOCKED" : string.Empty),
+                $"SOCKET  {_selectedSocketName}" + (locked ? "  *  LOCKED" : string.Empty),
                 EditorStyles.boldLabel);
             if (GUI.Button(new Rect(rect.xMax - 36f, rect.y + 3f, 28f, 20f),
                     SocketLockContent(locked), EditorStyles.miniButton))
@@ -1617,7 +1617,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             float x = rect.x + 8f;
             if (GUI.Button(new Rect(x, rect.y + 26f, 140f, 22f),
-                    new GUIContent("Apply to Frames…",
+                    new GUIContent("Apply to Frames...",
                         "Copy this socket's position, rotation, and scale onto other frames."),
                     EditorStyles.miniButton))
             {
@@ -1625,7 +1625,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             x += 148f;
             if (GUI.Button(new Rect(x, rect.y + 26f, 110f, 22f),
-                    new GUIContent("Socket Actions…",
+                    new GUIContent("Socket Actions...",
                         "Lock, snap presets, Character collider, opaque bounds, copy/paste."),
                     EditorStyles.miniButton))
             {
@@ -1750,22 +1750,22 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             if (!allLocked)
             {
-                menu.AddItem(new GUIContent("Set Transform…"), false, OpenSocketTransformPanel);
-                menu.AddItem(new GUIContent("Apply to Frames…"), false,
+                menu.AddItem(new GUIContent("Set Transform..."), false, OpenSocketTransformPanel);
+                menu.AddItem(new GUIContent("Apply to Frames..."), false,
                     () => OpenSocketInheritPanel(clip, name, _selectedFrame, default, exitGui: false));
                 AddSocketPatternMenuItems(menu, clip);
             }
             else
             {
-                menu.AddDisabledItem(new GUIContent("Set Transform…"));
-                menu.AddDisabledItem(new GUIContent("Apply to Frames…"));
+                menu.AddDisabledItem(new GUIContent("Set Transform..."));
+                menu.AddDisabledItem(new GUIContent("Apply to Frames..."));
             }
             menu.AddSeparator(string.Empty);
             if (!allLocked)
             {
                 menu.AddItem(new GUIContent(count > 1
-                        ? $"Assign Profile to {count} Sockets…"
-                        : "Assign Profile…"),
+                        ? $"Assign Profile to {count} Sockets..."
+                        : "Assign Profile..."),
                     false, () => ShowSocketProfilePicker(selected));
                 menu.AddItem(new GUIContent(count > 1 ? "Clear Profiles" : "Clear Profile"),
                     false, () => ClearSocketPreviewOnNames(selected));
@@ -1773,8 +1773,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             else
             {
                 menu.AddDisabledItem(new GUIContent(count > 1
-                    ? $"Assign Profile to {count} Sockets…"
-                    : "Assign Profile…"));
+                    ? $"Assign Profile to {count} Sockets..."
+                    : "Assign Profile..."));
                 menu.AddDisabledItem(new GUIContent(count > 1 ? "Clear Profiles" : "Clear Profile"));
             }
             menu.AddSeparator(string.Empty);
@@ -1832,7 +1832,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Snapped socket(s) to profile pivot"));
             menu.AddItem(new GUIContent("Snap/Cell Center"), false,
                 () => SnapSelectedSocketsToCellUv(new Vector2(0.5f, 0.5f), "Snap Socket to Cell Center"));
-            menu.AddItem(new GUIContent("Snap/Bottom Center — Feet"), false,
+            menu.AddItem(new GUIContent("Snap/Bottom Center - Feet"), false,
                 () => SnapSelectedSocketsToCellUv(new Vector2(0.5f, 0f), "Snap Socket to Bottom Center"));
             menu.AddItem(new GUIContent("Snap/Top Center"), false,
                 () => SnapSelectedSocketsToCellUv(new Vector2(0.5f, 1f), "Snap Socket to Top Center"));
@@ -1862,7 +1862,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 menu.AddDisabledItem(new GUIContent(
                     "Snap to Character Collider Center (add Character collider first)"));
             }
-            menu.AddItem(new GUIContent("Add Character Collider…",
+            menu.AddItem(new GUIContent("Add Character Collider...",
                     "Create a Character (body) square collider on this profile."),
                 false, () => PromptAddCharacterColliderForPivot(snapAfter: false));
             menu.AddSeparator(string.Empty);
@@ -1873,7 +1873,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         "Tight AABB center of opaque pixels in the active cell (Grid or Cropped)."),
                     false, () => SnapSelectedSocketsToOpaqueContent(bottomCenter: false));
                 menu.AddItem(new GUIContent("Snap to Opaque Content Bottom Center",
-                        "Feet of the art — bottom-center of the opaque AABB in the active cell."),
+                        "Feet of the art - bottom-center of the opaque AABB in the active cell."),
                     false, () => SnapSelectedSocketsToOpaqueContent(bottomCenter: true));
             }
             else
@@ -1979,8 +1979,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             var icon = EditorGUIUtility.IconContent(locked ? "LockIcon-On" : "LockIcon");
             string tooltip = locked
-                ? "Unlock socket — allow select and drag in the preview"
-                : "Lock socket — prevent select and drag";
+                ? "Unlock socket - allow select and drag in the preview"
+                : "Lock socket - prevent select and drag";
             if (icon != null && icon.image != null)
             {
                 icon.tooltip = tooltip;
@@ -2164,7 +2164,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             names.RemoveAll(IsSocketLocked);
             if (names.Count == 0)
             {
-                _status = "Selected sockets are locked — unlock to edit";
+                _status = "Selected sockets are locked - unlock to edit";
                 Repaint();
                 return;
             }
@@ -2308,8 +2308,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Mathf.Max(48f, (position.height - height) * 0.28f),
                 width, height);
             _status = _socketTransformNames.Count == 1
-                ? $"Set Transform  •  {_socketTransformNames[0]}"
-                : $"Set Transform  •  {_socketTransformNames.Count} sockets";
+                ? $"Set Transform  *  {_socketTransformNames[0]}"
+                : $"Set Transform  *  {_socketTransformNames.Count} sockets";
             Repaint();
         }
 
@@ -2523,8 +2523,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _draggingSocket = false;
             _socketHandleKind = ColliderHandleKind.None;
             _status = _socketPlacementIndependent
-                ? "Independent Motion tool armed — click the preview to place"
-                : "Frame-Attached Socket tool armed — click the preview to place";
+                ? "Independent Motion tool armed - click the preview to place"
+                : "Frame-Attached Socket tool armed - click the preview to place";
             Repaint();
         }
 
@@ -2981,7 +2981,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 if (locked)
                 {
-                    _status = $"Socket {name} is locked — unlock to select";
+                    _status = $"Socket {name} is locked - unlock to select";
                     evt.Use();
                     Repaint();
                 }
@@ -3014,7 +3014,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.DrawRect(chipRect, swatch);
             var motionTrack = independentView ? _profile.FindSocketMotion(name) : null;
             string rowLabel = independentView
-                ? $"{i}. {name}  •  {motionTrack?.Keys?.Count ?? 0} keys"
+                ? $"{i}. {name}  *  {motionTrack?.Keys?.Count ?? 0} keys"
                 : onFrame ? $"{i}. {name}" : $"{i}. {name}  (other frame)";
             GUI.Label(labelRect, rowLabel, selected ? EditorStyles.whiteLabel : EditorStyles.label);
             if (showSpace && independentView && motionTrack != null)
@@ -3126,8 +3126,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             SaveDirty();
             SealUndoGroup();
             _status = independent
-                ? $"{inventory.Name}  •  {inventory.SocketNames.Count} Independent sockets"
-                : $"{inventory.Name}  •  {inventory.SocketNames.Count} Frame sockets";
+                ? $"{inventory.Name}  *  {inventory.SocketNames.Count} Independent sockets"
+                : $"{inventory.Name}  *  {inventory.SocketNames.Count} Frame sockets";
             Repaint();
         }
 
@@ -3361,7 +3361,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _selectedSockets.Clear();
                     _selectedSocketName = null;
                 }
-                _status = $"Socket {name} is locked — unlock to select";
+                _status = $"Socket {name} is locked - unlock to select";
                 Repaint();
                 return;
             }
@@ -4175,8 +4175,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _socketOrbitCenter = center;
             _socketOrbitCenterSet = true;
             _status = restamp
-                ? $"{SocketOrbitPatternLabels[pattern]}  •  restamped {names.Count} sockets"
-                : $"{SocketOrbitPatternLabels[pattern]}  •  created {names.Count} sockets";
+                ? $"{SocketOrbitPatternLabels[pattern]}  *  restamped {names.Count} sockets"
+                : $"{SocketOrbitPatternLabels[pattern]}  *  created {names.Count} sockets";
             SaveDirty();
             Repaint();
         }
@@ -4544,7 +4544,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         string UniqueOrbitTiltName(SpriteClipDef clip, float tilt)
         {
-            string baseName = $"Orbit {Mathf.RoundToInt(Mathf.Repeat(tilt, 360f))}°";
+            string baseName = $"Orbit {Mathf.RoundToInt(Mathf.Repeat(tilt, 360f))} deg";
             if (SpriteSocketKeys.IdentityIndex(clip.Sockets, baseName) < 0)
                 return SpriteSocketKeys.CanonicalName(baseName);
             int n = 2;
@@ -4600,7 +4600,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedSockets.Clear();
             _selectedSockets.Add(copyName);
             _selectedSocketName = copyName;
-            _status = $"Duplicated {name} → {copyName}";
+            _status = $"Duplicated {name} -> {copyName}";
             SaveDirty();
             Repaint();
         }
@@ -4863,8 +4863,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedSocketName = names[0];
             string shape = SocketOrbitShapeLabels[Mathf.Clamp(_socketOrbitShape, 0, SocketOrbitShapeLabels.Length - 1)];
             _status = orbs == 1
-                ? $"{name}  {shape}  {tilt:0}°  r={radius:0}px"
-                : $"{name}  {orbs} coplanar orbs  {shape}  {tilt:0}°  {360f / orbs:0.#}° phase";
+                ? $"{name}  {shape}  {tilt:0} deg  r={radius:0}px"
+                : $"{name}  {orbs} coplanar orbs  {shape}  {tilt:0} deg  {360f / orbs:0.#} deg phase";
             SaveDirty();
             GUIUtility.ExitGUI();
         }
@@ -5339,8 +5339,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     out int playFrame, out int playCount))
             {
                 string playing = item.PreviewPlayMode == SpriteSocketPreviewPlayMode.Cell
-                    ? $"Showing cell {cellIndex}" + (string.IsNullOrEmpty(clipLabel) ? string.Empty : $"  •  {clipLabel}")
-                    : $"Playing {clipLabel}  •  frame {playFrame + 1}/{Mathf.Max(1, playCount)}";
+                    ? $"Showing cell {cellIndex}" + (string.IsNullOrEmpty(clipLabel) ? string.Empty : $"  *  {clipLabel}")
+                    : $"Playing {clipLabel}  *  frame {playFrame + 1}/{Mathf.Max(1, playCount)}";
                 GUILayout.Label(playing, _mutedStyle);
             }
         }
@@ -6120,7 +6120,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return true;
 
             // Preview art and handles often sit outside the character cell, so do not
-            // require cell.Contains — hit-test the gizmo / socket instead.
+            // require cell.Contains - hit-test the gizmo / socket instead.
             if (evt.type != EventType.MouseDown || evt.button != 0)
                 return false;
 
@@ -6691,7 +6691,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             ? _socketMoveMotionStartAngles[i]
                             : _socketAngleStart) + delta;
                 }
-                _status = $"Socket {_socketTransformName}  {angle:0.#}°";
+                _status = $"Socket {_socketTransformName}  {angle:0.#} deg";
                 return;
             }
 
@@ -6773,7 +6773,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     key.LocalAngle = _socketMoveStartAngles[i] + angle;
                 }
                 ApplySocketMotionKeyGroupRotate(clip, angle);
-                _status = $"Selection  {angle:0.#}°";
+                _status = $"Selection  {angle:0.#} deg";
                 return;
             }
 

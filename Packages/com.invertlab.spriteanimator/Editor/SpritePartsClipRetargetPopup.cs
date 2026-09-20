@@ -114,7 +114,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             var required = SpriteProfileClipImport.CollectRequiredSourceSlots(
                 source, new[] { _sourceClipIndex });
             var destIds = new List<string> { "" };
-            var destOptions = new List<string> { "(unmapped — blocks Apply)" };
+            var destOptions = new List<string> { "(unmapped - blocks Apply)" };
             if (dest.PartsSlots != null)
             {
                 for (int i = 0; i < dest.PartsSlots.Count; i++)
@@ -176,7 +176,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     preview != null ? preview.Name : plan.DestinationName,
                     preview,
                     $"Previewing retargeted '{plan.SourceClipName}' on this rest/hierarchy (keys remapped; rest not rewritten)",
-                    $" RETARGET PREVIEW: '{plan.SourceClipName}' ({plan.Mode}) — keys remapped onto this rest. Rest/hierarchy not rewritten.");
+                    $" RETARGET PREVIEW: '{plan.SourceClipName}' ({plan.Mode}) - keys remapped onto this rest. Rest/hierarchy not rewritten.");
             }
             if (_host.ImportPreviewing && GUILayout.Button("Stop Preview", GUILayout.Height(22f)))
                 _host.ClearImportPreview("Retarget preview ended");

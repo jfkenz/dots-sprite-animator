@@ -190,7 +190,7 @@ namespace InvertLab.Sprites.DOTS
                 return;
             _helpStyle ??= new GUIStyle(GUI.skin.label) { fontSize = 14 };
             GUI.Label(new Rect(12f, 12f, 320f, 40f),
-                "A / D move   •   J attack (pure query)", _helpStyle);
+                "A / D move   *   J attack (pure query)", _helpStyle);
         }
 
         string ClipName(int index)

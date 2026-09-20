@@ -12,7 +12,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             serializedObject.Update();
 
             // everything except Pivot (drawn last, gated by Override Pivot)
-            UnityEditor.Editor.DrawPropertiesExcluding(serializedObject, "m_Script", "Pivot");
+            UnityEditor.Editor.DrawPropertiesExcluding(serializedObject, "m_Script", "Pivot", "OverridePivot", "Row", "Column");
+            using (new EditorGUI.DisabledScope(serializedObject.FindProperty("UseProfileDefaultCell").boolValue))
+            {
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("Row"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("Column"));
+            }
             var overrideProp = serializedObject.FindProperty("OverridePivot");
             var pivotProp = serializedObject.FindProperty("Pivot");
 
@@ -27,7 +32,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (data != null)
                 {
                     data.EnsureSheets();
-                    var sheetDef = data.SheetAt(Mathf.Max(0, source.SheetIndex));
+                    var sheetDef = data.SheetAt(Mathf.Max(0, source.EffectiveSheetIndex));
                     if (sheetDef != null)
                     {
                         var profilePivot = SpriteSocketWorld.ResolvePivot(data, sheetDef);
@@ -49,14 +54,29 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 if (GUILayout.Button(new GUIContent("Pick Cell From Sheet",
                         "Open the sheet with its grid overlay; click a cell to set Row/Column.")))
+                {
+                    Undo.RecordObject(authoring, "Override Static Cell");
+                    int sheet = authoring.EffectiveSheetIndex, row = authoring.EffectiveRow, column = authoring.EffectiveColumn;
+                    authoring.UseProfileDefaultCell = false;
+                    authoring.SheetIndex = sheet;
+                    authoring.Row = row;
+                    authoring.Column = column;
+                    EditorUtility.SetDirty(authoring);
                     SpriteStaticCellPicker.Show(authoring);
+                }
             }
 
+            if (authoring.HasAuthoringConflict)
+            {
+                EditorGUILayout.HelpBox("Conflicting authoring components. Conversion preserves the profile; removes other animation authoring with Undo.", MessageType.Warning);
+                if (GUILayout.Button("Use Static on This Object"))
+                    SpriteProfileSceneSetup.Apply(authoring.gameObject, authoring.Profile, SpriteAnimKind.Static);
+            }
             if (authoring.Profile == null)
             {
                 EditorGUILayout.HelpBox(
                     "Assign a Profile (Window > DOTS Sprite Animator). Profiles without " +
-                    "clips are fine — the sheet grid is all this component needs.",
+                    "clips are fine - the sheet grid is all this component needs.",
                     MessageType.Info);
                 return;
             }
@@ -72,7 +92,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
     /// <summary>
     /// Cell picker for SpriteStaticAuthoring, styled after the sheet tool's
-    /// "1×1 from texture" picker: a tile grid (checkerboard + per-cell
+    /// "1x1 from texture" picker: a tile grid (checkerboard + per-cell
     /// texture, 2px gaps), accent border + slot badge on the selection, and
     /// a muted footer. Click a cell to write Row/Column (undo-able).
     /// </summary>
@@ -117,7 +137,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 if (_target.ResolveSheet(out texture, out cols, out rows, out _))
                     GUILayout.Label(
-                        texture != null ? $"{texture.name} ({cols}×{rows})" : "no texture",
+                        texture != null ? $"{texture.name} ({cols}x{rows})" : "no texture",
                         EditorStyles.miniLabel);
 
                 GUILayout.FlexibleSpace();
@@ -133,7 +153,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             int selRow = Mathf.Clamp(_target.Row, 0, rows - 1);
             int selCol = Mathf.Clamp(_target.Column, 0, cols - 1);
 
-            // ---- tile grid (like the tool's 1×1 picker) ----
+            // ---- tile grid (like the tool's 1x1 picker) ----
             const float gap = 2f;
             float cellAspect = (texture.width / (float)cols) / Mathf.Max(1f, texture.height / (float)rows);
             cellAspect = Mathf.Max(0.01f, cellAspect);
@@ -189,8 +209,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             // ---- footer ----
             EditorGUILayout.Space(2f);
             GUILayout.Label(
-                $"row {selRow} · col {selCol} → slot {selRow * cols + selCol}" +
-                "   •   click = pick   •   Esc = close",
+                $"row {selRow} * col {selCol} -> slot {selRow * cols + selCol}" +
+                "   *   click = pick   *   Esc = close",
                 EditorStyles.miniLabel);
             using (new EditorGUILayout.HorizontalScope())
             {

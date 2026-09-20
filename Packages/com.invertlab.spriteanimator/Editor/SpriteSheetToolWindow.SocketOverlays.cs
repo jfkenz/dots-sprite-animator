@@ -197,8 +197,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             string label = _socketTransformNames.Count == 1
                 ? _socketTransformNames[0]
                 : $"{_socketTransformNames.Count} sockets";
-            GUILayout.Label($"{label}  •  {clip.Name}  •  frame {_selectedFrame + 1}", EditorStyles.boldLabel);
-            GUILayout.Label("Pose is per frame. Pivot is the preview art grip (0–1).", _mutedStyle);
+            GUILayout.Label($"{label}  *  {clip.Name}  *  frame {_selectedFrame + 1}", EditorStyles.boldLabel);
+            GUILayout.Label("Pose is per frame. Pivot is the preview art grip (0-1).", _mutedStyle);
 
             Vector2 position = Vector2.zero;
             float angle = 0f;
@@ -285,7 +285,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button(new GUIContent("Reset Pose",
-                        "Position 0,0  •  rotation 0°  •  scale 1,1")))
+                        "Position 0,0  *  rotation 0 deg  *  scale 1,1")))
                     WriteSocketTransformPose(clip, Vector2.zero, 0f, Vector2.one,
                         writePos: true, writeAngle: true, writeScale: true);
                 if (GUILayout.Button(new GUIContent("Reset Pivot", "Pivot 0.5, 0.5")))
@@ -331,8 +331,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             _status = _socketTransformAllFrames
-                ? $"Set transform on {_socketTransformNames.Count} sockets  •  all frames"
-                : $"Set transform on {_socketTransformNames.Count} sockets  •  frame {_selectedFrame + 1}";
+                ? $"Set transform on {_socketTransformNames.Count} sockets  *  all frames"
+                : $"Set transform on {_socketTransformNames.Count} sockets  *  frame {_selectedFrame + 1}";
             SaveDirty();
             Repaint();
         }
@@ -359,7 +359,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _profile.EnsureSocketCatalog();
             for (int i = 0; i < _socketTransformNames.Count; i++)
                 _profile.SocketCatalog.Ensure(_socketTransformNames[i]).Pivot = pivot;
-            _status = $"Pivot {pivot.x:0.##}, {pivot.y:0.##}  •  {_socketTransformNames.Count} sockets";
+            _status = $"Pivot {pivot.x:0.##}, {pivot.y:0.##}  *  {_socketTransformNames.Count} sockets";
             SaveDirty();
             Repaint();
         }
@@ -392,11 +392,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             bool sourceBehind = SocketInheritDrawsBehind(clip, _socketInheritNames[0], source);
             float sourceTime = AuthoredStartTime(clip, source);
             float sourceDur = FrameDuration(clip, source);
-            GUILayout.Label($"{socketLabel}  •  {clip.Name}", EditorStyles.boldLabel);
+            GUILayout.Label($"{socketLabel}  *  {clip.Name}", EditorStyles.boldLabel);
             GUILayout.Label(
-                $"Source  {sourceTime:0.00}s  ({sourceDur:0.00}s)  •  frame {source + 1}" +
+                $"Source  {sourceTime:0.00}s  ({sourceDur:0.00}s)  *  frame {source + 1}" +
                 (sourceKeyed ? "  key" : "  inherited") +
-                $"   ({sourcePos.x:0.#}, {sourcePos.y:0.#})  {sourceAngle:0.#}°  {sourceScale.x:0.##},{sourceScale.y:0.##}",
+                $"   ({sourcePos.x:0.#}, {sourcePos.y:0.#})  {sourceAngle:0.#} deg  {sourceScale.x:0.##},{sourceScale.y:0.##}",
                 _mutedStyle);
             GUILayout.Label(
                 sourceBehind
@@ -454,7 +454,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SelectSocketInheritFrames(clip, "none");
                 if (GUILayout.Button(new GUIContent("Missing", "Times that have no key yet."), EditorStyles.miniButton))
                     SelectSocketInheritFrames(clip, "missing");
-                if (GUILayout.Button(new GUIContent("This→End", "From the source time to the end of the clip."),
+                if (GUILayout.Button(new GUIContent("This->End", "From the source time to the end of the clip."),
                         EditorStyles.miniButton))
                     SelectSocketInheritFrames(clip, "rest");
                 if (GUILayout.Button(new GUIContent("Timeline", "Use the timeline selection."),
@@ -464,7 +464,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             GUILayout.Space(4f);
             GUILayout.Label(
-                $"Time  •  {_socketInheritFrames.Count} selected  •  click a row to preview",
+                $"Time  *  {_socketInheritFrames.Count} selected  *  click a row to preview",
                 _mutedStyle);
             _socketInheritScroll = GUILayout.BeginScrollView(_socketInheritScroll, GUILayout.ExpandHeight(true));
             for (int i = 0; i < clip.Frames.Length; i++)
@@ -507,7 +507,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     {
                         ToggleSocketInheritFrame(i, ReadSelectionOp(evt, orderedList: true));
                         JumpPreviewToFrame(clip, i);
-                        _status = $"{socketLabel}  {time:0.00}s  (frame {i + 1})  •  " +
+                        _status = $"{socketLabel}  {time:0.00}s  (frame {i + 1})  *  " +
                                   (behind ? "Behind" : "In Front");
                         evt.Use();
                         GUI.FocusControl(null);
@@ -561,7 +561,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button(new GUIContent("Reset selected",
-                            "Set checked channels to identity (0,0 / 0° / 1,1) on checked times.")))
+                            "Set checked channels to identity (0,0 / 0 deg / 1,1) on checked times.")))
                     {
                         int changed = ResetSocketInherit(clip, _socketInheritFrames);
                         _status = $"Reset {changed} frame key{Plural(changed)}";

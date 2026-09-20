@@ -16,11 +16,11 @@ namespace InvertLab.Sprites.DOTS
 
             EditorGUILayout.HelpBox(
                 "This sample's player/enemy live in the open scene (not the SubScene), " +
-                "so Unity Physics body boxes are created at runtime on DOTS entities — " +
+                "so Unity Physics body boxes are created at runtime on DOTS entities - " +
                 "you will NOT see Collider2D children under the GameObjects.\n\n" +
                 "Player does not need a body collider (attack is OverlapAabb). " +
                 "Enemy needs the runtime hurtbox for hits.\n\n" +
-                "View bodies: Window → Analysis → Physics Debugger.",
+                "View bodies: Window > Analysis > Physics Debugger.",
                 MessageType.Info);
 
             var enemies = FindObjectsByType<UnityPhysicsExampleEnemy>(FindObjectsInactive.Exclude);

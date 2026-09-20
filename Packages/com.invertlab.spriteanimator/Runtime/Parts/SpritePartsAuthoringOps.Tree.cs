@@ -159,6 +159,7 @@ namespace InvertLab.Sprites.DOTS
                 var slot = FindSlot(profile, cur);
                 if (slot == null) return false;
                 if (slot.EditorLocked) return true;
+                if (IsPartsGroupLocked(profile, slot.GroupId)) return true;
                 if (string.IsNullOrWhiteSpace(slot.ParentSlotId)) return false;
                 cur = SpritePartIdUtility.Canonical(slot.ParentSlotId);
             }
@@ -174,6 +175,7 @@ namespace InvertLab.Sprites.DOTS
                 var slot = FindSlot(profile, cur);
                 if (slot == null) return false;
                 if (!slot.Enabled) return true;
+                if (IsPartsGroupHidden(profile, slot.GroupId)) return true;
                 if (string.IsNullOrWhiteSpace(slot.ParentSlotId)) return false;
                 cur = SpritePartIdUtility.Canonical(slot.ParentSlotId);
             }
@@ -913,6 +915,7 @@ namespace InvertLab.Sprites.DOTS
                 moving.RestRotation = newRot;
                 moving.RestScale = newScale;
                 moving.ParentSlotId = destParent;
+                moving.GroupId = string.Empty;
             }
 
             // Remove from old sibling list conceptually, insert at destination index.
@@ -929,6 +932,8 @@ namespace InvertLab.Sprites.DOTS
 
             // DrawRank must stay unchanged on sibling reorder AND reparent.
             moving.DrawRank = oldDrawRank;
+            if (parentChanging)
+                PruneEmptyPartsGroups(profile);
 
             var ok = new HierarchyEditResult
             {
@@ -1311,6 +1316,7 @@ public static HierarchyEditResult TryDeleteSubtree(SpriteSheetProfile profile, s
             int deleted = profile.PartsSlots.RemoveAll(s =>
                 s != null && idSet.Contains(SpritePartIdUtility.Canonical(s.SlotId)));
             NormalizeSiblingOrders(profile);
+            PruneEmptyPartsGroups(profile);
 
             result.Ok = true;
             result.DeletedSlotCount = deleted;

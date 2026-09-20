@@ -8,7 +8,7 @@ namespace InvertLab.Sprites.DOTS.Editor
     /// canvas (checkerboard, grid lines, crop-rect outlines), click-select a
     /// cell, drag its pivot handle, and a Sprite inspector (Name, Position,
     /// Pivot preset/unit/custom). Per-cell pivots and rect edits write into
-    /// the profile asset (undo-able) — not Unity .meta data.
+    /// the profile asset (undo-able) - not Unity .meta data.
     /// </summary>
     public sealed class SpriteCellEditorWindow : EditorWindow, ISpriteSheetSliceHost
     {
@@ -66,7 +66,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             // throw mid-layout and permanently desync GUILayout state
             if (_host == null)
             {
-                EditorGUILayout.HelpBox("Host window closed — close and reopen the Cell " +
+                EditorGUILayout.HelpBox("Host window closed - close and reopen the Cell " +
                     "Editor from the Sprite Animator window.", MessageType.Warning);
                 return;
             }
@@ -120,7 +120,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     var popupRect = GUILayoutUtility.GetLastRect();
                     PopupWindow.Show(popupRect, new SpriteSheetSlicePopup(this));
                 }
-                // Sheet prev/next only when multiple sheets exist — never create sheets here.
+                // Sheet prev/next only when multiple sheets exist - never create sheets here.
                 int sheetCount = data.Sheets != null ? data.Sheets.Count : 0;
                 if (sheetCount > 1)
                 {
@@ -290,7 +290,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawInspector(SpriteSheetDef sheet, Texture2D texture, int cols, int rows)
         {
             // opaque panel: the canvas must never bleed through, whatever the
-            // zoom or scroll position. Scope-based layout only — no BeginArea,
+            // zoom or scroll position. Scope-based layout only - no BeginArea,
             // so layout state can never go mismatched.
             var panelBg = new GUIStyle(GUIStyle.none);
             panelBg.normal.background = PanelBackgroundTexture();
@@ -313,7 +313,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 int c = slot % cols;
                 int r = slot / cols;
                 EditorGUILayout.LabelField("Name", $"{sheet.Name ?? "Sheet"}_{slot}");
-                EditorGUILayout.LabelField("Cell", $"row {r} · col {c}");
+                EditorGUILayout.LabelField("Cell", $"row {r} * col {c}");
 
                 // ---- position / rect (CroppedCellRects) ----
                 var rects = sheet.CroppedCellRects;
@@ -331,7 +331,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         EditorGUILayout.IntField("H", rect.height);
                     }
                 }
-                EditorGUILayout.LabelField("Derived from Columns x Rows — change them or use Slice.",
+                EditorGUILayout.LabelField("Derived from Columns x Rows - change them or use Slice.",
                     EditorStyles.miniLabel);
 
                 EditorGUILayout.Space(6f);
@@ -346,7 +346,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _globalPivot = GUILayout.Toggle(_globalPivot, new GUIContent(
                     "Apply To All Cells",
                     "ON: moving the pivot (drag, preset, or fields) moves the pivot of EVERY " +
-                    "cell at once — per-cell overrides are cleared and the sheet pivot is set. " +
+                    "cell at once - per-cell overrides are cleared and the sheet pivot is set. " +
                     "OFF: only the selected cell changes."));
                 if (EditorGUI.EndChangeCheck() && _globalPivot)
                 {
@@ -484,7 +484,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         // ---- helpers ----
 
         /// <summary>
-        /// Profile edits (pivots) are baked into preview meshes — rebuild the
+        /// Profile edits (pivots) are baked into preview meshes - rebuild the
         /// scene previews of every authoring that references this profile.
         /// </summary>
         void RefreshDependentPreviews()
@@ -535,12 +535,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             int cols, int rows, int slot)
         {
             // grid-only: the position IS the uniform grid cell derived from
-            // Columns x Rows — stored crop data is ignored entirely
+            // Columns x Rows - stored crop data is ignored entirely
             int cw = texture.width / cols;
             int ch = texture.height / rows;
             int c = slot % cols;
             int r = slot / cols;
-            // row 0 = top (profile convention) → pixel y from bottom
+            // row 0 = top (profile convention) -> pixel y from bottom
             return new RectInt(c * cw, texture.height - (r + 1) * ch, cw, ch);
         }
 

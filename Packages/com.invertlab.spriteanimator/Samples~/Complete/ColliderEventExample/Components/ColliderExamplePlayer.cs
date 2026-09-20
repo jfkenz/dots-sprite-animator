@@ -15,7 +15,7 @@ namespace InvertLab.Sprites.DOTS
     {
         [Min(0.1f)] public float MoveSpeed = 3f;
 
-        [Tooltip("Default KeyCode.J â€” mapped through the Input System keyboard.")]
+        [Tooltip("Default KeyCode.J - mapped through the Input System keyboard.")]
         public KeyCode AttackKey = KeyCode.J;
         public KeyCode LeftKey = KeyCode.A;
         public KeyCode RightKey = KeyCode.D;

@@ -15,6 +15,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             Clips = 0,
             Parts = 1,
+            Static = 2,
         }
 
         enum PartsCanvasTool
@@ -28,6 +29,15 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             Clips = 0,
             Tree = 1,
+        }
+
+        struct PartsGroupMoveMember
+        {
+            public string SlotId;
+            public SpritePartsAuthoringOps.PoseEdit StartPose;
+            public float2 StartWorld;
+            public float4x4 ParentToRoot;
+            public bool HasParent;
         }
 
         [SerializeField] StudioTab _studioTab;
@@ -53,6 +63,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] float _partsOnionOpacity = SpritePartsAuthoringOps.DefaultOnionOpacity;
         [SerializeField] bool _partsShowArt = true;
         [SerializeField] bool _partsShowDebug = true;
+        [SerializeField] bool _partsShowRoot = true;
+        [SerializeField] SpritePartsAlignPivot _partsAlignPivot = SpritePartsAlignPivot.Center;
         [SerializeField] float _partsDisplayFps = SpritePartsAuthoringOps.DefaultDisplayFps;
         // Preview: wrap playhead at last key time instead of Duration.
         [SerializeField] bool _partsLoopLastKey;
@@ -81,6 +93,10 @@ namespace InvertLab.Sprites.DOTS.Editor
         readonly Dictionary<string, string> _partsSkinPreviewOverrides = new(StringComparer.Ordinal);
         string _partsArtSyncedSlotId;
         bool _partsDragActive;
+        bool _partsMarqueeActive;
+        bool _partsMarqueeAdditive;
+        Vector2 _partsMarqueeStart;
+        Vector2 _partsMarqueeCurrent;
         string _partsDragSlotId;
         // 0 = unset, 1 = horizontal (X), 2 = vertical (Y). Sticky for the current drag.
         int _partsDragShiftAxis;
@@ -91,6 +107,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         float4x4 _partsDragParentToRoot;
         bool _partsDragHasParent;
         SpritePartsAuthoringOps.PoseEdit _partsDragStartPose;
+        readonly List<PartsGroupMoveMember> _partsGroupMoveMembers = new();
+        readonly Dictionary<string, SpritePartsAuthoringOps.PoseEdit> _partsGroupTempPoses =
+            new(StringComparer.Ordinal);
         ColliderHandleKind _partsTransformHandle;
         int _partsDragUndoGroup = -1;
         int _partsCanvasHotControl;
@@ -218,47 +237,72 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawPartsStudioTabToggle(Rect toolbarRect)
         {
+            _ = toolbarRect;
             float tabX = 460f;
-            var clipsRect = new Rect(tabX, 10f, 68f, 28f);
-            var partsRect = new Rect(tabX + 72f, 10f, 64f, 28f);
+            var staticRect = new Rect(tabX, 10f, 64f, 28f);
+            var clipsRect = new Rect(tabX + 68f, 10f, 68f, 28f);
+            var partsRect = new Rect(tabX + 140f, 10f, 64f, 28f);
             var clipsStyle = _studioTab == StudioTab.Clips ? _primaryStyle : _transportStyle;
             var partsStyle = _studioTab == StudioTab.Parts ? _primaryStyle : _transportStyle;
+            var staticStyle = _studioTab == StudioTab.Static ? _primaryStyle : _transportStyle;
+            if (GUI.Button(staticRect, new GUIContent("Static", "One still image or sheet cell. No animation clips."), staticStyle))
+                SwitchStudioTab(StudioTab.Static);
             if (GUI.Button(clipsRect, new GUIContent("Frames", "Frame flipbook authoring (frame clips)."), clipsStyle))
-            {
-                if (_studioTab != StudioTab.Clips && TryResolveTempPoseForSwitch())
-                {
-                    ClearImportPreview();
-                    RecordWindowUndo("Switch to Frames tab");
-                    SwapWorkspaceCameraState(toParts: false);
-                    StashPartsSelection();
-                    _studioTab = StudioTab.Clips;
-                    _partsPlaying = false;
-                    RestoreFramesSelection();
-                }
-            }
+                SwitchStudioTab(StudioTab.Clips);
             if (GUI.Button(partsRect, new GUIContent("Parts", "Cutout Parts rig / animate / skins."), partsStyle))
-            {
-                if (_studioTab != StudioTab.Parts && TryResolveTempPoseForSwitch())
-                {
-                    ClearImportPreview();
-                    RecordWindowUndo("Switch to Parts tab");
-                    StashFramesSelection();
-                    SwapWorkspaceCameraState(toParts: true);
-                    _studioTab = StudioTab.Parts;
-                    _playing = false;
-                    RestorePartsSelectionById();
-                    EnsurePartsSession();
-                }
-            }
+                SwitchStudioTab(StudioTab.Parts);
 
-            // Runtime badge: the Frames/Parts buttons above only change the editor
-            // workspace. The profile's runtime mode is separate and explicit.
-            bool runtimeParts = _profile != null && _profile.AnimKind == SpriteAnimKind.Parts;
-            var badgeRect = new Rect(tabX + 142f, 15f, 120f, 18f);
+            // Runtime badge: the Frames/Parts/Static buttons above only change the
+            // editor workspace. The profile's runtime mode is separate and explicit.
+            var badgeRect = new Rect(tabX + 210f, 15f, 128f, 18f);
             GUI.Label(badgeRect, new GUIContent(
-                runtimeParts ? "Runtime: Parts" : "Runtime: Frames",
-                "Runtime playback mode stored on the profile. Switch it with 'Use Parts for Character' / 'Use Frames for Character' in the inactive workspace banner; switching workspaces never changes it."),
+                RuntimeKindBadgeLabel(_profile != null ? _profile.AnimKind : SpriteAnimKind.Frame),
+                "Runtime playback mode stored on the profile. Switch it with 'Use ... for Character' in the inactive workspace banner; switching workspaces never changes it."),
                 _mutedStyle);
+        }
+
+        static string RuntimeKindBadgeLabel(SpriteAnimKind kind)
+            => kind switch
+            {
+                SpriteAnimKind.Parts => "Runtime: Parts",
+                SpriteAnimKind.Static => "Runtime: Static",
+                _ => "Runtime: Frames",
+            };
+
+        static string StudioTabUndoLabel(StudioTab tab)
+            => tab switch
+            {
+                StudioTab.Parts => "Switch to Parts tab",
+                StudioTab.Static => "Switch to Static tab",
+                _ => "Switch to Frames tab",
+            };
+
+        void SwitchStudioTab(StudioTab next)
+        {
+            if (_studioTab == next || !TryResolveTempPoseForSwitch())
+                return;
+            ClearImportPreview();
+            RecordWindowUndo(StudioTabUndoLabel(next));
+            bool wasParts = _studioTab == StudioTab.Parts;
+            bool goingParts = next == StudioTab.Parts;
+            if (_studioTab == StudioTab.Clips)
+                StashFramesSelection();
+            if (_studioTab == StudioTab.Parts)
+                StashPartsSelection();
+            if (wasParts != goingParts)
+                SwapWorkspaceCameraState(toParts: goingParts);
+            _studioTab = next;
+            _playing = false;
+            _partsPlaying = false;
+            if (next == StudioTab.Clips)
+                RestoreFramesSelection();
+            else if (next == StudioTab.Parts)
+            {
+                RestorePartsSelectionById();
+                EnsurePartsSession();
+            }
+            else
+                EnsureStaticSession();
         }
 
         /// <summary>Leaving Frames: remember clip index + frame for restore.</summary>
@@ -392,9 +436,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
             SaveDirty();
-            _status = kind == SpriteAnimKind.Parts
-                ? "Runtime mode: Parts (frame clips kept, not baked)"
-                : "Runtime mode: Frames (Parts data kept, not baked)";
+            _status = kind switch
+            {
+                SpriteAnimKind.Parts => "Runtime mode: Parts (frame clips kept, not baked)",
+                SpriteAnimKind.Static => "Runtime mode: Static (one cell, clips and Parts kept)",
+                _ => "Runtime mode: Frames (Parts data kept, not baked)",
+            };
             Repaint();
         }
 
@@ -503,8 +550,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 bool hasPartsData = (_profile.PartsSlots?.Count ?? 0) > 0 ||
                                     (_profile.PartsClips?.Count ?? 0) > 0 ||
                                     (_profile.PartsAppearances?.Count ?? 0) > 0;
+                string runtimeName = _profile.AnimKind == SpriteAnimKind.Static ? "Static" : "Frames";
                 EditorGUILayout.HelpBox(
-                    "Preview only. Character currently uses Frames. Parts edits here are saved with the profile but do not bake until the runtime mode changes.",
+                    $"Preview only. Character currently uses {runtimeName}. Parts edits here are saved with the profile but do not bake until the runtime mode changes.",
                     MessageType.Info);
                 if (hasPartsData)
                 {
@@ -577,8 +625,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_profile.AnimKind != SpriteAnimKind.Parts)
             {
+                string runtimeName = _profile.AnimKind == SpriteAnimKind.Static ? "Static" : "Frames";
                 EditorGUILayout.HelpBox(
-                    "Preview only. Character currently uses Frames. Use 'Use Parts for Character' in the left panel to activate this rig.",
+                    $"Preview only. Character currently uses {runtimeName}. Use 'Use Parts for Character' in the left panel to activate this rig.",
                     MessageType.None);
             }
 
@@ -630,7 +679,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 bool partLocked = slot.EditorLocked ||
                     SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId);
 
-                // Transform first — most edited while posing.
+                // Transform first - most edited while posing.
                 GUILayout.Space(6f);
                 DrawPartsTransformInspector(slot, partLocked);
 
@@ -747,7 +796,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             string modeHint = isRig
                 ? "Rest pose (shared by every clip)"
                 : (_partsPlaying
-                    ? "Playing — transform fields locked (avoids baking keys while scrubbing)"
+                    ? "Playing - transform fields locked (avoids baking keys while scrubbing)"
                     : (_partsAutoKey
                         ? "Clip pose at playhead (Auto Key ON)"
                         : "Clip pose at playhead (Auto Key OFF = temp until Key Pose)"));
@@ -923,7 +972,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUILayout.EndHorizontal();
             }
 
-            // Pivot is art registration on the joint — shown here with TRS for one-stop editing.
+            // Pivot is art registration on the joint - shown here with TRS for one-stop editing.
             using (new EditorGUI.DisabledScope(partLocked))
                 DrawPartsAppearancePivotInspector(slot);
 
@@ -1119,6 +1168,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             int cellCount = Mathf.Max(1, _partsArtColumns * _partsArtRows);
             _partsArtCell = Mathf.Clamp(EditorGUILayout.IntField("Cell (0 = first)", _partsArtCell), 0, cellCount - 1);
             bool changed = EditorGUI.EndChangeCheck();
+
+            // Pixels Per Unit under Cell; drives pose-canvas / bake size when LogicalWorldSize is zero.
+            if (!string.IsNullOrEmpty(slot.DefaultAppearanceId))
+                DrawPartsAppearancePixelsPerUnit(slot.DefaultAppearanceId);
 
             if (nextTex != null)
             {
@@ -1523,7 +1576,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             GUILayout.Space(6f);
             if (GUILayout.Button(new GUIContent("Apply Outfit...",
-                    "Map a source skin/outfit onto this profile by semantic role (Body/Head/Weapon/Offhand). Appearance binding only — not motion retargeting."),
+                    "Map a source skin/outfit onto this profile by semantic role (Body/Head/Weapon/Offhand). Appearance binding only - not motion retargeting."),
                 GUILayout.Height(22f)))
             {
                 var anchor = GUILayoutUtility.GetLastRect();
@@ -1542,21 +1595,25 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.BeginChangeCheck();
             float next = Mathf.Max(SpriteSheetProfile.MinPixelsPerUnit,
                 EditorGUILayout.FloatField(
-                    new GUIContent("Pixels / Unit",
-                        "Size of the selected part in world units. Higher values draw it smaller; lower values draw it larger. Shared by appearances using this sheet."),
+                    new GUIContent("Pixels Per Unit",
+                        "World size of the selected cell = cell pixels / PPU. Higher = smaller on canvas and in scene. Shared by appearances on this sheet. Save Profile to rebake scene characters."),
                     current));
             if (EditorGUI.EndChangeCheck() && !Mathf.Approximately(next, current))
             {
                 RecordPartsUndo("Set Parts Pixels Per Unit");
                 sheet.PixelsPerUnit = next;
+                // Explicit world size overrides PPU; clear so the new PPU drives canvas / bake size.
+                if (appearance.LogicalWorldSize != Vector2.zero)
+                    appearance.LogicalWorldSize = Vector2.zero;
                 SaveDirty();
+                Repaint();
                 _status = $"Parts sheet '{sheet.Name}' set to {next:g} PPU. Save Profile to update the scene.";
             }
 
             if (appearance.LogicalWorldSize != Vector2.zero)
             {
                 EditorGUILayout.HelpBox(
-                    "This appearance has an explicit World Size, so Pixels / Unit does not control its size.",
+                    "This appearance has an explicit World Size, so Pixels Per Unit does not control its size.",
                     MessageType.Info);
             }
             else if (SpriteSheetProfile.TryGetActiveCellPixels(
@@ -1564,7 +1621,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 EditorGUILayout.LabelField(
                     "Scene Size",
-                    $"{cellW / next:0.###} × {cellH / next:0.###} units");
+                    $"{cellW / next:0.###} x {cellH / next:0.###} units");
             }
         }
 
@@ -1629,6 +1686,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GUI.HorizontalSlider(new Rect(ox, oy + 4f, 40f, 14f), _partsOnionAfter, 0f, 3f)), 0, 3);
             }
 
+            ox += 56f;
+            DrawPartsRootBoundsToolbar(ox, oy);
+
             DrawPartsCanvasZoomToolbar(rect);
 
             var canvas = new Rect(rect.x + 10f, rect.y + 84f, rect.width - 20f, rect.height - 96f);
@@ -1641,7 +1701,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             EditorGUI.DrawRect(canvas, new Color(0.07f, 0.08f, 0.1f));
             // Input in window space; draw clipped so art cannot spill into the timeline.
-            if (!overlay.Contains(Event.current.mousePosition) || _partsDragActive)
+            if (_partsMarqueeActive || _partsDragActive ||
+                !overlay.Contains(Event.current.mousePosition))
                 HandlePartsCanvasInput(canvas, partsCanvasControlId);
             GUI.BeginClip(canvas);
             try
@@ -1653,6 +1714,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUI.EndClip();
             }
 
+            DrawPartsMarquee(canvas);
             DrawPartsCanvasVisibilityOverlay(overlay);
         }
 
@@ -1660,7 +1722,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             const float pad = 8f;
             const float h = 24f;
-            const float w = 188f;
+            const float w = 244f;
             return new Rect(canvas.xMax - w - pad, canvas.yMax - h - pad, w, h);
         }
 
@@ -1678,6 +1740,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 "Art", "Show or hide the current pose sprites.");
             DrawPartsVisibilityToggle(ref x, y, 58f, ref _partsShowDebug,
                 "Debug", "Show or hide part names, onion labels, and transform gizmos.");
+            DrawPartsVisibilityToggle(ref x, y, 48f, ref _partsShowRoot,
+                "Root", "Show the character origin square (same pivot as the scene GameObject).");
         }
 
         void DrawPartsToolToggle(ref float x, float y, string label, PartsCanvasTool tool)
@@ -1797,9 +1861,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
 
             _partsDragActive = false;
+            _partsMarqueeActive = false;
             _partsDragSlotId = null;
             _partsDragShiftAxis = 0;
             _partsCanvasHotControl = 0;
+            _partsGroupMoveMembers.Clear();
+            _partsGroupTempPoses.Clear();
             if (GUIUtility.hotControl != 0)
                 GUIUtility.hotControl = 0;
             // Auto Key already wrote keys during drag; drop the live overlay.
@@ -1808,13 +1875,44 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         void CenterSelectedPartsSlot()
+            => AlignSelectedPartsToRoot(SpritePartsAlignPivot.Center);
+
+        void CenterSelectedPartsOnRoot()
+            => AlignSelectedPartsToRoot(SpritePartsAlignPivot.Center);
+
+        void CenterSelectedPartsWithBounds()
+            => AlignSelectedPartsToBounds(SpritePartsAlignPivot.Center);
+
+        enum PartsAlignTarget : byte
         {
-            var slot = CurrentPartsSlot;
-            if (slot == null) return;
-            if (slot.EditorLocked ||
-                SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId))
+            Bounds = 0,
+            Root = 1,
+        }
+
+        void AlignSelectedPartsToBounds(object pivotObj)
+        {
+            if (pivotObj is SpritePartsAlignPivot pivot)
+                AlignSelectedParts(pivot, PartsAlignTarget.Bounds);
+        }
+
+        void AlignSelectedPartsToRoot(object pivotObj)
+        {
+            if (pivotObj is SpritePartsAlignPivot pivot)
+                AlignSelectedParts(pivot, PartsAlignTarget.Root);
+        }
+
+        void AlignSelectedPartsToBounds(SpritePartsAlignPivot pivot)
+            => AlignSelectedParts(pivot, PartsAlignTarget.Bounds);
+
+        void AlignSelectedPartsToRoot(SpritePartsAlignPivot pivot)
+            => AlignSelectedParts(pivot, PartsAlignTarget.Root);
+
+        void AlignSelectedParts(SpritePartsAlignPivot pivot, PartsAlignTarget target)
+        {
+            EnsurePartsTreeSelectionSynced();
+            if (_partsSelectedSlotIds.Count == 0)
             {
-                _status = "Part is locked.";
+                _status = "Select parts first (drag a box, or click the group).";
                 return;
             }
             if (_partsMode == SpritePartsStudioMode.Skins)
@@ -1822,19 +1920,257 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _status = "Transform tools off in Skins.";
                 return;
             }
-            var pose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
-            if (pose.Position == Vector2.zero)
+
+            _partsAlignPivot = pivot;
+            int clipIndex = PartsEvaluationClipIndex();
+            if (!SpritePartsOnion.TrySampleCharacter(
+                    _profile, clipIndex, _partsPreviewTime, Allocator.Temp,
+                    out var blob, out var poses, out var matrices, out _))
+                return;
+
+            try
             {
-                _status = "Already centered.";
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
+                if (!TryEncapsulateSelectedWorldAabb(
+                        ref blob.Value, matrices, clipIndex, _partsPreviewTime,
+                        out var selMin, out var selMax) &&
+                    !TryEncapsulateSelectedJointAabb(ref blob.Value, matrices, out selMin, out selMax))
+                {
+                    _status = "Could not measure the selection.";
+                    return;
+                }
+                if (!TryGetAlignTargetWorldAabb(ref blob.Value, matrices, clipIndex, target,
+                        out var bMin, out var bMax))
+                {
+                    _status = target == PartsAlignTarget.Root
+                        ? "Root origin is missing."
+                        : "No Bounds to align to. Turn Root on and Fit Pose, or save Bounds size.";
+                    return;
+                }
+
+                float2 from = SpritePartsAuthoringOps.PivotOnAabb(selMin, selMax, pivot);
+                float2 to = SpritePartsAuthoringOps.PivotOnAabb(bMin, bMax, pivot);
+                float2 delta = to - from;
+                if (math.lengthsq(delta) < 1e-8f)
+                {
+                    _status = "Selection is already aligned to " +
+                              (target == PartsAlignTarget.Root ? "Root" : "Bounds") +
+                              " (" + SpritePartsAuthoringOps.AlignPivotLabel(pivot) + ").";
+                    return;
+                }
+
+                string op = target == PartsAlignTarget.Root
+                    ? "Center Selection On Root " + SpritePartsAuthoringOps.AlignPivotLabel(pivot)
+                    : "Align Selection To Bounds " + SpritePartsAuthoringOps.AlignPivotLabel(pivot);
+                BeginPartsDragUndo(op);
+                int moved = OffsetSelectedPartsByWorldDelta(ref blob.Value, matrices, delta);
+                _partsHasTempPose = false;
+                _partsGroupTempPoses.Clear();
+                EndPartsDragUndo();
+                SaveDirty();
+                _status = moved > 0
+                    ? "Aligned " + moved + " part(s) to " +
+                      (target == PartsAlignTarget.Root ? "Root" : "Bounds") + " " +
+                      SpritePartsAuthoringOps.AlignPivotLabel(pivot) +
+                      " (rest + all clip keys)."
+                    : "No unlocked parts to align.";
+                Repaint();
+            }
+            finally
+            {
+                SpritePartsOnion.DisposeSample(blob, poses, matrices);
+            }
+        }
+
+        int OffsetSelectedPartsByWorldDelta(
+            ref SpritePartsSetBlob set,
+            NativeArray<float4x4> matrices,
+            float2 delta)
+        {
+            int moved = 0;
+            foreach (var id in _partsSelectedSlotIds)
+            {
+                var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+                if (slot == null || slot.EditorLocked ||
+                    SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, id))
+                    continue;
+                int idx = BlobSlotIndex(ref set, id);
+                float2 localDelta = delta;
+                if (idx >= 0 && idx < set.Slots.Length)
+                {
+                    int parent = set.Slots[idx].ParentSlotIndex;
+                    if (parent >= 0 && parent < matrices.Length)
+                    {
+                        float3x3 rs = new float3x3(
+                            matrices[parent].c0.xyz,
+                            matrices[parent].c1.xyz,
+                            matrices[parent].c2.xyz);
+                        localDelta = math.mul(math.inverse(rs), new float3(delta.x, delta.y, 0f)).xy;
+                    }
+                }
+                int wrote = SpritePartsAuthoringOps.OffsetSlotLocalPosition(
+                    _profile, id, new Vector2(localDelta.x, localDelta.y),
+                    includeRest: true, clipIndex: -1);
+                if (wrote > 0)
+                    moved++;
+            }
+            return moved;
+        }
+
+        bool TryGetAlignTargetWorldAabb(
+            ref SpritePartsSetBlob set,
+            NativeArray<float4x4> matrices,
+            int clipIndex,
+            PartsAlignTarget target,
+            out float2 min,
+            out float2 max)
+        {
+            if (target == PartsAlignTarget.Root)
+            {
+                min = new float2(-0.5f, -0.5f);
+                max = new float2(0.5f, 0.5f);
+                return true;
+            }
+            if (SpritePartsAuthoringOps.HasStoredRootBounds(_profile))
+            {
+                float2 center = new float2(_profile.PartsRootBoundsCenter.x, _profile.PartsRootBoundsCenter.y);
+                float2 half = new float2(_profile.PartsRootBoundsSize.x, _profile.PartsRootBoundsSize.y) * 0.5f;
+                min = center - half;
+                max = center + half;
+                return true;
+            }
+            if (SpritePartsAuthoringOps.TryEncapsulateWorldAabb(
+                    _profile, _partsSkinPreviewOverrides, ref set, matrices,
+                    clipIndex, _partsPreviewTime, out min, out max))
+                return true;
+            min = new float2(-0.5f, -0.5f);
+            max = new float2(0.5f, 0.5f);
+            return true;
+        }
+
+        bool TryEncapsulateSelectedJointAabb(
+            ref SpritePartsSetBlob set,
+            NativeArray<float4x4> matrices,
+            out float2 min,
+            out float2 max)
+        {
+            min = new float2(float.PositiveInfinity, float.PositiveInfinity);
+            max = new float2(float.NegativeInfinity, float.NegativeInfinity);
+            bool any = false;
+            int n = math.min(set.Slots.Length, matrices.Length);
+            for (int i = 0; i < n; i++)
+            {
+                string id = SpritePartIdUtility.Canonical(set.Slots[i].SlotId.ToString());
+                if (!_partsSelectedSlotIds.Contains(id))
+                    continue;
+                float2 p = matrices[i].c3.xy;
+                min = math.min(min, p);
+                max = math.max(max, p);
+                any = true;
+            }
+            if (!any || !math.all(math.isfinite(min)) || !math.all(math.isfinite(max)))
+                return false;
+            if (math.lengthsq(max - min) < 1e-8f)
+            {
+                min -= new float2(0.01f, 0.01f);
+                max += new float2(0.01f, 0.01f);
+            }
+            return true;
+        }
+
+        void PropagatePlayheadOffsetToAllKeys()
+        {
+            EnsurePartsTreeSelectionSynced();
+            if (_partsSelectedSlotIds.Count == 0)
+            {
+                _status = "Select parts first (drag a box, or Shift-click).";
                 return;
             }
-            BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
-                ? "Center Parts Rest" : "Center Parts Key");
-            pose.Position = Vector2.zero;
-            ApplyPartsPoseEdit(slot.SlotId, pose);
+            if (_partsMode == SpritePartsStudioMode.Skins)
+            {
+                _status = "Transform tools off in Skins.";
+                return;
+            }
+
+            var clip = CurrentPartsClip;
+            int clipIndex = clip != null ? _partsSelectedClip : -1;
+            BeginPartsDragUndo("Sync Other Keys With Playhead Offset");
+            int parts = 0;
+            int keys = 0;
+            foreach (var id in _partsSelectedSlotIds)
+            {
+                var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+                if (slot == null || slot.EditorLocked ||
+                    SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, id))
+                    continue;
+                var now = SampleLocalPoseForSlot(id, _partsPreviewTime);
+                var track = clip != null
+                    ? SpritePartsAuthoringOps.FindTrack(clip, id, SpritePartsTrackKind.Pose)
+                    : null;
+                Vector2 oldPos = SpritePartsAuthoringOps.EvaluateSlotLocalPosition(
+                    slot, track, _partsPreviewTime, _partsPreviewTime);
+                Vector2 delta = now.Position - oldPos;
+                if (delta.sqrMagnitude < 1e-8f)
+                    continue;
+                keys += SpritePartsAuthoringOps.OffsetSlotLocalPosition(
+                    _profile, id, delta, includeRest: true, clipIndex: clipIndex,
+                    skipTime: _partsPreviewTime);
+                parts++;
+            }
+            _partsHasTempPose = false;
             EndPartsDragUndo();
-            _status = "Centered " + (slot.Name ?? slot.SlotId);
+            SaveDirty();
+            _status = parts > 0
+                ? $"Synced {keys} other key(s) on {parts} part(s) to the playhead offset."
+                : "Playhead already matches the other keys.";
             Repaint();
+        }
+
+        bool TryEncapsulateSelectedWorldAabb(
+            ref SpritePartsSetBlob set,
+            NativeArray<float4x4> matrices,
+            int clipIndex,
+            float sampleTime,
+            out float2 min,
+            out float2 max)
+        {
+            min = new float2(float.PositiveInfinity, float.PositiveInfinity);
+            max = new float2(float.NegativeInfinity, float.NegativeInfinity);
+            bool any = false;
+            int n = math.min(set.Slots.Length, matrices.Length);
+            for (int i = 0; i < n; i++)
+            {
+                string id = SpritePartIdUtility.Canonical(set.Slots[i].SlotId.ToString());
+                if (!_partsSelectedSlotIds.Contains(id))
+                    continue;
+                if (SpritePartsAuthoringOps.SlotOrAncestorHidden(_profile, id))
+                    continue;
+                var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+                var app = SpritePartsAuthoringOps.FindAppearance(_profile,
+                    SpritePartsAuthoringOps.ResolvePreviewAppearanceId(
+                        _profile, slot, clipIndex, sampleTime, _partsSkinPreviewOverrides));
+                if (app == null ||
+                    !SpritePartsGeometry.TryResolve(_profile, app, false, out var geo, out _))
+                    continue;
+                float4x4 m = matrices[i];
+                EncapsulateSelectedCorner(ref min, ref max, m, geo, new float2(-0.5f, -0.5f));
+                EncapsulateSelectedCorner(ref min, ref max, m, geo, new float2(0.5f, -0.5f));
+                EncapsulateSelectedCorner(ref min, ref max, m, geo, new float2(0.5f, 0.5f));
+                EncapsulateSelectedCorner(ref min, ref max, m, geo, new float2(-0.5f, 0.5f));
+                any = true;
+            }
+
+            return any && math.all(math.isfinite(min)) && math.all(math.isfinite(max));
+        }
+
+        static void EncapsulateSelectedCorner(
+            ref float2 min, ref float2 max, float4x4 matrix,
+            SpritePartsGeometry.Resolved geo, float2 quad)
+        {
+            float2 local = SpritePartsGeometry.VisualPoint(quad, geo.Pivot, geo.LogicalWorldSize);
+            float4 world = math.mul(matrix, new float4(local.x, local.y, 0f, 1f));
+            min = math.min(min, world.xy);
+            max = math.max(max, world.xy);
         }
 
         void ShowPartsCanvasContextMenu()
@@ -1843,7 +2179,23 @@ namespace InvertLab.Sprites.DOTS.Editor
             var menu = new GenericMenu();
             if (slot == null)
             {
-                menu.AddDisabledItem(new GUIContent("Center (no selection)"));
+                if (_partsSelectedSlotIds.Count == 0)
+                    menu.AddDisabledItem(new GUIContent("Center Selection On Root (no selection)"));
+                else
+                    menu.AddItem(new GUIContent("Center Selection On Root"), false,
+                        CenterSelectedPartsOnRoot);
+                if (_partsSelectedSlotIds.Count == 0)
+                    menu.AddDisabledItem(new GUIContent("Center Selection With Bounds (no selection)"));
+                else
+                    menu.AddItem(new GUIContent("Center Selection With Bounds"), false,
+                        CenterSelectedPartsWithBounds);
+                if (_partsSelectedSlotIds.Count == 0)
+                    menu.AddDisabledItem(new GUIContent("Sync Other Keys With Playhead Offset (no selection)"));
+                else
+                    menu.AddItem(new GUIContent("Sync Other Keys With Playhead Offset"), false,
+                        PropagatePlayheadOffsetToAllKeys);
+                AddPartsAlignToBoundsMenuItems(menu);
+                AddPartsGroupMenuItems(menu, null);
                 menu.ShowAsContext();
                 return;
             }
@@ -1851,9 +2203,21 @@ namespace InvertLab.Sprites.DOTS.Editor
                 SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId);
             string sid = SpritePartIdUtility.Canonical(slot.SlotId);
             if (_partsMode == SpritePartsStudioMode.Skins || locked)
-                menu.AddDisabledItem(new GUIContent("Center"));
+                menu.AddDisabledItem(new GUIContent("Center Selection On Root"));
             else
-                menu.AddItem(new GUIContent("Center"), false, CenterSelectedPartsSlot);
+                menu.AddItem(new GUIContent("Center Selection On Root"), false, CenterSelectedPartsOnRoot);
+            if (_partsMode == SpritePartsStudioMode.Skins)
+                menu.AddDisabledItem(new GUIContent("Center Selection With Bounds"));
+            else
+                menu.AddItem(new GUIContent("Center Selection With Bounds"), false,
+                    CenterSelectedPartsWithBounds);
+            if (_partsMode == SpritePartsStudioMode.Skins)
+                menu.AddDisabledItem(new GUIContent("Sync Other Keys With Playhead Offset"));
+            else
+                menu.AddItem(new GUIContent("Sync Other Keys With Playhead Offset"), false,
+                    PropagatePlayheadOffsetToAllKeys);
+            AddPartsAlignToBoundsMenuItems(menu);
+            AddPartsGroupMenuItems(menu, slot);
             if (!locked)
             {
                 menu.AddItem(new GUIContent("Duplicate"), false, () => DuplicatePartsSlot(sid, false));
@@ -1904,19 +2268,36 @@ namespace InvertLab.Sprites.DOTS.Editor
             NativeArray<SpritePartsSampler.Pose> localPoses,
             NativeArray<float4x4> matrices)
         {
-            if (!_partsHasTempPose || string.IsNullOrEmpty(_partsTempSlotId))
-                return;
             if (!localPoses.IsCreated || !matrices.IsCreated)
                 return;
-            int idx = BlobSlotIndex(ref set, _partsTempSlotId);
-            if (idx < 0 || idx >= localPoses.Length || idx >= matrices.Length)
-                return;
+            bool any = false;
+            if (_partsGroupTempPoses.Count > 0)
+            {
+                foreach (var kv in _partsGroupTempPoses)
+                    any |= ApplyOneTempPose(ref set, localPoses, kv.Key, kv.Value);
+            }
+            if (_partsHasTempPose && !string.IsNullOrEmpty(_partsTempSlotId) &&
+                !_partsGroupTempPoses.ContainsKey(SpritePartIdUtility.Canonical(_partsTempSlotId)))
+                any |= ApplyOneTempPose(ref set, localPoses, _partsTempSlotId, _partsTempPose);
+            if (any)
+                SpritePartsHierarchy.ComposeLocalToRoot(ref set, localPoses, matrices);
+        }
+
+        static bool ApplyOneTempPose(
+            ref SpritePartsSetBlob set,
+            NativeArray<SpritePartsSampler.Pose> localPoses,
+            string slotId,
+            SpritePartsAuthoringOps.PoseEdit pose)
+        {
+            int idx = BlobSlotIndex(ref set, slotId);
+            if (idx < 0 || idx >= localPoses.Length)
+                return false;
             var p = localPoses[idx];
-            p.Position = new float2(_partsTempPose.Position.x, _partsTempPose.Position.y);
-            p.Rotation = _partsTempPose.Rotation;
-            p.Scale = new float2(_partsTempPose.Scale.x, _partsTempPose.Scale.y);
+            p.Position = new float2(pose.Position.x, pose.Position.y);
+            p.Rotation = pose.Rotation;
+            p.Scale = new float2(pose.Scale.x, pose.Scale.y);
             localPoses[idx] = p;
-            SpritePartsHierarchy.ComposeLocalToRoot(ref set, localPoses, matrices);
+            return true;
         }
 
         void DrawPartsCanvasContents(Rect canvas)
@@ -1957,6 +2338,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     // Read-only preview: no onion (ghosts track the selected
                     // profile clip), no handles, nothing pickable.
+                    DrawPartsRootGuide(canvas, ref blob.Value, matrices, clipIndex, time);
                     DrawPartsPoseQuads(canvas, ref blob.Value, poses, matrices,
                         new Color(0.85f, 0.95f, 1f, 1f), pickable: false,
                         sampleTime: time, drawArt: true);
@@ -2003,15 +2385,31 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
 
                 ApplyTempPoseToSample(ref blob.Value, poses, matrices);
+                if (_partsShowRoot)
+                    DrawPartsRootGuide(canvas, ref blob.Value, matrices, clipIndex, time);
                 DrawPartsPoseQuads(canvas, ref blob.Value, poses, matrices, Color.white,
                     pickable: true, sampleTime: time, drawArt: _partsShowArt);
                 if (_partsShowDebug)
                     DrawPartsTransformGizmo(canvas, ref blob.Value, poses, matrices);
+                DrawPartsSelectionAlignWidget(canvas, ref blob.Value, matrices, clipIndex, time);
+                DrawPartsIsolateBanner(canvas);
             }
             finally
             {
                 SpritePartsOnion.DisposeSample(blob, poses, matrices);
             }
+        }
+
+        void DrawPartsIsolateBanner(Rect canvas)
+        {
+            if (!IsPartsIsolating())
+                return;
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, _partsIsolatedSlotId);
+            string name = slot?.Name ?? _partsIsolatedSlotId;
+            var banner = new Rect(canvas.x + 8f, canvas.y + 8f, Mathf.Min(canvas.width - 16f, 360f), 22f);
+            EditorGUI.DrawRect(banner, new Color(0.12f, 0.18f, 0.28f, 0.92f));
+            GUI.Label(new Rect(banner.x + 6f, banner.y + 3f, banner.width - 12f, 16f),
+                "Isolating " + name + "  (Esc returns to group)", _mutedStyle);
         }
 
         void DrawOnionBadge(Rect canvas, NativeArray<float4x4> matrices, SpritePartsOnion.GhostSample ghost)
@@ -2024,6 +2422,284 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ? new Color(0.2f, 0.35f, 0.7f, 0.85f)
                 : new Color(0.7f, 0.4f, 0.15f, 0.85f));
             GUI.Label(r, label, _mutedStyle);
+        }
+
+        void DrawPartsRootGuide(Rect canvas,
+            ref SpritePartsSetBlob set,
+            NativeArray<float4x4> matrices,
+            int clipIndex,
+            float sampleTime)
+        {
+            if (!_partsShowRoot)
+                return;
+
+            Vector2 o = WorldToCanvas(canvas, float2.zero);
+            float unit = 64f * Mathf.Max(0.001f, _previewZoom);
+            var cyan = new Color(0.35f, 0.85f, 0.9f, 0.95f);
+            var xCol = new Color(0.85f, 0.32f, 0.32f, 0.9f);
+            var yCol = new Color(0.32f, 0.82f, 0.42f, 0.9f);
+
+            // Small origin square: the scene GameObject pivot.
+            DrawGuiRectOutline(new Rect(o.x - unit * 0.5f, o.y - unit * 0.5f, unit, unit), cyan, 2f);
+            DrawGuiLine(new Vector2(o.x - unit, o.y), new Vector2(o.x + unit, o.y), xCol, 1f);
+            DrawGuiLine(new Vector2(o.x, o.y - unit), new Vector2(o.x, o.y + unit), yCol, 1f);
+            float d = 5f;
+            EditorGUI.DrawRect(new Rect(o.x - d, o.y - 1f, d * 2f, 2f), cyan);
+            EditorGUI.DrawRect(new Rect(o.x - 1f, o.y - d, 2f, d * 2f), cyan);
+            GUI.Label(new Rect(o.x + 8f, o.y - 20f, 72f, 16f),
+                new GUIContent("Root", "Character origin. Same pivot as the scene GameObject."),
+                _mutedStyle);
+
+            if (!TryGetPartsRootBoundsRect(ref set, matrices, clipIndex, sampleTime,
+                    out float2 center, out float2 size, out bool stored))
+                return;
+
+            Vector2 min = WorldToCanvas(canvas, center - size * 0.5f);
+            Vector2 max = WorldToCanvas(canvas, center + size * 0.5f);
+            var bounds = Rect.MinMaxRect(
+                math.min(min.x, max.x), math.min(min.y, max.y),
+                math.max(min.x, max.x), math.max(min.y, max.y));
+            var boundsColor = stored
+                ? new Color(1f, 0.38f, 0.32f, 0.95f)
+                : new Color(1f, 0.55f, 0.2f, 0.55f);
+            DrawGuiRectOutline(bounds, boundsColor, stored ? 2f : 1f);
+            GUI.Label(new Rect(bounds.x, bounds.y - 16f, 120f, 16f),
+                stored ? "Bounds" : "Bounds (Fit to store)",
+                _mutedStyle);
+        }
+
+        bool TryGetPartsRootBoundsRect(
+            ref SpritePartsSetBlob set,
+            NativeArray<float4x4> matrices,
+            int clipIndex,
+            float sampleTime,
+            out float2 center,
+            out float2 size,
+            out bool stored)
+        {
+            stored = SpritePartsAuthoringOps.HasStoredRootBounds(_profile);
+            if (stored)
+            {
+                center = new float2(_profile.PartsRootBoundsCenter.x, _profile.PartsRootBoundsCenter.y);
+                size = new float2(_profile.PartsRootBoundsSize.x, _profile.PartsRootBoundsSize.y);
+                return true;
+            }
+
+            if (SpritePartsAuthoringOps.TryEncapsulateWorldAabb(
+                    _profile, _partsSkinPreviewOverrides, ref set, matrices,
+                    clipIndex, sampleTime, out var min, out var max))
+            {
+                center = 0.5f * (min + max);
+                size = max - min;
+                return true;
+            }
+
+            center = float2.zero;
+            size = new float2(1f, 1f);
+            return false;
+        }
+
+        void DrawPartsRootBoundsToolbar(float x, float y)
+        {
+            if (!_partsShowRoot || _profile == null)
+                return;
+
+            GUI.Label(new Rect(x, y, 48f, 18f),
+                new GUIContent("Bounds", "Character boundary size in world units. Fit frames the current pose without moving keys."),
+                _mutedStyle);
+            x += 50f;
+            EditorGUI.BeginChangeCheck();
+            float w = EditorGUI.FloatField(new Rect(x, y, 44f, 16f),
+                SpritePartsAuthoringOps.HasStoredRootBounds(_profile)
+                    ? _profile.PartsRootBoundsSize.x
+                    : 0f);
+            x += 48f;
+            float h = EditorGUI.FloatField(new Rect(x, y, 44f, 16f),
+                SpritePartsAuthoringOps.HasStoredRootBounds(_profile)
+                    ? _profile.PartsRootBoundsSize.y
+                    : 0f);
+            if (EditorGUI.EndChangeCheck())
+            {
+                RecordPartsUndo("Set Root Bounds Size");
+                if (!SpritePartsAuthoringOps.HasStoredRootBounds(_profile))
+                    TryFitPartsRootBounds(writeOnly: true);
+                SpritePartsAuthoringOps.SetRootBounds(
+                    _profile,
+                    new float2(_profile.PartsRootBoundsCenter.x, _profile.PartsRootBoundsCenter.y),
+                    new float2(Mathf.Max(0.01f, w), Mathf.Max(0.01f, h)));
+                SaveDirty();
+            }
+
+            x += 50f;
+            if (GUI.Button(new Rect(x, y, 70f, 16f),
+                    new GUIContent("Fit Pose",
+                        "Center and size the bounds around the current pose. Does not change animation keys or rest poses."),
+                    EditorStyles.miniButton))
+                TryFitPartsRootBounds(writeOnly: false);
+        }
+
+        void TryFitPartsRootBounds(bool writeOnly)
+        {
+            if (_profile == null)
+                return;
+            if (!writeOnly)
+                RecordPartsUndo("Fit Root Bounds To Pose");
+            int clipIndex = PartsEvaluationClipIndex();
+            if (!SpritePartsOnion.TrySampleCharacter(
+                    _profile, clipIndex, _partsPreviewTime, Allocator.Temp,
+                    out var blob, out var poses, out var matrices, out _))
+                return;
+            try
+            {
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
+                if (!SpritePartsAuthoringOps.TryEncapsulateWorldAabb(
+                        _profile, _partsSkinPreviewOverrides, ref blob.Value, matrices,
+                        clipIndex, _partsPreviewTime, out var min, out var max))
+                    return;
+                SpritePartsAuthoringOps.FitRootBoundsToAabb(_profile, min, max);
+                if (!writeOnly)
+                {
+                    SaveDirty();
+                    _status = "Root bounds fitted to the current pose. Keys were not changed.";
+                }
+            }
+            finally
+            {
+                SpritePartsOnion.DisposeSample(blob, poses, matrices);
+            }
+        }
+
+        const float PartsAlignPivotHit = 12f;
+
+        void DrawPartsSelectionAlignWidget(
+            Rect canvas,
+            ref SpritePartsSetBlob set,
+            NativeArray<float4x4> matrices,
+            int clipIndex,
+            float sampleTime)
+        {
+            EnsurePartsTreeSelectionSynced();
+            if (_partsSelectedSlotIds.Count < 2)
+                return;
+            if (!TryEncapsulateSelectedWorldAabb(ref set, matrices, clipIndex, sampleTime,
+                    out var selMin, out var selMax))
+                return;
+
+            Vector2 a = WorldToCanvas(canvas, selMin);
+            Vector2 b = WorldToCanvas(canvas, selMax);
+            var box = Rect.MinMaxRect(
+                math.min(a.x, b.x), math.min(a.y, b.y),
+                math.max(a.x, b.x), math.max(a.y, b.y));
+            DrawGuiRectOutline(box, new Color(0.4f, 0.95f, 0.7f, 0.9f), 1f);
+
+            for (int i = 0; i < 9; i++)
+            {
+                var pivot = (SpritePartsAlignPivot)i;
+                Vector2 p = WorldToCanvas(canvas,
+                    SpritePartsAuthoringOps.PivotOnAabb(selMin, selMax, pivot));
+                bool on = pivot == _partsAlignPivot;
+                float s = on ? 8f : 5f;
+                var fill = on
+                    ? new Color(1f, 0.85f, 0.2f, 1f)
+                    : new Color(0.95f, 0.95f, 0.95f, 0.95f);
+                var edge = on
+                    ? new Color(1f, 0.55f, 0.1f, 1f)
+                    : new Color(0.15f, 0.7f, 0.45f, 1f);
+                EditorGUI.DrawRect(new Rect(p.x - s, p.y - s, s * 2f, s * 2f), edge);
+                EditorGUI.DrawRect(new Rect(p.x - s + 1.5f, p.y - s + 1.5f, s * 2f - 3f, s * 2f - 3f), fill);
+            }
+
+            Vector2 active = WorldToCanvas(canvas,
+                SpritePartsAuthoringOps.PivotOnAabb(selMin, selMax, _partsAlignPivot));
+            EditorGUI.DrawRect(new Rect(active.x - 10f, active.y - 1f, 20f, 2f), new Color(1f, 0.8f, 0.15f, 1f));
+            EditorGUI.DrawRect(new Rect(active.x - 1f, active.y - 10f, 2f, 20f), new Color(1f, 0.8f, 0.15f, 1f));
+            GUI.Label(new Rect(box.x, box.yMax + 2f, 280f, 16f),
+                "Pivot " + SpritePartsAuthoringOps.AlignPivotLabel(_partsAlignPivot) +
+                "  (click = Root, Ctrl+click = Bounds)",
+                _mutedStyle);
+        }
+
+        int HitPartsAlignPivot(Rect canvas, Vector2 mouse)
+        {
+            EnsurePartsTreeSelectionSynced();
+            if (_partsSelectedSlotIds.Count < 2)
+                return -1;
+            if (!SpritePartsOnion.TrySampleCharacter(
+                    _profile, PartsEvaluationClipIndex(), _partsPreviewTime, Allocator.Temp,
+                    out var blob, out var poses, out var matrices, out _))
+                return -1;
+            try
+            {
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
+                if (!TryEncapsulateSelectedWorldAabb(
+                        ref blob.Value, matrices, PartsEvaluationClipIndex(), _partsPreviewTime,
+                        out var selMin, out var selMax))
+                    return -1;
+                float best = PartsAlignPivotHit * PartsAlignPivotHit;
+                int hit = -1;
+                for (int i = 0; i < 9; i++)
+                {
+                    Vector2 p = WorldToCanvas(canvas,
+                        SpritePartsAuthoringOps.PivotOnAabb(selMin, selMax, (SpritePartsAlignPivot)i));
+                    float d = (p - mouse).sqrMagnitude;
+                    if (d <= best)
+                    {
+                        best = d;
+                        hit = i;
+                    }
+                }
+                return hit;
+            }
+            finally
+            {
+                SpritePartsOnion.DisposeSample(blob, poses, matrices);
+            }
+        }
+
+        void AddPartsAlignToBoundsMenuItems(GenericMenu menu)
+        {
+            bool can = _partsMode != SpritePartsStudioMode.Skins && _partsSelectedSlotIds.Count > 0;
+            for (int i = 0; i < 9; i++)
+            {
+                var pivot = (SpritePartsAlignPivot)i;
+                string path = "Align To Root/" + SpritePartsAuthoringOps.AlignPivotLabel(pivot);
+                if (!can)
+                    menu.AddDisabledItem(new GUIContent(path));
+                else
+                    menu.AddItem(new GUIContent(path), pivot == _partsAlignPivot,
+                        AlignSelectedPartsToRoot, pivot);
+            }
+            for (int i = 0; i < 9; i++)
+            {
+                var pivot = (SpritePartsAlignPivot)i;
+                string path = "Align To Bounds/" + SpritePartsAuthoringOps.AlignPivotLabel(pivot);
+                if (!can)
+                    menu.AddDisabledItem(new GUIContent(path));
+                else
+                    menu.AddItem(new GUIContent(path), pivot == _partsAlignPivot,
+                        AlignSelectedPartsToBounds, pivot);
+            }
+        }
+
+        static void DrawGuiRectOutline(Rect r, Color color, float thickness)
+        {
+            EditorGUI.DrawRect(new Rect(r.x, r.y, r.width, thickness), color);
+            EditorGUI.DrawRect(new Rect(r.x, r.yMax - thickness, r.width, thickness), color);
+            EditorGUI.DrawRect(new Rect(r.x, r.y, thickness, r.height), color);
+            EditorGUI.DrawRect(new Rect(r.xMax - thickness, r.y, thickness, r.height), color);
+        }
+
+        static void DrawGuiLine(Vector2 a, Vector2 b, Color color, float thickness)
+        {
+            Vector2 d = b - a;
+            float len = d.magnitude;
+            if (len < 0.5f)
+                return;
+            float ang = Vector2.SignedAngle(Vector2.right, d);
+            var prev = GUI.matrix;
+            GUIUtility.RotateAroundPivot(ang, a);
+            EditorGUI.DrawRect(new Rect(a.x, a.y - thickness * 0.5f, len, thickness), color);
+            GUI.matrix = prev;
         }
 
         SpritePartSlotDef SlotDefFromBlob(ref SpritePartsSetBlob set, int slotIndex)
@@ -2124,7 +2800,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     continue;
 
                 // Pose scale signs: Mirror H = Scale.x < 0 (east-west), Mirror V = Scale.y < 0 (north-south).
-                // Use RAW worldDeg from the matrix (same as gizmo/hit). Do not +180 here — that
+                // Use RAW worldDeg from the matrix (same as gizmo/hit). Do not +180 here - that
                 // desynced handles from the sprite and broke Move/Rotate/Scale.
                 float flipSx = 1f;
                 float flipSy = 1f;
@@ -2148,7 +2824,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (drawArt && tex != null && app != null)
                 {
                     // Keep art colors. Selection outline is drawn by the transform gizmo
-                    // (Handles ignore GUI.matrix — drawing here caused a second unrotated box).
+                    // (Handles ignore GUI.matrix - drawing here caused a second unrotated box).
                     DrawPartsSheetCell(tex, sheet, sheet.Columns, sheet.Rows, app.CellIndex, r, tint);
                 }
                 else if (drawArt)
@@ -2161,6 +2837,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                     EditorGUI.DrawRect(r, col);
                 }
                 GUI.matrix = prev;
+
+                if (pickable && IsPartsBlobSlotSelected(ref set, i))
+                {
+                    float guiDeg = -worldDeg;
+                    Vector2 c0 = RotateAround(new Vector2(r.xMin, r.yMin), joint, guiDeg);
+                    Vector2 c1 = RotateAround(new Vector2(r.xMax, r.yMin), joint, guiDeg);
+                    Vector2 c2 = RotateAround(new Vector2(r.xMax, r.yMax), joint, guiDeg);
+                    Vector2 c3 = RotateAround(new Vector2(r.xMin, r.yMax), joint, guiDeg);
+                    var sel = new Color(0.35f, 0.9f, 0.55f, 0.95f);
+                    DrawGuiLine(c0, c1, sel, 2f);
+                    DrawGuiLine(c1, c2, sel, 2f);
+                    DrawGuiLine(c2, c3, sel, 2f);
+                    DrawGuiLine(c3, c0, sel, 2f);
+                }
 
                 if (_partsShowDebug && pickable)
                 {
@@ -2202,10 +2892,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool IsPartsBlobSlotSelected(ref SpritePartsSetBlob set, int blobIndex)
         {
             if (blobIndex < 0 || blobIndex >= set.Slots.Length) return false;
-            var selected = CurrentPartsSlot;
-            if (selected == null) return false;
-            return SpritePartIdUtility.Canonical(set.Slots[blobIndex].SlotId.ToString()) ==
-                   SpritePartIdUtility.Canonical(selected.SlotId);
+            EnsurePartsTreeSelectionSynced();
+            string id = SpritePartIdUtility.Canonical(set.Slots[blobIndex].SlotId.ToString());
+            return _partsSelectedSlotIds.Contains(id);
         }
 
         int SelectedPartsBlobIndex(ref SpritePartsSetBlob set)
@@ -2583,7 +3272,7 @@ Handles.EndGUI();
             if (ImportPreviewActive)
             {
                 // Preview pose is not profile data; never write it anywhere.
-                // Also free hotControl — leaving it stuck blocks Q/W/E and the tree.
+                // Also free hotControl - leaving it stuck blocks Q/W/E and the tree.
                 ReleasePartsCanvasCapture();
                 return;
             }
@@ -2591,7 +3280,7 @@ Handles.EndGUI();
             var evt = Event.current;
             EventType raw = evt.rawType;
 
-            // Missed MouseUp leaves us "dragging" forever. End on a real MouseDown only —
+            // Missed MouseUp leaves us "dragging" forever. End on a real MouseDown only -
             // never Event.rawType alone: during Layout/Repaint rawType can still be MouseDown
             // from the press that STARTED the drag, which immediately killed Move/Rotate auto-key.
             if (evt.type == EventType.MouseDown)
@@ -2630,7 +3319,13 @@ Handles.EndGUI();
 
             if (raw == EventType.KeyDown && evt.keyCode == KeyCode.Escape)
             {
-                ApplyPartsPoseEdit(_partsDragSlotId, _partsDragStartPose);
+                if (_partsGroupMoveMembers.Count > 1)
+                {
+                    _partsGroupTempPoses.Clear();
+                    _partsHasTempPose = false;
+                }
+                else
+                    ApplyPartsPoseEdit(_partsDragSlotId, _partsDragStartPose);
                 EndPartsDragUndo();
                 Undo.PerformUndo();
                 ReleasePartsCanvasCapture();
@@ -2653,6 +3348,8 @@ Handles.EndGUI();
             if (raw == EventType.MouseUp || raw == EventType.MouseLeaveWindow)
             {
                 string moved = _partsDragSlotId ?? "part";
+                if (_partsGroupMoveMembers.Count > 1)
+                    CommitPartsGroupMoveOffsets();
                 EndPartsDragUndo();
                 ReleasePartsCanvasCapture();
                 _status = "Moved " + moved;
@@ -2969,6 +3666,132 @@ Handles.EndGUI();
             return false;
         }
 
+        void BeginPartsMarquee(Rect canvas, Event evt, int controlId)
+        {
+            _partsMarqueeActive = true;
+            _partsMarqueeAdditive = evt.shift || evt.control;
+            _partsMarqueeStart = evt.mousePosition;
+            _partsMarqueeCurrent = evt.mousePosition;
+            _partsCanvasHotControl = controlId;
+            GUIUtility.hotControl = controlId;
+            GUIUtility.keyboardControl = 0;
+            GUI.FocusControl(null);
+            Repaint();
+        }
+
+        bool HandlePartsMarquee(Rect canvas, Event evt, int controlId)
+        {
+            if (!_partsMarqueeActive)
+                return false;
+
+            if (evt.type == EventType.MouseDrag)
+            {
+                _partsMarqueeCurrent = evt.mousePosition;
+                evt.Use();
+                Repaint();
+                return true;
+            }
+
+            if (evt.type == EventType.MouseUp ||
+                (evt.rawType == EventType.MouseUp && GUIUtility.hotControl == controlId))
+            {
+                var box = PartsMarqueeRect();
+                bool tiny = box.width < 4f && box.height < 4f;
+                if (tiny)
+                {
+                    if (IsPartsIsolating())
+                    {
+                        TryExitPartsIsolate();
+                    }
+                    else if (!_partsMarqueeAdditive)
+                    {
+                        ClearPartsSelection();
+                        _status = "Selection cleared.";
+                    }
+                }
+                else
+                {
+                    var hits = CollectPartsSlotIdsInGuiRect(canvas, box);
+                    if (!_partsMarqueeAdditive)
+                        ClearPartsSelection();
+                    for (int i = 0; i < hits.Count; i++)
+                        SelectPartsSlotId(hits[i], true, false);
+                    ExpandMarqueeHitsToGroups();
+                    _status = hits.Count == 0
+                        ? "Marquee: nothing selected."
+                        : $"Marquee selected {_partsSelectedSlotIds.Count} part(s). Right-click to Center Selection With Bounds.";
+                }
+                _partsMarqueeActive = false;
+                if (GUIUtility.hotControl == controlId || GUIUtility.hotControl == _partsCanvasHotControl)
+                    GUIUtility.hotControl = 0;
+                _partsCanvasHotControl = 0;
+                evt.Use();
+                Repaint();
+                return true;
+            }
+
+            return evt.type == EventType.Ignore;
+        }
+
+        static Rect PartsMarqueeRect(Vector2 a, Vector2 b)
+            => Rect.MinMaxRect(math.min(a.x, b.x), math.min(a.y, b.y),
+                math.max(a.x, b.x), math.max(a.y, b.y));
+
+        Rect PartsMarqueeRect()
+            => PartsMarqueeRect(_partsMarqueeStart, _partsMarqueeCurrent);
+
+        void DrawPartsMarquee(Rect canvas)
+        {
+            if (!_partsMarqueeActive)
+                return;
+            var box = PartsMarqueeRect();
+            box = Rect.MinMaxRect(
+                math.max(box.xMin, canvas.xMin), math.max(box.yMin, canvas.yMin),
+                math.min(box.xMax, canvas.xMax), math.min(box.yMax, canvas.yMax));
+            if (box.width < 1f || box.height < 1f)
+                return;
+            EditorGUI.DrawRect(box, new Color(0.25f, 0.7f, 0.95f, 0.12f));
+            DrawGuiRectOutline(box, new Color(0.35f, 0.85f, 1f, 0.95f), 1f);
+        }
+
+        System.Collections.Generic.List<string> CollectPartsSlotIdsInGuiRect(Rect canvas, Rect guiRect)
+        {
+            var hits = new System.Collections.Generic.List<string>();
+            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), _partsPreviewTime,
+                    Allocator.Temp, out var blob, out var poses, out var matrices, out _))
+                return hits;
+            try
+            {
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
+                for (int i = 0; i < blob.Value.Slots.Length; i++)
+                {
+                    string sid = blob.Value.Slots[i].SlotId.ToString();
+                    if (SpritePartsAuthoringOps.SlotOrAncestorHidden(_profile, sid))
+                        continue;
+                    if (!TryGetPartsSlotDrawRect(canvas, ref blob.Value, matrices, i, _partsPreviewTime,
+                            out var r, out var joint, out float worldDeg, out _, out _, poses))
+                        continue;
+                    float guiDeg = -worldDeg;
+                    Vector2 c0 = RotateAround(new Vector2(r.xMin, r.yMin), joint, guiDeg);
+                    Vector2 c1 = RotateAround(new Vector2(r.xMax, r.yMin), joint, guiDeg);
+                    Vector2 c2 = RotateAround(new Vector2(r.xMax, r.yMax), joint, guiDeg);
+                    Vector2 c3 = RotateAround(new Vector2(r.xMin, r.yMax), joint, guiDeg);
+                    var aabb = Rect.MinMaxRect(
+                        math.min(math.min(c0.x, c1.x), math.min(c2.x, c3.x)),
+                        math.min(math.min(c0.y, c1.y), math.min(c2.y, c3.y)),
+                        math.max(math.max(c0.x, c1.x), math.max(c2.x, c3.x)),
+                        math.max(math.max(c0.y, c1.y), math.max(c2.y, c3.y)));
+                    if (aabb.Overlaps(guiRect, true))
+                        hits.Add(sid);
+                }
+            }
+            finally
+            {
+                SpritePartsOnion.DisposeSample(blob, poses, matrices);
+            }
+            return hits;
+        }
+
         void HandlePartsCanvasInput(Rect canvas, int controlId)
         {
             Event evt = Event.current;
@@ -2977,16 +3800,19 @@ Handles.EndGUI();
             if (canvas.Contains(evt.mousePosition) && HandlePartsCanvasHotkeys(canvas, evt))
                 return;
 
-            bool ours = _partsDragActive &&
+            bool ours = (_partsDragActive || _partsMarqueeActive) &&
                         (GUIUtility.hotControl == controlId ||
                          GUIUtility.hotControl == _partsCanvasHotControl ||
                          GUIUtility.hotControl == 0);
 
-            if (!canvas.Contains(evt.mousePosition) && !ours && !_partsDragActive)
+            if (!canvas.Contains(evt.mousePosition) && !ours && !_partsDragActive && !_partsMarqueeActive)
                 return;
 
             // Canvas camera: scroll zooms toward cursor; MMB / Alt+LMB pans.
             if (HandlePartsCanvasNavigation(canvas, evt, controlId))
+                return;
+
+            if (HandlePartsMarquee(canvas, evt, controlId))
                 return;
 
             if (evt.type == EventType.ContextClick && canvas.Contains(evt.mousePosition))
@@ -2996,7 +3822,12 @@ Handles.EndGUI();
                 {
                     string sid = SlotIdFromHit(hitCtx);
                     if (!string.IsNullOrEmpty(sid))
-                        SelectPartsSlotId(sid, false, false);
+                    {
+                        string id = SpritePartIdUtility.Canonical(sid);
+                        EnsurePartsTreeSelectionSynced();
+                        if (!_partsSelectedSlotIds.Contains(id))
+                            SelectPartsCanvasClicked(sid, false, false, false);
+                    }
                 }
                 ShowPartsCanvasContextMenu();
                 evt.Use();
@@ -3034,6 +3865,23 @@ Handles.EndGUI();
                 GUIUtility.keyboardControl = 0;
                 GUI.FocusControl(null);
 
+                int alignHit = HitPartsAlignPivot(canvas, evt.mousePosition);
+                if (alignHit >= 0)
+                {
+                    var pivot = (SpritePartsAlignPivot)alignHit;
+                    _partsAlignPivot = pivot;
+                    if (!evt.shift)
+                    {
+                        if (evt.control || evt.command)
+                            AlignSelectedPartsToBounds(pivot);
+                        else
+                            AlignSelectedPartsToRoot(pivot);
+                    }
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
                 var handle = HitPartsTransformHandle(canvas, evt.mousePosition);
                 string slotId = null;
                 if (handle != ColliderHandleKind.None)
@@ -3045,69 +3893,77 @@ Handles.EndGUI();
                 {
                     int hit = HitTestPartsSlot(canvas, evt.mousePosition);
                     slotId = hit >= 0 ? SlotIdFromHit(hit) : null;
-                    // Empty miss still Body-drags the selection (Move/Rotate/Scale-uniform).
-                    if (string.IsNullOrEmpty(slotId) && CurrentPartsSlot != null)
+                    if (string.IsNullOrEmpty(slotId))
                     {
-                        slotId = CurrentPartsSlot.SlotId;
-                        handle = ColliderHandleKind.Body;
-                    }
-                }
-                if (!string.IsNullOrEmpty(slotId))
-                {
-                    var slot = SpritePartsAuthoringOps.FindSlot(_profile, slotId);
-                    SelectPartsSlotId(slotId, false, false);
-                    bool locked = slot != null && (slot.EditorLocked ||
-                        SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId));
-                    if (locked || slot == null)
-                    {
-                        _status = "Part is locked.";
+                        BeginPartsMarquee(canvas, evt, controlId);
                         evt.Use();
+                        return;
                     }
-                    else
+                    bool isolate = evt.clickCount >= 2;
+                    SelectPartsCanvasClicked(
+                        slotId, evt.shift || evt.control, isolate, evt.alt);
+                    if (isolate)
                     {
-                        if (handle == ColliderHandleKind.None)
-                            handle = ColliderHandleKind.Body;
-                        _partsTransformHandle = handle;
-                        _partsDragActive = true;
-                        _partsDragShiftAxis = 0;
-                        _partsCanvasHotControl = controlId;
-                        GUIUtility.hotControl = controlId;
-                        _partsDragSlotId = slot.SlotId;
-                        _partsDragStartMouse = evt.mousePosition;
-                        _partsDragStartPose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
-                        CapturePartsDragStartTransform(canvas, slot.SlotId);
-                        if (handle == ColliderHandleKind.AxisX || handle == ColliderHandleKind.AxisY)
-                        {
-                            float wd = -_partsDragStartGuiDeg;
-                            _partsDragAxisWorld = handle == ColliderHandleKind.AxisX
-                                ? PartsGizmoAxisX(wd) : PartsGizmoAxisY(wd);
-                        }
-                        else
-                            _partsDragAxisWorld = default;
-                        bool isRotateHandle =
-                            handle == ColliderHandleKind.Rotate ||
-                            handle == ColliderHandleKind.RotateX ||
-                            handle == ColliderHandleKind.RotateY ||
-                            handle == ColliderHandleKind.RotateZ ||
-                            handle == ColliderHandleKind.RotateSphere;
-                        bool isAxisMove =
-                            handle == ColliderHandleKind.AxisX || handle == ColliderHandleKind.AxisY;
-                        bool isFreeMove = handle == ColliderHandleKind.FreeMove;
-                        string op = _partsCanvasTool == PartsCanvasTool.Rotate || isRotateHandle
-                            ? "Rotate Parts"
-                            : (_partsCanvasTool == PartsCanvasTool.Scale && !isAxisMove && !isFreeMove) ||
-                              (handle != ColliderHandleKind.Body && handle != ColliderHandleKind.None &&
-                               !isRotateHandle && !isAxisMove && !isFreeMove)
-                                ? "Scale Parts"
-                                : "Move Parts";
-                        BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
-                            ? op + " Rest"
-                            : op + " Key");
-                        _status = op + ": " + (slot.Name ?? slot.SlotId);
                         evt.Use();
                         Repaint();
+                        return;
                     }
                 }
+
+                if (string.IsNullOrEmpty(slotId))
+                    return;
+                var slot = SpritePartsAuthoringOps.FindSlot(_profile, slotId);
+                bool locked = slot != null && (slot.EditorLocked ||
+                    SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId));
+                if (locked || slot == null)
+                {
+                    _status = "Part is locked.";
+                    evt.Use();
+                    return;
+                }
+
+                if (handle == ColliderHandleKind.None)
+                    handle = ColliderHandleKind.Body;
+                _partsTransformHandle = handle;
+                _partsDragActive = true;
+                _partsDragShiftAxis = 0;
+                _partsCanvasHotControl = controlId;
+                GUIUtility.hotControl = controlId;
+                _partsDragSlotId = slot.SlotId;
+                _partsDragStartMouse = evt.mousePosition;
+                _partsDragStartPose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
+                CapturePartsDragStartTransform(canvas, slot.SlotId);
+                BeginPartsGroupMoveCapture(handle, slot);
+                if (handle == ColliderHandleKind.AxisX || handle == ColliderHandleKind.AxisY)
+                {
+                    float wd = -_partsDragStartGuiDeg;
+                    _partsDragAxisWorld = handle == ColliderHandleKind.AxisX
+                        ? PartsGizmoAxisX(wd) : PartsGizmoAxisY(wd);
+                }
+                else
+                    _partsDragAxisWorld = default;
+                bool isRotateHandle =
+                    handle == ColliderHandleKind.Rotate ||
+                    handle == ColliderHandleKind.RotateX ||
+                    handle == ColliderHandleKind.RotateY ||
+                    handle == ColliderHandleKind.RotateZ ||
+                    handle == ColliderHandleKind.RotateSphere;
+                bool isAxisMove =
+                    handle == ColliderHandleKind.AxisX || handle == ColliderHandleKind.AxisY;
+                bool isFreeMove = handle == ColliderHandleKind.FreeMove;
+                string op = _partsCanvasTool == PartsCanvasTool.Rotate || isRotateHandle
+                    ? "Rotate Parts"
+                    : (_partsCanvasTool == PartsCanvasTool.Scale && !isAxisMove && !isFreeMove) ||
+                      (handle != ColliderHandleKind.Body && handle != ColliderHandleKind.None &&
+                       !isRotateHandle && !isAxisMove && !isFreeMove)
+                        ? "Scale Parts"
+                        : "Move Parts";
+                BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
+                    ? op + " Rest"
+                    : op + " Key");
+                _status = op + ": " + (slot.Name ?? slot.SlotId);
+                evt.Use();
+                Repaint();
             }
         }
 
@@ -3286,7 +4142,137 @@ Handles.EndGUI();
                     pose.Position = new Vector2(local.x, local.y);
                 }
             }
+            if (_partsGroupMoveMembers.Count > 1 && !rotate && !scale)
+            {
+                ApplyPartsGroupMovePreview(pose, canvas, mouse, handle, axisMove);
+                return;
+            }
             ApplyPartsPoseEdit(_partsDragSlotId, pose);
+        }
+
+        void BeginPartsGroupMoveCapture(ColliderHandleKind handle, SpritePartSlotDef slot)
+        {
+            _partsGroupMoveMembers.Clear();
+            _partsGroupTempPoses.Clear();
+            bool moveHandle = handle == ColliderHandleKind.Body ||
+                              handle == ColliderHandleKind.FreeMove ||
+                              handle == ColliderHandleKind.AxisX ||
+                              handle == ColliderHandleKind.AxisY ||
+                              handle == ColliderHandleKind.None;
+            if (!moveHandle || IsPartsIsolating() || slot == null)
+                return;
+            string gid = SpritePartsAuthoringOps.SlotGroupId(slot);
+            if (string.IsNullOrEmpty(gid) ||
+                SpritePartsAuthoringOps.FindGroup(_profile, gid) == null)
+                return;
+            var members = SpritePartsAuthoringOps.GetGroupMemberSlotIds(_profile, gid);
+            if (members.Count < 2)
+                return;
+            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(),
+                    _partsPreviewTime, Allocator.Temp,
+                    out var blob, out var poses, out var matrices, out _))
+                return;
+            try
+            {
+                ApplyTempPoseToSample(ref blob.Value, poses, matrices);
+                for (int i = 0; i < members.Count; i++)
+                {
+                    string id = members[i];
+                    var memberSlot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+                    if (memberSlot == null || memberSlot.EditorLocked ||
+                        SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, id))
+                        continue;
+                    int idx = BlobSlotIndex(ref blob.Value, id);
+                    var m = new PartsGroupMoveMember
+                    {
+                        SlotId = id,
+                        StartPose = SampleLocalPoseForSlot(id, _partsPreviewTime),
+                    };
+                    if (idx >= 0 && idx < matrices.Length)
+                    {
+                        m.StartWorld = matrices[idx].c3.xy;
+                        int parent = blob.Value.Slots[idx].ParentSlotIndex;
+                        if (parent >= 0 && parent < matrices.Length)
+                        {
+                            m.HasParent = true;
+                            m.ParentToRoot = matrices[parent];
+                        }
+                    }
+                    _partsGroupMoveMembers.Add(m);
+                }
+            }
+            finally
+            {
+                SpritePartsOnion.DisposeSample(blob, poses, matrices);
+            }
+        }
+
+        void ApplyPartsGroupMovePreview(
+            SpritePartsAuthoringOps.PoseEdit draggedPose,
+            Rect canvas, Vector2 mouse,
+            ColliderHandleKind handle, bool axisMove)
+        {
+            float2 deltaWorld = CanvasToWorld(canvas, mouse) -
+                                CanvasToWorld(canvas, _partsDragStartMouse);
+            if (axisMove)
+            {
+                float2 axis = handle == ColliderHandleKind.AxisX
+                    ? PartsGizmoAxisX(-_partsDragStartGuiDeg)
+                    : PartsGizmoAxisY(-_partsDragStartGuiDeg);
+                if (math.lengthsq(_partsDragAxisWorld) > 1e-6f)
+                    axis = math.normalizesafe(_partsDragAxisWorld);
+                else
+                    axis = math.normalizesafe(axis);
+                deltaWorld = axis * math.dot(deltaWorld, axis);
+            }
+            else if (handle != ColliderHandleKind.FreeMove)
+                deltaWorld = ConstrainPartsMoveDelta(deltaWorld);
+
+            _partsGroupTempPoses.Clear();
+            for (int i = 0; i < _partsGroupMoveMembers.Count; i++)
+            {
+                var m = _partsGroupMoveMembers[i];
+                var pose = m.StartPose;
+                float2 newWorld = m.StartWorld + deltaWorld;
+                if (!m.HasParent)
+                    pose.Position = new Vector2(newWorld.x, newWorld.y);
+                else
+                {
+                    float4x4 inv = math.inverse(m.ParentToRoot);
+                    float4 local = math.mul(inv, new float4(newWorld.x, newWorld.y, 0f, 1f));
+                    pose.Position = new Vector2(local.x, local.y);
+                }
+                _partsGroupTempPoses[SpritePartIdUtility.Canonical(m.SlotId)] = pose;
+                if (SpritePartIdUtility.Canonical(m.SlotId) ==
+                    SpritePartIdUtility.Canonical(_partsDragSlotId))
+                    draggedPose = pose;
+            }
+            _partsHasTempPose = true;
+            _partsTempSlotId = _partsDragSlotId;
+            _partsTempPose = draggedPose;
+        }
+
+        void CommitPartsGroupMoveOffsets()
+        {
+            int moved = 0;
+            for (int i = 0; i < _partsGroupMoveMembers.Count; i++)
+            {
+                var m = _partsGroupMoveMembers[i];
+                string id = SpritePartIdUtility.Canonical(m.SlotId);
+                if (!_partsGroupTempPoses.TryGetValue(id, out var pose))
+                    continue;
+                Vector2 delta = pose.Position - m.StartPose.Position;
+                if (delta.sqrMagnitude < 1e-8f)
+                    continue;
+                int wrote = SpritePartsAuthoringOps.OffsetSlotLocalPosition(
+                    _profile, id, delta, includeRest: true, clipIndex: -1);
+                if (wrote > 0)
+                    moved++;
+            }
+            _partsGroupTempPoses.Clear();
+            _partsHasTempPose = false;
+            if (moved > 0)
+                SaveDirty();
         }
 
         int HitTestPartsSlot(Rect canvas, Vector2 mouse)
@@ -3556,7 +4542,7 @@ Handles.EndGUI();
             if (_profile == null) return;
             GUILayout.Label("ART LIBRARIES", _sectionStyle);
             GUILayout.Label(
-                "Opt-in shared sheets/appearances. Import from Profile remains the default copy path. Pull/Sync updates local art in one Undo. Bake flattens into the blob — play never looks up the library.",
+                "Opt-in shared sheets/appearances. Import from Profile remains the default copy path. Pull/Sync updates local art in one Undo. Bake flattens into the blob - play never looks up the library.",
                 EditorStyles.wordWrappedMiniLabel);
             _profile.ArtLibraries ??= new List<SpriteArtLibraryLink>();
             for (int i = 0; i < _profile.ArtLibraries.Count; i++)
@@ -4571,14 +5557,17 @@ Handles.EndGUI();
         {
             if (input == null || input.type != EventType.MouseDown || input.button != 0)
                 return;
-            if (_partsRenamingClip < 0 && string.IsNullOrEmpty(_partsRenameSlotId))
+            if (_partsRenamingClip < 0 &&
+                string.IsNullOrEmpty(_partsRenameSlotId) &&
+                string.IsNullOrEmpty(_partsRenameGroupId))
                 return;
             string focused = GUI.GetNameOfFocusedControl();
             if (focused == PartsClipRenameControl || focused == PartsSlotRenameControl)
                 return;
             if (_partsRenamingClip >= 0)
                 CommitPartsClipRename();
-            if (!string.IsNullOrEmpty(_partsRenameSlotId))
+            if (!string.IsNullOrEmpty(_partsRenameSlotId) ||
+                !string.IsNullOrEmpty(_partsRenameGroupId))
                 CommitPartsRename();
         }
 

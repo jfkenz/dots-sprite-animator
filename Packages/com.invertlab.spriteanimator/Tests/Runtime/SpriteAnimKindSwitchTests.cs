@@ -217,5 +217,39 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.IsNotNull(SpritePartsAuthoringOps.FindAppearance(profile, result.AppearanceIds[2]));
             Assert.IsTrue(SpritePartsValidation.Validate(profile).Ok);
         }
+
+        [Test]
+        public void SwitchToStatic_RejectedWithoutSheetTexture()
+        {
+            var profile = new SpriteSheetProfile();
+            var result = SpritePartsAuthoringOps.TrySetAnimKind(profile, SpriteAnimKind.Static);
+            Assert.IsFalse(result.Ok);
+            StringAssert.Contains("sheet", result.Reason);
+            Assert.AreEqual(SpriteAnimKind.Frame, profile.AnimKind);
+        }
+
+        [Test]
+        public void SwitchToStatic_SucceedsWithSheet_PreservesClipsAndParts()
+        {
+            var profile = FrameProfileWithPlayableClip();
+            SpritePartsAuthoringOps.ApplyFloatingPartsTemplate(profile);
+            Assert.IsTrue(SpritePartsAuthoringOps.TrySetAnimKind(profile, SpriteAnimKind.Static).Ok);
+            Assert.AreEqual(SpriteAnimKind.Static, profile.AnimKind);
+            Assert.AreEqual(1, profile.Clips.Count);
+            Assert.AreEqual(4, profile.PartsSlots.Count);
+
+            Assert.IsTrue(SpritePartsAuthoringOps.TrySetAnimKind(profile, SpriteAnimKind.Frame).Ok);
+            Assert.AreEqual(SpriteAnimKind.Frame, profile.AnimKind);
+            Assert.AreEqual(1, profile.Clips.Count);
+            Assert.AreEqual(4, profile.PartsSlots.Count);
+        }
+
+        [Test]
+        public void CanSetAnimKind_StaticPeekDoesNotChangeMode()
+        {
+            var profile = FrameProfileWithPlayableClip();
+            Assert.IsTrue(SpritePartsAuthoringOps.CanSetAnimKind(profile, SpriteAnimKind.Static, out _));
+            Assert.AreEqual(SpriteAnimKind.Frame, profile.AnimKind);
+        }
     }
 }

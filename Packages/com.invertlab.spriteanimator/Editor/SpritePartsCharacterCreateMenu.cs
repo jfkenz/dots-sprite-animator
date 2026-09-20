@@ -7,7 +7,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 {
     /// <summary>
     /// Create Character for Parts: configured ECS authoring inside a loaded SubScene.
-    /// Outside a SubScene, offers explicit Create ECS SubScene — never a silent dead GO.
+    /// Outside a SubScene, offers explicit Create ECS SubScene - never a silent dead GO.
     /// Create Demo Scene always opens a NEW dedicated scene (never overwrites the user's scene asset).
     /// </summary>
     public static class SpritePartsCharacterCreateMenu
@@ -90,7 +90,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             demo.AddComponent<CutoutPartsDemoBootstrap>();
             Selection.activeGameObject = demo;
 
-            // Dedicated sample path optional save — user chooses; default does not touch prior scene file.
+            // Dedicated sample path optional save - user chooses; default does not touch prior scene file.
             string suggested = "Assets/CutoutPartsDemo.unity";
             EditorUtility.DisplayDialog(
                 "Parts Demo Scene Created",
@@ -98,7 +98,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 "This did not overwrite your previous scene asset. Save As if you want to keep it (e.g. " + suggested + ").\n\n" +
                 "Enter Play Mode to run the pure-DOTS demo.",
                 "OK");
-            // Keep scene untitled unless user saves — avoids clobbering any existing asset path.
+            // Keep scene untitled unless user saves - avoids clobbering any existing asset path.
             _ = scene;
         }
 

@@ -13,12 +13,16 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         readonly HashSet<string> _partsSelectedSlotIds = new(StringComparer.Ordinal);
         readonly HashSet<string> _partsExpandedSlotIds = new(StringComparer.Ordinal);
+        readonly HashSet<string> _partsCollapsedGroupIds = new(StringComparer.Ordinal);
         readonly List<string> _partsTreeRowIds = new();
 
         string _partsRenameSlotId;
+        string _partsRenameGroupId;
         string _partsRenameDraft;
         bool _partsRenameFocus;
         int _partsRenameControlId = -1;
+        string _partsIsolatedSlotId;
+        string _partsActiveGroupId;
 
         bool _partsTreeDragActive;
         bool _partsTreeDragStarted;
@@ -47,6 +51,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             _partsSelectedSlotIds.RemoveWhere(id =>
                 SpritePartsAuthoringOps.FindSlot(_profile, id) == null);
+            if (!string.IsNullOrEmpty(_partsIsolatedSlotId) &&
+                SpritePartsAuthoringOps.FindSlot(_profile, _partsIsolatedSlotId) == null)
+                _partsIsolatedSlotId = null;
+            if (!string.IsNullOrEmpty(_partsActiveGroupId) &&
+                SpritePartsAuthoringOps.FindGroup(_profile, _partsActiveGroupId) == null)
+                _partsActiveGroupId = null;
             if (_partsSelectedSlotIds.Count == 0 &&
                 _partsSelectedSlot >= 0 &&
                 _partsSelectedSlot < _profile.PartsSlots.Count &&
@@ -67,11 +77,24 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
+        void ClearPartsSelection()
+        {
+            _partsSelectedSlotIds.Clear();
+            _partsSelectedSlot = -1;
+            _partsIsolatedSlotId = null;
+            _partsActiveGroupId = null;
+        }
+
         void SelectPartsSlotId(string slotId, bool additive, bool range)
         {
             string id = SpritePartIdUtility.Canonical(slotId);
             if (string.IsNullOrEmpty(id)) return;
             _partsBrowserFocus = PartsBrowserFocus.Tree;
+            if (!additive && !range)
+            {
+                _partsIsolatedSlotId = null;
+                _partsActiveGroupId = null;
+            }
 
             if (range && _partsSelectedSlotIds.Count > 0 && _partsTreeRowIds.Count > 0)
             {
@@ -86,6 +109,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     for (int i = lo; i <= hi; i++)
                         _partsSelectedSlotIds.Add(_partsTreeRowIds[i]);
                     _partsSelectedSlot = SpritePartsAuthoringOps.FindSlotIndex(_profile, id);
+                    _partsIsolatedSlotId = null;
+                    _partsActiveGroupId = null;
                     return;
                 }
             }
@@ -101,6 +126,147 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _partsSelectedSlotIds.Add(id);
             }
             _partsSelectedSlot = SpritePartsAuthoringOps.FindSlotIndex(_profile, id);
+        }
+
+        void SelectPartsGroup(string groupId, string primarySlotId = null)
+        {
+            string gid = SpritePartsAuthoringOps.CanonicalGroupId(groupId);
+            var members = SpritePartsAuthoringOps.GetGroupMemberSlotIds(_profile, gid);
+            if (members.Count == 0)
+                return;
+            _partsBrowserFocus = PartsBrowserFocus.Tree;
+            _partsIsolatedSlotId = null;
+            _partsActiveGroupId = gid;
+            _partsSelectedSlotIds.Clear();
+            for (int i = 0; i < members.Count; i++)
+                _partsSelectedSlotIds.Add(members[i]);
+            string primary = !string.IsNullOrEmpty(primarySlotId)
+                ? SpritePartIdUtility.Canonical(primarySlotId)
+                : members[0];
+            if (!_partsSelectedSlotIds.Contains(primary))
+                primary = members[0];
+            _partsSelectedSlot = SpritePartsAuthoringOps.FindSlotIndex(_profile, primary);
+        }
+
+        void IsolatePartsSlot(string slotId)
+        {
+            string id = SpritePartIdUtility.Canonical(slotId);
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+            if (slot == null) return;
+            string gid = SpritePartsAuthoringOps.SlotGroupId(slot);
+            _partsBrowserFocus = PartsBrowserFocus.Tree;
+            _partsIsolatedSlotId = id;
+            _partsActiveGroupId = SpritePartsAuthoringOps.FindGroup(_profile, gid) != null
+                ? gid
+                : null;
+            _partsSelectedSlotIds.Clear();
+            _partsSelectedSlotIds.Add(id);
+            _partsSelectedSlot = SpritePartsAuthoringOps.FindSlotIndex(_profile, id);
+        }
+
+        bool IsPartsIsolating()
+            => !string.IsNullOrEmpty(_partsIsolatedSlotId);
+
+        bool TryExitPartsIsolate()
+        {
+            if (!IsPartsIsolating())
+                return false;
+            string gid = _partsActiveGroupId;
+            if (!string.IsNullOrEmpty(gid) &&
+                SpritePartsAuthoringOps.FindGroup(_profile, gid) != null)
+                SelectPartsGroup(gid, _partsIsolatedSlotId);
+            else
+                _partsIsolatedSlotId = null;
+            _status = "Left isolate";
+            Repaint();
+            return true;
+        }
+
+        void SelectPartsTreeSlot(SpritePartSlotDef slot, bool additive, bool range)
+        {
+            if (slot == null) return;
+            string id = SpritePartIdUtility.Canonical(slot.SlotId);
+            string gid = SpritePartsAuthoringOps.SlotGroupId(slot);
+            bool grouped = !additive && !range &&
+                           SpritePartsAuthoringOps.FindGroup(_profile, gid) != null;
+            if (grouped)
+                IsolatePartsSlot(id);
+            else
+                SelectPartsSlotId(id, additive, range);
+        }
+
+        void SelectPartsCanvasClicked(string slotId, bool additive, bool isolate, bool altPick)
+        {
+            string id = SpritePartIdUtility.Canonical(slotId);
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+            if (slot == null)
+            {
+                SelectPartsSlotId(id, additive, false);
+                return;
+            }
+            string gid = SpritePartsAuthoringOps.SlotGroupId(slot);
+            bool grouped = SpritePartsAuthoringOps.FindGroup(_profile, gid) != null;
+
+            if (altPick)
+            {
+                SelectPartsSlotId(id, additive, false);
+                _partsIsolatedSlotId = null;
+                _partsActiveGroupId = grouped && !additive ? gid : null;
+                return;
+            }
+
+            if (isolate)
+            {
+                IsolatePartsSlot(id);
+                return;
+            }
+
+            if (IsPartsIsolating())
+            {
+                if (grouped && gid == _partsActiveGroupId)
+                {
+                    IsolatePartsSlot(id);
+                    return;
+                }
+                _partsIsolatedSlotId = null;
+            }
+
+            if (grouped && !additive)
+                SelectPartsGroup(gid, id);
+            else
+                SelectPartsSlotId(id, additive, false);
+        }
+
+        void ExpandMarqueeHitsToGroups()
+        {
+            if (IsPartsIsolating() || _profile?.PartsSlots == null)
+                return;
+            var extra = new List<string>();
+            var groupIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var id in _partsSelectedSlotIds)
+            {
+                var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+                if (slot == null) continue;
+                string gid = SpritePartsAuthoringOps.SlotGroupId(slot);
+                if (string.IsNullOrEmpty(gid) ||
+                    SpritePartsAuthoringOps.FindGroup(_profile, gid) == null)
+                    continue;
+                groupIds.Add(gid);
+                var members = SpritePartsAuthoringOps.GetGroupMemberSlotIds(_profile, gid);
+                for (int i = 0; i < members.Count; i++)
+                    extra.Add(members[i]);
+            }
+            for (int i = 0; i < extra.Count; i++)
+                _partsSelectedSlotIds.Add(extra[i]);
+            _partsActiveGroupId = groupIds.Count == 1 ? FirstHashSetValue(groupIds) : null;
+            _partsIsolatedSlotId = null;
+        }
+
+        static string FirstHashSetValue(HashSet<string> set)
+        {
+            foreach (var v in set)
+                return v;
+            return null;
         }
 
         string PrimarySelectedPartsSlotId()
@@ -133,20 +299,44 @@ namespace InvertLab.Sprites.DOTS.Editor
             HandlePartsTreeRootDrop(rootRect, isCharacterHeader: true);
 
             _partsTreeRowIds.Clear();
-            var rows = SpritePartsAuthoringOps.BuildTreeRows(_profile);
-            var visible = new List<(SpritePartSlotDef slot, int depth)>();
-            for (int i = 0; i < rows.Count; i++)
+            var items = new List<PartsTreeDrawItem>();
+            EmitPartsTreeItems(string.Empty, 0, items);
+            var known = new HashSet<string>(StringComparer.Ordinal);
+            if (_profile.PartsSlots != null)
             {
-                var (slot, depth) = rows[i];
-                if (slot == null) continue;
-                if (!IsPartsTreeRowVisible(slot))
-                    continue;
-                visible.Add((slot, depth));
-                _partsTreeRowIds.Add(SpritePartIdUtility.Canonical(slot.SlotId));
+                for (int i = 0; i < _profile.PartsSlots.Count; i++)
+                {
+                    var s = _profile.PartsSlots[i];
+                    if (s != null) known.Add(SpritePartIdUtility.Canonical(s.SlotId));
+                }
+                var emitted = new HashSet<string>(StringComparer.Ordinal);
+                for (int i = 0; i < items.Count; i++)
+                {
+                    if (items[i].Slot != null)
+                        emitted.Add(SpritePartIdUtility.Canonical(items[i].Slot.SlotId));
+                }
+                for (int i = 0; i < _profile.PartsSlots.Count; i++)
+                {
+                    var s = _profile.PartsSlots[i];
+                    if (s == null || string.IsNullOrWhiteSpace(s.ParentSlotId)) continue;
+                    string p = SpritePartIdUtility.Canonical(s.ParentSlotId);
+                    string sid = SpritePartIdUtility.Canonical(s.SlotId);
+                    if (!known.Contains(p) && emitted.Add(sid))
+                        items.Add(new PartsTreeDrawItem { Slot = s, Depth = 0 });
+                }
             }
 
-            for (int i = 0; i < visible.Count; i++)
-                DrawPartsTreeRow(visible[i].slot, visible[i].depth);
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.Group != null)
+                    DrawPartsGroupRow(item.Group, item.Depth);
+                else if (item.Slot != null)
+                {
+                    _partsTreeRowIds.Add(SpritePartIdUtility.Canonical(item.Slot.SlotId));
+                    DrawPartsTreeRow(item.Slot, item.Depth);
+                }
+            }
 
             var rootDrop = GUILayoutUtility.GetRect(0f, 18f, GUILayout.ExpandWidth(true));
             GUI.Label(rootDrop, "Move to root", EditorStyles.centeredGreyMiniLabel);
@@ -155,6 +345,54 @@ namespace InvertLab.Sprites.DOTS.Editor
             HandlePartsTreeDragEvents();
             HandlePartsTreeRenameHotkeys();
             HandlePartsTreeDeleteHotkeys();
+        }
+
+        struct PartsTreeDrawItem
+        {
+            public SpritePartSlotDef Slot;
+            public SpritePartsGroupDef Group;
+            public int Depth;
+        }
+
+        void EmitPartsTreeItems(string parentId, int depth, List<PartsTreeDrawItem> items)
+        {
+            var kids = SpritePartsAuthoringOps.GetChildrenSorted(_profile, parentId);
+            var seenGroups = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < kids.Count; i++)
+            {
+                var child = kids[i];
+                if (child == null) continue;
+                string gid = SpritePartsAuthoringOps.SlotGroupId(child);
+                var group = !string.IsNullOrEmpty(gid)
+                    ? SpritePartsAuthoringOps.FindGroup(_profile, gid)
+                    : null;
+                if (group != null)
+                {
+                    if (!seenGroups.Add(gid))
+                        continue;
+                    items.Add(new PartsTreeDrawItem { Group = group, Depth = depth });
+                    if (_partsCollapsedGroupIds.Contains(gid))
+                        continue;
+                    for (int m = 0; m < kids.Count; m++)
+                    {
+                        var member = kids[m];
+                        if (member == null) continue;
+                        if (SpritePartsAuthoringOps.SlotGroupId(member) != gid)
+                            continue;
+                        items.Add(new PartsTreeDrawItem { Slot = member, Depth = depth + 1 });
+                        string mid = SpritePartIdUtility.Canonical(member.SlotId);
+                        if (_partsExpandedSlotIds.Contains(mid))
+                            EmitPartsTreeItems(mid, depth + 2, items);
+                    }
+                }
+                else
+                {
+                    items.Add(new PartsTreeDrawItem { Slot = child, Depth = depth });
+                    string cid = SpritePartIdUtility.Canonical(child.SlotId);
+                    if (_partsExpandedSlotIds.Contains(cid))
+                        EmitPartsTreeItems(cid, depth + 1, items);
+                }
+            }
         }
 
         bool IsPartsTreeRowVisible(SpritePartSlotDef slot)
@@ -302,6 +540,119 @@ namespace InvertLab.Sprites.DOTS.Editor
             HandlePartsTreeRowEvents(row, slot, id, nameRect, chevronRect, eyeRect, lockRect, deleteRect);
         }
 
+        void DrawPartsGroupRow(SpritePartsGroupDef group, int depth)
+        {
+            if (group == null) return;
+            string gid = SpritePartsAuthoringOps.CanonicalGroupId(group.GroupId);
+            bool selected = !IsPartsIsolating() && _partsActiveGroupId == gid;
+            bool expanded = !_partsCollapsedGroupIds.Contains(gid);
+            bool renaming = _partsRenameGroupId == gid;
+            var members = SpritePartsAuthoringOps.GetGroupMembers(_profile, gid);
+
+            var row = GUILayoutUtility.GetRect(0f, 22f, GUILayout.ExpandWidth(true));
+            Color bg = selected
+                ? new Color(0.28f, 0.38f, 0.55f, 0.55f)
+                : (row.Contains(Event.current.mousePosition)
+                    ? new Color(1f, 1f, 1f, 0.06f)
+                    : Color.clear);
+            if (bg.a > 0f) EditorGUI.DrawRect(row, bg);
+
+            float x = row.x + 4f + depth * 14f;
+            var chevronRect = new Rect(x, row.y + 2f, 16f, 18f);
+            if (GUI.Button(chevronRect, expanded ? "v" : ">", EditorStyles.miniLabel))
+            {
+                if (expanded) _partsCollapsedGroupIds.Add(gid);
+                else _partsCollapsedGroupIds.Remove(gid);
+            }
+            x += 16f;
+
+            var thumb = new Rect(x, row.y + 3f, 16f, 16f);
+            EditorGUI.DrawRect(thumb, new Color(0.22f, 0.36f, 0.48f, 1f));
+            GUI.Label(thumb, "G", EditorStyles.miniLabel);
+            x += 20f;
+
+            float iconsW = 58f;
+            var nameRect = new Rect(x, row.y + 1f, Mathf.Max(40f, row.xMax - iconsW - x - 4f), 20f);
+            if (renaming)
+            {
+                GUI.SetNextControlName(PartsSlotRenameControl);
+                _partsRenameDraft = GUI.TextField(nameRect, _partsRenameDraft ?? string.Empty);
+                if (_partsRenameFocus)
+                {
+                    EditorGUI.FocusTextInControl(PartsSlotRenameControl);
+                    _partsRenameFocus = false;
+                }
+            }
+            else
+            {
+                string label = (group.Name ?? "Group") + "  (" + members.Count + ")";
+                if (group.EditorLocked)
+                    label = "# " + label;
+                if (!group.Enabled)
+                    GUI.contentColor = new Color(1f, 1f, 1f, 0.45f);
+                else if (group.EditorLocked)
+                    GUI.contentColor = new Color(1f, 0.85f, 0.55f, 0.95f);
+                GUI.Label(nameRect, new GUIContent(label, "Sibling group. Click to select all members."));
+                GUI.contentColor = Color.white;
+            }
+
+            EnsurePartsRowIconStyles();
+            var eyeRect = new Rect(row.xMax - 36f, row.y + 2f, 18f, 18f);
+            var lockRect = new Rect(row.xMax - 18f, row.y + 2f, 18f, 18f);
+
+            var eyePrev = GUI.color;
+            if (!group.Enabled)
+                GUI.color = new Color(1f, 0.55f, 0.5f, 1f);
+            if (GUI.Button(eyeRect,
+                    new GUIContent(group.Enabled ? "O" : "-",
+                        group.Enabled ? "Hide group members" : "Show group members"),
+                    _partsRowIconStyle))
+                TogglePartsGroupVisibility(gid, !group.Enabled);
+            GUI.color = eyePrev;
+
+            var lockPrev = GUI.color;
+            if (group.EditorLocked)
+                GUI.color = new Color(1f, 0.82f, 0.35f, 1f);
+            if (GUI.Button(lockRect,
+                    new GUIContent(group.EditorLocked ? "#" : "=",
+                        group.EditorLocked ? "Unlock group members" : "Lock group members"),
+                    _partsRowIconStyle))
+                TogglePartsGroupLock(gid, !group.EditorLocked);
+            GUI.color = lockPrev;
+
+            HandlePartsGroupRowEvents(row, group, gid, nameRect, chevronRect, eyeRect, lockRect);
+        }
+
+        void HandlePartsGroupRowEvents(
+            Rect row, SpritePartsGroupDef group, string gid,
+            Rect nameRect, Rect chevronRect, Rect eyeRect, Rect lockRect)
+        {
+            var evt = Event.current;
+            if (evt.type == EventType.MouseDown && evt.button == 0 && row.Contains(evt.mousePosition))
+            {
+                if (chevronRect.Contains(evt.mousePosition) ||
+                    eyeRect.Contains(evt.mousePosition) ||
+                    lockRect.Contains(evt.mousePosition))
+                    return;
+                SelectPartsGroup(gid);
+                _partsBrowserFocus = PartsBrowserFocus.Tree;
+                if (evt.clickCount == 2 && nameRect.Contains(evt.mousePosition))
+                {
+                    BeginPartsGroupRename(group);
+                    evt.Use();
+                    return;
+                }
+                evt.Use();
+                Repaint();
+            }
+            else if (evt.type == EventType.ContextClick && row.Contains(evt.mousePosition))
+            {
+                SelectPartsGroup(gid);
+                ShowPartsGroupContextMenu(group);
+                evt.Use();
+            }
+        }
+
         void DrawPartsTreeDropCue(Rect row, int depth, string id)
         {
             if (!_partsTreeDragActive || _partsTreeDropRelativeId != id)
@@ -347,7 +698,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                 bool additive = evt.control || evt.command;
                 bool range = evt.shift;
-                SelectPartsSlotId(id, additive, range);
+                SelectPartsTreeSlot(slot, additive, range);
                 _partsBrowserFocus = PartsBrowserFocus.Tree;
 
                 if (evt.clickCount == 2 && nameRect.Contains(evt.mousePosition))
@@ -554,17 +905,28 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void HandlePartsTreeRenameHotkeys()
         {
-            if (!string.IsNullOrEmpty(_partsRenameSlotId)) return;
+            if (!string.IsNullOrEmpty(_partsRenameSlotId) ||
+                !string.IsNullOrEmpty(_partsRenameGroupId)) return;
             var evt = Event.current;
             if (evt.type != EventType.KeyDown) return;
             if (EditorGUIUtility.editingTextField) return;
             if (evt.keyCode == KeyCode.F2 &&
-                _partsBrowserFocus == PartsBrowserFocus.Tree &&
-                _partsSelectedSlotIds.Count == 1)
+                _partsBrowserFocus == PartsBrowserFocus.Tree)
             {
-                var slot = SpritePartsAuthoringOps.FindSlot(_profile, PrimarySelectedPartsSlotId());
-                if (slot != null) BeginPartsRename(slot);
-                evt.Use();
+                if (!IsPartsIsolating() &&
+                    !string.IsNullOrEmpty(_partsActiveGroupId))
+                {
+                    var group = SpritePartsAuthoringOps.FindGroup(_profile, _partsActiveGroupId);
+                    if (group != null) BeginPartsGroupRename(group);
+                    evt.Use();
+                    return;
+                }
+                if (_partsSelectedSlotIds.Count == 1)
+                {
+                    var slot = SpritePartsAuthoringOps.FindSlot(_profile, PrimarySelectedPartsSlotId());
+                    if (slot != null) BeginPartsRename(slot);
+                    evt.Use();
+                }
             }
         }
 
@@ -579,6 +941,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             // Rename is metadata - allowed in all modes.
             CancelPartsClipRename();
+            _partsRenameGroupId = null;
             _partsBrowserFocus = PartsBrowserFocus.Tree;
             _partsRenameSlotId = SpritePartIdUtility.Canonical(slot.SlotId);
             _partsRenameDraft = slot.Name;
@@ -586,8 +949,25 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
+        void BeginPartsGroupRename(SpritePartsGroupDef group)
+        {
+            if (group == null) return;
+            CancelPartsClipRename();
+            _partsRenameSlotId = null;
+            _partsBrowserFocus = PartsBrowserFocus.Tree;
+            _partsRenameGroupId = SpritePartsAuthoringOps.CanonicalGroupId(group.GroupId);
+            _partsRenameDraft = group.Name;
+            _partsRenameFocus = true;
+            Repaint();
+        }
+
         void CommitPartsRename()
         {
+            if (!string.IsNullOrEmpty(_partsRenameGroupId))
+            {
+                CommitPartsGroupRename();
+                return;
+            }
             if (string.IsNullOrEmpty(_partsRenameSlotId)) return;
             string id = _partsRenameSlotId;
             string draft = (_partsRenameDraft ?? string.Empty).Trim();
@@ -611,9 +991,35 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
+        void CommitPartsGroupRename()
+        {
+            if (string.IsNullOrEmpty(_partsRenameGroupId)) return;
+            string id = _partsRenameGroupId;
+            string draft = (_partsRenameDraft ?? string.Empty).Trim();
+            _partsRenameGroupId = null;
+            _partsRenameDraft = null;
+            _partsRenameFocus = false;
+            GUIUtility.keyboardControl = 0;
+            GUI.FocusControl(null);
+            var group = SpritePartsAuthoringOps.FindGroup(_profile, id);
+            if (group != null && group.Name == draft)
+                return;
+            RecordPartsUndo("Rename Parts Group");
+            var result = SpritePartsAuthoringOps.TryRenameGroup(_profile, id, draft);
+            if (!result.Ok)
+                _status = result.Reason;
+            else
+            {
+                SaveDirty();
+                _status = "Renamed group";
+            }
+            Repaint();
+        }
+
         void CancelPartsRename()
         {
             _partsRenameSlotId = null;
+            _partsRenameGroupId = null;
             _partsRenameDraft = null;
             _partsRenameFocus = false;
             GUIUtility.keyboardControl = 0;
@@ -631,13 +1037,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             menu.AddItem(new GUIContent("Rename"), false, () => BeginPartsRename(slot));
             if (!locked && _partsMode != SpritePartsStudioMode.Skins)
-                menu.AddItem(new GUIContent("Center"), false, () =>
-                {
-                    SelectPartsSlotId(slot.SlotId, false, false);
-                    CenterSelectedPartsSlot();
-                });
+                menu.AddItem(new GUIContent("Center On Root"), false, CenterSelectedPartsOnRoot);
             else
-                menu.AddDisabledItem(new GUIContent("Center"));
+                menu.AddDisabledItem(new GUIContent("Center On Root"));
 
             menu.AddSeparator("");
             if (!locked)
@@ -715,6 +1117,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             menu.AddSeparator("");
+            AddPartsGroupMenuItems(menu, slot);
+            menu.AddSeparator("");
             string deleteReason = null;
             var v = SpritePartsAuthoringOps.ValidateDeleteSubtree(_profile, id);
             if (!v.Ok) deleteReason = v.Reason;
@@ -725,6 +1129,124 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             menu.ShowAsContext();
         }
+
+        void AddPartsGroupMenuItems(GenericMenu menu, SpritePartSlotDef slot)
+        {
+            bool canGroup = _partsSelectedSlotIds.Count >= 2;
+            if (canGroup)
+                menu.AddItem(new GUIContent("Group (Ctrl+G)"), false, GroupSelectedParts);
+            else
+                menu.AddDisabledItem(new GUIContent("Group (select 2+ siblings)"));
+
+            string gid = slot != null
+                ? SpritePartsAuthoringOps.SlotGroupId(slot)
+                : _partsActiveGroupId;
+            bool grouped = SpritePartsAuthoringOps.FindGroup(_profile, gid) != null;
+            if (grouped)
+            {
+                menu.AddItem(new GUIContent("Ungroup (Ctrl+Shift+G)"), false, UngroupSelectedParts);
+                if (IsPartsIsolating())
+                    menu.AddItem(new GUIContent("Select Group"), false, () => SelectPartsGroup(gid));
+            }
+            else
+                menu.AddDisabledItem(new GUIContent("Ungroup (not grouped)"));
+        }
+
+        void ShowPartsGroupContextMenu(SpritePartsGroupDef group)
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent("Rename"), false, () => BeginPartsGroupRename(group));
+            menu.AddItem(new GUIContent("Ungroup (Ctrl+Shift+G)"), false, UngroupSelectedParts);
+            menu.AddSeparator("");
+            if (_partsMode == SpritePartsStudioMode.Skins)
+            {
+                menu.AddDisabledItem(new GUIContent("Center On Root (not in Skins)"));
+                menu.AddDisabledItem(new GUIContent("Align To Bounds (not in Skins)"));
+            }
+            else
+            {
+                menu.AddItem(new GUIContent("Center On Root"), false, CenterSelectedPartsOnRoot);
+                AddPartsAlignToBoundsMenuItems(menu);
+            }
+            if (_partsMode == SpritePartsStudioMode.Skins)
+                menu.AddDisabledItem(new GUIContent("Sync Other Keys With Playhead Offset"));
+            else
+                menu.AddItem(new GUIContent("Sync Other Keys With Playhead Offset"), false,
+                    PropagatePlayheadOffsetToAllKeys);
+            menu.ShowAsContext();
+        }
+
+        void GroupSelectedParts()
+        {
+            EnsurePartsTreeSelectionSynced();
+            if (_partsSelectedSlotIds.Count < 2)
+            {
+                _status = "Select 2 or more sibling parts.";
+                return;
+            }
+            RecordPartsUndo("Group Parts");
+            var result = SpritePartsAuthoringOps.TryGroupSiblings(
+                _profile, _partsSelectedSlotIds, out var created);
+            if (!result.Ok)
+            {
+                _status = result.Reason;
+                return;
+            }
+            SaveDirty();
+            _partsCollapsedGroupIds.Remove(created.GroupId);
+            SelectPartsGroup(created.GroupId);
+            BeginPartsGroupRename(created);
+            _status = "Grouped as " + created.Name + " (siblings, not a parent joint)";
+        }
+
+        void UngroupSelectedParts()
+        {
+            EnsurePartsTreeSelectionSynced();
+            string gid = _partsActiveGroupId;
+            if (string.IsNullOrEmpty(gid))
+            {
+                var primary = CurrentPartsSlot;
+                if (primary != null)
+                    gid = SpritePartsAuthoringOps.SlotGroupId(primary);
+            }
+            RecordPartsUndo("Ungroup Parts");
+            var result = !string.IsNullOrEmpty(gid)
+                ? SpritePartsAuthoringOps.TryUngroup(_profile, gid)
+                : SpritePartsAuthoringOps.TryUngroupSlots(_profile, _partsSelectedSlotIds);
+            if (!result.Ok)
+            {
+                _status = result.Reason;
+                return;
+            }
+            SaveDirty();
+            _partsActiveGroupId = null;
+            _partsIsolatedSlotId = null;
+            _status = "Ungrouped (keys unchanged)";
+            Repaint();
+        }
+
+        void TogglePartsGroupVisibility(string groupId, bool enabled)
+        {
+            var group = SpritePartsAuthoringOps.FindGroup(_profile, groupId);
+            if (group == null || group.Enabled == enabled) return;
+            RecordPartsUndo(enabled ? "Show Parts Group" : "Hide Parts Group");
+            group.Enabled = enabled;
+            SaveDirty();
+            _status = (enabled ? "Shown " : "Hidden ") + (group.Name ?? group.GroupId);
+            Repaint();
+        }
+
+        void TogglePartsGroupLock(string groupId, bool locked)
+        {
+            var group = SpritePartsAuthoringOps.FindGroup(_profile, groupId);
+            if (group == null || group.EditorLocked == locked) return;
+            RecordPartsUndo(locked ? "Lock Parts Group" : "Unlock Parts Group");
+            group.EditorLocked = locked;
+            SaveDirty();
+            _status = (locked ? "Locked " : "Unlocked ") + (group.Name ?? group.GroupId);
+            Repaint();
+        }
+
         void DrawPartsLayers()
         {
             GUILayout.Space(8f);
@@ -988,6 +1510,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 var s = _profile.PartsSlots[i];
                 if (s != null) s.Enabled = true;
             }
+            if (_profile.PartsGroups != null)
+            {
+                for (int i = 0; i < _profile.PartsGroups.Count; i++)
+                {
+                    var g = _profile.PartsGroups[i];
+                    if (g != null) g.Enabled = true;
+                }
+            }
             SaveDirty();
             _status = "Shown all parts";
             Repaint();
@@ -1027,7 +1557,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void HandlePartsTreeDeleteHotkeys()
         {
-            if (!string.IsNullOrEmpty(_partsRenameSlotId)) return;
+            if (!string.IsNullOrEmpty(_partsRenameSlotId) ||
+                !string.IsNullOrEmpty(_partsRenameGroupId)) return;
             if (EditorGUIUtility.editingTextField) return;
             var evt = Event.current;
             if (evt.type != EventType.KeyDown) return;
@@ -1056,9 +1587,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _status = "No part selected.";
                 return false;
             }
-            if (!string.IsNullOrEmpty(_partsRenameSlotId))
+            if (!string.IsNullOrEmpty(_partsRenameSlotId) ||
+                !string.IsNullOrEmpty(_partsRenameGroupId))
             {
                 _status = "Finish renaming before delete.";
+                return false;
+            }
+            if (!IsPartsIsolating() && !string.IsNullOrEmpty(_partsActiveGroupId))
+            {
+                _status = "Ungroup first (Ctrl+Shift+G), or isolate a part to delete.";
                 return false;
             }
 

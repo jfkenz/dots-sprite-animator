@@ -70,7 +70,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             int frameCount = cards.Length;
             PruneEventSelection(clip);
             string markerSelection = SelectedEventMarker(clip) is { } selectedMarker
-                ? $"   •   marker {EventAuthoredTime(clip, selectedMarker):F3}s selected"
+                ? $"   *   marker {EventAuthoredTime(clip, selectedMarker):F3}s selected"
                 : string.Empty;
             const float addFrameWidth = 82f;
             const float pickSheetWidth = 118f;
@@ -91,15 +91,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             float headerInfoWidth = pickSheetRect.x - headerBtnGap - headerInfoX;
             if (headerInfoWidth > 24f)
             {
-                string summary = $"{clip.Frames.Length} frames   •   {total:F3}s{markerSelection}";
-                string details = $"{summary}   •   drag = marquee   •   Alt+drag image = reorder   •   frame edge = duration   •   right-click lane = event";
+                string summary = $"{clip.Frames.Length} frames   *   {total:F3}s{markerSelection}";
+                string details = $"{summary}   *   drag = marquee   *   Alt+drag image = reorder   *   frame edge = duration   *   right-click lane = event";
                 GUI.Label(new Rect(headerInfoX, rect.y + 10f, headerInfoWidth, 16f),
                     new GUIContent(headerInfoWidth >= 720f ? details : summary, details),
                     _mutedStyle);
             }
             int emptyFrameCount = CountEmptyFrames(clip);
             if (GUI.Button(pickSheetRect,
-                new GUIContent("1×1 from texture",
+                new GUIContent("1x1 from texture",
                     "Open a clickable grid of this sheet. Select one or more cells, then OK to add them as frames."),
                 EditorStyles.miniButton))
                 OpenSheetCellPicker();
@@ -204,7 +204,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUI.DrawRect(card, cardColor);
                 DrawBorder(card, selected ? AccentColor : BorderColor, selected ? 2f : 1f);
                 GUI.Label(new Rect(card.x + 6f, card.y + 4f, card.width - 12f, 16f),
-                    $"F{i + 1}  •  {duration:F3}s", _mutedStyle);
+                    $"F{i + 1}  *  {duration:F3}s", _mutedStyle);
                 var thumbArea = new Rect(card.x + 7f, TimelineCardsY + 23f, card.width - 14f, 62f);
                 DrawCheckerboard(thumbArea, 9f);
                 DrawClipFrame(clip, i, thumb, 1f);
@@ -217,9 +217,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 int frameEventCount = clip.MarkerCountOnFrame(i);
                 string cellTip = FormatSheetCellFull(cellCol, cellRow, cellIndex);
                 if (frameEventCount == 1)
-                    cellTip += $"   •   {EventName(clip.FirstMarkerOnFrame(i).EventId)}";
+                    cellTip += $"   *   {EventName(clip.FirstMarkerOnFrame(i).EventId)}";
                 else if (frameEventCount > 1)
-                    cellTip += $"   •   {frameEventCount} events";
+                    cellTip += $"   *   {frameEventCount} events";
                 GUI.Label(new Rect(card.x + 6f, card.y + 85f, card.width - 12f, 14f),
                     new GUIContent(cellLabel, cellTip),
                     _mutedStyle);
@@ -303,8 +303,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 int trackCount = _profile.SocketMotions.Count;
                 string status = statusWidth >= 150f
-                    ? $"{_socketPreviewTime:0.###}s / {duration:0.###}s  •  {trackCount} track{Plural(trackCount)}"
-                    : $"{_socketPreviewTime:0.##}/{duration:0.##}s  •  {trackCount}t";
+                    ? $"{_socketPreviewTime:0.###}s / {duration:0.###}s  *  {trackCount} track{Plural(trackCount)}"
+                    : $"{_socketPreviewTime:0.##}/{duration:0.##}s  *  {trackCount}t";
                 GUI.Label(new Rect(statusX, rect.y + 10f, statusWidth, 16f), status, _mutedStyle);
             }
 
@@ -463,7 +463,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         ref _renameSocketNameValue, ref _focusSocketNameRename,
                         EditorStyles.boldLabel);
                     GUI.Label(new Rect(labelRect.x, labelRect.y + 16f, labelRect.width, 14f),
-                        $"{track.Keys.Count} keys  •  master clock", _mutedStyle);
+                        $"{track.Keys.Count} keys  *  master clock", _mutedStyle);
                 }
                 else
                 {
@@ -478,7 +478,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     }
                     GUI.Label(labelRect,
                         new GUIContent(
-                            $"{track.SocketName}\n{track.Keys.Count} keys  •  master clock",
+                            $"{track.SocketName}\n{track.Keys.Count} keys  *  master clock",
                             "Click to select. Double-click or F2 to rename the socket."),
                         _mutedWrapStyle);
                 }
@@ -557,7 +557,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         _socketMotionHotControl = keyControl;
                         GUIUtility.hotControl = keyControl;
                         RecordProfileUndo("Move Independent Motion Key");
-                        _status = $"{track.SocketName}  •  independent key {k + 1}/{track.Keys.Count}";
+                        _status = $"{track.SocketName}  *  independent key {k + 1}/{track.Keys.Count}";
                         keyEvent.Use();
                         Repaint();
                     }
@@ -931,7 +931,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         string side = key.DrawLayer == SpriteSocketKeys.DrawBehind ? "Behind"
                             : key.DrawLayer == SpriteSocketKeys.DrawFront ? "Front" : "Default";
                         GUI.Label(hit, new GUIContent(string.Empty,
-                            $"{track.SocketName}  {side}  •  {key.NormalizedTime * duration:0.###}s"));
+                            $"{track.SocketName}  {side}  *  {key.NormalizedTime * duration:0.###}s"));
                     }
                 }
             }
@@ -2569,7 +2569,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             menu.AddItem(new GUIContent("Rename"), false, () =>
             {
-                // GenericMenu callbacks run outside layout — BeginEventRename +
+                // GenericMenu callbacks run outside layout - BeginEventRename +
                 // FocusTextInControl here loses to menu-close focus steal. Queue
                 // via delayCall so the EVENT TYPES inline field draws first.
                 byte renameId = marker.EventId;
@@ -2736,8 +2736,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             marker.FireMode = fireMode;
             clip.SyncLegacyEventsFromMarkers();
             _status = marker.FiresOnce
-                ? $"Fire mode Once · {EventName(marker.EventId)}"
-                : $"Fire mode Loop · {EventName(marker.EventId)}";
+                ? $"Fire mode Once * {EventName(marker.EventId)}"
+                : $"Fire mode Loop * {EventName(marker.EventId)}";
             SealEventUndo();
             Repaint();
         }
@@ -2758,7 +2758,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 menu.AddDisabledItem(new GUIContent("Delete Frame"));
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Add Frame After"), false, () => InsertFrameAfter(clip));
-            menu.AddItem(new GUIContent("1×1 from texture..."), false, OpenSheetCellPicker);
+            menu.AddItem(new GUIContent("1x1 from texture..."), false, OpenSheetCellPicker);
             menu.ShowAsContext();
         }
 

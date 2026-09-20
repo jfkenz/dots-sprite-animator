@@ -22,19 +22,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             CacheSheetClipCounts(sheetCount);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, 20f), "FRAME CLIPS", _sectionStyle);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 31f, rect.width - 24f, 16f),
-                $"{sheetCount} sheet{(sheetCount == 1 ? "" : "s")} · {clipCount} clip{(clipCount == 1 ? "" : "s")}",
+                $"{sheetCount} sheet{(sheetCount == 1 ? "" : "s")} * {clipCount} clip{(clipCount == 1 ? "" : "s")}",
                 _mutedStyle);
 
             // Inactive-workspace banner: this workspace stays editable, but the
-            // character's runtime mode is Parts.
+            // character's runtime mode is not Frames.
             float bannerH = 0f;
-            if (_profile.AnimKind == SpriteAnimKind.Parts)
+            if (_profile.AnimKind != SpriteAnimKind.Frame)
             {
+                string runtimeName = _profile.AnimKind == SpriteAnimKind.Static ? "Static" : "Parts";
                 bannerH = 48f;
                 var bannerRect = new Rect(rect.x + 8f, rect.y + 50f, rect.width - 16f, bannerH);
                 EditorGUI.DrawRect(bannerRect, new Color(0.13f, 0.17f, 0.22f, 1f));
                 GUI.Label(new Rect(bannerRect.x + 8f, bannerRect.y + 4f, bannerRect.width - 16f, 16f),
-                    "Preview only. Character currently uses Parts.", _mutedStyle);
+                    $"Preview only. Character currently uses {runtimeName}.", _mutedStyle);
                 if (GUI.Button(new Rect(bannerRect.x + 8f, bannerRect.y + 23f, 190f, 20f),
                         "Use Frames for Character", EditorStyles.miniButton))
                     SwitchRuntimeKind(SpriteAnimKind.Frame, "Use Frames for Character");
@@ -155,7 +156,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         $"{clipsOnSheet} clip{(clipsOnSheet == 1 ? "" : "s")}", _mutedStyle);
                 }
 
-                // Sheet delete X — same affordance as nested clip rows.
+                // Sheet delete X - same affordance as nested clip rows.
                 bool canDeleteSheet = sheetCount > 1;
                 using (new EditorGUI.DisabledScope(!canDeleteSheet || renaming))
                 {
@@ -224,7 +225,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             var itemRect = new Rect(inset.x + 4f, clipY, inset.width - 8f, rowH - 2f);
                             var headerRow = new Rect(itemRect.x, itemRect.y, itemRect.width, clipRowH - 2f);
 
-                            // Compact row: [fold][name……][✕] — fold column reserved on all rows for alignment.
+                            // Compact row: [fold][name......][✕] - fold column reserved on all rows for alignment.
                             float foldW = ClipRowFoldWidth;
                             float delW = ClipRowDeleteWidth;
                             float nameLeft = headerRow.x + 4f + foldW;
@@ -283,7 +284,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                                 string tip = showDetail
                                     ? $"{clipLabel}\nPrimary selection (detail expanded). F2 / double-click name to rename. Ctrl/Cmd multi, Shift range."
                                     : isPrimary
-                                        ? $"{clipLabel}\nPrimary selection (detail collapsed — use ▸ to expand). F2 / double-click name to rename."
+                                        ? $"{clipLabel}\nPrimary selection (detail collapsed - use ▸ to expand). F2 / double-click name to rename."
                                         : $"{clipLabel}\nClick to select. Ctrl/Cmd toggle, Shift range. F2 / double-click name to rename.";
                                 GUI.Label(clipNameRect, new GUIContent(clipLabel, tip),
                                     EditorStyles.boldLabel);
@@ -312,7 +313,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                                     pendingDuplicateClip = i;
                             }
 
-                            // Leftover clicks on name chrome only — never Use() on ✕ / fold /
+                            // Leftover clicks on name chrome only - never Use() on ✕ / fold /
                             // expanded detail (EditorGUI controls must process those first).
                             if (!isRenamingClip &&
                                 input.type == EventType.MouseDown &&
@@ -456,7 +457,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             float half = (bottom.width - gap) * 0.5f;
             if (GUI.Button(new Rect(bottom.x, bottom.y, half, bottom.height),
                 new GUIContent($"{rows} from rows",
-                    $"Create one clip per sheet row ({rows} clips × {cols} frames). Skips empty rows and rows that already have a clip."),
+                    $"Create one clip per sheet row ({rows} clips x {cols} frames). Skips empty rows and rows that already have a clip."),
                 EditorStyles.miniButton))
             {
                 CommitAllRenames();
@@ -501,14 +502,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                     focused == SocketIdRenameControl ||
                     focused == InventoryRenameControl ||
                     focused == EventRenameControl ||
+                    focused == ProfileRenameControl ||
                     _focusClipRename ||
                     _focusSheetRename ||
                     _focusSocketNameRename ||
                     _focusSocketIdRename ||
                     _focusInventoryRename ||
                     _focusEventRename ||
+                    _focusProfileRename ||
                     (_renamingClip >= 0 && _hasClipRenameFieldRect &&
-                     _clipRenameFieldRect.Contains(input.mousePosition));
+                     _clipRenameFieldRect.Contains(input.mousePosition)) ||
+                    (_renamingProfile && _hasProfileNameRect &&
+                     _profileNameRect.Contains(input.mousePosition));
                 if (!onRenameField)
                 {
                     CommitAllRenames();
@@ -555,6 +560,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                     input.Use();
                     return;
                 }
+                if (_renamingProfile)
+                {
+                    CommitProfileRename();
+                    input.Use();
+                    return;
+                }
             }
 
             if (input.type == EventType.KeyDown && input.keyCode == KeyCode.Escape)
@@ -595,13 +606,29 @@ namespace InvertLab.Sprites.DOTS.Editor
                     input.Use();
                     return;
                 }
+                if (_renamingProfile)
+                {
+                    CancelProfileRename();
+                    input.Use();
+                    return;
+                }
             }
 
             if (input.type == EventType.KeyDown && input.keyCode == KeyCode.F2 &&
                 !IsRenamingAnything() && !IsEditingStringTextField())
             {
-                if (TryBeginPreferredRename())
+                if (_hasProfileNameRect && _profileNameHovered && _asset != null)
+                {
+                    BeginProfileRename();
                     input.Use();
+                }
+                else if (TryBeginPreferredRename())
+                    input.Use();
+                else if (_asset != null)
+                {
+                    BeginProfileRename();
+                    input.Use();
+                }
             }
         }
 
@@ -614,7 +641,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                || _renamingEventId != 0
                || _pendingEventRename
                || _partsRenamingClip >= 0
-               || !string.IsNullOrEmpty(_partsRenameSlotId);
+               || !string.IsNullOrEmpty(_partsRenameSlotId)
+               || !string.IsNullOrEmpty(_partsRenameGroupId)
+               || _renamingProfile;
 
         bool TryBeginPreferredRename()
         {
@@ -791,8 +820,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 Name = UniqueSheetName($"Sheet {n}"),
                 Texture = null,
-                Columns = SpriteSheetProfile.DefaultColumns,
-                Rows = SpriteSheetProfile.DefaultRows,
+                Columns = _studioTab == StudioTab.Static ? 1 : SpriteSheetProfile.DefaultColumns,
+                Rows = _studioTab == StudioTab.Static ? 1 : SpriteSheetProfile.DefaultRows,
                 PixelsPerUnit = SpriteSheetProfile.DefaultPixelsPerUnit,
                 Pivot = SpriteSheetProfile.DefaultPivot,
             });
@@ -997,34 +1026,39 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_profile.Sheets.Count <= 1)
                 return;
 
+            if (!SpriteProfileSheetOps.CanDelete(_profile, index, out string reason))
+            {
+                _status = reason;
+                EditorUtility.DisplayDialog("Sheet is in use", reason, "OK");
+                return;
+            }
+            // Legacy scene/prefab overrides store sheet indices outside this profile.
+            // Never silently shift those indices in assets that are not open for editing.
+            if (_asset != null)
+            {
+                string profilePath = AssetDatabase.GetAssetPath(_asset);
+                var candidates = new HashSet<string>(AssetDatabase.FindAssets("t:Scene"));
+                candidates.UnionWith(AssetDatabase.FindAssets("t:Prefab"));
+                foreach (string guid in candidates)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (Array.IndexOf(AssetDatabase.GetDependencies(path, true), profilePath) < 0) continue;
+                    _status = "Sheet deletion blocked: scene/prefab references may use sheet indices.";
+                    EditorUtility.DisplayDialog("Profile used by scene assets",
+                        path + " references this profile. Keep its sheet indices stable, or duplicate the profile before restructuring it.", "OK");
+                    return;
+                }
+                foreach (var still in UnityEngine.Object.FindObjectsByType<SpriteStaticAuthoring>(FindObjectsInactive.Include))
+                    if (still.Profile == _asset && !still.UseProfileDefaultCell)
+                    {
+                        _status = "Sheet deletion blocked by a scene object's cell override: " + still.name;
+                        EditorUtility.DisplayDialog("Static cell override", _status, "OK");
+                        return;
+                    }
+            }
             RecordProfileUndo("Delete Sprite Sheet");
             string sheetName = _profile.Sheets[index]?.Name ?? $"Sheet {index + 1}";
-            if (_profile.Clips != null)
-            {
-                for (int i = _profile.Clips.Count - 1; i >= 0; i--)
-                {
-                    var clip = _profile.Clips[i];
-                    if (clip == null || clip.SheetIndex != index)
-                        continue;
-                    if (_profile.Hitboxes != null)
-                        _profile.Hitboxes.RemoveAll(box => box.ClipName == clip.Name);
-                    _profile.Clips.RemoveAt(i);
-                    if (i < _selectedClip)
-                        _selectedClip--;
-                    else if (i == _selectedClip)
-                        _selectedClip = -1;
-                    if (_renamingClip == i)
-                        ClearClipRename();
-                    else if (_renamingClip > i)
-                        _renamingClip--;
-                }
-                for (int i = 0; i < _profile.Clips.Count; i++)
-                {
-                    if (_profile.Clips[i] != null && _profile.Clips[i].SheetIndex > index)
-                        _profile.Clips[i].SheetIndex--;
-                }
-            }
-            _profile.Sheets.RemoveAt(index);
+            SpriteProfileSheetOps.TryDelete(_profile, index, out _);
             var nextCollapsed = new HashSet<int>();
             foreach (int collapsed in _collapsedSheets)
             {
@@ -1041,6 +1075,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             else if (_selectedSheet > index)
                 _selectedSheet--;
             _selectedSheet = Mathf.Clamp(_selectedSheet, 0, Mathf.Max(0, _profile.Sheets.Count - 1));
+            if (_profile.Sheets.Count > 0)
+                _profile.StaticSheetIndex = Mathf.Clamp(
+                    _profile.StaticSheetIndex, 0, _profile.Sheets.Count - 1);
             if (_renamingSheet == index)
                 ClearSheetRename();
             else if (_renamingSheet > index)
@@ -1162,8 +1199,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CommitEventRename();
             if (_partsRenamingClip >= 0)
                 CommitPartsClipRename();
-            if (!string.IsNullOrEmpty(_partsRenameSlotId))
+            if (!string.IsNullOrEmpty(_partsRenameSlotId) ||
+                !string.IsNullOrEmpty(_partsRenameGroupId))
                 CommitPartsRename();
+            if (_renamingProfile)
+                CommitProfileRename();
         }
 
         void CancelAllRenames()
@@ -1182,8 +1222,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CancelEventRename();
             if (_partsRenamingClip >= 0)
                 CancelPartsClipRename();
-            if (!string.IsNullOrEmpty(_partsRenameSlotId))
+            if (!string.IsNullOrEmpty(_partsRenameSlotId) ||
+                !string.IsNullOrEmpty(_partsRenameGroupId))
                 CancelPartsRename();
+            if (_renamingProfile)
+                CancelProfileRename();
         }
 
         void WriteActiveSheetFromLegacy()
@@ -1278,8 +1321,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUIUtility.labelWidth = Mathf.Clamp(rect.width * 0.36f, 72f, 100f);
             try
             {
-                // Order: FPS → Wrap → Interrupt (+ Cancel After) → Priority → Frames →
-                // On Done → Combo Start → Combo End → Boost → Duplicate.
+                // Order: FPS -> Wrap -> Interrupt (+ Cancel After) -> Priority -> Frames ->
+                // On Done -> Combo Start -> Combo End -> Boost -> Duplicate.
                 Rect fpsRow = EditorGUILayout.GetControlRect();
                 Rect fpsFieldRect = EditorGUI.PrefixLabel(fpsRow,
                     new GUIContent("FPS", ClipFpsTooltip));

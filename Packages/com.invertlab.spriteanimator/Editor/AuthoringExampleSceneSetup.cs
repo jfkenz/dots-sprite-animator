@@ -131,7 +131,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
 
-            Debug.Log("[AuthoringExampleSceneSetup] " + ScenePath + " â€” " +
+            Debug.Log("[AuthoringExampleSceneSetup] " + ScenePath + " - " +
                       (created.Count > 0 ? string.Join(", ", created) : "already set up") +
                       (profile != null ? " | profile: " + profile.name : ""));
         }

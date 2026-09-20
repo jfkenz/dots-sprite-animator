@@ -14,6 +14,20 @@ namespace InvertLab.Sprites.DOTS
         Skins = 2,
     }
 
+    /// <summary>9-point align anchors. Row 0 is world +Y (top).</summary>
+    public enum SpritePartsAlignPivot : byte
+    {
+        TopLeft = 0,
+        Top = 1,
+        TopRight = 2,
+        Left = 3,
+        Center = 4,
+        Right = 5,
+        BottomLeft = 6,
+        Bottom = 7,
+        BottomRight = 8,
+    }
+
     /// <summary>
     /// Pure Parts authoring operations. Mode isolation and templates live here so
     /// EditMode tests can cover contracts without opening the tool window.
@@ -25,6 +39,31 @@ namespace InvertLab.Sprites.DOTS
         public const int DefaultOnionBefore = 1;
         public const int DefaultOnionAfter = 1;
         public const int DefaultOnionSpacingFrames = 2;
+
+        public static float2 PivotOnAabb(float2 min, float2 max, SpritePartsAlignPivot pivot)
+        {
+            int i = (int)pivot;
+            int col = i % 3;
+            int row = i / 3;
+            float x = col == 0 ? min.x : col == 1 ? 0.5f * (min.x + max.x) : max.x;
+            float y = row == 0 ? max.y : row == 1 ? 0.5f * (min.y + max.y) : min.y;
+            return new float2(x, y);
+        }
+
+        public static string AlignPivotLabel(SpritePartsAlignPivot pivot)
+            => pivot switch
+            {
+                SpritePartsAlignPivot.TopLeft => "Top Left",
+                SpritePartsAlignPivot.Top => "Top",
+                SpritePartsAlignPivot.TopRight => "Top Right",
+                SpritePartsAlignPivot.Left => "Left",
+                SpritePartsAlignPivot.Center => "Center",
+                SpritePartsAlignPivot.Right => "Right",
+                SpritePartsAlignPivot.BottomLeft => "Bottom Left",
+                SpritePartsAlignPivot.Bottom => "Bottom",
+                SpritePartsAlignPivot.BottomRight => "Bottom Right",
+                _ => "Center",
+            };
 
         public struct PoseEdit
         {
@@ -50,6 +89,8 @@ namespace InvertLab.Sprites.DOTS
             profile.EnsurePartsRig();
             profile.AnimKind = SpriteAnimKind.Parts;
             profile.PartsSlots.Clear();
+            profile.PartsGroups ??= new List<SpritePartsGroupDef>();
+            profile.PartsGroups.Clear();
             profile.PartsAppearances.Clear();
             profile.PartsClips.Clear();
             profile.PartsSkins.Clear();
@@ -208,6 +249,96 @@ namespace InvertLab.Sprites.DOTS
                 result.InsertedRestAnchorAtZero = true;
             }
             return result;
+        }
+
+        /// <summary>
+        /// Add a parent-local position delta to rest and/or pose keys. Does not rewrite
+        /// rotation/scale. clipIndex &lt; 0 offsets every clip. skipTime skips keys at that
+        /// playhead so a current key is not double-offset.
+        /// </summary>
+        public static int OffsetSlotLocalPosition(
+            SpriteSheetProfile profile,
+            string slotId,
+            Vector2 localDelta,
+            bool includeRest,
+            int clipIndex = -1,
+            float skipTime = float.NaN,
+            float skipEps = 1e-4f)
+        {
+            if (profile == null ||
+                (Mathf.Abs(localDelta.x) < 1e-8f && Mathf.Abs(localDelta.y) < 1e-8f))
+                return 0;
+            profile.EnsurePartsRig();
+            var slot = FindSlot(profile, slotId);
+            if (slot == null)
+                return 0;
+
+            int count = 0;
+            if (includeRest)
+            {
+                slot.RestPosition += localDelta;
+                count++;
+            }
+
+            if (profile.PartsClips == null)
+                return count;
+            int start = clipIndex < 0 ? 0 : clipIndex;
+            int end = clipIndex < 0 ? profile.PartsClips.Count - 1 : clipIndex;
+            bool skip = !float.IsNaN(skipTime);
+            for (int c = start; c <= end && c < profile.PartsClips.Count; c++)
+            {
+                if (c < 0)
+                    continue;
+                var track = FindTrack(profile.PartsClips[c], slotId, SpritePartsTrackKind.Pose);
+                if (track?.Keys == null)
+                    continue;
+                for (int k = 0; k < track.Keys.Count; k++)
+                {
+                    var key = track.Keys[k];
+                    if (key == null)
+                        continue;
+                    if (skip && Mathf.Abs(key.Time - skipTime) <= skipEps)
+                        continue;
+                    key.Position += localDelta;
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        public static Vector2 EvaluateSlotLocalPosition(
+            SpritePartSlotDef slot,
+            SpritePartsTrackDef track,
+            float time,
+            float skipTime = float.NaN,
+            float skipEps = 1e-4f)
+        {
+            Vector2 pos = slot != null ? slot.RestPosition : Vector2.zero;
+            if (track?.Keys == null || track.Keys.Count == 0)
+                return pos;
+            SpritePartsKeyDef prev = null;
+            SpritePartsKeyDef next = null;
+            bool skip = !float.IsNaN(skipTime);
+            for (int i = 0; i < track.Keys.Count; i++)
+            {
+                var key = track.Keys[i];
+                if (key == null)
+                    continue;
+                if (skip && Mathf.Abs(key.Time - skipTime) <= skipEps)
+                    continue;
+                if (key.Time <= time)
+                    prev = key;
+                if (key.Time >= time && next == null)
+                    next = key;
+            }
+            if (prev == null && next == null)
+                return pos;
+            if (prev == null)
+                return next.Position;
+            if (next == null || Mathf.Abs(next.Time - prev.Time) < 1e-8f)
+                return prev.Position;
+            float u = Mathf.InverseLerp(prev.Time, next.Time, time);
+            return Vector2.LerpUnclamped(prev.Position, next.Position, u);
         }
 
         public static WriteResult WriteKeyPose(
@@ -557,18 +688,18 @@ namespace InvertLab.Sprites.DOTS
         /// Explicit, validated runtime-mode change. The editor workspace never
         /// calls this implicitly. Switching preserves both data sets; activating
         /// Parts requires a rig that passes validation, activating Frames requires
-        /// at least one frame clip on a sheet with a texture. Rejected switches
-        /// change nothing and explain the fix.
+        /// at least one frame clip on a sheet with a texture, and Static needs a
+        /// sheet texture. Rejected switches change nothing and explain the fix.
         /// </summary>
         public static KindSwitchResult TrySetAnimKind(SpriteSheetProfile profile, SpriteAnimKind kind)
         {
             if (profile == null)
                 return new KindSwitchResult { Reason = "Profile is null." };
-            if (profile.AnimKind == kind)
-                return new KindSwitchResult { Ok = true };
-
+            // Revalidate even the active mode: data may have been edited since activation.
             if (kind == SpriteAnimKind.Parts)
             {
+                if (profile.PartsSlots == null || profile.PartsSlots.Count == 0)
+                    return new KindSwitchResult { Reason = "Parts rig has no slots. Add a part before activating runtime." };
                 var previous = profile.AnimKind;
                 profile.AnimKind = SpriteAnimKind.Parts;
                 var validation = SpritePartsValidation.Validate(profile);
@@ -576,6 +707,20 @@ namespace InvertLab.Sprites.DOTS
                     return new KindSwitchResult { Ok = true };
                 profile.AnimKind = previous;
                 return new KindSwitchResult { Reason = SummarizeErrors(validation.Errors) };
+            }
+
+            if (kind == SpriteAnimKind.Static)
+            {
+                if (HasUsableStaticSheet(profile))
+                {
+                    profile.AnimKind = SpriteAnimKind.Static;
+                    return new KindSwitchResult { Ok = true };
+                }
+                return new KindSwitchResult
+                {
+                    Reason = "Static runtime needs a valid selected sheet and cell with a texture. " +
+                             "Assign a sheet in the Static or Frames workspace first.",
+                };
             }
 
             // Read-only: a rejected switch must not migrate legacy sheet fields.
@@ -600,6 +745,12 @@ namespace InvertLab.Sprites.DOTS
                          "Assign a sheet in the Frames workspace first.",
             };
         }
+
+        /// <summary>
+        /// True when a sheet texture exists without calling EnsureSheets (peek-safe).
+        /// </summary>
+        public static bool HasUsableStaticSheet(SpriteSheetProfile profile)
+            => SpriteProfileSheetOps.HasValidStaticCell(profile);
 
         /// <summary>
         /// Peek variant of <see cref="TrySetAnimKind"/>: validates and restores
@@ -1071,6 +1222,82 @@ namespace InvertLab.Sprites.DOTS
             if (float.IsNaN(v) || float.IsInfinity(v) || Mathf.Abs(v) < 1e-5f)
                 return v < 0f ? -1f : 1f;
             return v;
+        }
+
+        public static bool HasStoredRootBounds(SpriteSheetProfile profile)
+            => profile != null &&
+               profile.PartsRootBoundsSize.x > 1e-5f &&
+               profile.PartsRootBoundsSize.y > 1e-5f;
+
+        public static void SetRootBounds(SpriteSheetProfile profile, float2 center, float2 size)
+        {
+            if (profile == null)
+                return;
+            size = math.max(size, new float2(0.01f, 0.01f));
+            profile.PartsRootBoundsCenter = new Vector2(center.x, center.y);
+            profile.PartsRootBoundsSize = new Vector2(size.x, size.y);
+        }
+
+        /// <summary>
+        /// Writes a bounds rect that frames the pose AABB. Does not change rest poses or keys.
+        /// </summary>
+        public static void FitRootBoundsToAabb(SpriteSheetProfile profile, float2 min, float2 max,
+            float padding = 0.06f)
+        {
+            float2 size = math.max(max - min, new float2(0.01f, 0.01f));
+            size += size * math.max(0f, padding);
+            SetRootBounds(profile, 0.5f * (min + max), size);
+        }
+
+        public static bool TryEncapsulateWorldAabb(
+            SpriteSheetProfile profile,
+            Dictionary<string, string> previewOverrides,
+            ref SpritePartsSetBlob set,
+            NativeArray<float4x4> matrices,
+            int clipIndex,
+            float timeSeconds,
+            out float2 min,
+            out float2 max)
+        {
+            min = new float2(float.PositiveInfinity, float.PositiveInfinity);
+            max = new float2(float.NegativeInfinity, float.NegativeInfinity);
+            if (profile == null || !matrices.IsCreated)
+                return false;
+
+            bool any = false;
+            int n = math.min(set.Slots.Length, matrices.Length);
+            for (int i = 0; i < n; i++)
+            {
+                string sid = set.Slots[i].SlotId.ToString();
+                if (SlotOrAncestorHidden(profile, sid))
+                    continue;
+                var slot = FindSlot(profile, sid);
+                var app = FindAppearance(profile, ResolvePreviewAppearanceId(
+                    profile, slot, clipIndex, timeSeconds, previewOverrides));
+                if (app == null ||
+                    !SpritePartsGeometry.TryResolve(profile, app, false, out var geo, out _))
+                    continue;
+
+                float4x4 m = matrices[i];
+                EncapsulateVisualCorner(ref min, ref max, m, geo, new float2(-0.5f, -0.5f));
+                EncapsulateVisualCorner(ref min, ref max, m, geo, new float2(0.5f, -0.5f));
+                EncapsulateVisualCorner(ref min, ref max, m, geo, new float2(0.5f, 0.5f));
+                EncapsulateVisualCorner(ref min, ref max, m, geo, new float2(-0.5f, 0.5f));
+                any = true;
+            }
+
+            return any && math.all(math.isfinite(min)) && math.all(math.isfinite(max)) &&
+                   max.x > min.x && max.y > min.y;
+        }
+
+        static void EncapsulateVisualCorner(
+            ref float2 min, ref float2 max, float4x4 matrix,
+            SpritePartsGeometry.Resolved geo, float2 quad)
+        {
+            float2 local = SpritePartsGeometry.VisualPoint(quad, geo.Pivot, geo.LogicalWorldSize);
+            float4 world = math.mul(matrix, new float4(local.x, local.y, 0f, 1f));
+            min = math.min(min, world.xy);
+            max = math.max(max, world.xy);
         }
     }
 }

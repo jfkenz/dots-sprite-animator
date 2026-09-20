@@ -27,7 +27,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUILayout.BeginArea(inner);
             GUILayout.Label("APPLY OUTFIT", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Maps a source skin/outfit onto this profile by semantic role (Body, Head, Weapon, Offhand), not only SlotId. Appearance binding only — this does not retarget motion curves.",
+                "Maps a source skin/outfit onto this profile by semantic role (Body, Head, Weapon, Offhand), not only SlotId. Appearance binding only - this does not retarget motion curves.",
                 MessageType.Info);
 
             _source = (ScriptableSpriteSheetProfile)EditorGUILayout.ObjectField(
@@ -59,8 +59,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     var b = plan.Bindings[i];
                     string line = b.Unmapped
-                        ? $"{b.Role}  {b.DestinationSlotId}  — unmapped (unchanged)"
-                        : $"{b.Role}  {b.DestinationSlotId}  ←  {b.SourceAppearanceId}";
+                        ? $"{b.Role}  {b.DestinationSlotId}  - unmapped (unchanged)"
+                        : $"{b.Role}  {b.DestinationSlotId}  <-  {b.SourceAppearanceId}";
                     GUILayout.Label(line, EditorStyles.miniLabel);
                 }
                 if (plan.Unmapped.Count > 0)
@@ -68,14 +68,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GUILayout.Space(4f);
                     GUILayout.Label("Unmapped (destination unchanged):", EditorStyles.miniBoldLabel);
                     for (int i = 0; i < plan.Unmapped.Count; i++)
-                        GUILayout.Label("• " + plan.Unmapped[i], EditorStyles.miniLabel);
+                        GUILayout.Label("* " + plan.Unmapped[i], EditorStyles.miniLabel);
                 }
             }
             else
             {
                 EditorGUILayout.HelpBox(plan.Reason ?? "Cannot apply.", MessageType.Error);
                 for (int i = 0; i < plan.Conflicts.Count; i++)
-                    GUILayout.Label("• " + plan.Conflicts[i], EditorStyles.wordWrappedMiniLabel);
+                    GUILayout.Label("* " + plan.Conflicts[i], EditorStyles.wordWrappedMiniLabel);
             }
             GUILayout.EndScrollView();
 

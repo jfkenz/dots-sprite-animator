@@ -25,7 +25,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 characterColliders.Count + otherClips.Count;
             SectionLabel("COLLIDERS");
             GUILayout.Label(
-                $"Frame {_selectedFrame + 1} • {onThisFrame.Count} on this frame • {otherFrames.Count} other frames • {_selectedColliders.Count} selected",
+                $"Frame {_selectedFrame + 1} * {onThisFrame.Count} on this frame * {otherFrames.Count} other frames * {_selectedColliders.Count} selected",
                 _mutedStyle);
 
             if (listed == 0)
@@ -37,7 +37,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             _colliderFrameExpanded = EditorGUILayout.Foldout(_colliderFrameExpanded,
                 new GUIContent(
-                    $"CURRENT FRAME  {_selectedFrame + 1}  ({onThisFrame.Count} here • {otherFrames.Count} other)",
+                    $"CURRENT FRAME  {_selectedFrame + 1}  ({onThisFrame.Count} here * {otherFrames.Count} other)",
                     "Frame-lifetime slash windows. On this frame vs other frames of this clip."),
                 true);
             if (_colliderFrameExpanded)
@@ -58,7 +58,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Active throughout this clip. Best for stance-specific hurtboxes and interaction zones."))
                 return;
             if (DrawColliderScopeGroup(clip, characterColliders, ref _colliderCharacterExpanded,
-                    "CHARACTER — ALL CLIPS",
+                    "CHARACTER - ALL CLIPS",
                     "Shared by every clip. Best for the main body, pickup radius, and persistent sensors."))
                 return;
             if (otherClips.Count > 0 &&
@@ -235,7 +235,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 using (new EditorGUI.DisabledScope(Mathf.Approximately(box.Angle, 0f)))
                 {
-                    if (ResetValueButton("Reset this collider's rotation to 0°."))
+                    if (ResetValueButton("Reset this collider's rotation to 0 deg."))
                     {
                         RecordProfileUndo("Reset Sprite Collider Angle");
                         box.Angle = 0f;
@@ -336,7 +336,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                             Repaint();
                         }
                         GUI.backgroundColor = previous;
-                        if (GUILayout.Button(new GUIContent("×", "Remove this clip from the list."),
+                        if (GUILayout.Button(new GUIContent("x", "Remove this clip from the list."),
                             EditorStyles.miniButton, GUILayout.Width(22f), GUILayout.Height(20f)))
                         {
                             RecordProfileUndo(removeUndo);
@@ -472,12 +472,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return exclude == 1
                         ? $"All except {box.CharacterExcludeClips[0]}"
                         : $"All except {exclude}";
-                return $"Include {include} · Exclude {exclude}";
+                return $"Include {include} * Exclude {exclude}";
             }
             string clipName = string.IsNullOrEmpty(box.ClipName) ? "Clip" : box.ClipName;
             if (box.IsClip)
                 return clipName;
-            return $"{clipName}  •  Frame {box.FrameIndex + 1}";
+            return $"{clipName}  *  Frame {box.FrameIndex + 1}";
         }
 
         void DrawColliderBinding(SpriteClipDef clip, FrameBoxDef box)
@@ -490,7 +490,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Jump to the clip and frame this collider lives on."));
                 using (new EditorGUI.DisabledScope(here && !box.IsCharacter))
                 {
-                    if (GUILayout.Button(new GUIContent(here ? $"{home}  •  here" : home,
+                    if (GUILayout.Button(new GUIContent(here ? $"{home}  *  here" : home,
                             box.IsCharacter
                                 ? "Character colliders use Include / Exclude clip lists. Empty Include = all clips."
                                 : here
@@ -595,7 +595,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _selectedEventFrame = -1;
             _selectedEventIndex = -1;
             _status = box.IsCharacter
-                ? $"Character collider · {ColliderHomeLabel(box)}"
+                ? $"Character collider * {ColliderHomeLabel(box)}"
                 : $"Jumped to {ColliderHomeLabel(box)}";
             ReleaseShortcutKeyboardFocus();
             Repaint();
@@ -614,9 +614,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             string summary = $"{title}  ({group.Count})";
             if (selectedCount > 0)
-                summary += $"  •  {selectedCount} selected";
+                summary += $"  *  {selectedCount} selected";
             if (lockedCount > 0)
-                summary += $"  •  {lockedCount} locked";
+                summary += $"  *  {lockedCount} locked";
             expanded = EditorGUILayout.Foldout(expanded, new GUIContent(summary, description), true);
             if (!expanded)
                 return false;
@@ -718,7 +718,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         string state = box.Hidden ? "  (hidden)" : string.Empty;
                         bool away = !ColliderLivesHere(box, clip, _selectedFrame);
                         bool rowClicked = GUILayout.Button(new GUIContent(
-                                $"{i + 1}. {box.Shape}  •  ID {box.Id}{(away ? "  •  " + ColliderHomeLabel(box) : string.Empty)}{state}",
+                                $"{i + 1}. {box.Shape}  *  ID {box.Id}{(away ? "  *  " + ColliderHomeLabel(box) : string.Empty)}{state}",
                                 box.Locked
                                     ? "Unlock this collider before selecting or editing it."
                                     : "Click to select and open details. Click again to collapse. Use the search icon to jump to this collider's clip and frame."),
@@ -751,7 +751,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                     using (new EditorGUI.DisabledScope(box.Locked))
                     {
-                        if (GUILayout.Button(new GUIContent("×",
+                        if (GUILayout.Button(new GUIContent("x",
                                 box.Locked ? "Unlock this collider before deleting it." : "Delete this collider."),
                             EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
                         {
@@ -915,7 +915,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 if (includeSockets && _selectedSockets.Count > 0)
                 {
-                    _status = "Selected sockets are locked — unlock to delete";
+                    _status = "Selected sockets are locked - unlock to delete";
                     Repaint();
                 }
                 return;

@@ -123,8 +123,8 @@ namespace InvertLab.Sprites.DOTS
     /// </summary>
     public enum SpriteClipInterrupt : byte
     {
-        Always = 0,    // free cancel â€” idle/walk; any Play() replaces
-        Never = 1,     // locked until Once completes or Stop/Force â€” attack cast, death
+        Always = 0,    // free cancel - idle/walk; any Play() replaces
+        Never = 1,     // locked until Once completes or Stop/Force - attack cast, death
         AfterTime = 2, // cancelable only when normalized time >= CancelAfter (0-1)
     }
 
@@ -147,7 +147,7 @@ namespace InvertLab.Sprites.DOTS
         public int[] Frames = { 0, 1, 2, 3 };
         /// <summary>
         /// Per-frame sheet row. <see cref="InheritClipRow"/> uses <see cref="Row"/>.
-        /// Lets one clip sample cells from more than one row (1Ã—1 picker, column strips).
+        /// Lets one clip sample cells from more than one row (1x1 picker, column strips).
         /// </summary>
         public int[] FrameRows;
         public float FrameRate = DefaultFrameRate;
@@ -1122,7 +1122,7 @@ namespace InvertLab.Sprites.DOTS
         public byte PathWrap;
         /// <summary>0 = follow the character clip (weapon). 1 = own loop (pet).</summary>
         public byte MotionMode;
-        /// <summary>Own Clock only. 1 = same pace as the clip, 0.5 = 2Ã— slower. 0 means 1.</summary>
+        /// <summary>Own Clock only. 1 = same pace as the clip, 0.5 = 2x slower. 0 means 1.</summary>
         public float Speed;
 
         public int CellCount => Mathf.Max(1, Columns) * Mathf.Max(1, Rows);
@@ -1260,7 +1260,7 @@ namespace InvertLab.Sprites.DOTS
 
 
     /// <summary>
-    /// How sheet cells map to UVs. Grid keeps uniform ColumnsÃ—Rows cells.
+    /// How sheet cells map to UVs. Grid keeps uniform ColumnsxRows cells.
     /// Cropped stores a tight opaque pixel rect per cell (spacing / gutters removed
     /// from the sampled UV) while Columns/Rows still describe the coarse layout.
     /// </summary>
@@ -1380,16 +1380,34 @@ namespace InvertLab.Sprites.DOTS
         public List<SpriteCellPivot> CellPivots;
         public List<SpriteSheetDef> Sheets = new();
         public List<SpriteClipDef> Clips = new();
-        /// <summary>Frame flipbook (default) or Parts cutout. Old assets remain Frame.</summary>
+        /// <summary>Frame flipbook (default), Parts cutout, or one static cell. Old assets remain Frame.</summary>
         public SpriteAnimKind AnimKind = SpriteAnimKind.Frame;
+        /// <summary>Default still cell for Static runtime / the Static studio tab. Instance authoring may override.</summary>
+        public int StaticSheetIndex;
+        public int StaticRow;
+        public int StaticColumn;
+        /// <summary>
+        /// Baked Static world height in units (copied to SpriteStaticAuthoring.SizeUnits).
+        /// 0 = use the sheet cell height (pixels / PPU). Does not change PPU or transform scale.
+        /// </summary>
+        public float StaticSizeUnits;
         /// <summary>Parts authoring schema version. 0 upgrades to 1 on EnsurePartsRig.</summary>
         public int PartsSchemaVersion;
         public List<SpritePartSlotDef> PartsSlots = new();
+        /// <summary>Editor-only sibling selection folders. Not baked; not motion parents.</summary>
+        public List<SpritePartsGroupDef> PartsGroups = new();
         public List<SpritePartAppearanceDef> PartsAppearances = new();
         public List<SpritePartsClipDef> PartsClips = new();
         public List<SpritePartsSkinDef> PartsSkins = new();
         public string PartsDefaultClipId = string.Empty;
         public string PartsDefaultSkinId = string.Empty;
+        /// <summary>
+        /// Authoring character bounds in world units, centered on PartsRootBoundsCenter.
+        /// Zero size means no stored bounds (editor can still preview a live AABB).
+        /// Does not affect clip keys or rest poses.
+        /// </summary>
+        public Vector2 PartsRootBoundsSize;
+        public Vector2 PartsRootBoundsCenter;
         /// <summary>
         /// Shared art libraries this profile may pull from. Empty = local art only.
         /// Bake flattens library art into the blob; play mode never resolves these.
@@ -1438,6 +1456,8 @@ namespace InvertLab.Sprites.DOTS
         {
             SpritePartsValidation.EnsureLists(this);
             PartsSlots.RemoveAll(s => s == null);
+            PartsGroups ??= new List<SpritePartsGroupDef>();
+            PartsGroups.RemoveAll(g => g == null);
             PartsAppearances.RemoveAll(a => a == null);
             PartsClips.RemoveAll(c => c == null);
             PartsSkins.RemoveAll(s => s == null);
@@ -1941,7 +1961,7 @@ namespace InvertLab.Sprites.DOTS
             int columns = Mathf.Max(1, sheet.Columns);
             int rows = Mathf.Max(1, sheet.Rows);
             int count = columns * rows;
-            // Stale after Columns/Rows edit â€” fall back to uniform until Recompute.
+            // Stale after Columns/Rows edit - fall back to uniform until Recompute.
             if (count <= 0 || rects.Length != count)
                 return false;
             cellIndex = ((cellIndex % count) + count) % count;
@@ -1982,7 +2002,7 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Pixel size of the active cell. Cropped uses the opaque rect; Grid uses
-        /// texture / columnsÃ—rows. False when no texture.
+        /// texture / columnsxrows. False when no texture.
         /// </summary>
         public static bool TryGetActiveCellPixels(SpriteSheetDef sheet, int cellIndex,
             out float cellW, out float cellH)
@@ -2008,8 +2028,8 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Build per-cell tight opaque rects inside each uniform grid band.
-        /// Pixel y = 0 at texture bottom (GetPixels32). Empty cells keep a 1Ã—1
-        /// sentinel at the coarse cell origin so length stays ColumnsÃ—Rows.
+        /// Pixel y = 0 at texture bottom (GetPixels32). Empty cells keep a 1x1
+        /// sentinel at the coarse cell origin so length stays ColumnsxRows.
         /// </summary>
         public static RectInt[] BuildCroppedCellRects(Color32[] pixels, int width, int height,
             int columns, int rows, byte alphaThreshold = CroppedAlphaThreshold)
@@ -2151,7 +2171,7 @@ namespace InvertLab.Sprites.DOTS
 
 
         /// <summary>
-        /// Cell size in source pixels. PPU does not change this â€” it is
+        /// Cell size in source pixels. PPU does not change this - it is
         /// texture size divided by columns / rows.
         /// </summary>
         public static bool TryGetCellPixels(SpriteSheetDef sheet, out float cellW, out float cellH)

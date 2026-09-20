@@ -16,7 +16,7 @@ namespace InvertLab.Sprites.DOTS
         public float HealthBarWorldOffsetY = 1.15f;
         [Min(0.01f)] public float FlashSeconds = 0.12f;
 
-        [Tooltip("Health bar anchor socket (optional — falls back to this transform).")]
+        [Tooltip("Health bar anchor socket (optional - falls back to this transform).")]
         public string HealthBarSocketName = "HealthBarSocket";
         public string HealthBarSocketId = "";
 

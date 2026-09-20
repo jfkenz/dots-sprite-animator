@@ -83,7 +83,7 @@ namespace InvertLab.Sprites.DOTS
 
 
 
-        [Tooltip("Animation states â€” e.g. soldier: Idle, Run, Attack, Block")]
+        [Tooltip("Animation states - e.g. soldier: Idle, Run, Attack, Block")]
         public ClipAuthoring[] Clips =
         {
             new ClipAuthoring { Name = "Idle",   Row = 0, Frames = new[] { 0, 1, 2, 3 }, FrameRate = 8f,  Loop = true, OnCompleteClipIndex = -1, ComboWindowEndFrame = -1 },
@@ -245,24 +245,8 @@ namespace InvertLab.Sprites.DOTS
         void OnValidate()
         {
 #if UNITY_EDITOR
-            // static and animated authoring are mutually exclusive — both
-            // bakers would add duplicate components to the same entity
-            var staticAuthoring = GetComponent<SpriteStaticAuthoring>();
-            if (staticAuthoring != null)
-            {
-                Debug.LogError(
-                    $"[{nameof(SpriteAnimSetAuthoring)}] '{name}': animated and static sprite " +
-                    "authoring cannot coexist on one GameObject — removing the static authoring.",
-                    staticAuthoring);
-                var colliderAuthoring = GetComponent<SpriteColliderAuthoring>();
-                EditorApplication.delayCall += () =>
-                {
-                    if (colliderAuthoring != null)
-                        Undo.DestroyObjectImmediate(colliderAuthoring);
-                    if (staticAuthoring != null)
-                        Undo.DestroyObjectImmediate(staticAuthoring);
-                };
-            }
+            if (GetComponent<SpriteStaticAuthoring>() != null)
+                return; // Explicit conversion owns component changes, never OnValidate.
 
             if (Profile != null)
                 ApplyFromProfile();
@@ -401,7 +385,7 @@ namespace InvertLab.Sprites.DOTS
 
         public void ApplyQuadPreview(int clipIndex, int frameIndex)
         {
-            if (SpritePartsCharacterAuthoring.OwnsAnimation(gameObject))
+            if (GetComponent<SpriteStaticAuthoring>() != null || SpritePartsCharacterAuthoring.OwnsAnimation(gameObject))
                 return;
             var filter = GetComponent<MeshFilter>();
             var renderer = GetComponent<MeshRenderer>();
@@ -574,7 +558,7 @@ namespace InvertLab.Sprites.DOTS
 
 
             // 1x1 preview mesh is UV-baked; scale so PPU matches cell world size.
-            // Mesh is bottom-center: localScale (sx,sy,1) â†’ width sx, height sy, feet at position.
+            // Mesh is bottom-center: localScale (sx,sy,1) -> width sx, height sy, feet at position.
             if (clipSheet != null &&
                 SpriteSheetProfile.TryGetActiveCellPixels(clipSheet, cellIndex, out float cellW, out float cellH))
             {
@@ -1326,6 +1310,9 @@ namespace InvertLab.Sprites.DOTS
         {
             public override void Bake(SpriteAnimSetAuthoring authoring)
             {
+                if (GetComponent<SpriteStaticAuthoring>() != null)
+                    return; // Static baker reports the explicit repair requirement.
+
                 // Track both component and profile for incremental baking ownership changes.
                 var parts = GetComponent<SpritePartsCharacterAuthoring>();
                 if (parts != null && parts.Profile != null)
@@ -1335,7 +1322,15 @@ namespace InvertLab.Sprites.DOTS
                         return;
                 }
                 var profile = authoring.Profile != null ? authoring.Profile.Data : null;
-                // Exactly one baker by Profile.AnimKind. Parts owned by SpritePartsCharacterAuthoring.
+                // Exactly one baker by Profile.AnimKind. Parts owned by SpritePartsCharacterAuthoring;
+                // Static owned by SpriteStaticAuthoring.
+                if (profile != null && profile.AnimKind == SpriteAnimKind.Static)
+                {
+                    if (authoring.Profile != null)
+                        DependsOn(authoring.Profile);
+                    Debug.LogError("Static runtime needs SpriteStaticAuthoring. Use Apply Runtime Mode in the animator window.", authoring);
+                    return;
+                }
                 if (profile != null && profile.AnimKind == SpriteAnimKind.Parts)
                 {
                     if (authoring.GetComponent<SpritePartsCharacterAuthoring>() == null)

@@ -216,7 +216,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             GUILayout.EndScrollView();
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button(new GUIContent("Browse…", "Open a file picker as a last resort.")))
+            if (GUILayout.Button(new GUIContent("Browse...", "Open a file picker as a last resort.")))
             {
                 editorWindow.Close();
                 _host.BrowseAndLoadProfile();

@@ -57,7 +57,7 @@ public sealed class SpriteAnimatorStarter : MonoBehaviour
         if (world == null || !world.IsCreated || !world.EntityManager.Exists(cpu)) return;
         var em = world.EntityManager;
         GUILayout.BeginArea(new Rect(20, 20, 340, 245), GUI.skin.box);
-        GUILayout.Label("DOTS Sprite Animator — Starter");
+        GUILayout.Label("DOTS Sprite Animator - Starter");
         GUILayout.Label("Left: CPU playback   Right: GPU clock");
         GUILayout.Label("Generated demo art; no external assets required.");
         if (GUILayout.Button(paused ? "Resume left sprite" : "Pause left sprite"))

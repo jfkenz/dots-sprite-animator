@@ -32,7 +32,7 @@ namespace InvertLab.Sprites.DOTS
         [HideInInspector]
         public int DepthOffset;
 
-        [Tooltip("ON (default): depth is authored once — pin z at startup and skip " +
+        [Tooltip("ON (default): depth is authored once - pin z at startup and skip " +
                  "the periodic re-pin entirely (zero per-tick cost). Turn OFF only " +
                  "when gameplay will write SpriteSortDepth on this entity at runtime.")]
         public bool Static = true;

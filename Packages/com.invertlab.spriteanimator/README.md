@@ -33,7 +33,7 @@ Optional — not imported until you choose them in Package Manager (**Samples** 
 
 ## Toolbar highlights
 
-- **New Profile** / **Load Profileâ€¦** / **Save Profile**
+- **New Profile** / **Load Profile...** / **Save Profile**
 - Step-frame transport `|<  <  >  >|`
 - Play/Pause, Stop, Loop, playback speed
 - Undo/Redo text buttons (Windows-safe)

@@ -23,9 +23,9 @@ namespace InvertLab.Sprites.DOTS
 
         int _lastClip = -1;
         int _lastFrame = -1;
-        string _lastFrameEvent = "—";
-        string _lastClipEvent = "—";
-        string _lastSource = "—";
+        string _lastFrameEvent = "-";
+        string _lastClipEvent = "-";
+        string _lastSource = "-";
         float _lastEventTime = -999f;
         long _lastHandledKey = long.MinValue;
         readonly StringBuilder _overlay = new(256);
@@ -220,8 +220,8 @@ namespace InvertLab.Sprites.DOTS
             string freshness = age < 1.25f ? "●" : "○";
 
             _overlay.Clear();
-            _overlay.Append("DOTS Sprite Animator — Events\n");
-            _overlay.Append("Author: Footstep (id 1) on Walk · Attack (id 2) on Attack\n");
+            _overlay.Append("DOTS Sprite Animator - Events\n");
+            _overlay.Append("Author: Footstep (id 1) on Walk * Attack (id 2) on Attack\n");
             _overlay.Append(freshness).Append(" Frame: ").Append(_lastFrameEvent).Append('\n');
             _overlay.Append("Clip: ").Append(_lastClipEvent).Append('\n');
             _overlay.Append("Source: ").Append(_lastSource);

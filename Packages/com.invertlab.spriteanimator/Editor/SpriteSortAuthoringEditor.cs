@@ -27,7 +27,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             serializedObject.Update();
 
-            // Total index entry: 1 = 0.001 z everywhere. total = layer×1000 +
+            // Total index entry: 1 = 0.001 z everywhere. total = layerx1000 +
             // order + offset. DelayedIntField commits once on Enter/focus-loss;
             // the write is applied immediately so nothing later can drop it.
             var layerProp = serializedObject.FindProperty("SortLayer");
@@ -40,7 +40,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUI.BeginChangeCheck();
                 int index = EditorGUILayout.DelayedIntField(new GUIContent("Sort Index",
                     $"Total depth coordinate where 1 = 0.001 z (higher = on top). " +
-                    $"Index = Layer × {SpriteSortDepth.OrdersPerLayer} + Order + Offset; " +
+                    $"Index = Layer x {SpriteSortDepth.OrdersPerLayer} + Order + Offset; " +
                     "editing it fills Layer/Order below and clears Offset."),
                     current);
                 if (EditorGUI.EndChangeCheck() && index != current)
@@ -52,14 +52,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     serializedObject.ApplyModifiedProperties();
                     serializedObject.Update();
                     // the immediate apply consumes the change, so the shared
-                    // sync below would skip this edit — sync here instead
+                    // sync below would skip this edit - sync here instead
                     SyncTransformZ((SpriteSortAuthoring)target);
                 }
                 float labelZ = SpriteSortDepth.FromLayerOrder(
                     layerProp.intValue, orderProp.intValue, offsetProp.intValue);
                 EditorGUILayout.LabelField(" ",
-                    $"= Layer {layerProp.intValue} · Order {orderProp.intValue} · " +
-                    $"Offset {offsetProp.intValue}  →  z {labelZ:0.###}",
+                    $"= Layer {layerProp.intValue} * Order {orderProp.intValue} * " +
+                    $"Offset {offsetProp.intValue}  ->  z {labelZ:0.###}",
                     EditorStyles.miniLabel);
             }
 
@@ -133,8 +133,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 float z = sort.BakedDepth;
                 EditorGUILayout.HelpBox(
                     $"Camera '{camera.name}' z {camera.transform.position.z:0.###}, near " +
-                    $"{camera.nearClipPlane:0.##}, far {camera.farClipPlane:0.#} → visible z " +
-                    $"{nearEdge:0.###} … {farEdge:0.#}.\n" +
+                    $"{camera.nearClipPlane:0.##}, far {camera.farClipPlane:0.#} -> visible z " +
+                    $"{nearEdge:0.###} ... {farEdge:0.#}.\n" +
                     $"Baked z {z:0.###}: {z - nearEdge:0.##} from the front edge, " +
                     $"{farEdge - z:0.#} from the back edge.\n" +
                     "All fields: higher = on top. Editing them also writes the GameObject's " +
@@ -142,7 +142,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             else
                 EditorGUILayout.HelpBox(
-                    "No camera in scene — clip range cannot be checked.\n" +
+                    "No camera in scene - clip range cannot be checked.\n" +
                     "All fields: higher = on top; editing them also writes the GameObject's " +
                     "world z (undo-able).", MessageType.Info);
         }

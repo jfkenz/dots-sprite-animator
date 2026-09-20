@@ -42,7 +42,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             Debug.Log(
                 "[Playback API Sample] Built " + ScenePath +
-                ". Enter Play. Keys: 1 Walk · 2 PlayOneShot Attack · 3 Queue · 4 Priority · 5 Hitstop · 6 Hold · 0 Idle.");
+                ". Enter Play. Keys: 1 Walk * 2 PlayOneShot Attack * 3 Queue * 4 Priority * 5 Hitstop * 6 Hold * 0 Idle.");
         }
 
         static ScriptableSpriteSheetProfile LoadProfile()

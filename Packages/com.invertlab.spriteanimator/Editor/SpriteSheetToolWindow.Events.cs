@@ -71,7 +71,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             var otherClipMarkers = new List<(SpriteClipDef clip, int markerIndex)>();
             CollectEventMarkers(clip, thisClipMarkers, otherClipMarkers);
             GUILayout.Label(
-                $"{thisClipMarkers.Count} on this clip  •  {otherClipMarkers.Count} on other clips",
+                $"{thisClipMarkers.Count} on this clip  *  {otherClipMarkers.Count} on other clips",
                 _mutedStyle);
 
             if (DrawEventMarkerScope(thisClipMarkers, ref _eventThisClipExpanded,
@@ -139,7 +139,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             string summary = $"{title}  ({group.Count})";
             if (selectedCount > 0)
-                summary += $"  •  {selectedCount} selected";
+                summary += $"  *  {selectedCount} selected";
             expanded = EditorGUILayout.Foldout(expanded, new GUIContent(summary, description), true);
             if (!expanded)
                 return false;
@@ -188,11 +188,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                     string payloadBit = marker.Payloads.Count == 0
                         ? string.Empty
                         : marker.Payloads.Count == 1
-                            ? "  •  1 payload"
-                            : $"  •  {marker.Payloads.Count} payloads";
+                            ? "  *  1 payload"
+                            : $"  *  {marker.Payloads.Count} payloads";
                     string label = here
-                        ? $"{i + 1}. {EventName(marker.EventId)}  •  Frame {frame + 1}  •  {EventAuthoredTime(owner, marker):0.000}s  •  {fire}{payloadBit}"
-                        : $"{i + 1}. {EventName(marker.EventId)}  •  {EventMarkerHomeLabel(owner, frame)}  •  {fire}{payloadBit}";
+                        ? $"{i + 1}. {EventName(marker.EventId)}  *  Frame {frame + 1}  *  {EventAuthoredTime(owner, marker):0.000}s  *  {fire}{payloadBit}"
+                        : $"{i + 1}. {EventName(marker.EventId)}  *  {EventMarkerHomeLabel(owner, frame)}  *  {fire}{payloadBit}";
                     bool rowClicked = GUILayout.Button(new GUIContent(label,
                             "Click to select and edit. Search jumps to this marker."),
                         EditorStyles.miniButton, GUILayout.Height(22f));
@@ -205,7 +205,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         Repaint();
                     }
 
-                    if (GUILayout.Button(new GUIContent("×", "Delete this event marker."),
+                    if (GUILayout.Button(new GUIContent("x", "Delete this event marker."),
                         EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(22f)))
                     {
                         RemoveEventMarkerAt(owner, markerIndex, focusPreview: owner == CurrentClip);
@@ -343,7 +343,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
                     DrawEventPayloadValue(marker, entry);
 
-                    if (GUILayout.Button(new GUIContent("×", "Remove this payload."),
+                    if (GUILayout.Button(new GUIContent("x", "Remove this payload."),
                         EditorStyles.miniButton, GUILayout.Width(27f), GUILayout.Height(18f)))
                     {
                         RecordProfileUndo("Remove Event Payload");
@@ -359,7 +359,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (GUILayout.Button(new GUIContent("Add Payload",
                     marker.Payloads.Count >= SpriteEventPayloads.Max
                         ? $"Max {SpriteEventPayloads.Max} payloads per marker."
-                        : "Add an Int, then change Type (Float2, Color, Byte, …)."),
+                        : "Add an Int, then change Type (Float2, Color, Byte, ...)."),
                     EditorStyles.miniButton))
                 {
                     RecordProfileUndo("Add Event Payload");
@@ -560,10 +560,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             string headerRight = unused > 0
-                ? $"{_profile.Events.Count}  •  {unused} unused"
+                ? $"{_profile.Events.Count}  *  {unused} unused"
                 : $"{_profile.Events.Count}";
             if (selectedCount > 0)
-                headerRight += $"  •  {selectedCount} selected";
+                headerRight += $"  *  {selectedCount} selected";
 
             var headerRect = EditorGUILayout.GetControlRect(false, 18f);
             EditorGUI.LabelField(headerRect, "EVENT TYPES", headerRight, EditorStyles.miniBoldLabel);
@@ -598,8 +598,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Mathf.Max(20f, deleteRect.x - row.x - 6f), 16f);
 
                 string label = placed == 0
-                    ? $"{definition.Name}  •  ID {definition.Id}  •  not placed"
-                    : $"{definition.Name}  •  ID {definition.Id}  •  {placed} placed";
+                    ? $"{definition.Name}  *  ID {definition.Id}  *  not placed"
+                    : $"{definition.Name}  *  ID {definition.Id}  *  {placed} placed";
 
                 if (renaming)
                 {
@@ -822,7 +822,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            // Exclusive select — click again on the sole selection clears it.
+            // Exclusive select - click again on the sole selection clears it.
             if (_selectedEventTypeIndex == index &&
                 _selectedEventTypeIndices.Count == 1 &&
                 _selectedEventTypeIndices.Contains(index))
@@ -989,7 +989,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         static string EventMarkerHomeLabel(SpriteClipDef clip, int frame)
         {
             string clipName = clip == null || string.IsNullOrEmpty(clip.Name) ? "Clip" : clip.Name;
-            return $"{clipName}  •  Frame {frame + 1}";
+            return $"{clipName}  *  Frame {frame + 1}";
         }
 
         bool EventMarkerIsSelected(SpriteClipDef clip, int markerIndex)
@@ -1071,7 +1071,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _eventRowDetailsExpanded = true;
             _status = marker == null
                 ? $"Jumped to {EventMarkerHomeLabel(clip, frame)}"
-                : $"Jumped to {EventName(marker.EventId)}  •  {EventMarkerHomeLabel(clip, frame)}";
+                : $"Jumped to {EventName(marker.EventId)}  *  {EventMarkerHomeLabel(clip, frame)}";
             ReleaseShortcutKeyboardFocus();
             Repaint();
         }

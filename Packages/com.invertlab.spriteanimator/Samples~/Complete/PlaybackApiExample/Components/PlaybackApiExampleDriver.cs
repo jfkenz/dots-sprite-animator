@@ -40,7 +40,7 @@ namespace InvertLab.Sprites.DOTS
             SyncIndicesFromBootstrap();
             if (_player != null)
                 _player.Play(IdleClipIndex, force: true);
-            _lastAction = "Start → Play(Idle)";
+            _lastAction = "Start -> Play(Idle)";
         }
 
         void SyncIndicesFromBootstrap()
@@ -76,7 +76,7 @@ namespace InvertLab.Sprites.DOTS
                     _player.Play(IdleClipIndex, force: true);
                 bool ok = _player.PlayOneShot(AttackClipIndex);
                 _lastAction = ok
-                    ? $"2 PlayOneShot(Attack[{AttackClipIndex}]) → resume Idle"
+                    ? $"2 PlayOneShot(Attack[{AttackClipIndex}]) -> resume Idle"
                     : "2 PlayOneShot(Attack) FAILED";
             }
             else if (WasPressed(KeyCode.Alpha3) || WasPressed(KeyCode.Keypad3))
@@ -88,7 +88,7 @@ namespace InvertLab.Sprites.DOTS
                 bool ok = _player.PlayOrQueue(AttackClipIndex, force: false, queueIfBlocked: true);
                 int queued = _player.QueuedClipIndex;
                 _lastAction = ok
-                    ? $"3 PlayOrQueue(Attack) while Walk — queued={queued}"
+                    ? $"3 PlayOrQueue(Attack) while Walk - queued={queued}"
                     : "3 PlayOrQueue(Attack) FAILED";
             }
             else if (WasPressed(KeyCode.Alpha4) || WasPressed(KeyCode.Keypad4))
@@ -168,8 +168,8 @@ namespace InvertLab.Sprites.DOTS
             GUI.Box(
                 new Rect(16f, 12f, 520f, 168f),
                 "Playback APIs\n" +
-                "1 Play Walk · 2 PlayOneShot Attack→Idle · 3 Queue Attack on Walk\n" +
-                "4 Priority Attack interrupts Walk · 5 Hitstop · 6 Hold · 0 Idle reset\n" +
+                "1 Play Walk * 2 PlayOneShot Attack->Idle * 3 Queue Attack on Walk\n" +
+                "4 Priority Attack interrupts Walk * 5 Hitstop * 6 Hold * 0 Idle reset\n" +
                 $"Last: {_lastAction}\n" +
                 $"Clip: [{clip}] {clipName}  playing={playing}  queued={queued}  oneShot={oneShot}",
                 _helpStyle);

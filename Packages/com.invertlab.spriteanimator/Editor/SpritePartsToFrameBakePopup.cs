@@ -53,7 +53,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 GUILayout.Label(plan.Summary, EditorStyles.wordWrappedMiniLabel);
                 GUILayout.Label(
-                    $"{plan.FrameCount} frame(s) | {plan.Columns}×{plan.Rows} cells | {plan.CellWidth}×{plan.CellHeight} px",
+                    $"{plan.FrameCount} frame(s) | {plan.Columns}x{plan.Rows} cells | {plan.CellWidth}x{plan.CellHeight} px",
                     EditorStyles.miniLabel);
                 for (int i = 0; i < plan.Notes.Count; i++)
                     GUILayout.Label(plan.Notes[i], EditorStyles.wordWrappedMiniLabel);
@@ -62,7 +62,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GUILayout.Space(4f);
                     GUILayout.Label("Not transferred / not full fidelity:", EditorStyles.miniBoldLabel);
                     for (int i = 0; i < plan.Unsupported.Count; i++)
-                        GUILayout.Label("• " + plan.Unsupported[i], EditorStyles.wordWrappedMiniLabel);
+                        GUILayout.Label("* " + plan.Unsupported[i], EditorStyles.wordWrappedMiniLabel);
                 }
                 if (GUILayout.Button("Bake", GUILayout.Height(24f)))
                 {

@@ -350,5 +350,84 @@ namespace InvertLab.Sprites.DOTS.Tests
                 profile, Unity.Collections.Allocator.Temp, out var blob, out var err), err);
             if (blob.IsCreated) blob.Dispose();
         }
+
+        [Test]
+        public void GroupSiblings_DoesNotChangeParent_OrKeys()
+        {
+            var profile = MakeFloating();
+            int walk = SpritePartsAuthoringOps.FindClipIndex(profile, "walk");
+            SpritePartsAuthoringOps.ApplyPoseEdit(
+                profile, SpritePartsStudioMode.Animate, walk, "hand.l", 0.1f,
+                new SpritePartsAuthoringOps.PoseEdit
+                {
+                    Position = new Vector2(-0.4f, 0.2f),
+                    Rotation = 10f,
+                    Scale = Vector2.one,
+                }, autoKey: true);
+
+            var left = SpritePartsAuthoringOps.FindSlot(profile, "hand.l");
+            string parentBefore = SpritePartIdUtility.Canonical(left.ParentSlotId);
+            var result = SpritePartsAuthoringOps.TryGroupSiblings(
+                profile, new[] { "hand.l", "hand.r" }, out var group);
+            Assert.IsTrue(result.Ok, result.Reason);
+            Assert.IsNotNull(group);
+            Assert.AreEqual(parentBefore, SpritePartIdUtility.Canonical(left.ParentSlotId));
+            Assert.AreEqual("body", SpritePartIdUtility.Canonical(
+                SpritePartsAuthoringOps.FindSlot(profile, "hand.r").ParentSlotId));
+            Assert.AreEqual(group.GroupId, SpritePartsAuthoringOps.SlotGroupId(left));
+            var track = SpritePartsAuthoringOps.FindTrack(profile.PartsClips[walk], "hand.l");
+            Assert.IsNotNull(track);
+            Assert.Greater(track.Keys.Count, 0);
+            Assert.AreEqual(-0.4f, track.Keys[track.Keys.Count - 1].Position.x, 1e-4f);
+        }
+
+        [Test]
+        public void GroupRejectsMixedParents_AndUngroupClearsIds()
+        {
+            var profile = MakeFloating();
+            var mixed = SpritePartsAuthoringOps.TryGroupSiblings(
+                profile, new[] { "body", "hand.l" }, out _);
+            Assert.IsFalse(mixed.Ok);
+
+            var parentChild = SpritePartsAuthoringOps.TryGroupSiblings(
+                profile, new[] { "hand.r", "weapon" }, out _);
+            Assert.IsFalse(parentChild.Ok);
+
+            Assert.IsTrue(SpritePartsAuthoringOps.TryGroupSiblings(
+                profile, new[] { "hand.l", "hand.r" }, out var group).Ok);
+            Assert.IsTrue(SpritePartsAuthoringOps.TryUngroup(profile, group.GroupId).Ok);
+            Assert.IsNull(SpritePartsAuthoringOps.FindGroup(profile, group.GroupId));
+            Assert.AreEqual(string.Empty,
+                SpritePartsAuthoringOps.SlotGroupId(SpritePartsAuthoringOps.FindSlot(profile, "hand.l")));
+        }
+
+        [Test]
+        public void HiddenGroup_HidesMembers_WithoutDisablingSlot()
+        {
+            var profile = MakeFloating();
+            Assert.IsTrue(SpritePartsAuthoringOps.TryGroupSiblings(
+                profile, new[] { "hand.l", "hand.r" }, out var group).Ok);
+            group.Enabled = false;
+            Assert.IsTrue(SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, "hand.l"));
+            Assert.IsTrue(SpritePartsAuthoringOps.FindSlot(profile, "hand.l").Enabled);
+            Assert.IsFalse(SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, "body"));
+        }
+
+        [Test]
+        public void Reparent_ClearsGroupMembership()
+        {
+            var profile = MakeFloating();
+            Assert.IsTrue(SpritePartsAuthoringOps.TryGroupSiblings(
+                profile, new[] { "hand.l", "hand.r" }, out var group).Ok);
+            var move = SpritePartsAuthoringOps.TryCommitTreeMove(
+                profile, "hand.l",
+                SpritePartsAuthoringOps.TreeDropKind.MoveToRoot,
+                string.Empty,
+                confirmAnimationReview: true);
+            Assert.IsTrue(move.Ok, move.Reason);
+            Assert.AreEqual(string.Empty,
+                SpritePartsAuthoringOps.SlotGroupId(SpritePartsAuthoringOps.FindSlot(profile, "hand.l")));
+            Assert.IsNull(SpritePartsAuthoringOps.FindGroup(profile, group.GroupId));
+        }
     }
 }

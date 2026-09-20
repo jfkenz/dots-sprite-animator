@@ -144,7 +144,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             set.Profile = profile;
             set.InitialClipIndex = 0;
             // Play mode uses SpriteInstanceRenderSystem for the character.
-            // Show Sprite is MeshRenderer edit preview only — DontSave mesh/mat
+            // Show Sprite is MeshRenderer edit preview only - DontSave mesh/mat
             // cannot serialize into SubScenes and can feed EG/BRG wrongly.
             set.ShowSpriteInScene = false;
             set.ApplyFromProfile();

@@ -35,6 +35,9 @@ Goal: floating hands, bouncing body, swinging feet, and replaceable weapons, ani
 
 ## 3. Creative workflow
 
+Profile/workspace clarification (2026-09-16): see [Profile-Frames-Parts-Workflow-Design.md](Profile-Frames-Parts-Workflow-Design.md). The user-facing Clips tab becomes Frames; one owner profile keeps separate data sets, with explicit copy/import reuse. Workspace changes never switch runtime mode.
+
+
 1. Existing window → Parts → New Parts Character. Create a NEW profile by default; conversion of an existing flipbook is Advanced and explicit.
 2. Choose Floating Parts (default), Humanoid, or Empty. Floating Parts supplies Body, Hand L, Hand R, Weapon; user-defined parts remain supported.
 3. Drag a sliced sprite, whole PNG, or existing sheet cell into the canvas. Whole PNG becomes a 1x1 sheet. New part appears at the drop point. Parent defaults to character root; Add Child is explicit.
