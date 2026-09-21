@@ -39,6 +39,11 @@ namespace InvertLab.Sprites.DOTS.Tests
             cam.clearFlags = CameraClearFlags.SolidColor;
             _demo = new GameObject("Combat integration test").AddComponent<PartsCombatDemo>();
             _demo.Atlas = Atlas();
+#if UNITY_EDITOR
+            _demo.Profile = UnityEditor.AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(
+                "Packages/com.invertlab.spriteanimator/Runtime/DemoArt/PartsCombatProfile.asset");
+            Assert.IsNotNull(_demo.Profile, "Ship the editable profile with the example.");
+#endif
             _demo.ViewCamera = cam;
             _demo.ShowControls = false;
             yield return null;
@@ -53,6 +58,12 @@ namespace InvertLab.Sprites.DOTS.Tests
                 Assert.AreNotEqual(Entity.Null, sheet, "Every default part must be bound, not just the weapon skin.");
                 Assert.IsTrue(em.Exists(sheet));
                 Assert.IsTrue(em.HasComponent<SpriteSheetAsset>(sheet));
+                var art = em.GetComponentData<SpritePartAppearanceState>(link.Part);
+                var frame = em.GetComponentData<SpriteAnimFrame>(link.Part);
+                var definition = em.GetComponentData<SpriteSheetDefinition>(sheet);
+                Assert.AreEqual(art.LogicalWorldSize.x, frame.Scale.x * definition.CellAspect, 0.001f,
+                    "Rendered width must match the profile preview, including cropped art.");
+                Assert.AreEqual(art.LogicalWorldSize.y, frame.Scale.y, 0.001f);
             }
         }
 
@@ -137,6 +148,55 @@ namespace InvertLab.Sprites.DOTS.Tests
 
 #if UNITY_EDITOR
         [UnityTest]
+        public IEnumerator SavedProfileEditsDrivePlaybackAndReorderedSlots()
+        {
+            var source = _demo.Profile;
+            Object.Destroy(_demo.gameObject);
+            yield return null;
+            string folder = "__PartsCombatTest_" + System.Guid.NewGuid().ToString("N");
+            UnityEditor.AssetDatabase.CreateFolder("Assets", folder);
+            _importedFolder = "Assets/" + folder;
+            string path = _importedFolder + "/EditedProfile.asset";
+            Assert.IsTrue(UnityEditor.AssetDatabase.CopyAsset(UnityEditor.AssetDatabase.GetAssetPath(source), path));
+            var edited = UnityEditor.AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(path);
+            var idle = edited.Data.PartsClips.Find(c => c.Name == "Idle");
+            idle.Duration = 2.4f;
+            foreach (var key in idle.Tracks.Find(t => t.SlotId == "body").Keys)
+                key.Position = new Vector2(0.35f, key.Position.y);
+            edited.Data.PartsAppearances.Find(a => a.AppearanceId == "blaster").LogicalWorldSize = new Vector2(2f, 0.8f);
+            var weapon = edited.Data.PartsSlots.Find(s => s.SlotId == "weapon");
+            edited.Data.PartsSlots.Remove(weapon);
+            edited.Data.PartsSlots.Insert(0, weapon);
+            UnityEditor.EditorUtility.SetDirty(edited);
+            UnityEditor.AssetDatabase.SaveAssets();
+            UnityEditor.AssetDatabase.ImportAsset(path, UnityEditor.ImportAssetOptions.ForceUpdate);
+            _demo = new GameObject("Edited profile demo").AddComponent<PartsCombatDemo>();
+            _demo.Profile = UnityEditor.AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(path);
+            _demo.ShowControls = false;
+            _demo.ViewCamera = _camera.GetComponent<Camera>();
+            // No fallback atlas: the saved profile must supply all art and motion.
+            yield return null;
+            yield return null;
+            Assert.IsTrue(_demo.Ready);
+            var em = World.DefaultGameObjectInjectionWorld.EntityManager;
+            var blob = em.GetComponentData<SpritePartsSetRef>(_demo.Root).Set;
+            Assert.AreEqual(2.4f, blob.Value.Clips[0].Duration);
+            Assert.AreEqual(0, em.GetComponentData<SpritePartSlot>(_demo.Weapon).SlotIndex);
+            Assert.AreEqual(new float2(2f, 0.8f), em.GetComponentData<SpritePartAppearanceState>(_demo.Weapon).LogicalWorldSize);
+            foreach (var link in em.GetBuffer<SpritePartLink>(_demo.Root))
+                if (blob.Value.Slots[link.SlotIndex].SlotId.ToString() == "body")
+                    Assert.AreEqual(0.35f, em.GetComponentData<LocalTransform>(link.Part).Position.x, 0.001f);
+            _demo.Fire();
+            yield return new WaitForSeconds(0.1f);
+            Assert.AreEqual(1, _demo.ShotsFired);
+            _demo.TogglePhysics();
+            Assert.IsTrue(_demo.WeaponDetached);
+            _demo.TogglePhysics();
+            Assert.IsFalse(_demo.WeaponDetached);
+            Assert.AreEqual(1.2f, source.Data.PartsClips[0].Duration, "Editing a copy must preserve the template.");
+        }
+
+        [UnityTest]
         public IEnumerator ImportedSampleSceneReloadsAndRenders()
         {
             Object.Destroy(_demo.gameObject);
@@ -163,6 +223,7 @@ namespace InvertLab.Sprites.DOTS.Tests
                 Assert.IsTrue(_demo.Ready);
                 Assert.AreNotEqual(previousRoot, _demo.Root);
                 Assert.IsNotNull(_demo.Atlas);
+                Assert.IsNotNull(_demo.Profile, "The distributed scene must use the editable profile.");
                 _demo.Fire();
                 yield return new WaitForSeconds(0.1f);
                 Assert.AreEqual(1, _demo.ShotsFired);

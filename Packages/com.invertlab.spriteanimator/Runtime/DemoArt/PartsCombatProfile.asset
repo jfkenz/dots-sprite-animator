@@ -1,0 +1,376 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e4c91a2d8f4e6ab3c1d9e0f5a8b246, type: 3}
+  m_Name: PartsCombatProfile
+  m_EditorClassIdentifier: InvertLab.SpriteAnimator.Runtime::InvertLab.Sprites.DOTS.ScriptableSpriteSheetProfile
+  Data:
+    Sheet: {fileID: 2800000, guid: 4f7c1f5b2462c5f4fbaf422a58abbf08, type: 3}
+    Columns: 1
+    Rows: 1
+    PixelsPerUnit: 400
+    Pivot: {x: 0.5, y: 0.5}
+    CellLayoutMode: 1
+    CroppedCellRects:
+    - x: 100
+      y: 578
+      width: 458
+      height: 606
+    CellPivots: []
+    Sheets:
+    - Name: Body
+      Texture: {fileID: 2800000, guid: 4f7c1f5b2462c5f4fbaf422a58abbf08, type: 3}
+      Columns: 1
+      Rows: 1
+      PixelsPerUnit: 400
+      Pivot: {x: 0.5, y: 0.5}
+      CellLayoutMode: 1
+      CroppedCellRects:
+      - x: 100
+        y: 578
+        width: 458
+        height: 606
+      CellPivots: []
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+    - Name: Glove
+      Texture: {fileID: 2800000, guid: 4f7c1f5b2462c5f4fbaf422a58abbf08, type: 3}
+      Columns: 1
+      Rows: 1
+      PixelsPerUnit: 400
+      Pivot: {x: 0.5, y: 0.5}
+      CellLayoutMode: 1
+      CroppedCellRects:
+      - x: 830
+        y: 677
+        width: 289
+        height: 307
+      CellPivots: []
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+    - Name: Blaster
+      Texture: {fileID: 2800000, guid: 4f7c1f5b2462c5f4fbaf422a58abbf08, type: 3}
+      Columns: 1
+      Rows: 1
+      PixelsPerUnit: 400
+      Pivot: {x: 0.25, y: 0.32}
+      CellLayoutMode: 1
+      CroppedCellRects:
+      - x: 70
+        y: 119
+        width: 497
+        height: 293
+      CellPivots: []
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+    - Name: Rifle
+      Texture: {fileID: 2800000, guid: 4f7c1f5b2462c5f4fbaf422a58abbf08, type: 3}
+      Columns: 1
+      Rows: 1
+      PixelsPerUnit: 400
+      Pivot: {x: 0.25, y: 0.32}
+      CellLayoutMode: 1
+      CroppedCellRects:
+      - x: 628
+        y: 129
+        width: 602
+        height: 272
+      CellPivots: []
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+    Clips: []
+    AnimKind: 1
+    StaticSheetIndex: 0
+    StaticRow: 0
+    StaticColumn: 0
+    StaticSizeUnits: 0
+    PartsSchemaVersion: 1
+    PartsSlots:
+    - Name: body
+      SlotId: body
+      ParentSlotId:
+      SiblingOrder: 0
+      RestPosition: {x: 0, y: 0}
+      RestRotation: 0
+      RestScale: {x: 1, y: 1}
+      DefaultAppearanceId: body
+      DrawRank: 0
+      Enabled: 1
+      EditorLocked: 0
+      GroupId:
+      SemanticRole: 0
+    - Name: hand.l
+      SlotId: hand.l
+      ParentSlotId: body
+      SiblingOrder: 1
+      RestPosition: {x: -0.43, y: -0.16}
+      RestRotation: 0
+      RestScale: {x: 1, y: 1}
+      DefaultAppearanceId: hand
+      DrawRank: 1
+      Enabled: 1
+      EditorLocked: 0
+      GroupId:
+      SemanticRole: 0
+    - Name: hand.r
+      SlotId: hand.r
+      ParentSlotId: body
+      SiblingOrder: 2
+      RestPosition: {x: 0.43, y: -0.12}
+      RestRotation: 0
+      RestScale: {x: 1, y: 1}
+      DefaultAppearanceId: hand
+      DrawRank: 3
+      Enabled: 1
+      EditorLocked: 0
+      GroupId:
+      SemanticRole: 0
+    - Name: weapon
+      SlotId: weapon
+      ParentSlotId: hand.r
+      SiblingOrder: 3
+      RestPosition: {x: 0.04, y: 0}
+      RestRotation: 0
+      RestScale: {x: 1, y: 1}
+      DefaultAppearanceId: blaster
+      DrawRank: 2
+      Enabled: 1
+      EditorLocked: 0
+      GroupId:
+      SemanticRole: 0
+    PartsGroups: []
+    PartsAppearances:
+    - Name: Body
+      AppearanceId: body
+      SheetIndex: 0
+      CellIndex: 0
+      LogicalWorldSize: {x: 1.1, y: 1.45}
+      PivotSource: 2
+      PivotOverride: {x: 0.5, y: 0.5}
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+      SemanticRole: 0
+    - Name: Glove
+      AppearanceId: hand
+      SheetIndex: 1
+      CellIndex: 0
+      LogicalWorldSize: {x: 0.34, y: 0.36}
+      PivotSource: 2
+      PivotOverride: {x: 0.5, y: 0.5}
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+      SemanticRole: 0
+    - Name: Blaster
+      AppearanceId: blaster
+      SheetIndex: 2
+      CellIndex: 0
+      LogicalWorldSize: {x: 1.3, y: 0.766}
+      PivotSource: 2
+      PivotOverride: {x: 0.25, y: 0.32}
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+      SemanticRole: 0
+    - Name: Rifle
+      AppearanceId: rifle
+      SheetIndex: 3
+      CellIndex: 0
+      LogicalWorldSize: {x: 1.65, y: 0.746}
+      PivotSource: 2
+      PivotOverride: {x: 0.25, y: 0.32}
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+      SemanticRole: 0
+    PartsClips:
+    - Name: Idle
+      ClipId: idle
+      Duration: 1.2
+      Speed: 1
+      WrapMode: 0
+      Tracks:
+      - SlotId: body
+        Kind: 0
+        Keys:
+        - Time: 0
+          Position: {x: 0, y: 0}
+          Rotation: 0
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+        - Time: 0.6
+          Position: {x: 0, y: 0.025}
+          Rotation: 0
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+        - Time: 1.2
+          Position: {x: 0, y: 0}
+          Rotation: 0
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+    - Name: Walk
+      ClipId: walk
+      Duration: 0.5
+      Speed: 1
+      WrapMode: 0
+      Tracks:
+      - SlotId: body
+        Kind: 0
+        Keys:
+        - Time: 0
+          Position: {x: 0, y: 0}
+          Rotation: -3
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+        - Time: 0.125
+          Position: {x: 0, y: 0.09}
+          Rotation: 0
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+        - Time: 0.25
+          Position: {x: 0, y: 0}
+          Rotation: 3
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+        - Time: 0.375
+          Position: {x: 0, y: 0.09}
+          Rotation: 0
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+        - Time: 0.5
+          Position: {x: 0, y: 0}
+          Rotation: -3
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+      - SlotId: hand.l
+        Kind: 0
+        Keys:
+        - Time: 0
+          Position: {x: -0.43, y: -0.16}
+          Rotation: -12
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+        - Time: 0.25
+          Position: {x: -0.46, y: -0.05}
+          Rotation: 12
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+        - Time: 0.5
+          Position: {x: -0.43, y: -0.16}
+          Rotation: -12
+          Scale: {x: 1, y: 1}
+          EaseMode: 0
+          AppearanceId:
+      Import:
+        SourceGuid:
+        SourcePath:
+        SourceItem:
+        ImportedUtc:
+        LibraryGuid:
+        LibraryItemId:
+    PartsSkins:
+    - Name: blaster
+      SkinId: blaster
+      Bindings:
+      - SlotId: weapon
+        AppearanceId: blaster
+    - Name: rifle
+      SkinId: rifle
+      Bindings:
+      - SlotId: weapon
+        AppearanceId: rifle
+    PartsDefaultClipId: idle
+    PartsDefaultSkinId: blaster
+    PartsRootBoundsSize: {x: 2.6, y: 2}
+    PartsRootBoundsCenter: {x: 0, y: 0}
+    ArtLibraries: []
+    Events: []
+    Hitboxes: []
+    SocketCatalog:
+      Items: []
+    SocketMotions: []
+    SocketInventories: []
+    IndependentTimelineInitialized: 0
+    IndependentTimelineUsesSeconds: 0
+    IndependentMotionDurationSeconds: 1
+    IndependentMotionFrameRate: 12
+    IndependentMotionFrameCount: 12
+    IndependentMotionSpeed: 1
+    IndependentMotionLoop: 1
+    OnionSettingsInitialized: 1
+    OnionSkinEnabled: 0
+    OnionPastFrames: 3
+    OnionFutureFrames: 3
+    ShowOnionLayerNumbers: 1
+    TimelineHitShape: 0
+    TimelineHitPolygon:
+    - {x: 0.5, y: 0.04}
+    - {x: 0.82, y: 0.16}
+    - {x: 0.96, y: 0.5}
+    - {x: 0.82, y: 0.84}
+    - {x: 0.5, y: 0.96}
+    - {x: 0.18, y: 0.84}
+    - {x: 0.04, y: 0.5}
+    - {x: 0.18, y: 0.16}

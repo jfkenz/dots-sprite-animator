@@ -12,7 +12,11 @@ Use **Tools > DOTS Sprite Animator > Create Parts Combat Example**, or import
 Complete and open `PartsCombatExample/PartsCombatExample.unity`. Demonstrates
 Idle/Walk blending, independent aiming, recoil, skin swaps, socket-fired shots,
 pause, and Unity 2D weapon handoff. Includes generated cutout art and PlayMode
-integration tests. See the sample README for controls and implementation details.
+integration tests. The menu creates an editable `PartsCombatProfile` in
+`Assets/PartsCombatExample` and opens it in the animator. Edit Idle/Walk, save the
+profile, then restart Play to see the changes. The scene Inspector also provides
+**Open Profile in Animator** and **Create Editable Profile Copy**. See the sample
+README for controls and implementation details.
 
 ## Cutout Parts demo
 

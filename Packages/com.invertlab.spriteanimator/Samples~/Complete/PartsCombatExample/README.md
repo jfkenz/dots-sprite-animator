@@ -5,13 +5,38 @@ additive recoil, weapon skins, muzzle sockets, and physics ownership.
 
 ## Open it
 
-- Without importing samples: **Tools > DOTS Sprite Animator > Create Parts Combat Example**, then press Play.
+- Recommended: **Tools > DOTS Sprite Animator > Create Parts Combat Example**. This creates a
+  unique editable profile in `Assets/PartsCombatExample/`, assigns it to the new scene,
+  and opens it in the DOTS Sprite Animator. Save the scene, then press Play.
 - From Package Manager: import **Complete**, open `PartsCombatExample.unity` in
   its `PartsCombatExample` folder, then press Play.
 
-The scene references the package's generated atlas and runtime example components.
+The distributed scene references `Runtime/DemoArt/PartsCombatProfile.asset` in the package.
+To customize an imported scene, select **Parts Combat Playground**, click **Create Editable
+Profile Copy** in the Inspector, and save the scene. The copy is assigned automatically.
+**Open Profile in Animator** returns to its editor. You can also use **Load Profile** and
+select `PartsCombatProfile` directly. The profile references the package's generated atlas.
 It requires the package's normal Entities/URP setup and Unity 2D Physics module.
 It does not require the Input System or optional Unity Physics package.
+
+## Edit it without writing animation code
+
+1. Open the assigned profile and select **Parts**. Expand `body` to see both hands and
+   the weapon parented to `hand.r`.
+2. Select **Idle** or **Walk**, scrub the timeline, turn on onion skin, and change a
+   body pose/key. Save with **Save Profile**.
+3. Restart Play. The example rebuilds from your saved asset, including transforms,
+   keys, appearance sizes/pivots, sheet textures/crops, and weapon skin bindings.
+4. Use **Skins** to inspect the `blaster` and `rifle` patches. Display names and hierarchy
+   presentation can be changed; keep slot IDs `hand.r` and `weapon`, clip names `Idle`
+   and `Walk`, and skin IDs `blaster` and `rifle` for this particular gameplay controller.
+
+Animation is profile-driven; aiming overrides the right hand's keyed rotation and recoil
+adds to the weapon pose during gameplay. The demo muzzle is positioned at normalized
+weapon-art coordinates (0.94, 0.55), and its collider follows the appearance size/pivot.
+Changing to completely different weapon artwork may require adjusting that gameplay muzzle.
+Edits are read when entering Play, not hot-reloaded during a session. Do not add a second
+animation authoring component to the demo object: it already spawns its own ECS character.
 
 ## Controls
 
@@ -36,7 +61,9 @@ It does not require the Input System or optional Unity Physics package.
 
 ## Code map
 
-- `PartsCombatDemoRig`: slots, cropped atlas rectangles, Idle/Walk clips, and skins.
+- `PartsCombatProfile.asset`: editable slots, cropped atlas rectangles, Idle/Walk clips, and skins.
+- `PartsCombatDemoProfile`: creates the initial template once and provides editor shortcuts.
+- `PartsCombatDemoRig`: optional code-only API example, used only when Profile is unassigned.
 - `PartsCombatDemo`: controls, entity lifetime, projectile queries, and the Unity 2D bridge.
 - `PartsCombatDemoInputSystem`: movement and pose requests before `SpritePartsPlayerSystem`.
 - `PartsCombatDemoFireSystem`: socket reads and shot spawning after the pose writer.

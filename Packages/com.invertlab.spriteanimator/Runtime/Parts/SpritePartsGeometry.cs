@@ -92,6 +92,13 @@ namespace InvertLab.Sprites.DOTS
             if (!TryResolveExplicit(logical, pivot, appearance.SheetIndex, appearance.CellIndex,
                     out resolved, out error))
                 return false;
+            // Profile sheet entities use the uniform grid's aspect in the shader.
+            // Crops change UVs only; a part's logical aspect can be different.
+            // Compensate for the actual sheet aspect, not the part's own aspect.
+            float sheetAspect = SpriteSheetProfile.GetCellAspect(sheet.Texture,
+                UnityEngine.Mathf.Max(1, sheet.Columns), UnityEngine.Mathf.Max(1, sheet.Rows));
+            if (!math.isfinite(sheetAspect) || sheetAspect <= 0.01f) sheetAspect = 1f;
+            resolved.FrameScale = new float2(logical.x / sheetAspect, logical.y);
             return true;
         }
 

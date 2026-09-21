@@ -12,6 +12,9 @@ namespace InvertLab.Sprites.DOTS
     [AddComponentMenu("DOTS Sprite Animator/Parts Combat Demo")]
     public sealed class PartsCombatDemo : MonoBehaviour
     {
+        [Tooltip("Editable Parts profile. Save changes in the animator, then restart Play to rebuild the character.")]
+        public ScriptableSpriteSheetProfile Profile;
+        [Tooltip("Used only by the advanced code-only fallback when no Profile is assigned.")]
         public Texture2D Atlas;
         public bool ShowControls = true;
         public bool AutoAim = true;
@@ -35,6 +38,8 @@ namespace InvertLab.Sprites.DOTS
         readonly List<GameObject> _objects = new List<GameObject>();
         readonly float2[] _targets = { new float2(3f, 0.7f), new float2(1.8f, 2f), new float2(-3f, 1.4f) };
         Entity _whiteSheet, _weaponParent, _reticle;
+        int _aimSlot = 2, _weaponSlot = 3;
+        SpriteSheetProfile _profileData;
         Entity[] _targetEntities;
         Texture2D _white;
         Rigidbody2D _physical;
@@ -54,9 +59,9 @@ namespace InvertLab.Sprites.DOTS
         public void Initialize(World world, Texture2D atlas)
         {
             if (Ready) return;
-            if (world == null || !world.IsCreated || atlas == null)
+            if (world == null || !world.IsCreated || (Profile == null && atlas == null))
             {
-                Debug.LogError("[PartsCombatDemo] Assign the atlas and use a valid Entities world.", this);
+                Debug.LogError("[PartsCombatDemo] Assign a Parts profile (or the code-only atlas) and use a valid Entities world.", this);
                 enabled = false;
                 return;
             }
@@ -70,7 +75,38 @@ namespace InvertLab.Sprites.DOTS
             _recoil = _shotCooldown = 0f;
             SpriteBatchSpawner.LayoutXy = true;
             SpriteInstanceRenderSystem.Install(_em);
-            _blob = PartsCombatDemoRig.Build();
+            if (Profile != null)
+            {
+                // Work on a copy: runtime canonicalization must not edit the source asset.
+                _profileData = JsonUtility.FromJson<SpriteSheetProfile>(JsonUtility.ToJson(Profile.Data));
+                string error = null;
+                if (_profileData == null || _profileData.AnimKind != SpriteAnimKind.Parts ||
+                    !SpritePartsClipConversion.TryBuildBlob(_profileData, Allocator.Persistent, out _blob, out error))
+                {
+                    Debug.LogError("[PartsCombatDemo] Invalid Parts profile: " + (error ?? "select a Parts profile"), this);
+                    enabled = false;
+                    return;
+                }
+            }
+            else
+            {
+                _profileData = null;
+                _blob = PartsCombatDemoRig.Build();
+            }
+            _aimSlot = SpritePartsPlayback.FindSlotIndexById(ref _blob.Value, "hand.r");
+            _weaponSlot = SpritePartsPlayback.FindSlotIndexById(ref _blob.Value, "weapon");
+            if (_aimSlot < 0 || _weaponSlot < 0 || _blob.Value.Slots[_weaponSlot].ParentSlotIndex < 0 ||
+                SpritePartsPlayback.FindClipIndexByName(ref _blob.Value, "Idle") < 0 ||
+                SpritePartsPlayback.FindClipIndexByName(ref _blob.Value, "Walk") < 0 ||
+                SpritePartsPlayback.FindSkinIndex(ref _blob.Value, "blaster") < 0 ||
+                SpritePartsPlayback.FindSkinIndex(ref _blob.Value, "rifle") < 0)
+            {
+                Debug.LogError("[PartsCombatDemo] Keep slot IDs hand.r and weapon (with a parent), clip names Idle/Walk, and skin IDs blaster/rifle for this gameplay controller.", this);
+                _blob.Dispose();
+                _blob = default;
+                enabled = false;
+                return;
+            }
             SpawnCharacter();
             _white = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = "Combat demo shapes" };
             _white.SetPixel(0, 0, Color.white);
@@ -81,18 +117,24 @@ namespace InvertLab.Sprites.DOTS
 
         void SpawnCharacter()
         {
-            var result = SpritePartsEntityFactory.Create(_em, _blob, new float3(-0.8f, -0.7f, 0f));
+            var result = SpritePartsEntityFactory.Create(_em, _blob, new float3(-0.8f, -0.7f, 0f),
+                clipIndex: SpritePartsPlayback.FindClipIndexByName(ref _blob.Value, "Idle"));
             Root = result.Root;
-            Weapon = result.Parts[3];
+            Weapon = result.Parts[_weaponSlot];
             _weaponParent = _em.GetComponentData<Parent>(Weapon).Value;
             result.Parts.Dispose();
             _em.AddComponentObject(Root, new PartsCombatDemoLink { Demo = this });
             // Separate crop records preserve each part's aspect on the same atlas.
             var crops = PartsCombatDemoRig.Crops;
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < (_profileData?.Sheets.Count ?? 4); i++)
             {
-                float2 size = PartsCombatDemoRig.Sizes[i];
-                Entity sheet = Sheet(Atlas, size.x / size.y, crops[i]);
+                Entity sheet;
+                if (_profileData != null) sheet = ProfileSheet(_profileData.Sheets[i]);
+                else
+                {
+                    float2 size = PartsCombatDemoRig.Sizes[i];
+                    sheet = Sheet(Atlas, size.x / size.y, crops[i]);
+                }
                 _em.GetBuffer<SpritePartSheetEntry>(Root).Add(new SpritePartSheetEntry { Sheet = sheet, SheetTableIndex = i });
             }
             // The factory cannot bind textures until the sheet table exists.
@@ -101,6 +143,29 @@ namespace InvertLab.Sprites.DOTS
             SpriteParts.ApplySkin(_em, Root, WeaponStyle == 0 ? "blaster" : "rifle");
             BindMuzzle();
             SpritePartsPoseWriter.Apply(_em, Root);
+        }
+
+        Entity ProfileSheet(SpriteSheetDef definition)
+        {
+            if (definition?.Texture == null) return Entity.Null;
+            Entity sheet = _em.CreateEntity();
+            _owned.Add(sheet);
+            int columns = Mathf.Max(1, definition.Columns), rows = Mathf.Max(1, definition.Rows);
+            bool cropped = definition.CellLayoutMode == SpriteSheetCellLayoutMode.Cropped && SpriteSheetProfile.HasCroppedCellData(definition);
+            _em.AddComponentData(sheet, new SpriteSheetDefinition
+            {
+                Cols = columns, Rows = rows,
+                CellAspect = SpriteSheetProfile.GetCellAspect(definition.Texture, columns, rows),
+                UseCellCrops = cropped ? (byte)1 : (byte)0,
+            });
+            _em.AddComponentObject(sheet, new SpriteSheetAsset { Texture = definition.Texture });
+            if (cropped)
+            {
+                var buffer = _em.AddBuffer<SpriteAnimCellCrop>(sheet);
+                foreach (var crop in SpriteSheetProfile.BuildCellCropSTArray(definition))
+                    buffer.Add(new SpriteAnimCellCrop { Value = new float4(crop.x, crop.y, crop.z, crop.w) });
+            }
+            return sheet;
         }
 
         Entity Sheet(Texture2D texture, float aspect, float4 crop)
@@ -171,8 +236,9 @@ namespace InvertLab.Sprites.DOTS
 
         void BindMuzzle()
         {
-            float2 size = PartsCombatDemoRig.Sizes[WeaponStyle == 0 ? 2 : 3];
-            SpriteParts.BindSocket(_em, Root, "muzzle", "weapon", size * new float2(0.69f, 0.23f));
+            var art = _em.GetComponentData<SpritePartAppearanceState>(Weapon);
+            SpriteParts.BindSocket(_em, Root, "muzzle", "weapon",
+                art.LogicalWorldSize * (new float2(0.94f, 0.55f) - art.Pivot));
         }
 
         public void TogglePhysics()
@@ -201,9 +267,10 @@ namespace InvertLab.Sprites.DOTS
             float2 scale = new float2(math.length(matrix.c0.xyz), math.length(matrix.c1.xyz));
             if (math.determinant(new float3x3(matrix.c0.xyz, matrix.c1.xyz, matrix.c2.xyz)) < 0f) scale.y = -scale.y;
             var collider = proxy.GetComponent<BoxCollider2D>();
-            float2 size = PartsCombatDemoRig.Sizes[WeaponStyle == 0 ? 2 : 3];
+            var art = _em.GetComponentData<SpritePartAppearanceState>(Weapon);
+            float2 size = art.LogicalWorldSize;
             collider.size = size * math.abs(scale);
-            collider.offset = (new float2(0.5f) - PartsCombatDemoRig.Grip) * size * scale;
+            collider.offset = (new float2(0.5f) - art.Pivot) * size * scale;
             collider.sharedMaterial = _bounce;
             _em.AddComponentData(Weapon, new SpritePartPhysicsOwned());
             _em.RemoveComponent<Parent>(Weapon);
@@ -241,12 +308,12 @@ namespace InvertLab.Sprites.DOTS
             SpriteParts.SetFacing(_em, Root, AimTarget.x < root.Position.x);
             SpriteParts.SetOverride(_em, Root, new SpritePartsPoseOverride
             {
-                Id = 20001, SlotIndex = 2, Mode = (byte)SpritePartsPoseMode.LookAt,
+                Id = 20001, SlotIndex = _aimSlot, Mode = (byte)SpritePartsPoseMode.LookAt,
                 Channels = (byte)SpritePartsPoseChannel.Rotation, Space = (byte)SpritePartsPoseSpace.World,
                 Target = AimTarget, Weight = 1f,
             });
             _recoil = math.max(0f, _recoil - dt * 5f);
-            SpriteParts.SetOverride(_em, Root, SpritePartsMotion.Recoil(3, new float2(-0.16f, 0f), _recoil));
+            SpriteParts.SetOverride(_em, Root, SpritePartsMotion.Recoil(_weaponSlot, new float2(-0.16f, 0f), _recoil));
             _shotCooldown = math.max(0f, _shotCooldown - dt);
             CopyPhysicsPose();
         }

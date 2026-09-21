@@ -169,9 +169,29 @@ namespace InvertLab.Sprites.DOTS.Tests
             };
             Assert.IsTrue(SpritePartsGeometry.TryResolve(profile, app, false, out var r, out var e), e);
             Assert.AreEqual(2f, r.Aspect, 1e-5f);
-            // Scale.x = logicalWidth / A = 2/2 = 1; Scale.y = logicalHeight = 1
-            Assert.AreEqual(1f, r.FrameScale.x, 1e-5f);
+            // The square sheet's shader aspect is 1, even though this part is 2:1.
+            Assert.AreEqual(2f, r.FrameScale.x, 1e-5f);
             Assert.AreEqual(1f, r.FrameScale.y, 1e-5f);
+        }
+
+        [TestCase(1, 1)]
+        [TestCase(2, 1)]
+        [TestCase(1, 2)]
+        public void CroppedPartRenderedDimensionsMatchEditorGeometry(int columns, int rows)
+        {
+            var profile = Profile();
+            var sheet = profile.Sheets[0];
+            sheet.Columns = columns;
+            sheet.Rows = rows;
+            sheet.CellLayoutMode = SpriteSheetCellLayoutMode.Cropped;
+            sheet.CroppedCellRects = new RectInt[columns * rows];
+            sheet.CroppedCellRects[0] = new RectInt(2, 3, 10, 20);
+            var app = new SpritePartAppearanceDef { SheetIndex = 0, CellIndex = 0,
+                LogicalWorldSize = new Vector2(1.1f, 1.45f) };
+            Assert.IsTrue(SpritePartsGeometry.TryResolve(profile, app, false, out var geometry, out var error), error);
+            float shaderAspect = SpriteSheetProfile.GetCellAspect(sheet.Texture, columns, rows);
+            Assert.AreEqual(geometry.LogicalWorldSize.x, geometry.FrameScale.x * shaderAspect, 1e-5f);
+            Assert.AreEqual(geometry.LogicalWorldSize.y, geometry.FrameScale.y, 1e-5f);
         }
 
         [Test]

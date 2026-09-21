@@ -15,11 +15,15 @@ namespace InvertLab.Sprites.DOTS.Editor
         public static void CreateScene()
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-            CreateSceneContents();
-            Debug.Log("[Parts Combat] Press Play. WASD/arrows move; click/space fires. On-screen controls support mouse/touch.");
+            var template = AssetDatabase.LoadAssetAtPath<ScriptableSpriteSheetProfile>(PartsCombatDemoProfile.AssetPath);
+            if (template == null) throw new System.InvalidOperationException("Parts Combat profile is missing. Reimport the package.");
+            var profile = PartsCombatDemoProfile.CopyToAssets(template);
+            CreateSceneContents(profile);
+            PartsCombatDemoProfile.Open(profile);
+            Debug.Log("[Parts Combat] Editable profile created in Assets/PartsCombatExample. Edit and Save Profile, then press Play. WASD/arrows move; click/space fires.");
         }
 
-        static Scene CreateSceneContents()
+        static Scene CreateSceneContents(ScriptableSpriteSheetProfile profile)
         {
             // Import settings ship in the atlas .meta. Scene creation must also
             // work with read-only PackageCache installs.
@@ -34,6 +38,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             camera.backgroundColor = new Color(0.035f, 0.065f, 0.085f);
             var demo = new GameObject("Parts Combat Playground").AddComponent<PartsCombatDemo>();
             demo.Atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(AtlasPath);
+            demo.Profile = profile;
             demo.ViewCamera = camera;
             Selection.activeGameObject = demo.gameObject;
             return scene;
@@ -42,7 +47,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         // Batch preparation writes the distributable sample, never the user's current scene.
         public static void BuildSampleScene()
         {
-            var scene = CreateSceneContents();
+            var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(AtlasPath);
+            var scene = CreateSceneContents(PartsCombatDemoProfile.EnsureTemplate(atlas));
             Directory.CreateDirectory(Path.GetDirectoryName(SampleScenePath));
             if (!EditorSceneManager.SaveScene(scene, SampleScenePath))
                 throw new System.InvalidOperationException("Could not save Parts Combat sample scene.");
