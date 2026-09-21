@@ -1,0 +1,10 @@
+{
+  "name": "InvertLab.SpriteAnimator.InputPlayModeTests",
+  "references": ["InvertLab.SpriteAnimator.Runtime", "InvertLab.SpriteAnimator.DemoInputSystem", "Unity.InputSystem", "Unity.Entities", "Unity.Transforms", "Unity.Mathematics", "Unity.Collections"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false,
+  "defineConstraints": ["INVERTLAB_INPUT_SYSTEM", "ENABLE_INPUT_SYSTEM"],
+  "versionDefines": [
+    { "name": "com.unity.inputsystem", "expression": "1.0.0", "define": "INVERTLAB_INPUT_SYSTEM" }
+  ]
+}

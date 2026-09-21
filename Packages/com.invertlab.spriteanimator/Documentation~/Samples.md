@@ -10,7 +10,7 @@
 
 Use **Tools > DOTS Sprite Animator > Create Parts Combat Example**, or import
 Complete and open `PartsCombatExample/PartsCombatExample.unity`. Demonstrates
-Idle/Walk blending, independent aiming, recoil, skin swaps, socket-fired shots,
+Idle/Walk blending, upright independent aiming, recoil, a fixed weapon slot, socket-fired shots,
 pause, and Unity 2D weapon handoff. Includes generated cutout art and PlayMode
 integration tests. The menu creates an editable `PartsCombatProfile` in
 `Assets/PartsCombatExample` and opens it in the animator. Edit Idle/Walk, save the

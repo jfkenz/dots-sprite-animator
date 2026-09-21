@@ -46,6 +46,7 @@ namespace InvertLab.Sprites.DOTS.Tests
 #endif
             _demo.ViewCamera = cam;
             _demo.ShowControls = false;
+            _demo.ReadKeyboard = false;
             yield return null;
             yield return null;
             Assert.IsTrue(_demo.Ready);
@@ -84,7 +85,7 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [UnityTest]
-        public IEnumerator WalkAimShootSwapPauseAndPhysicsHandoff()
+        public IEnumerator WalkAimShootPauseAndPhysicsHandoff()
         {
             var em = World.DefaultGameObjectInjectionWorld.EntityManager;
             float start = em.GetComponentData<LocalTransform>(_demo.Root).Position.x;
@@ -98,9 +99,8 @@ namespace InvertLab.Sprites.DOTS.Tests
             _demo.SetMove(float2.zero);
             yield return new WaitForSeconds(0.6f);
             Assert.GreaterOrEqual(_demo.Hits, 1, "Socket-fired shot should hit the practice target.");
-            _demo.SwapWeapon();
-            Assert.AreEqual(1, _demo.WeaponStyle);
-            Assert.AreEqual(3, em.GetComponentData<SpritePartAppearanceState>(_demo.Weapon).SheetTableIndex);
+            Assert.AreEqual(2, em.GetComponentData<SpritePartAppearanceState>(_demo.Weapon).SheetTableIndex,
+                "Gameplay must keep the weapon assigned to the slot.");
             _demo.SetPaused(true);
             var beforePause = em.GetComponentData<SpritePartsPlayer>(_demo.Root);
             yield return new WaitForSeconds(0.12f);
@@ -172,6 +172,36 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual(parent, em.GetComponentData<Parent>(_demo.Weapon).Value);
             Assert.AreEqual(0, em.GetComponentData<SpritePartsFacing>(_demo.Root).FlipX,
                 "Aiming left must not mirror the weapon to the opposite side.");
+        }
+
+        [UnityTest]
+        public IEnumerator AimRemainsUprightOnBothSidesAndKeepsAssignedWeapon()
+        {
+            var em = World.DefaultGameObjectInjectionWorld.EntityManager;
+            Entity hand = em.GetComponentData<Parent>(_demo.Weapon).Value;
+            int appearance = em.GetComponentData<SpritePartAppearanceState>(_demo.Weapon).AppearanceIndex;
+            foreach (var direction in new[] { new float2(3, 1), new float2(-3, 1), new float2(-3, -1), new float2(3, -1) })
+            {
+                float2 handPosition = em.GetComponentData<LocalToWorld>(hand).Value.c3.xy;
+                _demo.AimAt(handPosition + direction);
+                yield return null;
+                yield return null;
+                var matrix = em.GetComponentData<LocalToWorld>(_demo.Weapon).Value;
+                Assert.Greater(matrix.c1.y, 0f, "Weapon's top must face upward in both aiming hemispheres.");
+                Assert.Greater(math.dot(math.normalizesafe(matrix.c0.xy), math.normalizesafe(direction)), 0.99f,
+                    "The barrel must still point toward the target after local mirroring.");
+                Assert.AreEqual(hand, em.GetComponentData<Parent>(_demo.Weapon).Value);
+                Assert.AreEqual(appearance, em.GetComponentData<SpritePartAppearanceState>(_demo.Weapon).AppearanceIndex);
+                Assert.IsTrue(SpriteParts.TryGetSocketWorld(em, _demo.Root, "muzzle", out var muzzle, out var angle));
+                float2 barrel = new float2(math.cos(math.radians(angle)), math.sin(math.radians(angle)));
+                Assert.Greater(math.dot(barrel, math.normalizesafe(direction)), 0.99f);
+            }
+            _demo.SetMove(new float2(0, 1));
+            yield return new WaitForSeconds(0.05f);
+            // A gameplay interruption must not leave the cached motion flag stuck on Walk.
+            SpriteParts.Play(em, _demo.Root, "Idle");
+            yield return new WaitForSeconds(0.05f);
+            Assert.AreEqual("Walk", _demo.CurrentClipName);
         }
 
         [UnityTest]

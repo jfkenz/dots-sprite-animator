@@ -1,0 +1,9 @@
+{
+  "name": "InvertLab.SpriteAnimator.DemoInputSystem",
+  "references": ["InvertLab.SpriteAnimator.Runtime", "Unity.InputSystem"],
+  "autoReferenced": true,
+  "defineConstraints": ["INVERTLAB_INPUT_SYSTEM", "ENABLE_INPUT_SYSTEM"],
+  "versionDefines": [
+    { "name": "com.unity.inputsystem", "expression": "1.0.0", "define": "INVERTLAB_INPUT_SYSTEM" }
+  ]
+}

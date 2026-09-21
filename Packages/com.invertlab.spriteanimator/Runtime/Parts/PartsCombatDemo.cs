@@ -17,6 +17,8 @@ namespace InvertLab.Sprites.DOTS
         [Tooltip("Used only by the advanced code-only fallback when no Profile is assigned.")]
         public Texture2D Atlas;
         public bool ShowControls = true;
+        [Tooltip("Poll held keyboard keys. Disable when driving the demo through SetMove.")]
+        public bool ReadKeyboard = true;
         public bool AutoAim = true;
         public Camera ViewCamera;
         public Entity Root { get; private set; }
@@ -27,7 +29,7 @@ namespace InvertLab.Sprites.DOTS
         public int Hits { get; private set; }
         public int ShotsFired { get; private set; }
         public int LiveShots => _shots.Count;
-        public int WeaponStyle { get; private set; }
+        public string CurrentClipName => Ready ? _clipNames[_em.GetComponentData<SpritePartsPlayer>(Root).ClipIndex] : "None";
         public float2 AimTarget { get; private set; } = new float2(3f, 0.7f);
         public float2 Velocity { get; private set; }
 
@@ -40,6 +42,9 @@ namespace InvertLab.Sprites.DOTS
         readonly float2[] _targets = { new float2(3f, 0.7f), new float2(1.8f, 2f), new float2(-3f, 1.4f) };
         Entity _whiteSheet, _weaponParent, _reticle;
         int _aimSlot = 2, _weaponSlot = 3;
+        int _idleClip, _walkClip;
+        Entity _aimPart;
+        string[] _clipNames;
         SpriteSheetProfile _profileData;
         Entity[] _targetEntities;
         Texture2D _white;
@@ -71,7 +76,7 @@ namespace InvertLab.Sprites.DOTS
             _em = world.EntityManager;
             Atlas = atlas;
             Paused = false;
-            Hits = ShotsFired = WeaponStyle = 0;
+            Hits = ShotsFired = 0;
             _move = Velocity = float2.zero;
             _heldKeys.Clear();
             _moving = _shoot = false;
@@ -98,18 +103,19 @@ namespace InvertLab.Sprites.DOTS
             }
             _aimSlot = SpritePartsPlayback.FindSlotIndexById(ref _blob.Value, "hand.r");
             _weaponSlot = SpritePartsPlayback.FindSlotIndexById(ref _blob.Value, "weapon");
+            _idleClip = SpritePartsPlayback.FindClipIndexByName(ref _blob.Value, "Idle");
+            _walkClip = SpritePartsPlayback.FindClipIndexByName(ref _blob.Value, "Walk");
             if (_aimSlot < 0 || _weaponSlot < 0 || _blob.Value.Slots[_weaponSlot].ParentSlotIndex < 0 ||
-                SpritePartsPlayback.FindClipIndexByName(ref _blob.Value, "Idle") < 0 ||
-                SpritePartsPlayback.FindClipIndexByName(ref _blob.Value, "Walk") < 0 ||
-                SpritePartsPlayback.FindSkinIndex(ref _blob.Value, "blaster") < 0 ||
-                SpritePartsPlayback.FindSkinIndex(ref _blob.Value, "rifle") < 0)
+                _idleClip < 0 || _walkClip < 0)
             {
-                Debug.LogError("[PartsCombatDemo] Keep slot IDs hand.r and weapon (with a parent), clip names Idle/Walk, and skin IDs blaster/rifle for this gameplay controller.", this);
+                Debug.LogError("[PartsCombatDemo] Keep slot IDs hand.r and weapon (with a parent), and clip names Idle/Walk for this gameplay controller.", this);
                 _blob.Dispose();
                 _blob = default;
                 enabled = false;
                 return;
             }
+            _clipNames = new string[_blob.Value.Clips.Length];
+            for (int i = 0; i < _clipNames.Length; i++) _clipNames[i] = _blob.Value.Clips[i].Name.ToString();
             SpawnCharacter();
             _white = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = "Combat demo shapes" };
             _white.SetPixel(0, 0, Color.white);
@@ -124,6 +130,7 @@ namespace InvertLab.Sprites.DOTS
                 clipIndex: SpritePartsPlayback.FindClipIndexByName(ref _blob.Value, "Idle"));
             Root = result.Root;
             Weapon = result.Parts[_weaponSlot];
+            _aimPart = result.Parts[_aimSlot];
             _weaponParent = _em.GetComponentData<Parent>(Weapon).Value;
             result.Parts.Dispose();
             _em.AddComponentObject(Root, new PartsCombatDemoLink { Demo = this });
@@ -141,9 +148,8 @@ namespace InvertLab.Sprites.DOTS
                 _em.GetBuffer<SpritePartSheetEntry>(Root).Add(new SpritePartSheetEntry { Sheet = sheet, SheetTableIndex = i });
             }
             // The factory cannot bind textures until the sheet table exists.
-            // Bind every default first; the weapon skin is only a partial patch.
+            // Keep the appearance assigned to each slot; this demo never swaps skins.
             SpriteParts.ResetSkin(_em, Root);
-            SpriteParts.ApplySkin(_em, Root, WeaponStyle == 0 ? "blaster" : "rifle");
             BindMuzzle();
             SpritePartsPoseWriter.Apply(_em, Root);
         }
@@ -230,14 +236,6 @@ namespace InvertLab.Sprites.DOTS
             if (_physical != null) _physical.simulated = !paused;
         }
 
-        public void SwapWeapon()
-        {
-            if (!Ready || WeaponDetached) return;
-            WeaponStyle = 1 - WeaponStyle;
-            SpriteParts.ApplySkin(_em, Root, WeaponStyle == 0 ? "blaster" : "rifle");
-            BindMuzzle();
-        }
-
         void BindMuzzle()
         {
             var art = _em.GetComponentData<SpritePartAppearanceState>(Weapon);
@@ -308,9 +306,11 @@ namespace InvertLab.Sprites.DOTS
             Velocity = (root.Position.xy - previousPosition) / dt;
             float threshold = _moving ? 0.02f : 0.04f;
             bool moving = math.lengthsq(Velocity) > threshold * threshold;
-            if (moving != _moving)
+            var player = _em.GetComponentData<SpritePartsPlayer>(Root);
+            int desiredClip = moving ? _walkClip : _idleClip;
+            if (moving != _moving || player.ClipIndex != desiredClip || player.Playing == 0 || player.Completed != 0)
             {
-                SpriteParts.Play(_em, Root, moving ? "Walk" : "Idle", crossfadeSeconds: 0.18f);
+                SpriteParts.Play(_em, Root, desiredClip, crossfadeSeconds: 0.18f);
                 _moving = moving;
             }
             if (AutoAim) AimTarget = _targets[(Hits / 4) % _targets.Length];
@@ -318,6 +318,18 @@ namespace InvertLab.Sprites.DOTS
             reticle.Position.xy = AimTarget;
             _em.SetComponentData(_reticle, reticle);
             // Aim the existing hand; do not mirror the whole rig across the body.
+            float2 handPosition = _em.GetComponentData<LocalToWorld>(_aimPart).Value.c3.xy + (root.Position.xy - previousPosition);
+            bool aimLeft = AimTarget.x < handPosition.x;
+            float2 handScale = math.abs(_blob.Value.Slots[_aimSlot].RestScale);
+            handScale.x *= aimLeft ? -1f : 1f;
+            // Mirroring local X lets LookAt keep the physical rotation in the upright
+            // half-turn, while its transformed +X barrel still points at the target.
+            SpriteParts.SetOverride(_em, Root, new SpritePartsPoseOverride
+            {
+                Id = 20002, SlotIndex = _aimSlot, Mode = (byte)SpritePartsPoseMode.Replace,
+                Channels = (byte)SpritePartsPoseChannel.Scale, Space = (byte)SpritePartsPoseSpace.Local,
+                Scale = handScale, Weight = 1f,
+            });
             SpriteParts.SetOverride(_em, Root, new SpritePartsPoseOverride
             {
                 Id = 20001, SlotIndex = _aimSlot, Mode = (byte)SpritePartsPoseMode.LookAt,
@@ -343,7 +355,7 @@ namespace InvertLab.Sprites.DOTS
                 _shots.Add(new Shot { Entity = shot, Position = muzzle, Velocity = new float2(math.cos(angle), math.sin(angle)) * 9f, Life = 2f });
                 ShotsFired++;
                 _recoil = 1f;
-                _shotCooldown = WeaponStyle == 0 ? 0.2f : 0.1f;
+                _shotCooldown = 0.2f;
             }
             _shoot = false;
             for (int i = _shots.Count - 1; i >= 0; i--)
@@ -372,7 +384,30 @@ namespace InvertLab.Sprites.DOTS
             }
         }
 
-        bool Held(KeyCode first, KeyCode second) => _heldKeys.Contains(first) || _heldKeys.Contains(second);
+        bool Held(KeyCode first, KeyCode second)
+        {
+            if (ReadKeyboard)
+            {
+                if (PartsCombatKeyboard.IsHeld != null)
+                    return PartsCombatKeyboard.IsHeld(first) || PartsCombatKeyboard.IsHeld(second);
+#if ENABLE_LEGACY_INPUT_MANAGER
+                return Input.GetKey(first) || Input.GetKey(second);
+#endif
+            }
+            return _heldKeys.Contains(first) || _heldKeys.Contains(second);
+        }
+
+        void Update()
+        {
+            if (!ReadKeyboard || !Ready) return;
+            if (PartsCombatKeyboard.FirePressed != null)
+            {
+                if (PartsCombatKeyboard.FirePressed()) Fire();
+            }
+#if ENABLE_LEGACY_INPUT_MANAGER
+            else if (Input.GetKeyDown(KeyCode.Space)) Fire();
+#endif
+        }
 
         internal bool HandleKey(KeyCode key, bool pressed)
         {
@@ -415,13 +450,13 @@ namespace InvertLab.Sprites.DOTS
             GUILayout.Label("Walk. Aim. Fire. Let go.", _muted);
             GUILayout.Space(14);
             GUILayout.Label($"{Hits:00} HITS   /   {ShotsFired:00} SHOTS");
-            GUILayout.Label(WeaponStyle == 0 ? "Equipped: Coral blaster" : "Equipped: Ion rifle");
+            var player = _em.GetComponentData<SpritePartsPlayer>(Root);
+            GUILayout.Label($"Clip: {CurrentClipName}  /  {(Paused ? "Paused" : player.Playing != 0 ? "Playing" : "Stopped")}");
+            GUILayout.Label($"Time: {player.TimeSeconds:0.00}s   Speed: {math.length(Velocity):0.00} units/s");
             GUILayout.Space(10);
             GUILayout.Label("WASD / arrows to move · click / space to fire", _muted);
             AutoAim = GUILayout.Toggle(AutoAim, "Aim at practice targets");
             if (GUILayout.RepeatButton("FIRE", GUILayout.Height(38))) Fire();
-            GUI.enabled = !WeaponDetached;
-            if (GUILayout.Button("Swap weapon", GUILayout.Height(30))) SwapWeapon();
             GUI.enabled = !Paused;
             if (GUILayout.Button(WeaponDetached ? "Return weapon to rig" : "Drop weapon → physics", GUILayout.Height(30))) TogglePhysics();
             GUI.enabled = true;
@@ -451,6 +486,14 @@ namespace InvertLab.Sprites.DOTS
             if (_bounce != null) Destroy(_bounce);
             _white = null; _bounce = null;
         }
+    }
+
+    /// <summary>Optional Input System bridge registers polling delegates. The core
+    /// package keeps working with the legacy input backend or programmatic input.</summary>
+    public static class PartsCombatKeyboard
+    {
+        public static System.Func<KeyCode, bool> IsHeld;
+        public static System.Func<bool> FirePressed;
     }
 
     public sealed class PartsCombatDemoLink : IComponentData { public PartsCombatDemo Demo; }

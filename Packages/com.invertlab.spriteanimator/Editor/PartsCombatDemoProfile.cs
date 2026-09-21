@@ -122,7 +122,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawDefaultInspector();
             var demo = (PartsCombatDemo)target;
             EditorGUILayout.HelpBox("Edit Idle/Walk, the hierarchy, and skins in the animator. Save Profile, then restart Play. " +
-                "Gameplay controls hand.r aiming and weapon recoil. Keep those slot IDs, clip names Idle/Walk, and skin IDs blaster/rifle.", MessageType.Info);
+                "Gameplay controls hand.r aiming and upright scale, plus weapon recoil. Keep those slot IDs and clip names Idle/Walk. " +
+                "The weapon uses its slot's assigned appearance; gameplay does not swap skins.", MessageType.Info);
             using (new EditorGUI.DisabledScope(demo.Profile == null || Application.isPlaying))
             {
                 if (GUILayout.Button("Open Profile in Animator")) PartsCombatDemoProfile.Open(demo.Profile);
