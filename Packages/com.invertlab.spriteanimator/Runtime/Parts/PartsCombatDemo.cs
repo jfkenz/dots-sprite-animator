@@ -29,6 +29,7 @@ namespace InvertLab.Sprites.DOTS
         public int LiveShots => _shots.Count;
         public int WeaponStyle { get; private set; }
         public float2 AimTarget { get; private set; } = new float2(3f, 0.7f);
+        public float2 Velocity { get; private set; }
 
         World _world;
         EntityManager _em;
@@ -44,9 +45,10 @@ namespace InvertLab.Sprites.DOTS
         Texture2D _white;
         Rigidbody2D _physical;
         PhysicsMaterial2D _bounce;
-        float2 _move, _screenMove;
+        float2 _move;
+        readonly HashSet<KeyCode> _heldKeys = new HashSet<KeyCode>();
         float _recoil, _shotCooldown;
-        bool _shoot, _moving, _left, _right, _up, _down;
+        bool _shoot, _moving;
         GUIStyle _title, _muted;
         Rect Panel => new Rect(20, 20, 300, Mathf.Min(480, Screen.height - 40));
         struct Shot { public Entity Entity; public float2 Position, Velocity; public float Life; }
@@ -70,8 +72,9 @@ namespace InvertLab.Sprites.DOTS
             Atlas = atlas;
             Paused = false;
             Hits = ShotsFired = WeaponStyle = 0;
-            _move = _screenMove = float2.zero;
-            _moving = _shoot = _left = _right = _up = _down = false;
+            _move = Velocity = float2.zero;
+            _heldKeys.Clear();
+            _moving = _shoot = false;
             _recoil = _shotCooldown = 0f;
             SpriteBatchSpawner.LayoutXy = true;
             SpriteInstanceRenderSystem.Install(_em);
@@ -222,6 +225,7 @@ namespace InvertLab.Sprites.DOTS
         {
             if (!Ready) return;
             Paused = paused;
+            if (paused) Velocity = float2.zero;
             if (paused) SpriteParts.Pause(_em, Root); else SpriteParts.Resume(_em, Root);
             if (_physical != null) _physical.simulated = !paused;
         }
@@ -289,23 +293,31 @@ namespace InvertLab.Sprites.DOTS
         {
             if (!Ready || Paused) return;
             dt = math.clamp(dt, 0f, 0.1f);
-            float2 keyboard = new float2((_right ? 1 : 0) - (_left ? 1 : 0), (_up ? 1 : 0) - (_down ? 1 : 0));
-            float2 move = math.clamp(_move + _screenMove + keyboard, -1f, 1f);
+            if (dt <= 1e-6f) return;
+            bool left = Held(KeyCode.A, KeyCode.LeftArrow), right = Held(KeyCode.D, KeyCode.RightArrow);
+            bool up = Held(KeyCode.W, KeyCode.UpArrow), down = Held(KeyCode.S, KeyCode.DownArrow);
+            float2 keyboard = new float2((right ? 1 : 0) - (left ? 1 : 0), (up ? 1 : 0) - (down ? 1 : 0));
+            float2 move = math.clamp(_move + keyboard, -1f, 1f);
             if (math.lengthsq(move) > 1f) move = math.normalize(move);
-            bool moving = math.lengthsq(move) > 0.01f;
+            var root = _em.GetComponentData<LocalTransform>(Root);
+            float2 previousPosition = root.Position.xy;
+            root.Position.xy = math.clamp(previousPosition + move * (2.2f * dt), new float2(-4f, -1.15f), new float2(4f, 2.2f));
+            _em.SetComponentData(Root, root);
+            // Measure resolved movement, including arena limits. Held input against
+            // a wall is idle; sideways/diagonal movement still plays Walk.
+            Velocity = (root.Position.xy - previousPosition) / dt;
+            float threshold = _moving ? 0.02f : 0.04f;
+            bool moving = math.lengthsq(Velocity) > threshold * threshold;
             if (moving != _moving)
             {
                 SpriteParts.Play(_em, Root, moving ? "Walk" : "Idle", crossfadeSeconds: 0.18f);
                 _moving = moving;
             }
-            var root = _em.GetComponentData<LocalTransform>(Root);
-            root.Position.xy = math.clamp(root.Position.xy + move * (2.2f * dt), new float2(-4f, -1.15f), new float2(4f, 2.2f));
-            _em.SetComponentData(Root, root);
             if (AutoAim) AimTarget = _targets[(Hits / 4) % _targets.Length];
             var reticle = _em.GetComponentData<LocalTransform>(_reticle);
             reticle.Position.xy = AimTarget;
             _em.SetComponentData(_reticle, reticle);
-            SpriteParts.SetFacing(_em, Root, AimTarget.x < root.Position.x);
+            // Aim the existing hand; do not mirror the whole rig across the body.
             SpriteParts.SetOverride(_em, Root, new SpritePartsPoseOverride
             {
                 Id = 20001, SlotIndex = _aimSlot, Mode = (byte)SpritePartsPoseMode.LookAt,
@@ -360,22 +372,32 @@ namespace InvertLab.Sprites.DOTS
             }
         }
 
+        bool Held(KeyCode first, KeyCode second) => _heldKeys.Contains(first) || _heldKeys.Contains(second);
+
+        internal bool HandleKey(KeyCode key, bool pressed)
+        {
+            switch (key)
+            {
+                case KeyCode.A: case KeyCode.LeftArrow:
+                case KeyCode.D: case KeyCode.RightArrow:
+                case KeyCode.W: case KeyCode.UpArrow:
+                case KeyCode.S: case KeyCode.DownArrow:
+                    if (pressed) _heldKeys.Add(key); else _heldKeys.Remove(key);
+                    return true;
+                case KeyCode.Space:
+                    if (pressed) Fire();
+                    return true;
+            }
+            return false;
+        }
+
         void OnGUI()
         {
-            if (!ShowControls || !Ready) return;
+            if (!Ready) return;
             Event evt = Event.current;
-            if (evt.type == EventType.KeyDown || evt.type == EventType.KeyUp)
-            {
-                bool pressed = evt.type == EventType.KeyDown;
-                switch (evt.keyCode)
-                {
-                    case KeyCode.A: case KeyCode.LeftArrow: _left = pressed; evt.Use(); break;
-                    case KeyCode.D: case KeyCode.RightArrow: _right = pressed; evt.Use(); break;
-                    case KeyCode.W: case KeyCode.UpArrow: _up = pressed; evt.Use(); break;
-                    case KeyCode.S: case KeyCode.DownArrow: _down = pressed; evt.Use(); break;
-                    case KeyCode.Space: if (pressed) Fire(); evt.Use(); break;
-                }
-            }
+            if ((evt.type == EventType.KeyDown || evt.type == EventType.KeyUp) &&
+                HandleKey(evt.keyCode, evt.type == EventType.KeyDown)) evt.Use();
+            if (!ShowControls) return;
             if (!Panel.Contains(evt.mousePosition))
             {
                 if (!AutoAim && ViewCamera != null)
@@ -397,13 +419,6 @@ namespace InvertLab.Sprites.DOTS
             GUILayout.Space(10);
             GUILayout.Label("WASD / arrows to move · click / space to fire", _muted);
             AutoAim = GUILayout.Toggle(AutoAim, "Aim at practice targets");
-            GUILayout.BeginHorizontal();
-            bool left = GUILayout.RepeatButton("◀", GUILayout.Height(36));
-            bool up = GUILayout.RepeatButton("▲", GUILayout.Height(36));
-            bool down = GUILayout.RepeatButton("▼", GUILayout.Height(36));
-            bool right = GUILayout.RepeatButton("▶", GUILayout.Height(36));
-            GUILayout.EndHorizontal();
-            _screenMove = new float2((right ? 1 : 0) - (left ? 1 : 0), (up ? 1 : 0) - (down ? 1 : 0));
             if (GUILayout.RepeatButton("FIRE", GUILayout.Height(38))) Fire();
             GUI.enabled = !WeaponDetached;
             if (GUILayout.Button("Swap weapon", GUILayout.Height(30))) SwapWeapon();
@@ -416,7 +431,8 @@ namespace InvertLab.Sprites.DOTS
             GUILayout.EndArea();
         }
 
-        void OnApplicationFocus(bool focus) { if (!focus) { _left = _right = _up = _down = false; _screenMove = float2.zero; } }
+        void OnApplicationFocus(bool focus) { if (!focus) _heldKeys.Clear(); }
+        void OnDisable() => _heldKeys.Clear();
         void OnDestroy() => Shutdown();
         public void Shutdown()
         {

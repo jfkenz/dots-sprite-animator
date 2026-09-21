@@ -121,6 +121,60 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [UnityTest]
+        public IEnumerator MovementKeysDriveWalkFromVelocityAndKeepWeaponOnSameHand()
+        {
+            var em = World.DefaultGameObjectInjectionWorld.EntityManager;
+            var handleKey = typeof(PartsCombatDemo).GetMethod("HandleKey",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            void Key(KeyCode key, bool down) => handleKey.Invoke(_demo, new object[] { key, down });
+            Entity parent = em.GetComponentData<Parent>(_demo.Weapon).Value;
+            Key(KeyCode.LeftArrow, true);
+            Key(KeyCode.UpArrow, true);
+            Key(KeyCode.RightArrow, true);
+            yield return new WaitForSeconds(0.08f);
+            Assert.AreEqual(0f, _demo.Velocity.x, 0.001f);
+            Assert.Greater(_demo.Velocity.y, 2f);
+            Assert.AreEqual(1, em.GetComponentData<SpritePartsPlayer>(_demo.Root).ClipIndex);
+
+            Key(KeyCode.UpArrow, false);
+            Key(KeyCode.RightArrow, false);
+            yield return new WaitForSeconds(0.08f);
+            Assert.Less(_demo.Velocity.x, -2f);
+            float walkTime = em.GetComponentData<SpritePartsPlayer>(_demo.Root).TimeSeconds;
+            Key(KeyCode.LeftArrow, false);
+            Key(KeyCode.RightArrow, true);
+            yield return new WaitForSeconds(0.08f);
+            Assert.Greater(_demo.Velocity.x, 2f);
+            Assert.AreEqual(1, em.GetComponentData<SpritePartsPlayer>(_demo.Root).ClipIndex);
+            Assert.Greater(em.GetComponentData<SpritePartsPlayer>(_demo.Root).TimeSeconds, walkTime,
+                "Changing direction must not restart Walk.");
+
+            Key(KeyCode.D, true);
+            Key(KeyCode.RightArrow, false);
+            yield return new WaitForSeconds(0.06f);
+            Assert.Greater(_demo.Velocity.x, 2f, "D remains held when Right Arrow is released.");
+            var root = em.GetComponentData<LocalTransform>(_demo.Root);
+            root.Position.x = 4f;
+            em.SetComponentData(_demo.Root, root);
+            yield return new WaitForSeconds(0.08f);
+            Assert.AreEqual(float2.zero, _demo.Velocity);
+            Assert.AreEqual(0, em.GetComponentData<SpritePartsPlayer>(_demo.Root).ClipIndex,
+                "Held input without actual motion must return to Idle.");
+            Key(KeyCode.W, true);
+            yield return new WaitForSeconds(0.08f);
+            Assert.Greater(_demo.Velocity.y, 0f);
+            Assert.AreEqual(1, em.GetComponentData<SpritePartsPlayer>(_demo.Root).ClipIndex);
+            Key(KeyCode.W, false);
+            Key(KeyCode.D, false);
+            _demo.AimAt(new float2(-3f, 1.4f));
+            yield return new WaitForSeconds(0.06f);
+            Assert.AreEqual(0, em.GetComponentData<SpritePartsPlayer>(_demo.Root).ClipIndex);
+            Assert.AreEqual(parent, em.GetComponentData<Parent>(_demo.Weapon).Value);
+            Assert.AreEqual(0, em.GetComponentData<SpritePartsFacing>(_demo.Root).FlipX,
+                "Aiming left must not mirror the weapon to the opposite side.");
+        }
+
+        [UnityTest]
         public IEnumerator DestroyAndRespawnLeavesNoOwnedCharactersOrPhysicsBodies()
         {
             var em = World.DefaultGameObjectInjectionWorld.EntityManager;

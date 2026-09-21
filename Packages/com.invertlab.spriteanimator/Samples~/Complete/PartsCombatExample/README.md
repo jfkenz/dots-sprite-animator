@@ -42,7 +42,7 @@ animation authoring component to the demo object: it already spawns its own ECS 
 
 | Action | Control |
 | --- | --- |
-| Move | WASD, arrow keys, or hold the on-screen direction buttons |
+| Move | WASD or keyboard arrow keys |
 | Aim | Enable practice-target aim, or disable it and point inside the arena |
 | Fire | Click the arena, press Space, or hold FIRE |
 | Swap art | Swap weapon button: blaster / rifle |
@@ -53,11 +53,16 @@ animation authoring component to the demo object: it already spawns its own ECS 
 
 1. Hold FIRE while moving. The body plays Walk while the hand aims and the weapon recoils.
 2. Swap weapons. The skin changes and the muzzle binding updates for the new barrel.
-3. Aim across the character to exercise mirrored facing.
+3. Aim across the character. The weapon stays parented to the right hand; aiming does
+   not mirror the rig or move it to the other hand.
 4. Drop the weapon. It becomes an unparented entity controlled by a Rigidbody2D proxy.
    The body remains animated. Returning restores the original parent and animation
    ownership; this example intentionally snaps back to the clip pose.
 5. Pause during movement or a drop. Resume should preserve the current state.
+
+Idle/Walk follows actual movement speed after arena limits are applied. Holding a
+direction against a boundary becomes Idle; moving along that boundary remains Walk.
+Direction changes while moving continue the current Walk clip without restarting it.
 
 ## Code map
 
