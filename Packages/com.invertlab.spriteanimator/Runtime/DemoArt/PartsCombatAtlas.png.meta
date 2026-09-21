@@ -1,0 +1,1053 @@
+fileFormatVersion: 2
+guid: 4f7c1f5b2462c5f4fbaf422a58abbf08
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 4226400023790753774
+    second: PartsCombatAtlas_0
+  - first:
+      213: 7125533875532661798
+    second: PartsCombatAtlas_1
+  - first:
+      213: -3498279622633889414
+    second: PartsCombatAtlas_2
+  - first:
+      213: 9110626636694014001
+    second: PartsCombatAtlas_3
+  - first:
+      213: -3318795643856809054
+    second: PartsCombatAtlas_4
+  - first:
+      213: 6136358076491509759
+    second: PartsCombatAtlas_5
+  - first:
+      213: -285249553532881902
+    second: PartsCombatAtlas_6
+  - first:
+      213: -4277734472427251374
+    second: PartsCombatAtlas_7
+  - first:
+      213: 3055037030113082230
+    second: PartsCombatAtlas_8
+  - first:
+      213: 5651990913441810878
+    second: PartsCombatAtlas_9
+  - first:
+      213: 744699794563537115
+    second: PartsCombatAtlas_10
+  - first:
+      213: -8056666954403512909
+    second: PartsCombatAtlas_11
+  - first:
+      213: 2905702299079875613
+    second: PartsCombatAtlas_12
+  - first:
+      213: -3888511798096287482
+    second: PartsCombatAtlas_13
+  - first:
+      213: 7693544839002920580
+    second: PartsCombatAtlas_14
+  - first:
+      213: -2362359415548314249
+    second: PartsCombatAtlas_15
+  - first:
+      213: -3679576388767473370
+    second: PartsCombatAtlas_16
+  - first:
+      213: 3878148220770978074
+    second: PartsCombatAtlas_17
+  - first:
+      213: -5269017838556433825
+    second: PartsCombatAtlas_18
+  - first:
+      213: -905324983407519403
+    second: PartsCombatAtlas_19
+  - first:
+      213: 7738777556822919912
+    second: PartsCombatAtlas_20
+  - first:
+      213: 5277491803576262226
+    second: PartsCombatAtlas_21
+  - first:
+      213: 8142439593993300255
+    second: PartsCombatAtlas_22
+  - first:
+      213: 7347881585844838312
+    second: PartsCombatAtlas_23
+  - first:
+      213: 2051704857898188056
+    second: PartsCombatAtlas_24
+  - first:
+      213: 3152648586680799569
+    second: PartsCombatAtlas_25
+  - first:
+      213: -2463961758850609361
+    second: PartsCombatAtlas_26
+  - first:
+      213: -7616339219372779050
+    second: PartsCombatAtlas_27
+  - first:
+      213: 755855010061465922
+    second: PartsCombatAtlas_28
+  - first:
+      213: -9097714391845073480
+    second: PartsCombatAtlas_29
+  - first:
+      213: -7741703850703964379
+    second: PartsCombatAtlas_30
+  - first:
+      213: 7031377232427178907
+    second: PartsCombatAtlas_31
+  - first:
+      213: 1964256056983965250
+    second: PartsCombatAtlas_32
+  - first:
+      213: 2180679469582395179
+    second: PartsCombatAtlas_33
+  - first:
+      213: 1110255941724119443
+    second: PartsCombatAtlas_34
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 0
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: PartsCombatAtlas_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 566
+        width: 739
+        height: 637
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ee710c0ed6037aa30800000000000000
+      internalID: 4226400023790753774
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_1
+      rect:
+        serializedVersion: 2
+        x: 731
+        y: 469
+        width: 468
+        height: 729
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 624032e9e4bf2e260800000000000000
+      internalID: 7125533875532661798
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_2
+      rect:
+        serializedVersion: 2
+        x: 1192
+        y: 947
+        width: 27
+        height: 32
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a716be7c73d937fc0800000000000000
+      internalID: -3498279622633889414
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_3
+      rect:
+        serializedVersion: 2
+        x: 701
+        y: 726
+        width: 7
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 138cb59e7a27f6e70800000000000000
+      internalID: 9110626636694014001
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_4
+      rect:
+        serializedVersion: 2
+        x: 721
+        y: 690
+        width: 22
+        height: 43
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2a31dc512f441f1d0800000000000000
+      internalID: -3318795643856809054
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_5
+      rect:
+        serializedVersion: 2
+        x: 679
+        y: 708
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fff20e3a829b82550800000000000000
+      internalID: 6136358076491509759
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_6
+      rect:
+        serializedVersion: 2
+        x: 1017
+        y: 497
+        width: 41
+        height: 37
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2147559da079a0cf0800000000000000
+      internalID: -285249553532881902
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_7
+      rect:
+        serializedVersion: 2
+        x: 1053
+        y: 529
+        width: 57
+        height: 46
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 259d787692f62a4c0800000000000000
+      internalID: -4277734472427251374
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_8
+      rect:
+        serializedVersion: 2
+        x: 1057
+        y: 508
+        width: 17
+        height: 25
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 67bfd8b1efba56a20800000000000000
+      internalID: 3055037030113082230
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_9
+      rect:
+        serializedVersion: 2
+        x: 96
+        y: 513
+        width: 20
+        height: 12
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: eb94f6d4ac7ef6e40800000000000000
+      internalID: 5651990913441810878
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_10
+      rect:
+        serializedVersion: 2
+        x: 526
+        y: 513
+        width: 10
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bd8144f7484b55a00800000000000000
+      internalID: 744699794563537115
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_11
+      rect:
+        serializedVersion: 2
+        x: 530
+        y: 489
+        width: 14
+        height: 37
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3bd762d4718f03090800000000000000
+      internalID: -8056666954403512909
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_12
+      rect:
+        serializedVersion: 2
+        x: 577
+        y: 491
+        width: 31
+        height: 36
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d1c11bf88d0235820800000000000000
+      internalID: 2905702299079875613
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_13
+      rect:
+        serializedVersion: 2
+        x: 1053
+        y: 518
+        width: 7
+        height: 9
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6092e813f1b390ac0800000000000000
+      internalID: -3888511798096287482
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_14
+      rect:
+        serializedVersion: 2
+        x: 1069
+        y: 517
+        width: 15
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4861f48d446f4ca60800000000000000
+      internalID: 7693544839002920580
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_15
+      rect:
+        serializedVersion: 2
+        x: 24
+        y: 55
+        width: 558
+        height: 413
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 77d717cb0a6373fd0800000000000000
+      internalID: -2362359415548314249
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_16
+      rect:
+        serializedVersion: 2
+        x: 80
+        y: 47
+        width: 10
+        height: 9
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 621a99705c48fecc0800000000000000
+      internalID: -3679576388767473370
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_17
+      rect:
+        serializedVersion: 2
+        x: 94
+        y: 65
+        width: 20
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a190e5d6243f1d530800000000000000
+      internalID: 3878148220770978074
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_18
+      rect:
+        serializedVersion: 2
+        x: 104
+        y: 57
+        width: 10
+        height: 9
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f52b5a93130b0e6b0800000000000000
+      internalID: -5269017838556433825
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_19
+      rect:
+        serializedVersion: 2
+        x: 295
+        y: 63
+        width: 8
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 55955b569b3af63f0800000000000000
+      internalID: -905324983407519403
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_20
+      rect:
+        serializedVersion: 2
+        x: 317
+        y: 117
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8ea0236af29a56b60800000000000000
+      internalID: 7738777556822919912
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_21
+      rect:
+        serializedVersion: 2
+        x: 346
+        y: 84
+        width: 22
+        height: 15
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 25ed23185da6d3940800000000000000
+      internalID: 5277491803576262226
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_22
+      rect:
+        serializedVersion: 2
+        x: 603
+        y: 23
+        width: 623
+        height: 375
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f19eb059ba1cff070800000000000000
+      internalID: 8142439593993300255
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_23
+      rect:
+        serializedVersion: 2
+        x: 611
+        y: 53
+        width: 7
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8af5aef1f5be8f560800000000000000
+      internalID: 7347881585844838312
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_24
+      rect:
+        serializedVersion: 2
+        x: 617
+        y: 73
+        width: 9
+        height: 18
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 81df6f6a2be197c10800000000000000
+      internalID: 2051704857898188056
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_25
+      rect:
+        serializedVersion: 2
+        x: 844
+        y: 71
+        width: 7
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1511fb6af2570cb20800000000000000
+      internalID: 3152648586680799569
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_26
+      rect:
+        serializedVersion: 2
+        x: 860
+        y: 81
+        width: 7
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f2f009fb5df3ecdd0800000000000000
+      internalID: -2463961758850609361
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_27
+      rect:
+        serializedVersion: 2
+        x: 864
+        y: 77
+        width: 23
+        height: 38
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6d9d86445d35d4690800000000000000
+      internalID: -7616339219372779050
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_28
+      rect:
+        serializedVersion: 2
+        x: 868
+        y: 61
+        width: 11
+        height: 16
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 249b96080265d7a00800000000000000
+      internalID: 755855010061465922
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_29
+      rect:
+        serializedVersion: 2
+        x: 890
+        y: 69
+        width: 9
+        height: 22
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8bd8d1e56fc6eb180800000000000000
+      internalID: -9097714391845073480
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_30
+      rect:
+        serializedVersion: 2
+        x: 894
+        y: 51
+        width: 21
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 52734867d51ff8490800000000000000
+      internalID: -7741703850703964379
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_31
+      rect:
+        serializedVersion: 2
+        x: 946
+        y: 85
+        width: 14
+        height: 16
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b9b579cc658749160800000000000000
+      internalID: 7031377232427178907
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_32
+      rect:
+        serializedVersion: 2
+        x: 960
+        y: 69
+        width: 8
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 24e407c0a70724b10800000000000000
+      internalID: 1964256056983965250
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_33
+      rect:
+        serializedVersion: 2
+        x: 966
+        y: 65
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b2722718c64534e10800000000000000
+      internalID: 2180679469582395179
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: PartsCombatAtlas_34
+      rect:
+        serializedVersion: 2
+        x: 1117
+        y: 81
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData:
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 391ab3885eb686f00800000000000000
+      internalID: 1110255941724119443
+      vertices: []
+      indices:
+      edges: []
+      weights: []
+    outline: []
+    customData:
+    physicsShape: []
+    bones: []
+    spriteID:
+    internalID: 0
+    vertices: []
+    indices:
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      PartsCombatAtlas_0: 4226400023790753774
+      PartsCombatAtlas_1: 7125533875532661798
+      PartsCombatAtlas_10: 744699794563537115
+      PartsCombatAtlas_11: -8056666954403512909
+      PartsCombatAtlas_12: 2905702299079875613
+      PartsCombatAtlas_13: -3888511798096287482
+      PartsCombatAtlas_14: 7693544839002920580
+      PartsCombatAtlas_15: -2362359415548314249
+      PartsCombatAtlas_16: -3679576388767473370
+      PartsCombatAtlas_17: 3878148220770978074
+      PartsCombatAtlas_18: -5269017838556433825
+      PartsCombatAtlas_19: -905324983407519403
+      PartsCombatAtlas_2: -3498279622633889414
+      PartsCombatAtlas_20: 7738777556822919912
+      PartsCombatAtlas_21: 5277491803576262226
+      PartsCombatAtlas_22: 8142439593993300255
+      PartsCombatAtlas_23: 7347881585844838312
+      PartsCombatAtlas_24: 2051704857898188056
+      PartsCombatAtlas_25: 3152648586680799569
+      PartsCombatAtlas_26: -2463961758850609361
+      PartsCombatAtlas_27: -7616339219372779050
+      PartsCombatAtlas_28: 755855010061465922
+      PartsCombatAtlas_29: -9097714391845073480
+      PartsCombatAtlas_3: 9110626636694014001
+      PartsCombatAtlas_30: -7741703850703964379
+      PartsCombatAtlas_31: 7031377232427178907
+      PartsCombatAtlas_32: 1964256056983965250
+      PartsCombatAtlas_33: 2180679469582395179
+      PartsCombatAtlas_34: 1110255941724119443
+      PartsCombatAtlas_4: -3318795643856809054
+      PartsCombatAtlas_5: 6136358076491509759
+      PartsCombatAtlas_6: -285249553532881902
+      PartsCombatAtlas_7: -4277734472427251374
+      PartsCombatAtlas_8: 3055037030113082230
+      PartsCombatAtlas_9: 5651990913441810878
+  mipmapLimitGroupName:
+  pSDRemoveMatte: 0
+  userData:
+  assetBundleName:
+  assetBundleVariant:

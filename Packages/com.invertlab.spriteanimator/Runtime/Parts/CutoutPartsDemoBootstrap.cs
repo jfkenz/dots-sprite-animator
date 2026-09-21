@@ -124,7 +124,8 @@ namespace InvertLab.Sprites.DOTS
             buf.Clear();
             buf.Add(new SpritePartSheetEntry { Sheet = swordSheet, SheetTableIndex = 0 });
             buf.Add(new SpritePartSheetEntry { Sheet = spearSheet, SheetTableIndex = 1 });
-            // Re-apply current skin so bindings pick up sheet entities.
+            // Bind all default parts before applying a weapon-only skin patch.
+            SpriteParts.ResetSkin(_em, _root);
             SpriteParts.ApplySkin(_em, _root, _weaponMode == 0 ? "weapon.sword" : "weapon.spear");
         }
 

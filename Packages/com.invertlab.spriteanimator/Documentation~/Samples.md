@@ -6,6 +6,14 @@
 
 # Samples map
 
+## Parts Combat Playground
+
+Use **Tools > DOTS Sprite Animator > Create Parts Combat Example**, or import
+Complete and open `PartsCombatExample/PartsCombatExample.unity`. Demonstrates
+Idle/Walk blending, independent aiming, recoil, skin swaps, socket-fired shots,
+pause, and Unity 2D weapon handoff. Includes generated cutout art and PlayMode
+integration tests. See the sample README for controls and implementation details.
+
 ## Cutout Parts demo
 
 Add **DOTS Sprite Animator / Cutout Parts Demo** to an empty GameObject in a DOTS

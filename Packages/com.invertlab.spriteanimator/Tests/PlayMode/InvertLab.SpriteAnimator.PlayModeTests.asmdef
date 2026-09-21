@@ -1,0 +1,6 @@
+{
+  "name": "InvertLab.SpriteAnimator.PlayModeTests",
+  "references": ["InvertLab.SpriteAnimator.Runtime", "Unity.Entities", "Unity.Transforms", "Unity.Mathematics", "Unity.Collections"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
