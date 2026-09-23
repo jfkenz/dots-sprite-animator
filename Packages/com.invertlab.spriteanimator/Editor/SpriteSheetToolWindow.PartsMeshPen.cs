@@ -36,6 +36,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
+        static int[] ComposeRemap(int[] total, int[] step)
+        {
+            if (step == null)
+                return total;
+            var result = new int[total.Length];
+            for (int i = 0; i < total.Length; i++)
+                result[i] = total[i] >= 0 && total[i] < step.Length ? step[total[i]] : -1;
+            return result;
+        }
+
         static int[] IdentityRemap(int n)
         {
             var map = new int[n];
@@ -233,11 +243,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 return;
             }
-            if (hit < 0 && _partsCreateMode != PartsCreateMode.Vertex
-                && HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out int ea, out int eb))
+            if (hit < 0 && HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out int ea, out int eb))
             {
-                if (EditMeshDraft("Delete Mesh Edge", w => SpritePartsMeshOps.TryRemoveEdge(w, ea, eb) ? IdentityRemap(n) : null))
-                    _status = "Edge deleted.";
+                var lineMenu = new GenericMenu();
+                AddMeshLineMenuItems(lineMenu, mesh, ea, eb, MeshGuiToUv(sprite, evt.mousePosition));
+                lineMenu.ShowAsContext();
                 return;
             }
             if (hit >= 0 && !inSelection)
@@ -257,7 +267,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (joined)
                 {
                     menu.AddItem(new GUIContent("Disconnect"), false, DisconnectSelectedGraph);
-                    menu.AddItem(new GUIContent("Add Vertex Between"), false, () => AddVertexBetween(a, b));
+                    menu.AddItem(new GUIContent("Add Vertex Between"), false, () => AddVerticesOnLine(a, b, new[] { 0.5f }));
                 }
                 else
                     menu.AddItem(new GUIContent("Connect"), false, () => ConnectSelectedGraph(false));
@@ -356,25 +366,6 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
-        void AddVertexBetween(int a, int b)
-        {
-            var mesh = MeshEditSlot()?.Mesh;
-            int n = mesh?.VertexCount ?? 0;
-            if ((uint)a >= (uint)n || (uint)b >= (uint)n)
-                return;
-            Vector2 mid = (mesh.Vertices[a] + mesh.Vertices[b]) * 0.5f;
-            int added = -1;
-            if (!EditMeshDraft("Add Vertex Between", w =>
-                    SpritePartsMeshOps.TrySplitGraphEdge(w, a, b, mid, out added) ? IdentityRemap(n) : null))
-            {
-                _status = n >= SpritePartsMeshOps.MaxVertices ? MeshFullMessage() : "Could not add a vertex there.";
-                return;
-            }
-            SelectOnly(added);
-            _status = "Vertex " + added + " between " + a + " and " + b + ".";
-            Repaint();
-        }
-
         void DeleteSelectedGraph(bool keepEdges)
         {
             int n = MeshEditSlot()?.Mesh?.VertexCount ?? 0;
@@ -408,6 +399,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _status = message;
                 return;
             }
+            int dropped = System.Array.FindAll(remap, i => i < 0).Length;
+            if (dropped > 0 && !EditorUtility.DisplayDialog("Make Polygons",
+                    message + "\n\nOnly the area inside a closed loop of edges becomes the mesh. " + dropped
+                    + " vertices are outside it and will be removed.", "Make Polygons", "Cancel"))
+            {
+                _status = "Make Polygons cancelled. Close the loop around every vertex you want to keep.";
+                return;
+            }
             RecordPartsUndo("Make Polygons");
             slot.Mesh = work;
             SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
@@ -418,14 +417,6 @@ namespace InvertLab.Sprites.DOTS.Editor
             SaveDirty();
             _status = message;
             Repaint();
-        }
-
-        /// <summary>Leaving Create with a draft: fill it, like pressing Make Polygons. Quiet when there is nothing yet.</summary>
-        void MakeMeshPolygonsIfDraft()
-        {
-            var mesh = MeshEditSlot()?.Mesh;
-            if (mesh != null && SpritePartsMeshOps.IsDraft(mesh) && mesh.VertexCount >= 3 && (mesh.Edges?.Length ?? 0) >= 6)
-                MakeMeshPolygons();
         }
 
         void AutoLinkMeshEdges()
@@ -500,7 +491,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         /// <summary>Hovered edge, and the line from the last vertex to the mouse (cut markers with Shift).</summary>
         void DrawMeshCreatePreview(Rect sprite, SpritePartMeshDef mesh)
         {
-            if (_partsMeshTool != PartsMeshTool.Create || mesh?.Vertices == null || Event.current.type != EventType.Repaint
+            if ((_partsMeshTool != PartsMeshTool.Create && _partsMeshTool != PartsMeshTool.Modify)
+                || mesh?.Vertices == null || Event.current.type != EventType.Repaint
                 || _partsMeshDrag || _partsWarpBox)
                 return;
             Vector2 mouseUv = _partsMeshMouseUv;
@@ -515,7 +507,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_partsWarpHover < 0 && !ctrl && HitMeshGraphEdge(sprite, mesh, mouse, out int ha, out int hb))
                 DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[ha]), MeshUvToGui(sprite, mesh.Vertices[hb]), Color.white, 3f);
 
-            if (pen < 0 || _partsCreateMode == PartsCreateMode.Vertex)
+            if (_partsMeshTool != PartsMeshTool.Create || pen < 0 || _partsCreateMode == PartsCreateMode.Vertex)
                 return;
             Vector2 target = mouseUv;
             if (ctrl)
@@ -542,6 +534,172 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Vector2 g = MeshUvToGui(sprite, p);
                 EditorGUI.DrawRect(new Rect(g.x - 3f, g.y - 3f, 6f, 6f), new Color(1f, 0.95f, 0.4f, 1f));
             }
+        }
+
+        // ------------------------------------------------------------------ line actions (right-click a line)
+
+        /// <summary>Menu items for the line a-b under the mouse, shared by Modify and Create.</summary>
+        void AddMeshLineMenuItems(GenericMenu menu, SpritePartMeshDef mesh, int a, int b, Vector2 uv)
+        {
+            bool draft = SpritePartsMeshOps.IsDraft(mesh);
+            bool hull = SpritePartsMeshOps.IsHullEdge(mesh, a, b);
+            bool stored = SpritePartsMeshOps.HasEdge(mesh, a, b);
+            menu.AddItem(new GUIContent("Add Vertex In Middle"), false, () => AddVerticesOnLine(a, b, new[] { 0.5f }));
+            menu.AddItem(new GUIContent("Add Vertex Here"), false, () => AddVerticesOnLine(a, b, new[] { LineParam(mesh, a, b, uv) }));
+            menu.AddItem(new GUIContent("Divide/Into 3"), false, () => AddVerticesOnLine(a, b, new[] { 1f / 3f, 2f / 3f }));
+            menu.AddItem(new GUIContent("Divide/Into 4"), false, () => AddVerticesOnLine(a, b, new[] { 0.25f, 0.5f, 0.75f }));
+            menu.AddItem(new GUIContent("Collapse Line (Merge Ends)"), false, () =>
+            {
+                _partsWarpSelection.Clear();
+                _partsWarpSelection.Add(a);
+                _partsWarpSelection.Add(b);
+                if (draft)
+                    MergeSelectedGraph();
+                else
+                    MergeSelectedMeshPair();
+            });
+            if (draft || (!hull && !stored))
+                menu.AddItem(new GUIContent("Turn Line"), false, () => TurnMeshLine(a, b));
+            else
+                menu.AddDisabledItem(new GUIContent("Turn Line"));
+            if (!draft && !hull && !stored)
+                menu.AddItem(new GUIContent("Keep Line (Make Edge)"), false, () => AddMeshEdge(a, b));
+            if (draft || stored)
+                menu.AddItem(new GUIContent("Delete Line"), false, () => RemoveMeshEdge(a, b));
+            else
+                menu.AddDisabledItem(new GUIContent(hull ? "Delete Line (outline: delete a vertex instead)" : "Delete Line (triangle line, not an edge)"));
+            menu.AddItem(new GUIContent("Select Line Ends"), false, () =>
+            {
+                _partsWarpSelection.Clear();
+                _partsWarpSelection.Add(a);
+                _partsWarpSelection.Add(b);
+                _partsWarpIndex = b;
+                _partsMeshPen = -1;
+                Repaint();
+            });
+        }
+
+        static float LineParam(SpritePartMeshDef mesh, int a, int b, Vector2 uv)
+        {
+            Vector2 pa = mesh.Vertices[a];
+            Vector2 ab = mesh.Vertices[b] - pa;
+            return Mathf.Clamp(Vector2.Dot(uv - pa, ab) / Mathf.Max(1e-10f, ab.sqrMagnitude), 0.02f, 0.98f);
+        }
+
+        /// <summary>
+        /// Puts vertices on line a-b at the fractions <paramref name="ts"/> (0 = a, 1 = b). Works on drafts,
+        /// the outline, user edges and plain triangle lines. One undo step.
+        /// </summary>
+        void AddVerticesOnLine(int a, int b, float[] ts)
+        {
+            var slot = MeshEditSlot();
+            var mesh = slot?.Mesh;
+            int n = mesh?.VertexCount ?? 0;
+            if ((uint)a >= (uint)n || (uint)b >= (uint)n || ts == null || ts.Length == 0)
+                return;
+            if (n + ts.Length > SpritePartsMeshOps.MaxVertices)
+            {
+                _status = MeshFullMessage();
+                return;
+            }
+            Vector2 pa = mesh.Vertices[a], pb = mesh.Vertices[b];
+            var sorted = (float[])ts.Clone();
+            System.Array.Sort(sorted);
+            var work = mesh.Clone();
+            bool draft = SpritePartsMeshOps.IsDraft(work);
+            int[] total = IdentityRemap(n);
+            int from = a, to = b;
+            var added = new List<int>();
+            foreach (float t in sorted)
+            {
+                Vector2 p = Vector2.Lerp(pa, pb, t);
+                int x;
+                int[] step = null;
+                bool ok;
+                if (draft)
+                    ok = SpritePartsMeshOps.TrySplitGraphEdge(work, from, to, p, out x);
+                else if (SpritePartsMeshOps.IsHullEdge(work, from, to) || SpritePartsMeshOps.HasEdge(work, from, to))
+                    ok = SpritePartsMeshOps.TrySplitEdgeAt(work, from, to, p, out x, out step);
+                else
+                    ok = SpritePartsMeshOps.TryAddInteriorVertex(work, p, out x, out step);
+                if (!ok)
+                    break;
+                total = ComposeRemap(total, step);
+                if (step != null)
+                {
+                    to = step[to];
+                    for (int k = 0; k < added.Count; k++)
+                        added[k] = step[added[k]];
+                }
+                added.Add(x);
+                from = x;
+            }
+            if (added.Count == 0)
+            {
+                _status = "Could not add a vertex on that line.";
+                return;
+            }
+            RecordPartsUndo(added.Count == 1 ? "Add Vertex On Line" : "Divide Line");
+            slot.Mesh = work;
+            SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, total, work.VertexCount);
+            _partsWarpSelection.Clear();
+            _partsWarpSelection.AddRange(added);
+            _partsWarpIndex = added[added.Count - 1];
+            _partsWarpHover = -1;
+            _partsMeshPen = -1;
+            SaveDirty();
+            _status = added.Count == 1 ? "Vertex " + added[0] + " added on the line." : "Line divided: " + added.Count + " new vertices.";
+            Repaint();
+        }
+
+        /// <summary>
+        /// Turns a line to the other diagonal of the two triangles beside it. On a finished mesh this adds
+        /// that diagonal as an edge, so the triangulation keeps it.
+        /// </summary>
+        void TurnMeshLine(int a, int b)
+        {
+            var slot = MeshEditSlot();
+            var mesh = slot?.Mesh;
+            int n = mesh?.VertexCount ?? 0;
+            if (mesh == null)
+                return;
+            if (SpritePartsMeshOps.IsDraft(mesh))
+            {
+                _status = EditMeshDraft("Turn Mesh Edge", w => SpritePartsMeshOps.TryTurnGraphEdge(w, a, b) ? IdentityRemap(n) : null)
+                    ? "Line turned."
+                    : "That line cannot turn: it needs a triangle on both sides.";
+                return;
+            }
+            int c = -1, d = -1;
+            for (int t = 0; mesh.Triangles != null && t + 2 < mesh.Triangles.Length; t += 3)
+            {
+                for (int e = 0; e < 3; e++)
+                {
+                    int p = mesh.Triangles[t + e], q = mesh.Triangles[t + (e + 1) % 3], r = mesh.Triangles[t + (e + 2) % 3];
+                    if (p == a && q == b)
+                        c = r;
+                    else if (p == b && q == a)
+                        d = r;
+                }
+            }
+            if (c < 0 || d < 0 || !SpritePartsMeshOps.TrySegmentHit(mesh.Vertices[a], mesh.Vertices[b], mesh.Vertices[c], mesh.Vertices[d], out _, out _))
+            {
+                _status = "That line cannot turn: the two triangles beside it do not form a convex shape.";
+                return;
+            }
+            var work = mesh.Clone();
+            if (SpritePartsMeshOps.HasEdge(work, a, b))
+                SpritePartsMeshOps.TryRemoveEdge(work, a, b);
+            if (!SpritePartsMeshOps.TryAddEdge(work, c, d))
+            {
+                _status = "Could not turn that line.";
+                return;
+            }
+            RecordPartsUndo("Turn Mesh Line");
+            slot.Mesh = work;
+            SaveDirty();
+            _status = "Line turned: " + c + " - " + d + " is kept as an edge.";
+            Repaint();
         }
 
         // ------------------------------------------------------------------ Merge / Split (right-click)

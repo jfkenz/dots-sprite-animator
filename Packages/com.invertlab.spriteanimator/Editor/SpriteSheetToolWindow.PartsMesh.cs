@@ -802,8 +802,6 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (!IsPartsMeshEdit())
                 return false;
-            if (_partsMeshTool == PartsMeshTool.Create)
-                MakeMeshPolygonsIfDraft();
             var left = MeshEditSlot()?.Mesh;
             _partsMeshEditSlotId = null;
             _partsMeshPen = -1;
@@ -822,13 +820,15 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void SetPartsMeshTool(PartsMeshTool tool)
         {
-            if (_partsMeshTool == PartsMeshTool.Create && tool != PartsMeshTool.Create)
-                MakeMeshPolygonsIfDraft();
+            // No automatic Make Polygons here: on a half-drawn mesh it would drop vertices outside the loop.
             _partsMeshTool = tool;
             _partsMeshEdgeFrom = -1;
             _partsMeshPen = -1;
+            var current = MeshEditSlot()?.Mesh;
+            bool draft = current != null && SpritePartsMeshOps.IsDraft(current) && current.VertexCount > 0;
             _status = tool == PartsMeshTool.Modify
-                ? "Modify: drag vertices to fit the image. The image stays flat."
+                ? "Modify: drag vertices or lines to fit the image. Right-click a line for Add Vertex."
+                    + (draft ? " No polygons yet: press Make Polygons when the loop is closed." : string.Empty)
                 : tool == PartsMeshTool.Create
                     ? "Create: click to add vertices joined by edges, right-click deletes. Close the loop, then Make Polygons."
                     : tool == PartsMeshTool.Delete
@@ -1069,7 +1069,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 _partsMeshMouseUv = MeshGuiToUvFree(sprite, evt.mousePosition);
                 int hover = HitMeshVertex(sprite, mesh, evt.mousePosition);
-                if (hover != _partsWarpHover || _partsMeshEdgeFrom >= 0 || _partsMeshTool == PartsMeshTool.Create)
+                if (hover != _partsWarpHover || _partsMeshEdgeFrom >= 0
+                    || _partsMeshTool == PartsMeshTool.Create || _partsMeshTool == PartsMeshTool.Modify) // line hover highlight
                 {
                     _partsWarpHover = hover;
                     Repaint();
@@ -1158,6 +1159,19 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _partsDragStartMouse = evt.mousePosition;
                     CapturePartsMeshDrag(controlId);
                 }
+            }
+            else if (HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out int la, out int lb))
+            {
+                // A line: select both ends (Shift adds) and drag them together.
+                if (!evt.shift)
+                    _partsWarpSelection.Clear();
+                if (!_partsWarpSelection.Contains(la))
+                    _partsWarpSelection.Add(la);
+                if (!_partsWarpSelection.Contains(lb))
+                    _partsWarpSelection.Add(lb);
+                _partsWarpIndex = lb;
+                BeginMeshVertexDrag(evt.mousePosition, controlId, mesh);
+                _status = "Line " + la + " - " + lb + " selected. Drag to move it, right-click for Add Vertex.";
             }
             else
             {
@@ -1500,11 +1514,23 @@ namespace InvertLab.Sprites.DOTS.Editor
             var mesh = slot?.Mesh;
             var menu = new GenericMenu();
             int hit = HitMeshVertex(sprite, mesh, mouse);
+            if (mesh != null && hit < 0 && HitMeshGraphEdge(sprite, mesh, mouse, out int la, out int lb))
+            {
+                // A line under the mouse: its own actions (add vertex in the middle, divide, turn, ...).
+                AddMeshLineMenuItems(menu, mesh, la, lb, MeshGuiToUv(sprite, mouse));
+                menu.ShowAsContext();
+                return;
+            }
             if (hit >= 0 && !_partsWarpSelection.Contains(hit))
             {
                 _partsWarpSelection.Clear();
                 _partsWarpSelection.Add(hit);
                 _partsWarpIndex = hit;
+            }
+            if (mesh != null && SpritePartsMeshOps.IsDraft(mesh))
+            {
+                ShowCreateContextMenu(mesh); // no polygons yet: the Create menu (Connect, Merge, Make Polygons, ...)
+                return;
             }
             if (_partsWarpSelection.Count == 2 && mesh != null && mesh.HasMesh)
             {
@@ -1515,18 +1541,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 else if (!SpritePartsMeshOps.IsHullEdge(mesh, a, b))
                     menu.AddItem(new GUIContent("Connect With Edge"), false, () => AddMeshEdge(a, b));
             }
-            if (HitMeshUserEdge(sprite, mesh, mouse, out int ea, out int eb))
-                menu.AddItem(new GUIContent("Remove This Edge"), false, () => RemoveMeshEdge(ea, eb));
             if (_partsWarpSelection.Count > 0)
                 menu.AddItem(new GUIContent("Delete Vertices"), false, DeleteSelectedMeshVertices);
             if (_partsWarpSelection.Count == 2 && mesh != null && mesh.HasMesh)
             {
                 menu.AddItem(new GUIContent("Merge"), false, MergeSelectedMeshPair);
                 int sa = _partsWarpSelection[0], sb = _partsWarpSelection[1];
-                if (SpritePartsMeshOps.HasEdge(mesh, sa, sb) || SpritePartsMeshOps.IsHullEdge(mesh, sa, sb))
-                    menu.AddItem(new GUIContent("Split"), false, SplitSelectedMeshPair);
+                if (SpritePartsMeshOps.GraphEdges(mesh).Exists(e => (e.x == sa && e.y == sb) || (e.x == sb && e.y == sa)))
+                    menu.AddItem(new GUIContent("Add Vertex Between"), false, () => AddVerticesOnLine(sa, sb, new[] { 0.5f }));
                 else
-                    menu.AddDisabledItem(new GUIContent("Split"));
+                    menu.AddDisabledItem(new GUIContent("Add Vertex Between (not joined)"));
             }
             if ((uint)_partsMeshPen < (uint)(mesh?.VertexCount ?? 0))
                 menu.AddItem(new GUIContent("End Pen (Enter)"), false, EndMeshPen);

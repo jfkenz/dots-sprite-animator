@@ -97,6 +97,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SetPartsMeshTool(tool);
                 if (_partsMeshTool == PartsMeshTool.Create)
                     DrawPanelCreateSection(mesh);
+                else if (mesh != null && SpritePartsMeshOps.IsDraft(mesh) && mesh.VertexCount > 0)
+                {
+                    EditorGUILayout.LabelField("No polygons yet: the part draws as a rectangle.", EditorStyles.wordWrappedMiniLabel);
+                    if (GUILayout.Button(new GUIContent("Make Polygons", "Fill every closed loop of edges with triangles"), _primaryStyle))
+                        MakeMeshPolygons();
+                }
                 EditorGUILayout.BeginHorizontal();
                 if (GUILayout.Button(new GUIContent("New", "The four image corners")))
                     ResetPartsMeshToQuad();
@@ -304,7 +310,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUILayout.Space(8f);
             string help = IsPartsMeshEdit()
                 ? _partsMeshTool == PartsMeshTool.Create
-                    ? "Keys: 1 Modify  2 Create  3 Delete  4 Weights  Enter ends the chain  Esc done.\nLeaving Create makes the polygons."
+                    ? "Keys: 1 Modify  2 Create  3 Delete  4 Weights  Enter ends the chain  Esc done.\nRight-click a line: add a vertex in the middle, and more."
                     : "Keys: 1 Modify  2 Create  3 Delete  4 Weights  Del delete  Ctrl+A all  Esc done.\nRight-click: edges, generate, trace."
                 : "Drag a vertex, or drag inside the green box to move the selection.\nDouble-click a part to edit its mesh. Q moves the whole part.";
             EditorGUILayout.LabelField(help, EditorStyles.wordWrappedMiniLabel);
