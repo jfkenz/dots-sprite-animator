@@ -103,6 +103,17 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Dense slot -> appearance track index (-1 = none; sampler then falls back to legacy pose-key ids).</summary>
         public BlobArray<int> SlotAppearanceTrackIndices;
         public BlobArray<SpritePartsTrackBlob> Tracks;
+        /// <summary>Events by time.</summary>
+        public BlobArray<SpritePartsEventBlob> Events;
+    }
+
+    public struct SpritePartsEventBlob
+    {
+        public float Time;
+        public byte Id;
+        public int IntPayload;
+        public float FloatPayload;
+        public ulong TextHash;
     }
 
     public struct SpritePartsTrackBlob
@@ -230,6 +241,16 @@ namespace InvertLab.Sprites.DOTS
             public float SpeedMultiplier;
             public byte WrapMode;
             public TrackInput[] Tracks;
+            public EventInput[] Events;
+        }
+
+        public struct EventInput
+        {
+            public float Time;
+            public byte Id;
+            public int IntPayload;
+            public float FloatPayload;
+            public string TextPayload;
         }
 
         public struct SkinBindingInput
@@ -392,6 +413,25 @@ namespace InvertLab.Sprites.DOTS
                     clip.Duration = duration;
                     clip.SpeedMultiplier = math.isfinite(src.SpeedMultiplier) ? src.SpeedMultiplier : 1f;
                     clip.WrapMode = wrap;
+
+                    var events = new System.Collections.Generic.List<SpritePartsEventBlob>();
+                    foreach (var ev in src.Events ?? Array.Empty<EventInput>())
+                    {
+                        if (ev.Id == 0 || !math.isfinite(ev.Time))
+                            continue;
+                        events.Add(new SpritePartsEventBlob
+                        {
+                            Time = math.clamp(ev.Time, 0f, duration),
+                            Id = ev.Id,
+                            IntPayload = ev.IntPayload,
+                            FloatPayload = ev.FloatPayload,
+                            TextHash = string.IsNullOrEmpty(ev.TextPayload) ? 0UL : SpriteAnimSetBuilder.Fnv(ev.TextPayload),
+                        });
+                    }
+                    events.Sort((a, b) => a.Time.CompareTo(b.Time));
+                    var eventArr = builder.Allocate(ref clip.Events, events.Count);
+                    for (int e = 0; e < events.Count; e++)
+                        eventArr[e] = events[e];
 
                     var tracks = src.Tracks ?? Array.Empty<TrackInput>();
                     // One pose and one appearance track per slot at most. Pose

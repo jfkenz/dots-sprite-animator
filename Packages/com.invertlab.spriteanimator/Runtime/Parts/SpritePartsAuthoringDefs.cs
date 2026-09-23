@@ -291,6 +291,27 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsKeyDef> Keys = new();
     }
 
+    /// <summary>
+    /// An event on a Parts clip (footstep, hit, spawn an effect): fires when playback passes <see cref="Time"/>.
+    /// <see cref="EventId"/> is an id from the profile's event list (the same list Frame clips use), so gameplay
+    /// reads Parts and Frame events the same way (SpriteAnimEventBuffer / SpriteAnimEvents.Raised).
+    /// </summary>
+    [Serializable]
+    public class SpritePartsEventMarker
+    {
+        public float Time;
+        public byte EventId = 1;
+        public int IntPayload;
+        public float FloatPayload;
+        public string TextPayload = string.Empty;
+
+        public SpritePartsEventMarker Clone() => new SpritePartsEventMarker
+        {
+            Time = Time, EventId = EventId, IntPayload = IntPayload, FloatPayload = FloatPayload,
+            TextPayload = TextPayload ?? string.Empty,
+        };
+    }
+
     [Serializable]
     public class SpritePartsClipDef
     {
@@ -300,6 +321,8 @@ namespace InvertLab.Sprites.DOTS
         public float Speed = 1f;
         public byte WrapMode = (byte)SpritePartsWrap.Loop;
         public List<SpritePartsTrackDef> Tracks = new();
+        /// <summary>Events that fire as playback passes their time.</summary>
+        public List<SpritePartsEventMarker> Events = new();
         /// <summary>Display-only provenance when this clip was copied from another profile.</summary>
         public SpriteImportProvenance Import;
     }

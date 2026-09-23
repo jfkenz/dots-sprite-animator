@@ -333,6 +333,13 @@ namespace InvertLab.Sprites.DOTS
                     SpeedMultiplier = clip.Speed,
                     WrapMode = clip.WrapMode,
                     Tracks = kept.ToArray(),
+                    Events = clip.Events == null
+                        ? Array.Empty<SpritePartsSetBuilder.EventInput>()
+                        : clip.Events.ConvertAll(e => new SpritePartsSetBuilder.EventInput
+                        {
+                            Time = e.Time, Id = e.EventId, IntPayload = e.IntPayload, FloatPayload = e.FloatPayload,
+                            TextPayload = e.TextPayload,
+                        }).ToArray(),
                 };
             }
             return result;

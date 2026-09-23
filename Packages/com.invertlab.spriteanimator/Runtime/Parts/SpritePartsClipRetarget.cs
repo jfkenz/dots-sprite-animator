@@ -238,6 +238,7 @@ namespace InvertLab.Sprites.DOTS
                 Speed = src.Speed,
                 WrapMode = src.WrapMode,
                 Tracks = new List<SpritePartsTrackDef>(),
+                Events = src.Events == null ? new List<SpritePartsEventMarker>() : src.Events.ConvertAll(e => e.Clone()),
             };
             if (src.Tracks == null)
                 return copy;

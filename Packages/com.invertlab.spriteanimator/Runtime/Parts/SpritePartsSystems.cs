@@ -13,6 +13,8 @@ namespace InvertLab.Sprites.DOTS
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateBefore(typeof(TransformSystemGroup))]
     [UpdateAfter(typeof(SpriteSortDepthSystem))]
+    [UpdateAfter(typeof(SpriteAnimEventClearSystem))]
+    [UpdateBefore(typeof(SpriteAnimEventDispatchSystem))]
     public partial struct SpritePartsPlayerSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
@@ -21,6 +23,7 @@ namespace InvertLab.Sprites.DOTS
             var em = state.EntityManager;
             using var commands = new EntityCommandBuffer(Allocator.Temp);
             using var pending = new NativeList<Entity>(16, Allocator.Temp);
+            using var ticks = new NativeList<SpritePartsEventFiring.Tick>(16, Allocator.Temp);
             foreach (var (playerRef, setRef, entity) in
                      SystemAPI.Query<RefRW<SpritePartsPlayer>, RefRO<SpritePartsSetRef>>()
                               .WithEntityAccess())
@@ -37,11 +40,23 @@ namespace InvertLab.Sprites.DOTS
                 if (em.HasComponent<SpritePartsCompleted>(entity))
                     already = 1;
                 player.Completed = already;
+                var tick = new SpritePartsEventFiring.Tick
+                {
+                    Entity = entity, ClipIndex = player.ClipIndex, From = player.TimeSeconds,
+                    Playing = !SpritePartsPoseWriter.IsPaused(player) && player.Completed == 0,
+                };
                 SpritePartsPoseWriter.TickClocks(ref player, ref set, dt);
+                tick.To = player.TimeSeconds;
+                if (tick.Playing && set.Clips[player.ClipIndex].Events.Length > 0)
+                    ticks.Add(tick);
                 if (player.Completed != 0 && !em.HasComponent<SpritePartsCompleted>(entity))
                     commands.AddComponent(entity, new SpritePartsCompleted());
                 pending.Add(entity);
             }
+
+            // Clip events the tick passed (structural: the event buffer may need adding, so after the query).
+            for (int i = 0; i < ticks.Length; i++)
+                SpritePartsEventFiring.Fire(em, ticks[i]);
 
             // Pose writes can add PostTransformMatrix. Do that after the query
             // enumerator is gone, and only through the ECB.

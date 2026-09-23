@@ -511,6 +511,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             float authored = clip.Speed;
             if (float.IsNaN(authored) || float.IsInfinity(authored))
                 authored = 1f;
+            float eventsFrom = _partsPreviewTime;
+            try
+            {
             _partsPreviewTime += delta * Mathf.Max(0.05f, _speed) * authored;
             // Loop Last: wrap at last keyframe time back to first (preview only).
             float lastKey = 0f;
@@ -533,6 +536,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             else
             {
                 _partsPreviewTime = SpritePartsSampler.WrapTime(_partsPreviewTime, duration, clip.WrapMode);
+            }
+            }
+            finally
+            {
+                FlashPartsEvents(clip, eventsFrom, _partsPreviewTime);
             }
         }
 
@@ -760,6 +768,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsSkinsInspector();
             else
             {
+                DrawPartsEventInspector();
                 DrawPartsIkInspector();
                 DrawPartsJiggleInspector();
                 DrawPartsParamsInspector();
@@ -1810,6 +1819,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsDialBar(canvas);
             DrawPartsIkOverlay();
             DrawPartsIkTargets(canvas);
+            DrawPartsEventFlash(canvas);
         }
 
         /// <summary>Warp and Edit Mesh swap Onion / Debug / Root for what matters there: vertices, lines, triangles, FFD.</summary>
@@ -5728,8 +5738,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             var rulerRect = new Rect(rect.x, rect.y, rect.width, rulerH);
             // Scrub only on the ruler so key diamonds remain clickable.
             var scrubRect = new Rect(rect.x + labelW, rect.y, rect.width - labelW, rulerH);
-            HandlePartsTimelineScrub(scrubRect, duration, scrubControlId);
+            if (!HandlePartsEventMarkers(scrubRect, clip, duration))
+                HandlePartsTimelineScrub(scrubRect, duration, scrubControlId);
             DrawPartsTimelineRuler(rulerRect, labelW, duration);
+            DrawPartsEventMarkers(scrubRect, clip, duration);
 
             var evt = Event.current;
             float tracksTop = rect.y + rulerH;
