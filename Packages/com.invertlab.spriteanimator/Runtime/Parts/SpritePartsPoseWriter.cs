@@ -214,6 +214,11 @@ namespace InvertLab.Sprites.DOTS
                 // IK constraints last, so they reach targets that clips or gameplay overrides moved.
                 if (set.IkConstraints.Length > 0 && !extras.KeyedPoseOnly)
                     SpritePartsIk.Apply(ref set, finalLocal, localToRoot, keyed.IkMix, keyed.IkBend);
+                // Transform then path constraints (Spine's order after IK).
+                if (set.TransformConstraints.Length > 0 && !extras.KeyedPoseOnly)
+                    SpritePartsConstraints.ApplyTransforms(ref set, finalLocal, localToRoot, keyed.TransformMix);
+                if (set.PathConstraints.Length > 0 && !extras.KeyedPoseOnly)
+                    SpritePartsConstraints.ApplyPaths(ref set, finalLocal, localToRoot, keyed.PathPosition, keyed.PathMix);
                 // Jiggle after IK: springs swing behind the final animated pose.
                 if (set.Jiggles.Length > 0 && !extras.KeyedPoseOnly && extras.Jiggle.IsCreated)
                     SpritePartsJiggle.Apply(ref set, finalLocal, localToRoot, extras.Jiggle, extras.DeltaTime,

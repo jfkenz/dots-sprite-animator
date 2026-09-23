@@ -92,6 +92,14 @@ namespace InvertLab.Sprites.DOTS
         public string ClipEndSlotId = string.Empty;
         /// <summary>Bone length in world units along its +X axis (editor drawing, IK tips). 0 = 1.</summary>
         public float BoneLength = 1f;
+        /// <summary>
+        /// Path (Spine's path attachment): a smooth curve through <see cref="PathPoints"/> (this part's space, world
+        /// units) that path constraints move parts along. Never drawn; it follows its parent like any part.
+        /// </summary>
+        public bool IsPath;
+        public Vector2[] PathPoints;
+        /// <summary>True: the curve joins its last point back to the first.</summary>
+        public bool PathClosed;
     }
 
     /// <summary>
@@ -195,6 +203,70 @@ namespace InvertLab.Sprites.DOTS
         public bool BendPositive = true;
         /// <summary>0 = off, 1 = fully solved; in between blends with the clip pose.</summary>
         [Range(0f, 1f)] public float Mix = 1f;
+    }
+
+    /// <summary>
+    /// Transform constraint (Spine): the listed parts copy the target's rotation, position and scale, each channel
+    /// by its mix. Character space matches the target where it is drawn; Local copies its local values. Relative adds
+    /// the target's change from its setup pose instead of matching it.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsTransformConstraintDef
+    {
+        public string Name = "Transform";
+        public bool Enabled = true;
+        public string TargetSlotId = string.Empty;
+        public List<string> BoneSlotIds = new();
+        [Range(0f, 1f)] public float MixRotate = 1f;
+        [Range(0f, 1f)] public float MixX = 1f;
+        [Range(0f, 1f)] public float MixY = 1f;
+        [Range(0f, 1f)] public float MixScaleX;
+        [Range(0f, 1f)] public float MixScaleY;
+        public float OffsetRotation;
+        public Vector2 OffsetPosition;
+        /// <summary>Added to the target's scale.</summary>
+        public Vector2 OffsetScale;
+        public bool Local;
+        public bool Relative;
+    }
+
+    public enum SpritePartsPathSpacing : byte
+    {
+        /// <summary>Spacing is a fraction of the path's length.</summary>
+        Percent = 0,
+        /// <summary>Spacing is in world units.</summary>
+        Fixed = 1,
+    }
+
+    public enum SpritePartsPathRotate : byte
+    {
+        /// <summary>Each part turns to the path's direction where it sits.</summary>
+        Tangent = 0,
+        /// <summary>Each part points at the next one (a chain along the path).</summary>
+        Chain = 1,
+        /// <summary>Parts move along the path without turning.</summary>
+        None = 2,
+    }
+
+    /// <summary>
+    /// Path constraint (Spine): the listed parts (a chain, first to last) sit along a path part's curve from
+    /// <see cref="Position"/>, <see cref="Spacing"/> apart, turned to follow it. Key the position to slide them along.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsPathConstraintDef
+    {
+        public string Name = "Path";
+        public bool Enabled = true;
+        public string PathSlotId = string.Empty;
+        public List<string> BoneSlotIds = new();
+        /// <summary>Where the first part sits: 0 = the path's start, 1 = its end.</summary>
+        [Range(0f, 1f)] public float Position;
+        public float Spacing = 0.1f;
+        public SpritePartsPathSpacing SpacingMode = SpritePartsPathSpacing.Percent;
+        public SpritePartsPathRotate RotateMode = SpritePartsPathRotate.Tangent;
+        public float OffsetRotation;
+        [Range(0f, 1f)] public float MixRotate = 1f;
+        [Range(0f, 1f)] public float MixTranslate = 1f;
     }
 
     /// <summary>
@@ -374,6 +446,12 @@ namespace InvertLab.Sprites.DOTS
         JiggleMix = 2,
         /// <summary>A control parameter's value.</summary>
         Param = 3,
+        /// <summary>A transform constraint's overall mix (scales its channel mixes).</summary>
+        TransformMix = 4,
+        /// <summary>A path constraint's position along its path (0..1).</summary>
+        PathPosition = 5,
+        /// <summary>A path constraint's overall mix (scales its rotate / translate mixes).</summary>
+        PathMix = 6,
     }
 
     [Serializable]

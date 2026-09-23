@@ -18,6 +18,10 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<SpritePartsJiggleBlob> Jiggles;
         /// <summary>Control parameters; values live on the character (<see cref="SpritePartsParamValue"/>).</summary>
         public BlobArray<SpritePartsParamBlob> Params;
+        /// <summary>Transform constraints, solved after IK.</summary>
+        public BlobArray<SpritePartsTransformBlob> TransformConstraints;
+        /// <summary>Path constraints, solved after transform constraints.</summary>
+        public BlobArray<SpritePartsPathBlob> PathConstraints;
         /// <summary>Crossfade times per clip pair (-1 From = any clip).</summary>
         public BlobArray<SpritePartsMixBlob> Mixes;
         public float DefaultMix;
@@ -26,6 +30,38 @@ namespace InvertLab.Sprites.DOTS
         public byte FadeOutEvents;
         public BlobArray<SpritePartsMaskBlob> Masks;
         public BlobArray<SpritePartsBlendSpaceBlob> BlendSpaces;
+    }
+
+    public struct SpritePartsTransformBlob
+    {
+        public int Target;
+        /// <summary>Constrained slots, parents first.</summary>
+        public BlobArray<int> Bones;
+        public float MixRotate;
+        public float MixX;
+        public float MixY;
+        public float MixScaleX;
+        public float MixScaleY;
+        public float OffsetRotation;
+        public float2 OffsetPosition;
+        public float2 OffsetScale;
+        public byte Local;
+        public byte Relative;
+    }
+
+    public struct SpritePartsPathBlob
+    {
+        /// <summary>The slot whose <see cref="SpritePartSlotBlob.PathPoints"/> is the curve.</summary>
+        public int PathSlot;
+        /// <summary>Constrained slots in chain order (first sits at <see cref="Position"/>).</summary>
+        public BlobArray<int> Bones;
+        public float Position;
+        public float Spacing;
+        public byte SpacingMode;
+        public byte RotateMode;
+        public float OffsetRotation;
+        public float MixRotate;
+        public float MixTranslate;
     }
 
     public struct SpritePartsMixBlob
@@ -128,6 +164,10 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<float2> ClipPolygon;
         /// <summary>The last slot (in draw order) a clip shape clips; -1 = every slot above it.</summary>
         public int ClipEndIndex;
+        /// <summary>1 = a path: <see cref="PathPoints"/> (this slot's space) is a smooth curve through them.</summary>
+        public byte IsPath;
+        public byte PathClosed;
+        public BlobArray<float2> PathPoints;
     }
 
     public struct SpritePartsClipBlob
@@ -260,6 +300,9 @@ namespace InvertLab.Sprites.DOTS
             public bool IsClipShape;
             public float2[] ClipPolygon;
             public string ClipEndSlotId;
+            public bool IsPath;
+            public float2[] PathPoints;
+            public bool PathClosed;
         }
 
         public struct AppearanceInput
@@ -356,6 +399,39 @@ namespace InvertLab.Sprites.DOTS
             public float Mix;
         }
 
+        public struct TransformInput
+        {
+            /// <summary>Clips key its overall mix by this name.</summary>
+            public string Name;
+            public string TargetSlotId;
+            public string[] BoneSlotIds;
+            public float MixRotate;
+            public float MixX;
+            public float MixY;
+            public float MixScaleX;
+            public float MixScaleY;
+            public float OffsetRotation;
+            public float2 OffsetPosition;
+            public float2 OffsetScale;
+            public bool Local;
+            public bool Relative;
+        }
+
+        public struct PathInput
+        {
+            /// <summary>Clips key its position and overall mix by this name.</summary>
+            public string Name;
+            public string PathSlotId;
+            public string[] BoneSlotIds;
+            public float Position;
+            public float Spacing;
+            public byte SpacingMode;
+            public byte RotateMode;
+            public float OffsetRotation;
+            public float MixRotate;
+            public float MixTranslate;
+        }
+
         public struct JiggleInput
         {
             /// <summary>Clips key its Mix by this name (every joint of a chain shares it).</summary>
@@ -428,7 +504,9 @@ namespace InvertLab.Sprites.DOTS
             IkInput[] ik = null,
             JiggleInput[] jiggles = null,
             ParamInput[] parameters = null,
-            TransitionsInput transitions = null)
+            TransitionsInput transitions = null,
+            TransformInput[] transforms = null,
+            PathInput[] paths = null)
         {
             if (slots == null || slots.Length == 0)
                 throw new ArgumentException("Parts set requires at least one slot.");
@@ -737,6 +815,87 @@ namespace InvertLab.Sprites.DOTS
                     };
                 }
 
+                // Transform and path constraints: unknown slots are dropped; bones solve parents first.
+                int Depth(int s)
+                {
+                    int d = 0;
+                    for (int p = ParentIndex(slots, slotIndex, s); p >= 0 && d < 256; p = ParentIndex(slots, slotIndex, p))
+                        d++;
+                    return d;
+                }
+                System.Collections.Generic.List<int> Bones(string[] ids, int exclude, bool byDepth)
+                {
+                    var list = new System.Collections.Generic.List<int>();
+                    foreach (string id in ids ?? Array.Empty<string>())
+                        if (slotIndex.TryGetValue(SpritePartIdUtility.Canonical(id ?? string.Empty), out int s) && s != exclude && !list.Contains(s))
+                            list.Add(s);
+                    if (byDepth)
+                        list.Sort((a, b) => Depth(a) != Depth(b) ? Depth(a).CompareTo(Depth(b)) : a.CompareTo(b));
+                    return list;
+                }
+                var transformNames = new System.Collections.Generic.List<string>();
+                var transformList = new System.Collections.Generic.List<(TransformInput input, int target, System.Collections.Generic.List<int> bones)>();
+                foreach (var t in transforms ?? Array.Empty<TransformInput>())
+                {
+                    if (!slotIndex.TryGetValue(SpritePartIdUtility.Canonical(t.TargetSlotId ?? string.Empty), out int target))
+                        continue;
+                    var bones = Bones(t.BoneSlotIds, target, true);
+                    if (bones.Count == 0)
+                        continue;
+                    transformList.Add((t, target, bones));
+                    transformNames.Add((t.Name ?? string.Empty).Trim());
+                }
+                var transformArr = builder.Allocate(ref root.TransformConstraints, transformList.Count);
+                for (int k = 0; k < transformList.Count; k++)
+                {
+                    var (t, target, bones) = transformList[k];
+                    ref var tc = ref transformArr[k];
+                    tc.Target = target;
+                    var boneArr = builder.Allocate(ref tc.Bones, bones.Count);
+                    for (int b = 0; b < bones.Count; b++)
+                        boneArr[b] = bones[b];
+                    tc.MixRotate = math.saturate(t.MixRotate);
+                    tc.MixX = math.saturate(t.MixX);
+                    tc.MixY = math.saturate(t.MixY);
+                    tc.MixScaleX = math.saturate(t.MixScaleX);
+                    tc.MixScaleY = math.saturate(t.MixScaleY);
+                    tc.OffsetRotation = math.isfinite(t.OffsetRotation) ? t.OffsetRotation : 0f;
+                    tc.OffsetPosition = t.OffsetPosition;
+                    tc.OffsetScale = t.OffsetScale;
+                    tc.Local = t.Local ? (byte)1 : (byte)0;
+                    tc.Relative = t.Relative ? (byte)1 : (byte)0;
+                }
+                var pathNames = new System.Collections.Generic.List<string>();
+                var pathList = new System.Collections.Generic.List<(PathInput input, int path, System.Collections.Generic.List<int> bones)>();
+                foreach (var p in paths ?? Array.Empty<PathInput>())
+                {
+                    if (!slotIndex.TryGetValue(SpritePartIdUtility.Canonical(p.PathSlotId ?? string.Empty), out int path)
+                        || !slots[path].IsPath || slots[path].PathPoints == null || slots[path].PathPoints.Length < 2)
+                        continue;
+                    var bones = Bones(p.BoneSlotIds, path, false);
+                    if (bones.Count == 0)
+                        continue;
+                    pathList.Add((p, path, bones));
+                    pathNames.Add((p.Name ?? string.Empty).Trim());
+                }
+                var pathArr = builder.Allocate(ref root.PathConstraints, pathList.Count);
+                for (int k = 0; k < pathList.Count; k++)
+                {
+                    var (p, path, bones) = pathList[k];
+                    ref var pc = ref pathArr[k];
+                    pc.PathSlot = path;
+                    var boneArr = builder.Allocate(ref pc.Bones, bones.Count);
+                    for (int b = 0; b < bones.Count; b++)
+                        boneArr[b] = bones[b];
+                    pc.Position = math.isfinite(p.Position) ? p.Position : 0f;
+                    pc.Spacing = math.isfinite(p.Spacing) ? p.Spacing : 0f;
+                    pc.SpacingMode = p.SpacingMode;
+                    pc.RotateMode = p.RotateMode;
+                    pc.OffsetRotation = math.isfinite(p.OffsetRotation) ? p.OffsetRotation : 0f;
+                    pc.MixRotate = math.saturate(p.MixRotate);
+                    pc.MixTranslate = math.saturate(p.MixTranslate);
+                }
+
                 // Keyed values: each track drives every IK / jiggle / parameter with its name.
                 for (int ci = 0; ci < clips.Length; ci++)
                 {
@@ -765,6 +924,17 @@ namespace InvertLab.Sprites.DOTS
                             case SpritePartsValueKind.Param:
                                 for (int k = 0; k < parameters.Length; k++)
                                     if ((parameters[k].Name ?? string.Empty).Trim() == target)
+                                        targets.Add(k);
+                                break;
+                            case SpritePartsValueKind.TransformMix:
+                                for (int k = 0; k < transformNames.Count; k++)
+                                    if (transformNames[k] == target)
+                                        targets.Add(k);
+                                break;
+                            case SpritePartsValueKind.PathPosition:
+                            case SpritePartsValueKind.PathMix:
+                                for (int k = 0; k < pathNames.Count; k++)
+                                    if (pathNames[k] == target)
                                         targets.Add(k);
                                 break;
                         }
@@ -1002,6 +1172,19 @@ namespace InvertLab.Sprites.DOTS
                 var shapePieces = builder.Allocate(ref slotArr[i].MaskPieces, flatPieces.Count);
                 for (int k = 0; k < flatPieces.Count; k++)
                     shapePieces[k] = flatPieces[k];
+            }
+
+            // Paths: their points (a smooth curve through them at runtime).
+            for (int i = 0; i < n; i++)
+            {
+                var src = slots[i];
+                if (!src.IsPath || src.PathPoints == null || src.PathPoints.Length < 2)
+                    continue;
+                slotArr[i].IsPath = 1;
+                slotArr[i].PathClosed = src.PathClosed && src.PathPoints.Length >= 3 ? (byte)1 : (byte)0;
+                var pathArr = builder.Allocate(ref slotArr[i].PathPoints, src.PathPoints.Length);
+                for (int k = 0; k < src.PathPoints.Length; k++)
+                    pathArr[k] = src.PathPoints[k];
             }
 
             // Masks with a mesh: split once into convex pieces for the per-frame clip.

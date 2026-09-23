@@ -700,6 +700,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsTransformInspector(slot, partLocked);
                 DrawPartsBoneInspector(slot, partLocked);
                 DrawPartsClipShapeInspector(slot, partLocked);
+                DrawPartsPathPartInspector(slot, partLocked);
                 DrawPartsKeyInspector(slot, partLocked);
 
                 bool partOpen = PartsSection("SELECTED PART", slot.Name);
@@ -776,6 +777,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 DrawPartsEventInspector();
                 DrawPartsIkInspector();
+                DrawPartsTransformConstraintsInspector();
+                DrawPartsPathConstraintsInspector();
                 DrawPartsJiggleInspector();
                 DrawPartsParamsInspector();
                 DrawPartsTransitionsInspector();
@@ -3166,6 +3169,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                         DrawPartsClipShape(canvas, matrices[i], boneDef, IsPartsBlobSlotSelected(ref set, i));
                     continue;
                 }
+                if (boneDef != null && boneDef.IsPath)
+                {
+                    // Paths have no image: their curve on the main pose only.
+                    if (pickable)
+                        DrawPartsPath(canvas, matrices[i], boneDef, IsPartsBlobSlotSelected(ref set, i));
+                    continue;
+                }
 
                 // Pose scale signs: Mirror H = Scale.x < 0 (east-west), Mirror V = Scale.y < 0 (north-south).
                 // Use RAW worldDeg from the matrix (same as gizmo/hit). Do not +180 here - that
@@ -4254,6 +4264,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
 
             if (!IsPartsMeshEdit() && !IsPartsPivotFocus() && !_partsDragActive && HandleClipShapeInput(canvas, evt))
+                return;
+            if (!IsPartsMeshEdit() && !IsPartsPivotFocus() && !_partsDragActive && HandlePathInput(canvas, evt))
                 return;
 
             if (HandlePartsMarquee(canvas, evt, controlId))

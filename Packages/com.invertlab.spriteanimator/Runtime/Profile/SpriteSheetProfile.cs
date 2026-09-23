@@ -1407,6 +1407,10 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsJiggleDef> PartsJiggles = new();
         /// <summary>Control parameters: a value scrubs a clip (mouth open, head turn), set by gameplay.</summary>
         public List<SpritePartsParamDef> PartsParams = new();
+        /// <summary>Transform constraints (parts copy a target's rotation / position / scale).</summary>
+        public List<SpritePartsTransformConstraintDef> PartsTransformConstraints = new();
+        /// <summary>Path constraints (parts follow a path part's curve).</summary>
+        public List<SpritePartsPathConstraintDef> PartsPathConstraints = new();
         /// <summary>Crossfade time per clip pair; <see cref="PartsDefaultMix"/> for pairs not listed.</summary>
         public List<SpritePartsMixDef> PartsMixes = new();
         public float PartsDefaultMix;

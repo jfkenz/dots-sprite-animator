@@ -62,7 +62,8 @@ namespace InvertLab.Sprites.DOTS
                 var clips = CreateClips(bakeProfile);
                 var skins = CreateSkins(bakeProfile);
                 blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins, CreateIk(bakeProfile),
-                    CreateJiggles(bakeProfile), CreateParams(bakeProfile), CreateTransitions(bakeProfile));
+                    CreateJiggles(bakeProfile), CreateParams(bakeProfile), CreateTransitions(bakeProfile),
+                    CreateTransforms(bakeProfile), CreatePaths(bakeProfile));
                 return true;
             }
             catch (Exception ex)
@@ -94,6 +95,49 @@ namespace InvertLab.Sprites.DOTS
                 });
             }
             return result.ToArray();
+        }
+
+        public static SpritePartsSetBuilder.TransformInput[] CreateTransforms(SpriteSheetProfile profile)
+        {
+            var list = profile?.PartsTransformConstraints;
+            if (list == null || list.Count == 0)
+                return Array.Empty<SpritePartsSetBuilder.TransformInput>();
+            return list.FindAll(c => c != null && c.Enabled).ConvertAll(c => new SpritePartsSetBuilder.TransformInput
+            {
+                Name = c.Name,
+                TargetSlotId = c.TargetSlotId,
+                BoneSlotIds = (c.BoneSlotIds ?? new List<string>()).ToArray(),
+                MixRotate = c.MixRotate,
+                MixX = c.MixX,
+                MixY = c.MixY,
+                MixScaleX = c.MixScaleX,
+                MixScaleY = c.MixScaleY,
+                OffsetRotation = c.OffsetRotation,
+                OffsetPosition = new float2(c.OffsetPosition.x, c.OffsetPosition.y),
+                OffsetScale = new float2(c.OffsetScale.x, c.OffsetScale.y),
+                Local = c.Local,
+                Relative = c.Relative,
+            }).ToArray();
+        }
+
+        public static SpritePartsSetBuilder.PathInput[] CreatePaths(SpriteSheetProfile profile)
+        {
+            var list = profile?.PartsPathConstraints;
+            if (list == null || list.Count == 0)
+                return Array.Empty<SpritePartsSetBuilder.PathInput>();
+            return list.FindAll(c => c != null && c.Enabled).ConvertAll(c => new SpritePartsSetBuilder.PathInput
+            {
+                Name = c.Name,
+                PathSlotId = c.PathSlotId,
+                BoneSlotIds = (c.BoneSlotIds ?? new List<string>()).ToArray(),
+                Position = c.Position,
+                Spacing = c.Spacing,
+                SpacingMode = (byte)c.SpacingMode,
+                RotateMode = (byte)c.RotateMode,
+                OffsetRotation = c.OffsetRotation,
+                MixRotate = c.MixRotate,
+                MixTranslate = c.MixTranslate,
+            }).ToArray();
         }
 
         public static SpritePartsSetBuilder.TransitionsInput CreateTransitions(SpriteSheetProfile profile)
@@ -229,7 +273,7 @@ namespace InvertLab.Sprites.DOTS
             for (int i = 0; i < list.Count; i++)
             {
                 var s = list[i];
-                string defaultApp = s.IsBone || s.IsClipShape ? string.Empty : s.DefaultAppearanceId; // bones and clip shapes have no image
+                string defaultApp = s.IsBone || s.IsClipShape || s.IsPath ? string.Empty : s.DefaultAppearanceId; // bones, clip shapes and paths have no image
                 if (!string.IsNullOrWhiteSpace(defaultApp)
                     && SpritePartsValidation.FindAppearanceIndex(profile, defaultApp) < 0)
                     defaultApp = string.Empty;
@@ -248,7 +292,7 @@ namespace InvertLab.Sprites.DOTS
                     DefaultAppearanceId = defaultApp,
                     DrawRank = s.DrawRank,
                     // A bone never draws itself, but its children do (Hidden is per slot here).
-                    Hidden = s.IsBone || s.IsClipShape || SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
+                    Hidden = s.IsBone || s.IsClipShape || s.IsPath || SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
                         ? (byte)1 : (byte)0,
                     Mesh = SpritePartsLattice.FromMesh(s.Mesh),
                     ClipMaskSlotId = s.ClipMaskSlotId,
@@ -257,6 +301,9 @@ namespace InvertLab.Sprites.DOTS
                         ? Array.ConvertAll(s.ClipPolygon, v => new float2(v.x, v.y))
                         : null,
                     ClipEndSlotId = s.IsClipShape ? s.ClipEndSlotId : null,
+                    IsPath = s.IsPath,
+                    PathPoints = s.IsPath && s.PathPoints != null ? Array.ConvertAll(s.PathPoints, v => new float2(v.x, v.y)) : null,
+                    PathClosed = s.PathClosed,
                 };
                 // Clipping maps between part images: masks and clipped parts need their image size and pivot
                 // (with a clip shape in the rig any part may be clipped).
@@ -493,7 +540,9 @@ namespace InvertLab.Sprites.DOTS
                     CreateIk(profile),
                     CreateJiggles(profile),
                     CreateParams(profile),
-                    CreateTransitions(profile));
+                    CreateTransitions(profile),
+                    CreateTransforms(profile),
+                    CreatePaths(profile));
                 return true;
             }
             catch (Exception ex)
@@ -547,7 +596,9 @@ namespace InvertLab.Sprites.DOTS
                     CreateIk(profile),
                     CreateJiggles(profile),
                     CreateParams(profile),
-                    CreateTransitions(profile));
+                    CreateTransitions(profile),
+                    CreateTransforms(profile),
+                    CreatePaths(profile));
                 return true;
             }
             catch (Exception ex)

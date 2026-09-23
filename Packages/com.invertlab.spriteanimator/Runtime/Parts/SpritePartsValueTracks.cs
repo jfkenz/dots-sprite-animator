@@ -17,6 +17,9 @@ namespace InvertLab.Sprites.DOTS
             public NativeArray<float> IkBend;
             public NativeArray<float> JiggleMix;
             public NativeArray<float> Params;
+            public NativeArray<float> TransformMix;
+            public NativeArray<float> PathPosition;
+            public NativeArray<float> PathMix;
 
             public bool IsCreated => IkMix.IsCreated;
 
@@ -26,6 +29,9 @@ namespace InvertLab.Sprites.DOTS
                 if (IkBend.IsCreated) IkBend.Dispose();
                 if (JiggleMix.IsCreated) JiggleMix.Dispose();
                 if (Params.IsCreated) Params.Dispose();
+                if (TransformMix.IsCreated) TransformMix.Dispose();
+                if (PathPosition.IsCreated) PathPosition.Dispose();
+                if (PathMix.IsCreated) PathMix.Dispose();
             }
         }
 
@@ -84,6 +90,9 @@ namespace InvertLab.Sprites.DOTS
                 Lerp(values.IkMix, incomingValues.IkMix, incoming);
                 Lerp(values.JiggleMix, incomingValues.JiggleMix, incoming);
                 Lerp(values.Params, incomingValues.Params, incoming);
+                Lerp(values.TransformMix, incomingValues.TransformMix, incoming);
+                Lerp(values.PathPosition, incomingValues.PathPosition, incoming);
+                Lerp(values.PathMix, incomingValues.PathMix, incoming);
                 if (incoming >= 0.5f)
                     values.IkBend.CopyFrom(incomingValues.IkBend);
             }
@@ -102,7 +111,17 @@ namespace InvertLab.Sprites.DOTS
                 IkBend = new NativeArray<float>(set.IkConstraints.Length, Allocator.Temp),
                 JiggleMix = new NativeArray<float>(set.Jiggles.Length, Allocator.Temp),
                 Params = new NativeArray<float>(set.Params.Length, Allocator.Temp),
+                TransformMix = new NativeArray<float>(set.TransformConstraints.Length, Allocator.Temp),
+                PathPosition = new NativeArray<float>(set.PathConstraints.Length, Allocator.Temp),
+                PathMix = new NativeArray<float>(set.PathConstraints.Length, Allocator.Temp),
             };
+            for (int i = 0; i < set.TransformConstraints.Length; i++)
+                v.TransformMix[i] = 1f;
+            for (int i = 0; i < set.PathConstraints.Length; i++)
+            {
+                v.PathPosition[i] = set.PathConstraints[i].Position;
+                v.PathMix[i] = 1f;
+            }
             for (int i = 0; i < set.IkConstraints.Length; i++)
             {
                 v.IkMix[i] = set.IkConstraints[i].Mix;
@@ -148,6 +167,18 @@ namespace InvertLab.Sprites.DOTS
                         case SpritePartsValueKind.Param:
                             if (target < v.Params.Length)
                                 v.Params[target] = value;
+                            break;
+                        case SpritePartsValueKind.TransformMix:
+                            if (target < v.TransformMix.Length)
+                                v.TransformMix[target] = math.saturate(value);
+                            break;
+                        case SpritePartsValueKind.PathPosition:
+                            if (target < v.PathPosition.Length)
+                                v.PathPosition[target] = value;
+                            break;
+                        case SpritePartsValueKind.PathMix:
+                            if (target < v.PathMix.Length)
+                                v.PathMix[target] = math.saturate(value);
                             break;
                     }
                 }
