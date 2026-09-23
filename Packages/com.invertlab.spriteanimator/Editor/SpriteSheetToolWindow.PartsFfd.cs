@@ -324,8 +324,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int k = 0; k < f.Verts.Length; k++)
             {
                 int i = f.Verts[k];
-                if ((uint)i >= (uint)start.PointCount)
-                    continue;
+                if ((uint)i >= (uint)start.PointCount || IsWarpPinned(f.SlotId, i))
+                    continue; // pinned vertices never move
                 float2 delta = FfdSample(to, f.Param[k]) - FfdSample(from, f.Param[k]);
                 if (_partsFfdSkinInverse != null && i < _partsFfdSkinInverse.Length
                     && _partsFfdSkinSize.x > 1e-6f && _partsFfdSkinSize.y > 1e-6f)

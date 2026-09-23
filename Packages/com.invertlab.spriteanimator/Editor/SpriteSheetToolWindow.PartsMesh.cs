@@ -394,7 +394,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
 
-            if (_partsSoftSelect && canvas.Contains(Event.current.mousePosition))
+            if (_partsSoftSelect && !PartsBrushOn() && canvas.Contains(Event.current.mousePosition))
             {
                 // Spine shows the soft radius at the cursor: outer = Size, inner = fully moved.
                 Vector2 m = Event.current.mousePosition;
@@ -422,11 +422,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Handles.color = Color.white;
                     Handles.DrawWireDisc(pts[i], Vector3.forward, 6.5f);
                 }
+                if (!virtualQuad && IsWarpPinned(slot.SlotId, i))
+                {
+                    Handles.color = Color.white;
+                    Handles.DrawWireDisc(pts[i], Vector3.forward, 8f); // pinned
+                    Handles.DrawWireDisc(pts[i], Vector3.forward, 9f);
+                }
                 EditorGUIUtility.AddCursorRect(HandleCursorRect(pts[i], 16f), MouseCursor.MoveArrow);
             }
             Handles.color = Color.yellow;
             Handles.DrawWireDisc(joint, Vector3.forward, 6f);
             Handles.EndGUI();
+            DrawPartsBrushCursor(canvas);
             if (PartsFfdActive())
                 DrawPartsFfd(canvas);
             else if (TryGetWarpSelectionCentre(canvas, out var axisOrigin)) // arrows always move, whatever the vertex tool
@@ -452,7 +459,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 && SpritePartIdUtility.Canonical(slotId) == SpritePartIdUtility.Canonical(selected.SlotId))
                 next = point;
             long line = next < 0 && TryPickPartsWarpLine(canvas, mouse, out int la, out int lb) ? ((long)la << 32) | (uint)lb : -1;
-            if (next == _partsWarpHover && line == _partsWarpHoverLine && !PartsFfdActive())
+            if (next == _partsWarpHover && line == _partsWarpHoverLine && !PartsFfdActive() && !PartsBrushOn())
                 return;
             _partsWarpHover = next;
             _partsWarpHoverLine = line;
@@ -460,6 +467,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         long _partsWarpHoverLine = -1;
+        /// <summary>Part under the press that started a Warp box; a click without a drag switches to it.</summary>
+        string _partsWarpBoxClickSlot;
 
         /// <summary>
         /// Selected part first (mesh vertices, or image corners when it has no mesh yet),
@@ -576,6 +585,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ApplyPartsFfdDrag(canvas, mouse);
                 return;
             }
+            if (_partsBrushActive)
+            {
+                PartsBrushDrag(canvas, mouse, Event.current != null && Event.current.shift);
+                return;
+            }
             if (!_partsWarpActive || _partsWarpSelection.Count == 0)
                 return;
             mouse = ConstrainPartsAxis(_partsDragStartMouse, mouse);
@@ -636,8 +650,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int i = 0; i < n; i++)
             {
                 float w = weights[i];
-                if (w <= 0f)
-                    continue;
+                if (w <= 0f || IsWarpPinned(_partsDragSlotId, i))
+                    continue; // pinned vertices never move
                 Vector2 p = local[i];
                 Vector2 moved = vertexTool switch
                 {
@@ -875,14 +889,26 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if ((mouse - _partsWarpBoxStart).sqrMagnitude < 36f)
             {
+                string clicked = _partsWarpBoxClickSlot;
+                _partsWarpBoxClickSlot = null;
+                if (!string.IsNullOrEmpty(clicked) && CurrentPartsSlot != null
+                    && SpritePartIdUtility.Canonical(clicked) != SpritePartIdUtility.Canonical(CurrentPartsSlot.SlotId))
+                {
+                    // A click (no drag) on another part picks that part.
+                    SelectPartsCanvasClicked(clicked, shift, false, false);
+                    _partsWarpSelection.Clear();
+                    _partsWarpIndex = -1;
+                    return;
+                }
                 if (!shift)
                 {
                     _partsWarpSelection.Clear();
                     _partsWarpIndex = -1;
                 }
-                _status = "Warp: drag a vertex. Double-click the part to edit its mesh.";
+                _status = "Warp: drag a vertex, or drag on empty space to box-select vertices.";
                 return;
             }
+            _partsWarpBoxClickSlot = null;
             if (!TryGetPartsWarpLayout(canvas, _partsDragSlotId, out var rect, out var joint, out float guiDeg,
                     out bool flipX, out bool flipY))
                 return;

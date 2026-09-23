@@ -1925,6 +1925,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsMeshPanning = false;
             _partsFfdDrag = -1;
             _partsFfdDragB = -1;
+            EndPartsBrush();
             _partsMarqueeActive = false;
             _partsWarpBox = false;
             _partsMeshDrag = false;
@@ -4282,6 +4283,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
+                // A Liquify brush paints over the selected part.
+                if (TryBeginPartsBrush(canvas, evt, controlId))
+                {
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
                 // X / Y arrows on the selected vertices: move along one axis (the square moves freely).
                 if (_partsCanvasTool == PartsCanvasTool.Warp
                     && _partsMode == SpritePartsStudioMode.Animate
@@ -4334,6 +4343,29 @@ namespace InvertLab.Sprites.DOTS.Editor
                     && warpBox.Contains(evt.mousePosition))
                 {
                     BeginPartsWarpDrag(controlId, CurrentPartsSlot.SlotId, _partsWarpSelection[0], evt.mousePosition, false);
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                // Warp on a meshed part: any other press starts a vertex box on THAT part, even over empty
+                // space or another part (which used to switch parts). A plain click on another part switches.
+                var warpPart = CurrentPartsSlot;
+                if (_partsCanvasTool == PartsCanvasTool.Warp
+                    && _partsMode == SpritePartsStudioMode.Animate
+                    && warpPart?.Mesh != null && warpPart.Mesh.HasMesh
+                    && !warpPart.EditorLocked && !SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, warpPart.SlotId))
+                {
+                    int under = HitTestPartsSlot(canvas, evt.mousePosition);
+                    _partsWarpBoxClickSlot = under >= 0 ? SlotIdFromHit(under) : null;
+                    _partsWarpBox = true;
+                    _partsWarpBoxStart = evt.mousePosition;
+                    _partsWarpBoxEnd = evt.mousePosition;
+                    _partsDragActive = true;
+                    _partsCanvasHotControl = controlId;
+                    GUIUtility.hotControl = controlId;
+                    _partsDragSlotId = warpPart.SlotId;
+                    _partsDragStartMouse = evt.mousePosition;
                     evt.Use();
                     Repaint();
                     return;
