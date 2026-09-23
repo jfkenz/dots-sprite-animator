@@ -251,14 +251,14 @@ namespace InvertLab.Sprites.DOTS.Editor
         /// Poses for drawing art: a clipped copy when any part has a clipping mask (<paramref name="owned"/>, dispose
         /// it), else <paramref name="poses"/> itself. Editing tools keep reading the uncut poses.
         /// </summary>
-        static NativeArray<SpritePartsSampler.Pose> ClippedArtPoses(ref SpritePartsSetBlob set,
+        NativeArray<SpritePartsSampler.Pose> ClippedArtPoses(ref SpritePartsSetBlob set,
             NativeArray<SpritePartsSampler.Pose> poses, NativeArray<float4x4> matrices, out bool owned)
         {
             owned = false;
             if (!poses.IsCreated || !SpritePartsClipping.Any(ref set))
                 return poses;
             var copy = new NativeArray<SpritePartsSampler.Pose>(poses, Allocator.Temp);
-            SpritePartsClipping.Apply(ref set, copy, matrices);
+            SpritePartsClipping.Apply(ref set, copy, matrices, PartsEvaluationClipIndex(), _partsPreviewTime);
             owned = true;
             return copy;
         }

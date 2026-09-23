@@ -1405,6 +1405,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (GUILayout.Button(new GUIContent("+ Bone", "A joint with no image, under the selected part (or at the root). Parts under it follow it."),
                     GUILayout.Width(56f)))
                 AddPartsBone();
+            if (GUILayout.Button(new GUIContent("+ Clip", "A clip shape (Spine clipping): an invisible polygon that clips the selected part (and, with End, the parts above it)."),
+                    GUILayout.Width(48f)))
+                AddPartsClipShape();
             if (GUILayout.Button(new GUIContent("PSD", "Import a Photoshop file: every layer becomes a part where it sits, groups become bones."),
                     GUILayout.Width(40f)))
                 OpenPsdImport();

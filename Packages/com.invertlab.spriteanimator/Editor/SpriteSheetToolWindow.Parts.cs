@@ -698,6 +698,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUILayout.Space(6f);
                 DrawPartsTransformInspector(slot, partLocked);
                 DrawPartsBoneInspector(slot, partLocked);
+                DrawPartsClipShapeInspector(slot, partLocked);
                 DrawPartsKeyInspector(slot, partLocked);
 
                 bool partOpen = PartsSection("SELECTED PART", slot.Name);
@@ -3138,6 +3139,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                         DrawPartsBone(joint, matrices[i], boneDef.BoneLength, IsPartsBlobSlotSelected(ref set, i), pickable);
                     continue;
                 }
+                if (boneDef != null && boneDef.IsClipShape)
+                {
+                    // Clip shapes have no image: their outline on the main pose only.
+                    if (pickable)
+                        DrawPartsClipShape(canvas, matrices[i], boneDef, IsPartsBlobSlotSelected(ref set, i));
+                    continue;
+                }
 
                 // Pose scale signs: Mirror H = Scale.x < 0 (east-west), Mirror V = Scale.y < 0 (north-south).
                 // Use RAW worldDeg from the matrix (same as gizmo/hit). Do not +180 here - that
@@ -4223,6 +4231,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (IsPartsMeshEdit()
                     ? HandlePartsMeshNavigation(canvas, evt, controlId)
                     : HandlePartsCanvasNavigation(canvas, evt, controlId))
+                return;
+
+            if (!IsPartsMeshEdit() && !IsPartsPivotFocus() && !_partsDragActive && HandleClipShapeInput(canvas, evt))
                 return;
 
             if (HandlePartsMarquee(canvas, evt, controlId))

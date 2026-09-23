@@ -199,7 +199,7 @@ namespace InvertLab.Sprites.DOTS
                     math.mul(rootWorld, SpritePartsPlayback.FacingMatrix(flipX, flipY)));
             // Clipping masks last: they cut the final (weighted) meshes.
             if (extras.Clip && !extras.KeyedPoseOnly && SpritePartsClipping.Any(ref set))
-                SpritePartsClipping.Apply(ref set, finalLocal, localToRoot);
+                SpritePartsClipping.Apply(ref set, finalLocal, localToRoot, player.ClipIndex, player.TimeSeconds);
             if (flipX || flipY)
             {
                 for (int i = 0; i < sources.Length && i < n; i++)

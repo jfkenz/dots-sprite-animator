@@ -87,6 +87,12 @@ namespace InvertLab.Sprites.DOTS
         /// [count, vertex, vertex, ..., count, ...]. Empty = use its triangles (or its rectangle).
         /// </summary>
         public BlobArray<int> MaskPieces;
+        /// <summary>1 = a clip shape: <see cref="ClipPolygon"/> clips the parts drawn above it (up to ClipEndIndex).</summary>
+        public byte IsClipShape;
+        /// <summary>The clip shape's polygon in this slot's space (world units); its convex split is in MaskPieces.</summary>
+        public BlobArray<float2> ClipPolygon;
+        /// <summary>The last slot (in draw order) a clip shape clips; -1 = every slot above it.</summary>
+        public int ClipEndIndex;
     }
 
     public struct SpritePartsClipBlob
@@ -144,6 +150,9 @@ namespace InvertLab.Sprites.DOTS
         public float4 Curve;
         /// <summary>Channels this key does NOT hold (<see cref="SpritePartsKeyChannel"/> bits). 0 = all of them.</summary>
         public byte SkipChannels;
+        /// <summary>1 = a clip key: <see cref="ClipActive"/> from here on (held).</summary>
+        public byte HasClipActive;
+        public byte ClipActive;
 
         public bool Holds(SpritePartsKeyChannel channel) => (SkipChannels & (byte)channel) == 0;
     }
@@ -193,6 +202,9 @@ namespace InvertLab.Sprites.DOTS
             public float2 SkinQuadSize;
             public float2 SkinQuadPivot;
             public string ClipMaskSlotId;
+            public bool IsClipShape;
+            public float2[] ClipPolygon;
+            public string ClipEndSlotId;
         }
 
         public struct AppearanceInput
@@ -223,6 +235,8 @@ namespace InvertLab.Sprites.DOTS
             public float4 Curve;
             /// <summary>Channels this key does NOT hold. 0 (default) = all.</summary>
             public byte SkipChannels;
+            public bool HasClipActive;
+            public bool ClipActive;
         }
 
         public struct TrackInput
@@ -652,6 +666,8 @@ namespace InvertLab.Sprites.DOTS
                     DrawOrder = k.DrawOrder,
                     Curve = math.all(k.Curve == float4.zero) ? new float4(0.33f, 0f, 0.67f, 1f) : k.Curve,
                     SkipChannels = (byte)(k.SkipChannels & (byte)SpritePartsKeyChannel.All),
+                    HasClipActive = (byte)(k.HasClipActive ? 1 : 0),
+                    ClipActive = (byte)(k.ClipActive ? 1 : 0),
                 }));
             }
             list.Sort((a, b) =>
@@ -713,6 +729,41 @@ namespace InvertLab.Sprites.DOTS
                     weightArr[w] = math.isfinite(src.SkinWeights[w]) ? math.max(0f, src.SkinWeights[w]) : 0f;
             }
 
+            // Clip shapes: their polygon, end slot, and convex pieces.
+            for (int i = 0; i < n; i++)
+            {
+                var src = slots[i];
+                slotArr[i].ClipEndIndex = -1;
+                if (!src.IsClipShape)
+                    continue;
+                slotArr[i].IsClipShape = 1;
+                if (!string.IsNullOrWhiteSpace(src.ClipEndSlotId)
+                    && slotIndex.TryGetValue(SpritePartIdUtility.Canonical(src.ClipEndSlotId), out int end) && end != i)
+                    slotArr[i].ClipEndIndex = end;
+                var poly = src.ClipPolygon ?? Array.Empty<float2>();
+                if (poly.Length < 3 || poly.Length > SpritePartsLattice.MaxVertices)
+                    continue;
+                var polyArr = builder.Allocate(ref slotArr[i].ClipPolygon, poly.Length);
+                var verts = new UnityEngine.Vector2[poly.Length];
+                for (int k = 0; k < poly.Length; k++)
+                {
+                    polyArr[k] = poly[k];
+                    verts[k] = new UnityEngine.Vector2(poly[k].x, poly[k].y);
+                }
+                var tris = SpritePartsMeshOps.Triangulate(verts, verts.Length, null);
+                if (tris == null)
+                    continue; // the outline crosses itself: the shape clips nothing
+                var lattice = new SpritePartsLattice();
+                foreach (var v in poly)
+                    lattice.Points.Add(v);
+                foreach (int t in tris)
+                    lattice.Indices.Add((byte)t);
+                var flatPieces = SpritePartsClipping.ConvexPieces(ref lattice);
+                var shapePieces = builder.Allocate(ref slotArr[i].MaskPieces, flatPieces.Count);
+                for (int k = 0; k < flatPieces.Count; k++)
+                    shapePieces[k] = flatPieces[k];
+            }
+
             // Masks with a mesh: split once into convex pieces for the per-frame clip.
             var isMask = new bool[n];
             for (int i = 0; i < n; i++)
@@ -723,7 +774,7 @@ namespace InvertLab.Sprites.DOTS
             }
             for (int i = 0; i < n; i++)
             {
-                if (!isMask[i] || !slotArr[i].Mesh.HasMesh)
+                if (!isMask[i] || !slotArr[i].Mesh.HasMesh || slots[i].IsClipShape)
                     continue;
                 var flat = SpritePartsClipping.ConvexPieces(ref slotArr[i].Mesh);
                 var pieces = builder.Allocate(ref slotArr[i].MaskPieces, flat.Count);

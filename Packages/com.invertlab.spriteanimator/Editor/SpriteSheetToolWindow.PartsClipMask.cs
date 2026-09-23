@@ -10,15 +10,15 @@ namespace InvertLab.Sprites.DOTS.Editor
     {
         void DrawPartsClipMaskInspector(SpritePartSlotDef slot, bool partLocked)
         {
-            if (slot == null || slot.IsBone || _profile?.PartsSlots == null)
+            if (slot == null || slot.IsBone || slot.IsClipShape || _profile?.PartsSlots == null)
                 return;
             var names = new List<string> { "(none)" };
             var ids = new List<string> { string.Empty };
             string self = SpritePartIdUtility.Canonical(slot.SlotId);
             foreach (var s in _profile.PartsSlots)
             {
-                if (s == null || s.IsBone || SpritePartIdUtility.Canonical(s.SlotId) == self)
-                    continue; // a bone has no shape to clip to
+                if (s == null || s.IsBone || s.IsClipShape || SpritePartIdUtility.Canonical(s.SlotId) == self)
+                    continue; // bones and clip shapes have no image shape to clip to
                 names.Add(s.Name);
                 ids.Add(SpritePartIdUtility.Canonical(s.SlotId));
             }

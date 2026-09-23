@@ -184,7 +184,7 @@ namespace InvertLab.Sprites.DOTS
             for (int i = 0; i < list.Count; i++)
             {
                 var s = list[i];
-                string defaultApp = s.IsBone ? string.Empty : s.DefaultAppearanceId; // bones have no image
+                string defaultApp = s.IsBone || s.IsClipShape ? string.Empty : s.DefaultAppearanceId; // bones and clip shapes have no image
                 if (!string.IsNullOrWhiteSpace(defaultApp)
                     && SpritePartsValidation.FindAppearanceIndex(profile, defaultApp) < 0)
                     defaultApp = string.Empty;
@@ -203,13 +203,19 @@ namespace InvertLab.Sprites.DOTS
                     DefaultAppearanceId = defaultApp,
                     DrawRank = s.DrawRank,
                     // A bone never draws itself, but its children do (Hidden is per slot here).
-                    Hidden = s.IsBone || SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
+                    Hidden = s.IsBone || s.IsClipShape || SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
                         ? (byte)1 : (byte)0,
                     Mesh = SpritePartsLattice.FromMesh(s.Mesh),
                     ClipMaskSlotId = s.ClipMaskSlotId,
+                    IsClipShape = s.IsClipShape,
+                    ClipPolygon = s.IsClipShape && s.ClipPolygon != null
+                        ? Array.ConvertAll(s.ClipPolygon, v => new float2(v.x, v.y))
+                        : null,
+                    ClipEndSlotId = s.IsClipShape ? s.ClipEndSlotId : null,
                 };
-                // Clipping maps between part images: masks and clipped parts need their image size and pivot.
-                bool clipping = !string.IsNullOrWhiteSpace(s.ClipMaskSlotId) || IsClipMask(profile, s.SlotId);
+                // Clipping maps between part images: masks and clipped parts need their image size and pivot
+                // (with a clip shape in the rig any part may be clipped).
+                bool clipping = !string.IsNullOrWhiteSpace(s.ClipMaskSlotId) || IsClipMask(profile, s.SlotId) || HasClipShape(profile);
                 if (clipping && SpritePartsSkinning.TryResolveQuad(profile, s, out var clipSize, out var clipPivot))
                 {
                     result[i].SkinQuadSize = clipSize;
@@ -225,6 +231,14 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
             return result;
+        }
+
+        static bool HasClipShape(SpriteSheetProfile profile)
+        {
+            foreach (var s in profile.PartsSlots)
+                if (s != null && s.IsClipShape)
+                    return true;
+            return false;
         }
 
         static bool IsClipMask(SpriteSheetProfile profile, string slotId)
@@ -313,6 +327,8 @@ namespace InvertLab.Sprites.DOTS
                             DrawOrder = key.DrawOrder,
                             Curve = new float4(key.Curve.x, key.Curve.y, key.Curve.z, key.Curve.w),
                             SkipChannels = (byte)(~(byte)key.Channels & (byte)SpritePartsKeyChannel.All),
+                            HasClipActive = key.HasClipActive,
+                            ClipActive = key.ClipActive,
                         };
                     }
                     kept.Add(new SpritePartsSetBuilder.TrackInput

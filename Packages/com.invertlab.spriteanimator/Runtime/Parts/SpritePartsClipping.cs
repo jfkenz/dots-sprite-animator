@@ -1,17 +1,20 @@
 using System.Collections.Generic;
 using Unity.Collections;
+using Unity.Entities;
 using Unity.Mathematics;
 
 namespace InvertLab.Sprites.DOTS
 {
     /// <summary>
-    /// Clipping masks (Spine's clipping, AnyPortrait's clipped meshes): a part only shows inside its mask part.
-    /// The mask shape is the mask's mesh (deformed and weighted, as drawn) or its rectangle; the clipped part's
-    /// mesh (or its rectangle) is cut to it on the CPU, so the result draws through the normal mesh path.
-    /// The mask mesh is split into convex pieces once at build time (<see cref="ConvexPieces"/>); each frame every
-    /// triangle of the clipped part is cut against each piece (Sutherland-Hodgman) and the cut polygons are
-    /// fanned back into triangles, texture coordinates carried by barycentric weights.
-    /// A result too big for a mesh (<see cref="SpritePartsLattice.MaxVertices"/>) leaves the part unclipped.
+    /// Clipping (Spine's clipping, AnyPortrait's clipped meshes), cut on the CPU so the result draws through the
+    /// normal mesh path. Two sources, applied one after the other:
+    ///   Clip To     a part only shows inside its mask part: the mask's mesh (deformed and weighted, as drawn) or its rectangle
+    ///   clip shape  an invisible polygon that clips every part drawn above it, up to its end part (Spine's clipping
+    ///               attachment); the current draw order (with draw-order keys) decides the range, clip keys turn it on / off
+    /// Masks are split into convex pieces once at build time (<see cref="ConvexPieces"/>); each frame every triangle
+    /// of a clipped part is cut against each piece (Sutherland-Hodgman) and fanned back into triangles, texture
+    /// coordinates carried by barycentric weights. A result too big for a mesh
+    /// (<see cref="SpritePartsLattice.MaxVertices"/>) leaves the part as it was.
     /// </summary>
     public static class SpritePartsClipping
     {
@@ -21,72 +24,144 @@ namespace InvertLab.Sprites.DOTS
         {
             for (int i = 0; i < set.Slots.Length; i++)
             {
-                if (set.Slots[i].ClipMaskIndex >= 0)
+                if (set.Slots[i].ClipMaskIndex >= 0 || set.Slots[i].IsClipShape != 0)
                     return true;
             }
             return false;
         }
 
-        /// <summary>Cuts every clipped part's lattice in <paramref name="local"/> to its mask. Marks results final.</summary>
-        public static void Apply(ref SpritePartsSetBlob set, NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
+        /// <summary>
+        /// Cuts every clipped part's lattice in <paramref name="local"/>. <paramref name="clipIndex"/> / <paramref name="time"/>
+        /// give the draw order and clip keys (a clip shape's range and on / off). Marks results final.
+        /// </summary>
+        public static void Apply(ref SpritePartsSetBlob set, NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot,
+            int clipIndex = -1, float time = 0f)
         {
             int n = math.min(set.Slots.Length, math.min(local.Length, localToRoot.Length));
-            for (int s = 0; s < n; s++)
+            bool shapes = false;
+            for (int i = 0; i < n; i++)
+                shapes |= set.Slots[i].IsClipShape != 0;
+            var rank = new NativeArray<int>(n, Allocator.Temp);
+            var active = new NativeArray<bool>(n, Allocator.Temp);
+            try
             {
-                int m = set.Slots[s].ClipMaskIndex;
-                if (m < 0 || m >= n || m == s)
-                    continue;
-                ref var slot = ref set.Slots[s];
-                ref var mask = ref set.Slots[m];
-                if (!ValidQuad(slot.SkinQuadSize) || !ValidQuad(mask.SkinQuadSize))
-                    continue;
-                float4x4 toSlot = math.inverse(localToRoot[s]);
-                if (!math.all(math.isfinite(toSlot.c0)))
-                    continue;
-
-                // The mask as drawn, in the clipped part's unit-quad space.
-                var maskLattice = local[m].Lattice;
-                if (maskLattice.HasMesh && maskLattice.Final == 0)
-                    SpritePartsSkinning.Apply(ref set, m, localToRoot, ref maskLattice);
-                var maskPoints = new FixedList512Bytes<float2>();
-                if (maskLattice.HasMesh)
+                if (shapes)
                 {
-                    for (int v = 0; v < maskLattice.PointCount; v++)
-                        maskPoints.Add(QuadToQuad(maskLattice.Points[v], mask.SkinQuadSize, mask.SkinQuadPivot, localToRoot[m], toSlot,
-                            slot.SkinQuadSize, slot.SkinQuadPivot));
+                    for (int i = 0; i < n; i++)
+                    {
+                        int keyed = SpritePartsSampler.SampleDrawOrder(ref set, clipIndex, i, time);
+                        rank[i] = keyed >= 0 ? keyed : set.Slots[i].DrawRank;
+                        active[i] = set.Slots[i].IsClipShape != 0 && set.Slots[i].ClipPolygon.Length >= 3
+                                    && set.Slots[i].MaskPieces.Length > 0 && SpritePartsSampler.SampleClipActive(ref set, clipIndex, i, time);
+                    }
                 }
-                else
+                for (int s = 0; s < n; s++)
                 {
-                    maskPoints.Add(QuadToQuad(new float2(-0.5f, -0.5f), mask.SkinQuadSize, mask.SkinQuadPivot, localToRoot[m], toSlot, slot.SkinQuadSize, slot.SkinQuadPivot));
-                    maskPoints.Add(QuadToQuad(new float2(0.5f, -0.5f), mask.SkinQuadSize, mask.SkinQuadPivot, localToRoot[m], toSlot, slot.SkinQuadSize, slot.SkinQuadPivot));
-                    maskPoints.Add(QuadToQuad(new float2(0.5f, 0.5f), mask.SkinQuadSize, mask.SkinQuadPivot, localToRoot[m], toSlot, slot.SkinQuadSize, slot.SkinQuadPivot));
-                    maskPoints.Add(QuadToQuad(new float2(-0.5f, 0.5f), mask.SkinQuadSize, mask.SkinQuadPivot, localToRoot[m], toSlot, slot.SkinQuadSize, slot.SkinQuadPivot));
-                }
+                    ref var slot = ref set.Slots[s];
+                    if (slot.IsClipShape != 0 || !ValidQuad(slot.SkinQuadSize))
+                        continue;
+                    int m = slot.ClipMaskIndex;
+                    bool masked = m >= 0 && m < n && m != s && ValidQuad(set.Slots[m].SkinQuadSize);
+                    int shape = shapes ? ClipShapeFor(ref set, s, rank, active, n) : -1;
+                    if (!masked && shape < 0)
+                        continue;
+                    float4x4 toSlot = math.inverse(localToRoot[s]);
+                    if (!math.all(math.isfinite(toSlot.c0)))
+                        continue;
 
-                var pose = local[s];
-                var subject = pose.Lattice;
-                if (!subject.HasMesh)
-                    subject = UnitQuad();
-                else if (subject.Final == 0)
-                    SpritePartsSkinning.Apply(ref set, s, localToRoot, ref subject);
+                    var pose = local[s];
+                    var subject = pose.Lattice;
+                    if (!subject.HasMesh)
+                        subject = UnitQuad();
+                    else if (subject.Final == 0)
+                        SpritePartsSkinning.Apply(ref set, s, localToRoot, ref subject);
+                    bool changed = false;
 
-                if (TryClip(subject, maskPoints, ref mask, maskLattice, out var clipped))
-                {
-                    pose.Lattice = clipped;
-                    local[s] = pose;
+                    if (masked)
+                    {
+                        // The mask as drawn, in the clipped part's unit-quad space.
+                        ref var mask = ref set.Slots[m];
+                        var maskLattice = local[m].Lattice;
+                        if (maskLattice.HasMesh && maskLattice.Final == 0)
+                            SpritePartsSkinning.Apply(ref set, m, localToRoot, ref maskLattice);
+                        var maskPoints = new FixedList512Bytes<float2>();
+                        if (maskLattice.HasMesh)
+                        {
+                            for (int v = 0; v < maskLattice.PointCount; v++)
+                                maskPoints.Add(ToSlotQuad(QuadToLocal(maskLattice.Points[v], mask.SkinQuadSize, mask.SkinQuadPivot), localToRoot[m], toSlot, ref slot));
+                        }
+                        else
+                        {
+                            maskPoints.Add(ToSlotQuad(QuadToLocal(new float2(-0.5f, -0.5f), mask.SkinQuadSize, mask.SkinQuadPivot), localToRoot[m], toSlot, ref slot));
+                            maskPoints.Add(ToSlotQuad(QuadToLocal(new float2(0.5f, -0.5f), mask.SkinQuadSize, mask.SkinQuadPivot), localToRoot[m], toSlot, ref slot));
+                            maskPoints.Add(ToSlotQuad(QuadToLocal(new float2(0.5f, 0.5f), mask.SkinQuadSize, mask.SkinQuadPivot), localToRoot[m], toSlot, ref slot));
+                            maskPoints.Add(ToSlotQuad(QuadToLocal(new float2(-0.5f, 0.5f), mask.SkinQuadSize, mask.SkinQuadPivot), localToRoot[m], toSlot, ref slot));
+                        }
+                        bool usePieces = maskLattice.HasMesh && mask.MaskPieces.Length > 0 && maskLattice.PointCount == mask.Mesh.PointCount;
+                        if (TryClip(subject, maskPoints, ref mask.MaskPieces, usePieces, maskLattice, out var cut))
+                        {
+                            subject = cut;
+                            changed = true;
+                        }
+                    }
+
+                    if (shape >= 0)
+                    {
+                        ref var clip = ref set.Slots[shape];
+                        var shapePoints = new FixedList512Bytes<float2>();
+                        for (int v = 0; v < clip.ClipPolygon.Length && shapePoints.Length < shapePoints.Capacity; v++)
+                            shapePoints.Add(ToSlotQuad(clip.ClipPolygon[v], localToRoot[shape], toSlot, ref slot));
+                        if (TryClip(subject, shapePoints, ref clip.MaskPieces, true, default, out var cut))
+                        {
+                            subject = cut;
+                            changed = true;
+                        }
+                    }
+
+                    if (changed)
+                    {
+                        pose.Lattice = subject;
+                        local[s] = pose;
+                    }
                 }
             }
+            finally
+            {
+                rank.Dispose();
+                active.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// The active clip shape that covers slot <paramref name="s"/>: the nearest one drawn below it whose range
+        /// (up to its end part) reaches it. -1 = none.
+        /// </summary>
+        static int ClipShapeFor(ref SpritePartsSetBlob set, int s, NativeArray<int> rank, NativeArray<bool> active, int n)
+        {
+            int best = -1;
+            for (int c = 0; c < n; c++)
+            {
+                if (!active[c] || c == s || rank[c] >= rank[s])
+                    continue;
+                int end = set.Slots[c].ClipEndIndex;
+                if (end >= 0 && end < n && rank[s] > rank[end])
+                    continue; // above the end part
+                if (best < 0 || rank[c] > rank[best])
+                    best = c;
+            }
+            return best;
         }
 
         static bool ValidQuad(float2 size) => size.x > 1e-6f && size.y > 1e-6f;
 
-        static float2 QuadToQuad(float2 q, float2 fromSize, float2 fromPivot, float4x4 fromToRoot, float4x4 rootToSlot,
-            float2 toSize, float2 toPivot)
+        static float2 QuadToLocal(float2 q, float2 size, float2 pivot) => (q + 0.5f - pivot) * size;
+
+        /// <summary>A point in another slot's space (world units) into slot <paramref name="slot"/>'s unit-quad space.</summary>
+        static float2 ToSlotQuad(float2 fromLocal, float4x4 fromToRoot, float4x4 rootToSlot, ref SpritePartSlotBlob slot)
         {
-            float2 local = (q + 0.5f - fromPivot) * fromSize;
-            float2 root = math.mul(fromToRoot, new float4(local, 0f, 1f)).xy;
+            float2 root = math.mul(fromToRoot, new float4(fromLocal, 0f, 1f)).xy;
             float2 slotLocal = math.mul(rootToSlot, new float4(root, 0f, 1f)).xy;
-            return slotLocal / toSize - 0.5f + toPivot;
+            return slotLocal / slot.SkinQuadSize - 0.5f + slot.SkinQuadPivot;
         }
 
         static SpritePartsLattice UnitQuad()
@@ -101,15 +176,18 @@ namespace InvertLab.Sprites.DOTS
             return q;
         }
 
-        /// <summary>The subject cut to the mask pieces. False when the result would not fit a mesh.</summary>
-        static bool TryClip(in SpritePartsLattice subject, in FixedList512Bytes<float2> maskPoints, ref SpritePartSlotBlob mask,
-            in SpritePartsLattice maskLattice, out SpritePartsLattice result)
+        /// <summary>
+        /// The subject cut to the mask: its convex <paramref name="pieces"/> (vertex indices into
+        /// <paramref name="maskPoints"/>) when <paramref name="usePieces"/>, else <paramref name="maskTriangles"/>'
+        /// triangles, else the mask points as one convex polygon. False when the result would not fit a mesh.
+        /// </summary>
+        static bool TryClip(in SpritePartsLattice subject, in FixedList512Bytes<float2> maskPoints, ref BlobArray<int> pieces,
+            bool usePieces, in SpritePartsLattice maskTriangles, out SpritePartsLattice result)
         {
             result = new SpritePartsLattice { Final = 1 };
             var poly = new FixedList512Bytes<float2>();
             var scratch = new FixedList512Bytes<float2>();
             var piece = new FixedList512Bytes<float2>();
-            bool usePieces = maskLattice.HasMesh && mask.MaskPieces.Length > 0 && maskLattice.PointCount == mask.Mesh.PointCount;
             for (int t = 0; t + 2 < subject.IndexCount; t += 3)
             {
                 int ia = subject.Indices[t], ib = subject.Indices[t + 1], ic = subject.Indices[t + 2];
@@ -119,24 +197,15 @@ namespace InvertLab.Sprites.DOTS
                 if (math.abs(area) < 1e-12f)
                     continue;
 
-                if (!maskLattice.HasMesh)
-                {
-                    piece.Clear();
-                    for (int k = 0; k < maskPoints.Length; k++)
-                        piece.Add(maskPoints[k]);
-                    if (!CutAndAdd(a, b, c, ua, ub, uc, area, piece, ref poly, ref scratch, ref result))
-                        return false;
-                    continue;
-                }
                 if (usePieces)
                 {
-                    for (int p = 0; p < mask.MaskPieces.Length;)
+                    for (int p = 0; p < pieces.Length;)
                     {
-                        int count = mask.MaskPieces[p++];
+                        int count = pieces[p++];
                         piece.Clear();
-                        for (int k = 0; k < count && p < mask.MaskPieces.Length; k++, p++)
+                        for (int k = 0; k < count && p < pieces.Length; k++, p++)
                         {
-                            int vi = mask.MaskPieces[p];
+                            int vi = pieces[p];
                             if (vi >= 0 && vi < maskPoints.Length)
                                 piece.Add(maskPoints[vi]);
                         }
@@ -145,12 +214,21 @@ namespace InvertLab.Sprites.DOTS
                     }
                     continue;
                 }
-                for (int mt = 0; mt + 2 < maskLattice.IndexCount; mt += 3)
+                if (!maskTriangles.HasMesh)
+                {
+                    piece.Clear();
+                    for (int k = 0; k < maskPoints.Length; k++)
+                        piece.Add(maskPoints[k]);
+                    if (!CutAndAdd(a, b, c, ua, ub, uc, area, piece, ref poly, ref scratch, ref result))
+                        return false;
+                    continue;
+                }
+                for (int mt = 0; mt + 2 < maskTriangles.IndexCount; mt += 3)
                 {
                     piece.Clear();
                     for (int k = 0; k < 3; k++)
                     {
-                        int vi = maskLattice.Indices[mt + k];
+                        int vi = maskTriangles.Indices[mt + k];
                         if (vi < maskPoints.Length)
                             piece.Add(maskPoints[vi]);
                     }

@@ -82,6 +82,14 @@ namespace InvertLab.Sprites.DOTS
         /// Empty = not clipped.
         /// </summary>
         public string ClipMaskSlotId = string.Empty;
+        /// <summary>
+        /// Clip shape (Spine's clipping attachment): an invisible polygon (<see cref="ClipPolygon"/>, in this part's space,
+        /// world units) that clips every part drawn above it, up to and including <see cref="ClipEndSlotId"/>
+        /// (empty = everything above). Never drawn. Can be switched on / off by clip keys.
+        /// </summary>
+        public bool IsClipShape;
+        public Vector2[] ClipPolygon;
+        public string ClipEndSlotId = string.Empty;
         /// <summary>Bone length in world units along its +X axis (editor drawing, IK tips). 0 = 1.</summary>
         public float BoneLength = 1f;
     }
@@ -270,6 +278,9 @@ namespace InvertLab.Sprites.DOTS
         public int DrawOrder;
         /// <summary>Bezier handles (x1, y1, x2, y2) used when <see cref="EaseMode"/> is Bezier.</summary>
         public Vector4 Curve = new Vector4(0.33f, 0f, 0.67f, 1f);
+        /// <summary>Clip key (clip shapes): from this key on the shape clips (<see cref="ClipActive"/>) or not. Held.</summary>
+        public bool HasClipActive;
+        public bool ClipActive = true;
     }
 
     /// <summary>

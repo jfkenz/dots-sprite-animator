@@ -252,7 +252,7 @@ namespace InvertLab.Sprites.DOTS
                         continue;
                     key.Channels &= ~channels;
                     changed++;
-                    if (key.Channels == SpritePartsKeyChannel.None && !key.HasColor && !key.HasDrawOrder
+                    if (key.Channels == SpritePartsKeyChannel.None && !key.HasColor && !key.HasDrawOrder && !key.HasClipActive
                         && string.IsNullOrWhiteSpace(key.AppearanceId))
                         track.Keys.RemoveAt(k);
                 }
@@ -382,6 +382,8 @@ namespace InvertLab.Sprites.DOTS
                 HasDrawOrder = src.HasDrawOrder,
                 DrawOrder = src.DrawOrder,
                 Channels = src.Channels,
+                HasClipActive = src.HasClipActive,
+                ClipActive = src.ClipActive,
                 Curve = src.Curve,
                 AppearanceId = src.AppearanceId ?? string.Empty,
             };
@@ -411,6 +413,11 @@ namespace InvertLab.Sprites.DOTS
             {
                 into.HasDrawOrder = true;
                 into.DrawOrder = from.DrawOrder;
+            }
+            if (from.HasClipActive && (!onlyMissing || !into.HasClipActive))
+            {
+                into.HasClipActive = true;
+                into.ClipActive = from.ClipActive;
             }
         }
 

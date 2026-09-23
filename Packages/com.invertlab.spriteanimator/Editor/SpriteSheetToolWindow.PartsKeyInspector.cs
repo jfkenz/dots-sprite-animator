@@ -147,6 +147,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     });
                 }
                 EditorGUILayout.EndHorizontal();
+                DrawPartsClipKeyRow(keys, slot);
             }
         }
 

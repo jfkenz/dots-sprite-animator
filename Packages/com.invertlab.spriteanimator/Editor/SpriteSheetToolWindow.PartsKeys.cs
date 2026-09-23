@@ -240,6 +240,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                         HasDrawOrder = key.HasDrawOrder,
                         DrawOrder = key.DrawOrder,
                         Channels = key.Channels,
+                        HasClipActive = key.HasClipActive,
+                        ClipActive = key.ClipActive,
                         Curve = key.Curve,
                         AppearanceId = key.AppearanceId ?? string.Empty,
                     };

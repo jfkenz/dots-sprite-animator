@@ -257,6 +257,36 @@ namespace InvertLab.Sprites.DOTS
             return clip.WrapMode != (byte)SpritePartsWrap.Once ? lastInClip : -1;
         }
 
+        /// <summary>
+        /// Whether a clip shape clips at the time: the last clip key at or before it (held; loops carry the last one
+        /// round). On (true) when the clip has no clip key for it.
+        /// </summary>
+        public static bool SampleClipActive(ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds)
+        {
+            if (clipIndex < 0 || clipIndex >= set.Clips.Length)
+                return true;
+            ref var clip = ref set.Clips[clipIndex];
+            int trackIndex = TrackIndexForSlot(ref clip, slotIndex);
+            if (trackIndex < 0)
+                return true;
+            ref var track = ref clip.Tracks[trackIndex];
+            float time = WrapTime(timeSeconds, clip.Duration, clip.WrapMode);
+            int best = -1, lastInClip = -1;
+            for (int i = 0; i < track.Keys.Length; i++)
+            {
+                if (track.Keys[i].HasClipActive == 0)
+                    continue;
+                lastInClip = track.Keys[i].ClipActive;
+                if (track.Keys[i].Time <= time + 1e-6f)
+                    best = track.Keys[i].ClipActive;
+            }
+            if (best >= 0)
+                return best != 0;
+            if (clip.WrapMode != (byte)SpritePartsWrap.Once && lastInClip >= 0)
+                return lastInClip != 0;
+            return true;
+        }
+
         public static float WrapTime(float time, float duration, byte wrapMode)
         {
             if (!(duration > 0f) || !math.isfinite(duration))
