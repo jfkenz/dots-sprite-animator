@@ -217,6 +217,30 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void MirrorPartners_Pair_Across_The_Axis()
+        {
+            var mesh = Draft(new Vector2(0.2f, 0.3f), new Vector2(0.81f, 0.3f), new Vector2(0.5f, 0.9f), new Vector2(0.3f, 0.6f));
+            var p = SpritePartsMeshOps.MirrorPartners(mesh, 0.5f);
+            Assert.AreEqual(1, p[0]);
+            Assert.AreEqual(0, p[1]);
+            Assert.AreEqual(2, p[2], "On the axis: its own partner.");
+            Assert.AreEqual(-1, p[3], "Nothing at its mirrored spot.");
+        }
+
+        [Test]
+        public void MirrorCopy_Adds_Twins_And_Their_Edges()
+        {
+            var mesh = Draft(new Vector2(0.2f, 0.3f), new Vector2(0.3f, 0.6f), new Vector2(0.5f, 0.9f));
+            SpritePartsMeshOps.TryConnectGraph(mesh, 0, 1, false);
+            SpritePartsMeshOps.TryConnectGraph(mesh, 1, 2, false);
+            var added = SpritePartsMeshOps.MirrorCopyGraph(mesh, new[] { 0, 1, 2 }, 0.5f);
+            Assert.AreEqual(2, added.Count, "Vertex 2 sits on the axis and is reused.");
+            Assert.AreEqual(0.8f, mesh.Vertices[added[0]].x, 1e-5f);
+            Assert.IsTrue(SpritePartsMeshOps.HasEdge(mesh, added[0], added[1]));
+            Assert.IsTrue(SpritePartsMeshOps.HasEdge(mesh, added[1], 2), "The mirrored chain meets on the axis.");
+        }
+
+        [Test]
         public void AutoLink_Fills_The_Loop_With_Edges()
         {
             var mesh = Draft(

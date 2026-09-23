@@ -357,6 +357,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.color = virtualQuad ? new Color(1f, 1f, 1f, 0.35f) : new Color(1f, 0.6f, 0.2f, 0.95f);
             for (int i = 0; i < hull && (_partsWarpShowLines || virtualQuad); i++)
                 Handles.DrawAAPolyLine(virtualQuad ? 1.5f : 2.5f, pts[i], pts[(i + 1) % hull]);
+            if (!virtualQuad)
+                DrawWarpMirrorAxis(rect, joint, guiDeg, flipX, flipY);
 
             var red = new Color(0.9f, 0.2f, 0.15f, 1f);
             var green = new Color(0.2f, 0.95f, 0.35f, 1f);
@@ -675,6 +677,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     delta = math.mul(_partsWarpSkinInverse[i], delta * _partsWarpSkinSize) / _partsWarpSkinSize;
                 lattice.SetPoint(i, start.GetPoint(i) + delta);
             }
+            MirrorLatticeChanges(_partsDragSlotId, start, ref lattice);
             pose.Lattice = lattice;
             ApplyPartsPoseEdit(_partsDragSlotId, pose);
         }
@@ -1357,6 +1360,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             // Outside the image the mesh draws nothing: a faint checker says "transparent here".
             DrawMeshFreeArea(sprite, mesh);
+            DrawMeshMirrorAxis(sprite);
             EditorGUI.DrawRect(sprite, new Color(0.12f, 0.13f, 0.16f, 1f));
             if (sheet?.Texture != null && app != null)
                 DrawPartsSheetCell(sheet.Texture, sheet, sheet.Columns, sheet.Rows, app.CellIndex, sprite, Color.white);
@@ -1716,6 +1720,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 indices.Add(i);
                 positions.Add(_partsMeshDragStart.Vertices[i] + delta);
             }
+            MirrorMeshDrag(_partsMeshDragStart, indices, positions); // Live Mirror: partners follow
             var next = _partsMeshDragStart.Clone();
             if (!next.HasMesh)
             {

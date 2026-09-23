@@ -335,6 +335,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     delta = math.mul(_partsFfdSkinInverse[i], delta * _partsFfdSkinSize) / _partsFfdSkinSize;
                 lattice.SetPoint(i, start.GetPoint(i) + delta);
             }
+            if (!f.Mesh)
+                MirrorLatticeChanges(f.SlotId, start, ref lattice);
             pose.Lattice = lattice;
             ApplyPartsPoseEdit(f.SlotId, pose);
         }

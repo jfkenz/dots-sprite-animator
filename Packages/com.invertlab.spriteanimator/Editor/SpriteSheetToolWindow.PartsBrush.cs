@@ -327,6 +327,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     delta = math.mul(_partsBrushSkinInverse[i], delta * _partsBrushSkinSize) / _partsBrushSkinSize;
                 lattice.SetPoint(i, start.GetPoint(i) + delta);
             }
+            MirrorLatticeChanges(slotId ?? _partsDragSlotId, start, ref lattice);
             pose.Lattice = lattice;
             ApplyPartsPoseEdit(slotId ?? _partsDragSlotId, pose);
         }
