@@ -54,9 +54,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (_profile == null)
                 return;
-            GUILayout.Space(6f);
-            GUILayout.Label("PARAMETERS", _sectionStyle);
             var list = _profile.PartsParams ??= new List<SpritePartsParamDef>();
+            if (!PartsSection("PARAMETERS", list.Count == 0 ? "none" : list.Count + " parameter" + (list.Count == 1 ? "" : "s")))
+                return;
             if (GUILayout.Button(new GUIContent("Add Parameter",
                     "A slider that scrubs its own clip: mouth open / closed, head turn, blink. Set it from gameplay.")))
                 AddPartsParam();

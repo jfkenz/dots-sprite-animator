@@ -70,9 +70,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (_profile == null)
                 return;
-            GUILayout.Space(6f);
-            GUILayout.Label("IK CONSTRAINTS", _sectionStyle);
             var list = _profile.PartsIkConstraints ??= new List<SpritePartsIkConstraintDef>();
+            if (!PartsSection("IK CONSTRAINTS", list.Count == 0 ? "none" : list.Count + " IK"))
+                return;
             if (GUILayout.Button(new GUIContent("Add IK for Selected Part",
                     "The selected part (hand / foot) reaches a new target bone by turning its parent (and grandparent).")))
                 AddPartsIkConstraint();

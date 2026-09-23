@@ -2111,9 +2111,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawPartsMeshInspector(SpritePartSlotDef slot)
         {
-            GUILayout.Space(6f);
-            GUILayout.Label("MESH", _sectionStyle);
             var mesh = slot.Mesh;
+            if (!PartsSection("MESH", mesh != null && mesh.HasMesh ? mesh.VertexCount + " vertices" : "none"))
+                return;
             EditorGUILayout.LabelField(mesh != null && mesh.HasMesh
                 ? mesh.VertexCount + " vertices, " + mesh.HullCount + " hull, " + mesh.Triangles.Length / 3 + " triangles"
                 : "None. The part draws as a rectangle.", _mutedStyle);

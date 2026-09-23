@@ -57,8 +57,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (slot == null || !slot.IsBone)
                 return;
-            GUILayout.Space(6f);
-            GUILayout.Label("BONE", _sectionStyle);
+            if (!PartsSection("BONE", "Length " + (slot.BoneLength > 1e-4f ? slot.BoneLength : 1f).ToString("0.##")))
+                return;
             EditorGUILayout.LabelField("A joint with no image: never drawn in the game. Parts under it follow it; it can drive mesh weights and IK.",
                 EditorStyles.wordWrappedMiniLabel);
             using (new EditorGUI.DisabledScope(partLocked))

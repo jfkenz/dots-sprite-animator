@@ -64,32 +64,34 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (_partsMode != SpritePartsStudioMode.Animate || slot == null)
                 return;
-            GUILayout.Space(6f);
-            GUILayout.Label("KEY", _sectionStyle);
             var keys = KeyInspectorTargets(slot, out bool fromSelection);
-            if (keys.Count == 0)
-            {
-                EditorGUILayout.LabelField("No key on this part at the playhead.", EditorStyles.wordWrappedMiniLabel);
-                using (new EditorGUI.DisabledScope(partLocked || CurrentPartsClip == null))
-                {
-                    if (GUILayout.Button(new GUIContent("Key here", "Key the part's current pose at the playhead, then set ease / colour / draw order")))
-                    {
-                        RecordPartsUndo("Key Here");
-                        var pose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
-                        SpritePartsAuthoringOps.ApplyPoseEdit(_profile, _partsMode, _partsSelectedClip, slot.SlotId,
-                            _partsPreviewTime, pose, true, _partsDisplayFps);
-                        SnapPartsPlayheadToFrame();
-                        SaveDirty();
-                    }
-                }
+            bool hasKey = keys.Count > 0;
+            string summary = fromSelection ? keys.Count + " selected key" + (keys.Count == 1 ? "" : "s")
+                : hasKey ? "Key at " + _partsPreviewTime.ToString("0.###") + "s"
+                : _partsPlaying ? "playing" : "no key here";
+            if (!PartsSection("KEY", summary))
                 return;
+            // One fixed layout whether or not the playhead sits on a key, so nothing below jumps while playing.
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(hasKey ? string.Empty : "No key on this part at the playhead.", EditorStyles.miniLabel);
+            using (new EditorGUI.DisabledScope(hasKey || partLocked || _partsPlaying || CurrentPartsClip == null))
+            {
+                if (GUILayout.Button(new GUIContent("Key here", "Key the part's current pose at the playhead, then set ease / colour / draw order"),
+                        EditorStyles.miniButton, GUILayout.Width(70f)))
+                {
+                    RecordPartsUndo("Key Here");
+                    var pose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
+                    SpritePartsAuthoringOps.ApplyPoseEdit(_profile, _partsMode, _partsSelectedClip, slot.SlotId,
+                        _partsPreviewTime, pose, true, _partsDisplayFps);
+                    SnapPartsPlayheadToFrame();
+                    SaveDirty();
+                }
             }
-            EditorGUILayout.LabelField(fromSelection
-                    ? keys.Count + " selected key" + (keys.Count == 1 ? "" : "s")
-                    : "Key at " + _partsPreviewTime.ToString("0.###") + "s",
-                EditorStyles.miniLabel);
+            EditorGUILayout.EndHorizontal();
+            if (!hasKey)
+                keys = new List<SpritePartsKeyDef> { PartsPlaceholderKey };
             var first = keys[0];
-            using (new EditorGUI.DisabledScope(partLocked))
+            using (new EditorGUI.DisabledScope(partLocked || !hasKey || _partsPlaying))
             {
                 DrawPartsKeyChannelToggles(keys);
                 if (fromSelection)
@@ -101,7 +103,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ease = (SpriteEaseMode)EditorGUILayout.EnumPopup(new GUIContent("Ease", "How the part moves from this key to the next. Bezier = your own curve."), ease);
                 if (EditorGUI.EndChangeCheck())
                     EditKeys(keys, "Key Ease", k => k.EaseMode = (byte)ease);
-                if (first.EaseMode == (byte)SpriteEaseMode.Bezier)
+                if (first.EaseMode == (byte)SpriteEaseMode.Bezier && hasKey)
                     DrawPartsCurveEditor(keys);
 
                 // Colour key.
@@ -147,6 +149,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUILayout.EndHorizontal();
             }
         }
+
+        /// <summary>Shown (greyed) when there is no key, so the section keeps its size.</summary>
+        static readonly SpritePartsKeyDef PartsPlaceholderKey = new SpritePartsKeyDef();
 
         int MaxDrawRank()
         {

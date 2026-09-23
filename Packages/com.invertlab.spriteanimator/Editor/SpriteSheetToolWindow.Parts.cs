@@ -644,7 +644,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             var clip = CurrentPartsClip;
-            if (clip != null && _partsMode == SpritePartsStudioMode.Animate)
+            if (clip != null && _partsMode == SpritePartsStudioMode.Animate
+                && PartsSection("CLIP", clip.Name + "  " + clip.Duration.ToString("0.##") + "s"))
             {
                 EditorGUI.BeginChangeCheck();
                 string name = EditorGUILayout.TextField("Clip Name", clip.Name);
@@ -699,8 +700,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsBoneInspector(slot, partLocked);
                 DrawPartsKeyInspector(slot, partLocked);
 
-                GUILayout.Space(6f);
-                GUILayout.Label("SELECTED PART", _sectionStyle);
+                bool partOpen = PartsSection("SELECTED PART", slot.Name);
+                if (partOpen)
+                {
                 using (new EditorGUI.DisabledScope(partLocked))
                 {
                     EditorGUI.BeginChangeCheck();
@@ -730,8 +732,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SaveDirty();
                 }
                 EditorGUILayout.LabelField("Sibling Order", slot.SiblingOrder.ToString());
-                DrawPartsZOrderInspector(slot);
-                DrawPartsArtInspector(slot);
                 DrawPartsClipMaskInspector(slot, partLocked);
                 if (_partsMode == SpritePartsStudioMode.Rig)
                 {
@@ -763,6 +763,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                         }
                     }
                 }
+                }
+                DrawPartsZOrderInspector(slot);
+                DrawPartsArtInspector(slot);
             }
 
             if (_partsMode == SpritePartsStudioMode.Skins)
@@ -803,8 +806,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (slot == null) return;
 
-            GUILayout.Space(6f);
-            GUILayout.Label("TRANSFORM", _sectionStyle);
+            if (!PartsSection("TRANSFORM"))
+                return;
 
             if (_partsMode == SpritePartsStudioMode.Skins)
             {
@@ -1029,8 +1032,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawPartsZOrderInspector(SpritePartSlotDef slot)
         {
             if (slot == null) return;
-            GUILayout.Space(6f);
-            GUILayout.Label("Z ORDER / LAYER", _sectionStyle);
+            if (!PartsSection("Z ORDER / LAYER", "Rank " + slot.DrawRank))
+                return;
             var list = SpritePartsAuthoringOps.GetSlotsSortedByDrawRank(_profile, frontFirst: true);
             int index = list.FindIndex(s => s != null &&
                 SpritePartIdUtility.Canonical(s.SlotId) == SpritePartIdUtility.Canonical(slot.SlotId));
@@ -1183,8 +1186,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (slot == null || _profile == null) return;
             SyncPartsArtDraft(slot);
-            GUILayout.Space(6f);
-            GUILayout.Label("SPRITE / ART", _sectionStyle);
+            if (!PartsSection("SPRITE / ART", slot.DefaultAppearanceId))
+                return;
 
             var app = SpritePartsAuthoringOps.FindAppearance(_profile, slot.DefaultAppearanceId);
             var sheet = app != null ? _profile.SheetAt(app.SheetIndex) : null;
@@ -1536,8 +1539,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawPartsSkinsInspector()
         {
-            GUILayout.Space(6f);
-            GUILayout.Label("SKINS", _sectionStyle);
+            if (!PartsSection("SKINS", _profile.PartsSkins.Count + " skin" + (_profile.PartsSkins.Count == 1 ? "" : "s")))
+                return;
             var names = new List<string>();
             int selected = 0;
             for (int i = 0; i < _profile.PartsSkins.Count; i++)
@@ -5187,7 +5190,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawArtLibrariesInspector()
         {
             if (_profile == null) return;
-            GUILayout.Label("ART LIBRARIES", _sectionStyle);
+            int libraries = _profile.ArtLibraries?.Count ?? 0;
+            if (!PartsSection("ART LIBRARIES", libraries == 0 ? "none" : libraries + " linked"))
+                return;
             GUILayout.Label(
                 "Opt-in shared sheets/appearances. Import from Profile remains the default copy path. Pull/Sync updates local art in one Undo. Bake flattens into the blob - play never looks up the library.",
                 EditorStyles.wordWrappedMiniLabel);

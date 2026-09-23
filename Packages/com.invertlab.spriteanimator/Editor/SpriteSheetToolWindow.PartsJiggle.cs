@@ -52,9 +52,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (_profile == null)
                 return;
-            GUILayout.Space(6f);
-            GUILayout.Label("JIGGLE", _sectionStyle);
             var list = _profile.PartsJiggles ??= new List<SpritePartsJiggleDef>();
+            if (!PartsSection("JIGGLE", list.Count == 0 ? "none" : list.Count + " chain" + (list.Count == 1 ? "" : "s")))
+                return;
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button(new GUIContent("Add Jiggle for Selected Part",
                     "The selected part and the parts under it swing behind the animation like a spring.")))

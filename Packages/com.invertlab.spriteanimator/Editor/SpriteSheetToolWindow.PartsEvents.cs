@@ -195,9 +195,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (ev == null)
                 return;
             var clip = CurrentPartsClip;
-            GUILayout.Space(6f);
+            if (!PartsSection("EVENT", PartsEventName(ev.EventId) + " at " + ev.Time.ToString("0.###") + "s"))
+                return;
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("EVENT", _sectionStyle);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button(new GUIContent("Delete", "Remove this event"), EditorStyles.miniButton, GUILayout.Width(50f)))
             {
