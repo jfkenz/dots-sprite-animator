@@ -11,6 +11,8 @@ namespace InvertLab.Sprites.DOTS.Editor
     //   Push    drag to smear vertices along the stroke
     //   Pinch   hold to pull vertices toward the centre; Bloat pushes them out
     //   Smooth  hold to relax vertices toward their neighbours (removes creases and bunching)
+    //   Bend    grab near the tip and drag sideways: the part curves along an arc from its pivot
+    //           (no bend at the pivot, most at the tip) - tails, antennae, arms, flags, no bones needed
     // Pins: pinned vertices never move - not by brushes, vertex drags, soft selection or FFD.
     public sealed partial class SpriteSheetToolWindow
     {
@@ -22,6 +24,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             Pinch = 3,
             Bloat = 4,
             Smooth = 5,
+            Bend = 6,
         }
 
         [SerializeField] PartsWarpBrush _partsWarpBrush = PartsWarpBrush.Off;
@@ -38,6 +41,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         float2x2[] _partsBrushSkinInverse;
         float2 _partsBrushSkinSize;
         Vector2[] _partsBrushWork; // vertex positions in the part's unrotated rect (pixels), updated by the stroke
+        Vector2[] _partsBrushStartWork; // Bend works from the stroke start (absolute), not step by step
+        Vector2 _partsBrushPress;       // Bend: where the stroke started (unrotated rect pixels)
+        Vector2 _partsBrushBase;        // Bend: the part's pivot (unrotated rect pixels)
         List<int>[] _partsBrushNeighbours;
 
         // Pins (Warp): per part, for this editor session.
@@ -109,6 +115,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int i = 0; i < shown.PointCount; i++)
                 _partsBrushWork[i] = LatticeGui(rect, shown.GetPoint(i));
             _partsBrushNeighbours = _partsWarpBrush == PartsWarpBrush.Smooth ? MeshNeighbours(slot.Mesh) : null;
+            _partsBrushStartWork = (Vector2[])_partsBrushWork.Clone();
+            if (TryGetPartsWarpLayout(canvas, id, out _, out var bendJoint, out float bendDeg, out bool bendFx, out bool bendFy))
+            {
+                _partsBrushBase = bendJoint; // the pivot is where the unrotated rect turns, so it stays put
+                _partsBrushPress = UnflipAround(UnrotateAround(evt.mousePosition, bendJoint, bendDeg), bendJoint, bendFx, bendFy);
+            }
             _partsBrushActive = true;
             _partsBrushCanvas = canvas;
             _partsBrushMouse = _partsBrushLastMouse = evt.mousePosition;
@@ -124,7 +136,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorApplication.update -= PartsBrushTick;
             EditorApplication.update += PartsBrushTick; // Twist / Pinch / Bloat / Smooth keep working while held
             SetWarpSelectionSlot(id);
-            _status = _partsWarpBrush + " brush: " + (_partsWarpBrush == PartsWarpBrush.Push ? "drag to smear." : "hold to apply, move to paint.")
+            _status = _partsWarpBrush + " brush: " + (_partsWarpBrush == PartsWarpBrush.Push ? "drag to smear."
+                          : _partsWarpBrush == PartsWarpBrush.Bend ? "drag sideways to curve the part from its pivot."
+                          : "hold to apply, move to paint.")
                       + (_partsWarpBrush == PartsWarpBrush.Twist ? " Shift turns the other way." : string.Empty);
             return true;
         }
@@ -166,6 +180,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             float radius = Mathf.Max(4f, _partsBrushSize);
             float strength = Mathf.Clamp01(_partsBrushStrength);
             var work = _partsBrushWork;
+            if (_partsWarpBrush == PartsWarpBrush.Bend)
+            {
+                BendPartsBrush(work, m);
+                WritePartsBrushPose(rect);
+                return;
+            }
             var before = (Vector2[])work.Clone(); // Smooth reads the positions from before this step
             for (int i = 0; i < work.Length; i++)
             {
@@ -211,6 +231,43 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
             WritePartsBrushPose(rect);
+        }
+
+        /// <summary>
+        /// Bend: the axis runs from the pivot to where the stroke started; the angle between that and the
+        /// mouse is the bend at that distance. Each vertex rides an arc: none at the pivot, growing along the axis.
+        /// </summary>
+        void BendPartsBrush(Vector2[] work, Vector2 mouse)
+        {
+            Vector2 axis = _partsBrushPress - _partsBrushBase;
+            float length = axis.magnitude;
+            if (length < 4f || _partsBrushStartWork == null)
+                return;
+            Vector2 a = axis / length;
+            Vector2 n = new Vector2(-a.y, a.x);
+            float theta = Vector2.SignedAngle(axis, mouse - _partsBrushBase) * Mathf.Deg2Rad * Mathf.Lerp(0.5f, 1.5f, _partsBrushStrength);
+            float k = theta / length; // curvature: this angle is reached at the grab point
+            for (int i = 0; i < work.Length; i++)
+            {
+                Vector2 p0 = _partsBrushStartWork[i];
+                if (IsWarpPinned(_partsDragSlotId, i))
+                {
+                    work[i] = p0;
+                    continue;
+                }
+                Vector2 r = p0 - _partsBrushBase;
+                float s = Vector2.Dot(r, a); // along the axis
+                float u = Vector2.Dot(r, n); // across it
+                if (s <= 0f || Mathf.Abs(k) < 1e-6f)
+                {
+                    work[i] = p0; // behind the pivot, or no bend
+                    continue;
+                }
+                float radius = 1f / k;
+                float phi = s * k;
+                Vector2 centre = _partsBrushBase + n * radius;
+                work[i] = centre + (radius - u) * (-n * Mathf.Cos(phi) + a * Mathf.Sin(phi));
+            }
         }
 
         /// <summary>Stroke positions (pixels, unrotated rect) to a deform key, through the inverse skin on weighted meshes.</summary>
@@ -264,6 +321,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!PartsBrushOn() || Event.current.type != EventType.Repaint || !canvas.Contains(Event.current.mousePosition))
                 return;
             Vector2 m = Event.current.mousePosition;
+            if (_partsWarpBrush == PartsWarpBrush.Bend)
+            {
+                GUI.Label(new Rect(m.x + 12f, m.y - 18f, 220f, 16f), "Bend: grab near the tip, drag sideways", _mutedStyle);
+                return;
+            }
             var color = _partsWarpBrush switch
             {
                 PartsWarpBrush.Twist => new Color(0.72f, 0.45f, 1f, 0.95f),
@@ -294,7 +356,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     new GUIContent("Pinch", "Hold to pull vertices toward the centre."),
                     new GUIContent("Bloat", "Hold to push vertices away from the centre."),
                     new GUIContent("Smooth", "Hold to relax vertices toward their neighbours."),
-                }, 3);
+                    new GUIContent("Bend", "Grab near the tip and drag sideways: the part curves along an arc from its pivot."),
+                }, 4);
             if (brush != _partsWarpBrush)
             {
                 _partsWarpBrush = brush;
