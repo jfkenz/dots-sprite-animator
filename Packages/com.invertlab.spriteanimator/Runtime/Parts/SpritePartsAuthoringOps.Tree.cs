@@ -288,6 +288,21 @@ namespace InvertLab.Sprites.DOTS
             return TryAddPart(profile, parentSlotId: string.Empty, out created);
         }
 
+        /// <summary>Adds a bone (a joint with no image) under <paramref name="parentSlotId"/> (empty = root).</summary>
+        public static HierarchyEditResult TryAddBone(
+            SpriteSheetProfile profile, string parentSlotId, out SpritePartSlotDef created)
+        {
+            var result = string.IsNullOrWhiteSpace(parentSlotId)
+                ? TryAddPart(profile, string.Empty, out created)
+                : TryAddChildPart(profile, parentSlotId, out created);
+            if (created == null)
+                return result;
+            created.IsBone = true;
+            created.BoneLength = 1f;
+            created.Name = UniqueSiblingDisplayName(profile, created.ParentSlotId, "Bone");
+            return result;
+        }
+
         /// <summary>Add Child under an unlocked parent.</summary>
         public static HierarchyEditResult TryAddChildPart(
             SpriteSheetProfile profile, string parentSlotId, out SpritePartSlotDef created)

@@ -1401,6 +1401,8 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartAppearanceDef> PartsAppearances = new();
         public List<SpritePartsClipDef> PartsClips = new();
         public List<SpritePartsSkinDef> PartsSkins = new();
+        /// <summary>Runtime IK constraints, solved after the clip every frame.</summary>
+        public List<SpritePartsIkConstraintDef> PartsIkConstraints = new();
         public string PartsDefaultClipId = string.Empty;
         public string PartsDefaultSkinId = string.Empty;
         /// <summary>

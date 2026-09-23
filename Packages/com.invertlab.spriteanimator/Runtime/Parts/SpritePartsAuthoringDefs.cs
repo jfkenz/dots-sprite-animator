@@ -72,6 +72,13 @@ namespace InvertLab.Sprites.DOTS
         public SpritePartSemanticRole SemanticRole;
         /// <summary>Setup mesh. Empty = the part draws as a rigid rectangle.</summary>
         public SpritePartMeshDef Mesh = new SpritePartMeshDef();
+        /// <summary>
+        /// Bone: a joint with no image (Spine-style). Never drawn in the game; its children draw normally.
+        /// Posed and keyed like any part; can drive mesh weights and IK.
+        /// </summary>
+        public bool IsBone;
+        /// <summary>Bone length in world units along its +X axis (editor drawing, IK tips). 0 = 1.</summary>
+        public float BoneLength = 1f;
     }
 
     /// <summary>
@@ -149,6 +156,26 @@ namespace InvertLab.Sprites.DOTS
         public SpriteImportProvenance Import;
         /// <summary>Optional outfit role. When set, Apply Outfit prefers this over the bound slot's role.</summary>
         public SpritePartSemanticRole SemanticRole;
+    }
+
+    /// <summary>
+    /// Runtime IK constraint (Spine / AnyPortrait style): the joint of <see cref="EffectorSlotId"/> reaches the
+    /// joint of <see cref="TargetSlotId"/> by turning its parent (Chain 1) or its parent and grandparent (Chain 2).
+    /// Solved every frame after the clip, in the game and the editor preview. Move / key the target
+    /// (usually a bone) to plant a foot or aim a hand; gameplay can drive it with a pose override.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsIkConstraintDef
+    {
+        public string Name = "IK";
+        public bool Enabled = true;
+        public string EffectorSlotId = string.Empty;
+        public string TargetSlotId = string.Empty;
+        [Range(1, 2)] public int ChainLength = 2;
+        /// <summary>Which way the middle joint bends (elbow / knee direction).</summary>
+        public bool BendPositive = true;
+        /// <summary>0 = off, 1 = fully solved; in between blends with the clip pose.</summary>
+        [Range(0f, 1f)] public float Mix = 1f;
     }
 
     [Serializable]

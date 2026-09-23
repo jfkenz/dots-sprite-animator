@@ -12,6 +12,20 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<SpritePartsClipBlob> Clips;
         public BlobArray<SpritePartAppearanceBlob> Appearances;
         public BlobArray<SpritePartsSkinBlob> SkinPatches;
+        /// <summary>IK constraints in solve order.</summary>
+        public BlobArray<SpritePartsIkBlob> IkConstraints;
+    }
+
+    /// <summary>Resolved IK constraint: slot indices, -1 Upper for a one-joint chain.</summary>
+    public struct SpritePartsIkBlob
+    {
+        public int Effector;
+        public int Lower;
+        public int Upper;
+        public int Target;
+        /// <summary>+1 / -1: which way the middle joint bends.</summary>
+        public float BendSign;
+        public float Mix;
     }
 
     public struct SpritePartSlotBlob
@@ -182,6 +196,15 @@ namespace InvertLab.Sprites.DOTS
             public string AppearanceId;
         }
 
+        public struct IkInput
+        {
+            public string EffectorSlotId;
+            public string TargetSlotId;
+            public int ChainLength;
+            public bool BendPositive;
+            public float Mix;
+        }
+
         public struct SkinInput
         {
             public string SkinId;
@@ -193,7 +216,8 @@ namespace InvertLab.Sprites.DOTS
             SlotInput[] slots,
             AppearanceInput[] appearances,
             ClipInput[] clips,
-            SkinInput[] skins)
+            SkinInput[] skins,
+            IkInput[] ik = null)
         {
             if (slots == null || slots.Length == 0)
                 throw new ArgumentException("Parts set requires at least one slot.");
@@ -396,6 +420,31 @@ namespace InvertLab.Sprites.DOTS
                     }
                 }
 
+                // IK: effector -> its parent (lower) -> grandparent (upper, chain 2). Unresolvable ones are dropped.
+                var resolved = new System.Collections.Generic.List<SpritePartsIkBlob>();
+                foreach (var c in ik ?? Array.Empty<IkInput>())
+                {
+                    if (!slotIndex.TryGetValue(SpritePartIdUtility.Canonical(c.EffectorSlotId ?? string.Empty), out int eff)
+                        || !slotIndex.TryGetValue(SpritePartIdUtility.Canonical(c.TargetSlotId ?? string.Empty), out int tgt))
+                        continue;
+                    int lower = ParentIndex(slots, slotIndex, eff);
+                    if (lower < 0 || tgt == eff)
+                        continue;
+                    int upper = c.ChainLength >= 2 ? ParentIndex(slots, slotIndex, lower) : -1;
+                    resolved.Add(new SpritePartsIkBlob
+                    {
+                        Effector = eff,
+                        Lower = lower,
+                        Upper = upper,
+                        Target = tgt,
+                        BendSign = c.BendPositive ? 1f : -1f,
+                        Mix = math.saturate(c.Mix),
+                    });
+                }
+                var ikArr = builder.Allocate(ref root.IkConstraints, resolved.Count);
+                for (int k = 0; k < resolved.Count; k++)
+                    ikArr[k] = resolved[k];
+
                 return builder.CreateBlobAssetReference<SpritePartsSetBlob>(allocator);
             }
             finally
@@ -515,6 +564,14 @@ namespace InvertLab.Sprites.DOTS
             rest[i] = local;
             state[i] = 2;
             return local;
+        }
+
+        static int ParentIndex(SlotInput[] slots, System.Collections.Generic.Dictionary<string, int> slotIndex, int child)
+        {
+            string pid = slots[child].ParentSlotId;
+            if (string.IsNullOrWhiteSpace(pid))
+                return -1;
+            return slotIndex.TryGetValue(SpritePartIdUtility.Canonical(pid), out int p) ? p : -1;
         }
 
         static FixedString64Bytes Truncate64(string value)

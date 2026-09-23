@@ -171,6 +171,9 @@ namespace InvertLab.Sprites.DOTS
             SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
             ApplyLookAtOverrides(ref set, overrides, finalLocal, localToRoot, sources, n, rootWorld, flipX, flipY);
             SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
+            // IK constraints last, so they reach targets that clips or gameplay overrides moved.
+            if (set.IkConstraints.Length > 0)
+                SpritePartsIk.Apply(ref set, finalLocal, localToRoot);
             if (flipX || flipY)
             {
                 for (int i = 0; i < sources.Length && i < n; i++)

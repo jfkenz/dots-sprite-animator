@@ -61,7 +61,7 @@ namespace InvertLab.Sprites.DOTS
                     return false;
                 var clips = CreateClips(bakeProfile);
                 var skins = CreateSkins(bakeProfile);
-                blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins);
+                blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins, CreateIk(bakeProfile));
                 return true;
             }
             catch (Exception ex)
@@ -69,6 +69,28 @@ namespace InvertLab.Sprites.DOTS
                 error = ex.Message;
                 return false;
             }
+        }
+
+        public static SpritePartsSetBuilder.IkInput[] CreateIk(SpriteSheetProfile profile)
+        {
+            var list = profile?.PartsIkConstraints;
+            if (list == null || list.Count == 0)
+                return Array.Empty<SpritePartsSetBuilder.IkInput>();
+            var result = new System.Collections.Generic.List<SpritePartsSetBuilder.IkInput>(list.Count);
+            foreach (var c in list)
+            {
+                if (c == null || !c.Enabled || c.Mix <= 0f)
+                    continue;
+                result.Add(new SpritePartsSetBuilder.IkInput
+                {
+                    EffectorSlotId = c.EffectorSlotId,
+                    TargetSlotId = c.TargetSlotId,
+                    ChainLength = Mathf.Clamp(c.ChainLength, 1, 2),
+                    BendPositive = c.BendPositive,
+                    Mix = c.Mix,
+                });
+            }
+            return result.ToArray();
         }
 
         public static SpritePartsSetBuilder.SlotInput[] CreateSlots(SpriteSheetProfile profile)
@@ -80,7 +102,7 @@ namespace InvertLab.Sprites.DOTS
             for (int i = 0; i < list.Count; i++)
             {
                 var s = list[i];
-                string defaultApp = s.DefaultAppearanceId;
+                string defaultApp = s.IsBone ? string.Empty : s.DefaultAppearanceId; // bones have no image
                 if (!string.IsNullOrWhiteSpace(defaultApp)
                     && SpritePartsValidation.FindAppearanceIndex(profile, defaultApp) < 0)
                     defaultApp = string.Empty;
@@ -98,7 +120,8 @@ namespace InvertLab.Sprites.DOTS
                     RestScale = new float2(s.RestScale.x, s.RestScale.y),
                     DefaultAppearanceId = defaultApp,
                     DrawRank = s.DrawRank,
-                    Hidden = SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
+                    // A bone never draws itself, but its children do (Hidden is per slot here).
+                    Hidden = s.IsBone || SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
                         ? (byte)1 : (byte)0,
                     Mesh = SpritePartsLattice.FromMesh(s.Mesh),
                 };
@@ -284,7 +307,8 @@ namespace InvertLab.Sprites.DOTS
                     slots,
                     System.Array.Empty<SpritePartsSetBuilder.AppearanceInput>(),
                     clips,
-                    System.Array.Empty<SpritePartsSetBuilder.SkinInput>());
+                    System.Array.Empty<SpritePartsSetBuilder.SkinInput>(),
+                    CreateIk(profile));
                 return true;
             }
             catch (Exception ex)
@@ -334,7 +358,8 @@ namespace InvertLab.Sprites.DOTS
                     slots,
                     System.Array.Empty<SpritePartsSetBuilder.AppearanceInput>(),
                     clips,
-                    System.Array.Empty<SpritePartsSetBuilder.SkinInput>());
+                    System.Array.Empty<SpritePartsSetBuilder.SkinInput>(),
+                    CreateIk(profile));
                 return true;
             }
             catch (Exception ex)

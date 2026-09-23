@@ -687,6 +687,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 // Transform first - most edited while posing.
                 GUILayout.Space(6f);
                 DrawPartsTransformInspector(slot, partLocked);
+                DrawPartsBoneInspector(slot, partLocked);
                 DrawPartsKeyInspector(slot, partLocked);
 
                 GUILayout.Space(6f);
@@ -3085,6 +3086,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (!TryGetPartsSlotDrawRect(canvas, ref set, matrices, i, sampleTime,
                         out var r, out var joint, out float worldDeg, out var app, out var sheet, poses))
                     continue;
+
+                // Bones have no image: draw the bone shape on the main pose only (not in onion ghosts).
+                var boneDef = SpritePartsAuthoringOps.FindSlot(_profile, sid);
+                if (boneDef != null && boneDef.IsBone)
+                {
+                    if (pickable)
+                        DrawPartsBone(joint, matrices[i], boneDef.BoneLength, IsPartsBlobSlotSelected(ref set, i), pickable);
+                    continue;
+                }
 
                 // Pose scale signs: Mirror H = Scale.x < 0 (east-west), Mirror V = Scale.y < 0 (north-south).
                 // Use RAW worldDeg from the matrix (same as gizmo/hit). Do not +180 here - that

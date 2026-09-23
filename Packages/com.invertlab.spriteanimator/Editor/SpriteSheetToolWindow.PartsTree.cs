@@ -1402,6 +1402,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("+ Part", GUILayout.Width(60f)))
                 AddPartsSlot();
+            if (GUILayout.Button(new GUIContent("+ Bone", "A joint with no image, under the selected part (or at the root). Parts under it follow it."),
+                    GUILayout.Width(56f)))
+                AddPartsBone();
             using (new EditorGUI.DisabledScope(CurrentPartsSlot == null))
             {
                 if (GUILayout.Button(new GUIContent("Dup", "Duplicate selected part + children. Ctrl+D / Ctrl+Shift+D mirror."),
