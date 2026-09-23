@@ -198,6 +198,46 @@ namespace InvertLab.Sprites.DOTS
     }
 
     /// <summary>
+    /// Mix time for one clip pair (Spine's AnimationStateData.SetMix): playing <see cref="ToClipId"/> while
+    /// <see cref="FromClipId"/> plays crossfades over <see cref="Duration"/> with <see cref="Ease"/>. Empty From = any clip.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsMixDef
+    {
+        public string FromClipId = string.Empty;
+        public string ToClipId = string.Empty;
+        public float Duration = 0.2f;
+        public byte Ease = (byte)SpriteEaseMode.Linear;
+    }
+
+    /// <summary>A named set of parts for layers (upper body, arms...).</summary>
+    [Serializable]
+    public class SpritePartsMaskDef
+    {
+        public string Name = "Mask";
+        public List<string> SlotIds = new();
+    }
+
+    /// <summary>One clip of a blend space at its value (walk at 1, run at 3).</summary>
+    [Serializable]
+    public class SpritePartsBlendPointDef
+    {
+        public string ClipId = string.Empty;
+        public float Value;
+    }
+
+    /// <summary>
+    /// 1D blend space: a value (speed) blends the two nearest clips, their cycles kept in step (walk and run
+    /// feet stay together). Played with SpriteParts.PlayBlend, driven with SpriteParts.SetBlendValue.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsBlendSpaceDef
+    {
+        public string Name = "Locomotion";
+        public List<SpritePartsBlendPointDef> Points = new();
+    }
+
+    /// <summary>
     /// A control parameter (AnyPortrait-style): a value from <see cref="Min"/> to <see cref="Max"/> scrubs a clip
     /// from its start to its end, so a "Mouth" clip keyed closed → open becomes a slider. Gameplay sets the
     /// value at runtime. Additive adds the change from the <see cref="Default"/> pose on top of whatever plays.

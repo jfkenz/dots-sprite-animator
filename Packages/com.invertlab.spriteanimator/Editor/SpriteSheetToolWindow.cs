@@ -656,6 +656,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 TickPartsPreview(delta);
                 if (_partsPlaying || (wasPlaying && before != _partsPreviewTime))
                     changed = true;
+                if (TickPartsMixPreview(delta))
+                    changed = true;
             }
             if (_socketPlaying && _profile != null)
             {

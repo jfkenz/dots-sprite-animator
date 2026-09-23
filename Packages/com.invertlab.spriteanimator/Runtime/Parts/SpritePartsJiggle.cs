@@ -27,6 +27,11 @@ namespace InvertLab.Sprites.DOTS
         public bool Clip;
         /// <summary>Hold each key's pose until the next key (editor blocking preview).</summary>
         public bool Stepped;
+        /// <summary>Clips a chained crossfade still shows under the previous clip (<see cref="SpritePartsMixEntry"/>).</summary>
+        public NativeArray<SpritePartsMixEntry> MixChain;
+        /// <summary>The blend space playing (and one fading out), when <see cref="HasBlend"/>.</summary>
+        public SpritePartsBlendState Blend;
+        public bool HasBlend;
     }
 
     /// <summary>

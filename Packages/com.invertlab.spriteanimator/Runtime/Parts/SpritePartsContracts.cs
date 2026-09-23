@@ -19,6 +19,17 @@ namespace InvertLab.Sprites.DOTS
         public float BlendDuration;
         public float BlendElapsed;
         public byte SpriteSwitch;
+        /// <summary>Ease of the crossfade into the current clip (SpriteEaseMode).</summary>
+        public byte BlendEase;
+        /// <summary>
+        /// The previous clip's own fade-in over older clips (still running when this crossfade began; the older clips
+        /// are in <see cref="SpritePartsMixEntry"/>). 0 = the previous clip is fully in.
+        /// </summary>
+        public float PreviousBlendDuration;
+        public float PreviousBlendElapsed;
+        public byte PreviousBlendEase;
+        /// <summary>Seconds the current clip has played (not wrapped): queued clips start from it.</summary>
+        public float PlayedSeconds;
     }
 
     public struct SpritePartsSetRef : IComponentData

@@ -762,6 +762,12 @@ namespace InvertLab.Sprites.DOTS
                 PartsIkConstraints = source.PartsIkConstraints,
                 PartsJiggles = source.PartsJiggles,
                 PartsParams = source.PartsParams,
+                PartsMixes = source.PartsMixes,
+                PartsDefaultMix = source.PartsDefaultMix,
+                PartsDefaultMixEase = source.PartsDefaultMixEase,
+                PartsFadeOutEvents = source.PartsFadeOutEvents,
+                PartsMasks = source.PartsMasks,
+                PartsBlendSpaces = source.PartsBlendSpaces,
                 ArtLibraries = source.ArtLibraries,
             };
             if (source.Sheets != null)

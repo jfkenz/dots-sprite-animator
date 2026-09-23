@@ -62,7 +62,7 @@ namespace InvertLab.Sprites.DOTS
                 var clips = CreateClips(bakeProfile);
                 var skins = CreateSkins(bakeProfile);
                 blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins, CreateIk(bakeProfile),
-                    CreateJiggles(bakeProfile), CreateParams(bakeProfile));
+                    CreateJiggles(bakeProfile), CreateParams(bakeProfile), CreateTransitions(bakeProfile));
                 return true;
             }
             catch (Exception ex)
@@ -92,6 +92,36 @@ namespace InvertLab.Sprites.DOTS
                 });
             }
             return result.ToArray();
+        }
+
+        public static SpritePartsSetBuilder.TransitionsInput CreateTransitions(SpriteSheetProfile profile)
+        {
+            if (profile == null)
+                return null;
+            var result = new SpritePartsSetBuilder.TransitionsInput
+            {
+                DefaultMix = profile.PartsDefaultMix,
+                DefaultMixEase = profile.PartsDefaultMixEase,
+                FadeOutEvents = profile.PartsFadeOutEvents,
+                Mixes = (profile.PartsMixes ?? new System.Collections.Generic.List<SpritePartsMixDef>()).FindAll(m => m != null)
+                    .ConvertAll(m => new SpritePartsSetBuilder.MixInput
+                    {
+                        FromClipId = m.FromClipId, ToClipId = m.ToClipId, Duration = m.Duration, Ease = m.Ease,
+                    }).ToArray(),
+                Masks = (profile.PartsMasks ?? new System.Collections.Generic.List<SpritePartsMaskDef>()).FindAll(m => m != null)
+                    .ConvertAll(m => new SpritePartsSetBuilder.MaskInput
+                    {
+                        Name = m.Name, SlotIds = (m.SlotIds ?? new System.Collections.Generic.List<string>()).ToArray(),
+                    }).ToArray(),
+                BlendSpaces = (profile.PartsBlendSpaces ?? new System.Collections.Generic.List<SpritePartsBlendSpaceDef>()).FindAll(b => b != null)
+                    .ConvertAll(b => new SpritePartsSetBuilder.BlendSpaceInput
+                    {
+                        Name = b.Name,
+                        ClipIds = (b.Points ?? new System.Collections.Generic.List<SpritePartsBlendPointDef>()).ConvertAll(q => q?.ClipId).ToArray(),
+                        Values = (b.Points ?? new System.Collections.Generic.List<SpritePartsBlendPointDef>()).ConvertAll(q => q?.Value ?? 0f).ToArray(),
+                    }).ToArray(),
+            };
+            return result;
         }
 
         public static SpritePartsSetBuilder.ParamInput[] CreateParams(SpriteSheetProfile profile)
@@ -435,7 +465,8 @@ namespace InvertLab.Sprites.DOTS
                     System.Array.Empty<SpritePartsSetBuilder.SkinInput>(),
                     CreateIk(profile),
                     CreateJiggles(profile),
-                    CreateParams(profile));
+                    CreateParams(profile),
+                    CreateTransitions(profile));
                 return true;
             }
             catch (Exception ex)
@@ -488,7 +519,8 @@ namespace InvertLab.Sprites.DOTS
                     System.Array.Empty<SpritePartsSetBuilder.SkinInput>(),
                     CreateIk(profile),
                     CreateJiggles(profile),
-                    CreateParams(profile));
+                    CreateParams(profile),
+                    CreateTransitions(profile));
                 return true;
             }
             catch (Exception ex)

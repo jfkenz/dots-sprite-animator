@@ -678,7 +678,7 @@ namespace InvertLab.Sprites.DOTS
                                 float crossfadeSeconds = 0f)
         {
             if (IsParts(em, e))
-                return SpriteParts.Play(em, e, clipName, force, crossfadeSeconds);
+                return SpriteParts.Play(em, e, clipName, force, crossfadeSeconds > 0f ? crossfadeSeconds : -1f);
             if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e))
                 return false;
             if (string.IsNullOrWhiteSpace(clipName))
@@ -728,7 +728,7 @@ namespace InvertLab.Sprites.DOTS
                                 float crossfadeSeconds = 0f)
         {
             if (IsParts(em, e))
-                return SpriteParts.Play(em, e, clipIndex, force, crossfadeSeconds);
+                return SpriteParts.Play(em, e, clipIndex, force, crossfadeSeconds > 0f ? crossfadeSeconds : -1f);
             if (!EnsureCpuPlayback(em, e) || !em.HasComponent<SpriteAnimSetRef>(e) || !em.HasComponent<SpriteAnimPlayer>(e))
                 return false;
             ref var set = ref em.GetComponentData<SpriteAnimSetRef>(e).Set.Value;

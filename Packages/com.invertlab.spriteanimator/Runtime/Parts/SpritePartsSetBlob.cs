@@ -18,6 +18,41 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<SpritePartsJiggleBlob> Jiggles;
         /// <summary>Control parameters; values live on the character (<see cref="SpritePartsParamValue"/>).</summary>
         public BlobArray<SpritePartsParamBlob> Params;
+        /// <summary>Crossfade times per clip pair (-1 From = any clip).</summary>
+        public BlobArray<SpritePartsMixBlob> Mixes;
+        public float DefaultMix;
+        public byte DefaultMixEase;
+        /// <summary>1 = the clip fading out still fires its events.</summary>
+        public byte FadeOutEvents;
+        public BlobArray<SpritePartsMaskBlob> Masks;
+        public BlobArray<SpritePartsBlendSpaceBlob> BlendSpaces;
+    }
+
+    public struct SpritePartsMixBlob
+    {
+        public int From;
+        public int To;
+        public float Duration;
+        public byte Ease;
+    }
+
+    public struct SpritePartsMaskBlob
+    {
+        public FixedString64Bytes Name;
+        public uint Bits;
+    }
+
+    public struct SpritePartsBlendSpaceBlob
+    {
+        public FixedString64Bytes Name;
+        /// <summary>Sorted by value.</summary>
+        public BlobArray<SpritePartsBlendPointBlob> Points;
+    }
+
+    public struct SpritePartsBlendPointBlob
+    {
+        public int ClipIndex;
+        public float Value;
     }
 
     /// <summary>A control parameter: its value scrubs <see cref="ClipIndex"/> from start (Min) to end (Max).</summary>
@@ -305,6 +340,38 @@ namespace InvertLab.Sprites.DOTS
             public bool Additive;
         }
 
+        /// <summary>Clip transitions: mix times, part masks, blend spaces.</summary>
+        public sealed class TransitionsInput
+        {
+            public MixInput[] Mixes;
+            public float DefaultMix;
+            public byte DefaultMixEase;
+            public bool FadeOutEvents;
+            public MaskInput[] Masks;
+            public BlendSpaceInput[] BlendSpaces;
+        }
+
+        public struct MixInput
+        {
+            public string FromClipId;
+            public string ToClipId;
+            public float Duration;
+            public byte Ease;
+        }
+
+        public struct MaskInput
+        {
+            public string Name;
+            public string[] SlotIds;
+        }
+
+        public struct BlendSpaceInput
+        {
+            public string Name;
+            public string[] ClipIds;
+            public float[] Values;
+        }
+
         public struct SkinInput
         {
             public string SkinId;
@@ -319,7 +386,8 @@ namespace InvertLab.Sprites.DOTS
             SkinInput[] skins,
             IkInput[] ik = null,
             JiggleInput[] jiggles = null,
-            ParamInput[] parameters = null)
+            ParamInput[] parameters = null,
+            TransitionsInput transitions = null)
         {
             if (slots == null || slots.Length == 0)
                 throw new ArgumentException("Parts set requires at least one slot.");
@@ -615,6 +683,65 @@ namespace InvertLab.Sprites.DOTS
                         Default = pin.Default,
                         Additive = pin.Additive ? (byte)1 : (byte)0,
                     };
+                }
+
+                // Transitions: mix table, masks, blend spaces (clips found by id; unknown ones dropped).
+                int ClipByIdIndex(string id)
+                {
+                    string cid = SpritePartIdUtility.Canonical(id ?? string.Empty);
+                    for (int c = 0; cid.Length > 0 && c < clips.Length; c++)
+                        if (SpritePartIdUtility.Canonical(clips[c].ClipId ?? string.Empty) == cid)
+                            return c;
+                    return -1;
+                }
+                var transIn = transitions ?? new TransitionsInput();
+                root.DefaultMix = math.max(0f, math.isfinite(transIn.DefaultMix) ? transIn.DefaultMix : 0f);
+                root.DefaultMixEase = SpriteEase.IsValidMode(transIn.DefaultMixEase) ? transIn.DefaultMixEase : (byte)SpriteEaseMode.Linear;
+                root.FadeOutEvents = transIn.FadeOutEvents ? (byte)1 : (byte)0;
+                var mixes = new System.Collections.Generic.List<SpritePartsMixBlob>();
+                foreach (var m in transIn.Mixes ?? Array.Empty<MixInput>())
+                {
+                    int to = ClipByIdIndex(m.ToClipId);
+                    int from = string.IsNullOrWhiteSpace(m.FromClipId) ? -1 : ClipByIdIndex(m.FromClipId);
+                    if (to < 0 || (!string.IsNullOrWhiteSpace(m.FromClipId) && from < 0))
+                        continue;
+                    mixes.Add(new SpritePartsMixBlob
+                    {
+                        From = from, To = to, Duration = math.max(0f, m.Duration),
+                        Ease = SpriteEase.IsValidMode(m.Ease) ? m.Ease : (byte)SpriteEaseMode.Linear,
+                    });
+                }
+                var mixArr = builder.Allocate(ref root.Mixes, mixes.Count);
+                for (int k = 0; k < mixes.Count; k++)
+                    mixArr[k] = mixes[k];
+                var masks = transIn.Masks ?? Array.Empty<MaskInput>();
+                var maskArr = builder.Allocate(ref root.Masks, masks.Length);
+                for (int k = 0; k < masks.Length; k++)
+                {
+                    uint bits = 0;
+                    foreach (string sid in masks[k].SlotIds ?? Array.Empty<string>())
+                        if (slotIndex.TryGetValue(SpritePartIdUtility.Canonical(sid ?? string.Empty), out int si) && si < 32)
+                            bits |= 1u << si;
+                    maskArr[k] = new SpritePartsMaskBlob { Name = Truncate64(masks[k].Name), Bits = bits };
+                }
+                var spaces = transIn.BlendSpaces ?? Array.Empty<BlendSpaceInput>();
+                var spaceArr = builder.Allocate(ref root.BlendSpaces, spaces.Length);
+                for (int k = 0; k < spaces.Length; k++)
+                {
+                    spaceArr[k].Name = Truncate64(spaces[k].Name);
+                    var pts = new System.Collections.Generic.List<SpritePartsBlendPointBlob>();
+                    var ids = spaces[k].ClipIds ?? Array.Empty<string>();
+                    for (int q = 0; q < ids.Length; q++)
+                    {
+                        int ci = ClipByIdIndex(ids[q]);
+                        float v = spaces[k].Values != null && q < spaces[k].Values.Length ? spaces[k].Values[q] : q;
+                        if (ci >= 0 && math.isfinite(v))
+                            pts.Add(new SpritePartsBlendPointBlob { ClipIndex = ci, Value = v });
+                    }
+                    pts.Sort((a, b) => a.Value.CompareTo(b.Value));
+                    var ptArr = builder.Allocate(ref spaceArr[k].Points, pts.Count);
+                    for (int q = 0; q < pts.Count; q++)
+                        ptArr[q] = pts[q];
                 }
 
                 return builder.CreateBlobAssetReference<SpritePartsSetBlob>(allocator);

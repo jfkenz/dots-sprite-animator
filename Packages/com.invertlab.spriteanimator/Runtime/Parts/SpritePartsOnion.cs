@@ -119,6 +119,41 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Editor preview values of control parameters, by name. Missing = the parameter's default.</summary>
         public static readonly Dictionary<string, float> PreviewParams = new Dictionary<string, float>();
 
+        /// <summary>Editor crossfade preview: while <see cref="Active"/> the shown pose is From fading into To.</summary>
+        public struct MixPreviewState
+        {
+            public bool Active;
+            public int From;
+            public int To;
+            /// <summary>Where From is (seconds) when the fade begins.</summary>
+            public float FromStart;
+            public float Duration;
+            public byte Ease;
+            /// <summary>Seconds since the fade began; negative = From alone, before it.</summary>
+            public float Time;
+
+            public SpritePartsPlayer Player()
+            {
+                var player = SpritePartsPoseWriter.DefaultPlayer(To, playing: false);
+                if (Time < 0f)
+                {
+                    player.ClipIndex = From;
+                    player.TimeSeconds = math.max(0f, FromStart + Time);
+                    return player;
+                }
+                player.TimeSeconds = Time;
+                player.PreviousClipIndex = From;
+                player.PreviousTimeSeconds = FromStart + Time;
+                player.BlendDuration = Duration;
+                player.BlendElapsed = Time;
+                player.BlendEase = Ease;
+                return player;
+            }
+        }
+
+        /// <summary>The editor's crossfade preview (TRANSITIONS section). The game never reads it.</summary>
+        public static MixPreviewState PreviewMix;
+
         /// <summary>
         /// Build a pose-only blob and sample all slots at time (local + root matrices), as shown: IK and,
         /// with <see cref="PreviewPhysics"/>, jiggle. Caller must <see cref="DisposeSample"/>.
@@ -179,7 +214,11 @@ namespace InvertLab.Sprites.DOTS
             var values = PreviewParamValues(ref blob.Value);
             try
             {
-                if (PreviewPhysics && blob.Value.Jiggles.Length > 0)
+                int clips = blob.Value.Clips.Length;
+                if (PreviewMix.Active && PreviewMix.To >= 0 && PreviewMix.To < clips && PreviewMix.From < clips)
+                    SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, PreviewMix.Player(), localPoses, localToRoot,
+                        new SpritePartsEvalExtras { ParamValues = values, Stepped = PreviewStepped });
+                else if (PreviewPhysics && blob.Value.Jiggles.Length > 0)
                     EvaluateWithPhysics(profile, ref blob.Value, clipIndex, timeSeconds, values, localPoses, localToRoot);
                 else
                     SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot,

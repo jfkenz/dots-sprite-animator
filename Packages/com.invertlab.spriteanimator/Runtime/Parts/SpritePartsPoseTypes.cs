@@ -100,6 +100,16 @@ namespace InvertLab.Sprites.DOTS
         public int ClipIndex;
         public float Weight;
         public uint SlotMask;
+        /// <summary>Weight fades toward this at <see cref="FadeSpeed"/> per second (SpriteParts.FadeLayer).</summary>
+        public float TargetWeight;
+        public float FadeSpeed;
+        /// <summary>1 = the layer adds its change from the setup pose on top (breathing); 0 = it replaces.</summary>
+        public byte Additive;
+        /// <summary>1 = the layer runs its own clock (<see cref="Time"/>); 0 = it follows the main clip's time.</summary>
+        public byte OwnClock;
+        public float Time;
+        /// <summary>1 = the layer is removed when a fade to 0 ends.</summary>
+        public byte RemoveAtZero;
     }
 
     [InternalBufferCapacity(4)]

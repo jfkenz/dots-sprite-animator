@@ -33,7 +33,7 @@ namespace InvertLab.Sprites.DOTS
         {
             if (!(player.BlendDuration > 1e-8f) || player.PreviousClipIndex < 0)
                 return 1f;
-            return math.saturate(player.BlendElapsed / player.BlendDuration);
+            return SpritePartsTransitions.Weight(player.BlendElapsed, player.BlendDuration, player.BlendEase);
         }
 
         public static bool IsPaused(in SpritePartsPlayer player)
@@ -49,6 +49,9 @@ namespace InvertLab.Sprites.DOTS
             if (player.ClipIndex >= 0 && player.ClipIndex < set.Clips.Length)
             {
                 ref var clip = ref set.Clips[player.ClipIndex];
+                float rate = player.SpeedMultiplier * clip.SpeedMultiplier;
+                if (math.isfinite(rate))
+                    player.PlayedSeconds += dt * math.abs(rate);
                 var tick = SpritePartsPlayback.Tick(
                     player.TimeSeconds, player.SpeedMultiplier, clip.SpeedMultiplier,
                     clip.Duration, clip.WrapMode, player.Playing, player.Completed, dt);
@@ -76,20 +79,25 @@ namespace InvertLab.Sprites.DOTS
                     prev.Duration, prev.WrapMode, prevPlaying, prevDone, dt);
                 player.PreviousTimeSeconds = prevTick.TimeSeconds;
                 if (!paused)
-                    player.BlendElapsed += dt;
-                if (player.BlendElapsed >= player.BlendDuration)
                 {
-                    player.PreviousClipIndex = -1;
-                    player.BlendDuration = 0f;
-                    player.BlendElapsed = 0f;
+                    player.BlendElapsed += dt;
+                    if (player.PreviousBlendDuration > 1e-8f)
+                        player.PreviousBlendElapsed += dt;
                 }
+                if (player.BlendElapsed >= player.BlendDuration)
+                    ClearPrevious(ref player);
             }
             else
-            {
-                player.PreviousClipIndex = -1;
-                player.BlendDuration = 0f;
-                player.BlendElapsed = 0f;
-            }
+                ClearPrevious(ref player);
+        }
+
+        static void ClearPrevious(ref SpritePartsPlayer player)
+        {
+            player.PreviousClipIndex = -1;
+            player.BlendDuration = 0f;
+            player.BlendElapsed = 0f;
+            player.PreviousBlendDuration = 0f;
+            player.PreviousBlendElapsed = 0f;
         }
 
         public static int ResolveAppearanceClip(in SpritePartsPlayer player)
@@ -161,13 +169,20 @@ namespace InvertLab.Sprites.DOTS
             float incoming = IncomingWeight(player);
             int appearClip = ResolveAppearanceClip(player);
 
+            bool blendSpace = extras.HasBlend && extras.Blend.SpaceIndex >= 0;
             for (int i = 0; i < n; i++)
             {
-                SpritePartsSampler.SampleSlot(ref set, player.ClipIndex, i, player.TimeSeconds, true, extras.Stepped, out var pose);
+                SpritePartsSampler.Pose pose;
+                if (blendSpace)
+                    SpritePartsTransitions.SampleBlend(ref set, extras.Blend.SpaceIndex, extras.Blend.Value,
+                        extras.Blend.Phase, i, extras.Stepped, out pose);
+                else
+                    SpritePartsSampler.SampleSlot(ref set, player.ClipIndex, i, player.TimeSeconds, true, extras.Stepped, out pose);
                 if (player.PreviousClipIndex >= 0 && incoming < 1f)
                 {
-                    SpritePartsSampler.SampleSlot(
-                        ref set, player.PreviousClipIndex, i, player.PreviousTimeSeconds, out var prev);
+                    // The clips fading out (and any a chained crossfade still shows under them).
+                    var prev = SpritePartsTransitions.SampleOutgoing(ref set, player, extras.MixChain, extras.Blend,
+                        extras.HasBlend, i, extras.Stepped);
                     pose = BlendPose(prev, pose, incoming);
                 }
                 if (i < basePoses.Length)
@@ -215,8 +230,8 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>
-        /// Masked clip layers between the base clip and gameplay overrides.
-        /// SlotMask 0 means every slot. Layers share the player's time clock.
+        /// Masked clip layers between the base clip and gameplay overrides. SlotMask 0 means every slot. A layer
+        /// follows the player's clock unless it has its own; an additive layer adds its change from the setup pose.
         /// </summary>
         static void ApplyAnimationLayers(
             ref SpritePartsSetBlob set,
@@ -234,12 +249,15 @@ namespace InvertLab.Sprites.DOTS
                 if (layer.Weight <= 1e-6f || layer.ClipIndex < 0 || layer.ClipIndex >= set.Clips.Length)
                     continue;
                 float w = math.saturate(layer.Weight);
+                float time = layer.OwnClock != 0 ? layer.Time : player.TimeSeconds;
                 for (int i = 0; i < n && i < finalLocal.Length; i++)
                 {
                     if (layer.SlotMask != 0 && i < 32 && (layer.SlotMask & (1u << i)) == 0)
                         continue;
-                    SpritePartsSampler.SampleSlot(ref set, layer.ClipIndex, i, player.TimeSeconds, out var pose);
-                    finalLocal[i] = BlendPose(finalLocal[i], pose, w);
+                    SpritePartsSampler.SampleSlot(ref set, layer.ClipIndex, i, time, out var pose);
+                    finalLocal[i] = layer.Additive != 0
+                        ? AddPose(finalLocal[i], pose, ref set.Slots[i], w)
+                        : BlendPose(finalLocal[i], pose, w);
                     if (i < sources.Length)
                     {
                         sources[i] = new SpritePartPoseSource
@@ -250,6 +268,20 @@ namespace InvertLab.Sprites.DOTS
                     }
                 }
             }
+        }
+
+        /// <summary>Adds the layer's change from the setup pose (Spine's additive mix).</summary>
+        static SpritePartsSampler.Pose AddPose(
+            in SpritePartsSampler.Pose current, in SpritePartsSampler.Pose layer, ref SpritePartSlotBlob slot, float w)
+        {
+            var pose = current;
+            pose.Position += (layer.Position - slot.RestPosition) * w;
+            pose.Rotation += (layer.Rotation - slot.RestRotation) * w;
+            pose.Scale += (layer.Scale - slot.RestScale) * w;
+            if (pose.Lattice.PointCount == layer.Lattice.PointCount && slot.Mesh.PointCount == layer.Lattice.PointCount)
+                for (int p = 0; p < pose.Lattice.PointCount; p++)
+                    pose.Lattice.Points[p] += (layer.Lattice.Points[p] - slot.Mesh.Points[p]) * w;
+            return pose;
         }
 
         static SpritePartsSampler.Pose BlendPose(
@@ -591,10 +623,21 @@ namespace InvertLab.Sprites.DOTS
             NativeArray<float4x4> localToRoot,
             in SpritePartsEvalExtras extras)
         {
-            int n = set.Slots.Length;
             var player = DefaultPlayer(clipIndex, playing: false);
             player.ClipIndex = clipIndex;
             player.TimeSeconds = timeSeconds;
+            EvaluateEditor(ref set, player, localPoses, localToRoot, extras);
+        }
+
+        /// <summary>Editor evaluation of a whole player state (crossfade previews).</summary>
+        public static void EvaluateEditor(
+            ref SpritePartsSetBlob set,
+            in SpritePartsPlayer player,
+            NativeArray<SpritePartsSampler.Pose> localPoses,
+            NativeArray<float4x4> localToRoot,
+            in SpritePartsEvalExtras extras)
+        {
+            int n = set.Slots.Length;
             var emptyOv = new NativeArray<SpritePartsPoseOverride>(0, Allocator.Temp);
             var basePoses = new NativeArray<SpritePartsSampler.Pose>(n, Allocator.Temp);
             var sources = new NativeArray<SpritePartPoseSource>(n, Allocator.Temp);
@@ -683,6 +726,13 @@ namespace InvertLab.Sprites.DOTS
                 float4x4 rootWorld = CurrentEntityWorld(em, root);
 
                 var extras = new SpritePartsEvalExtras { DeltaTime = deltaTime, Clip = true };
+                if (em.HasBuffer<SpritePartsMixEntry>(root))
+                    extras.MixChain = em.GetBuffer<SpritePartsMixEntry>(root).AsNativeArray();
+                if (em.HasComponent<SpritePartsBlendState>(root))
+                {
+                    extras.Blend = em.GetComponentData<SpritePartsBlendState>(root);
+                    extras.HasBlend = true;
+                }
                 if (set.Params.Length > 0 && em.HasBuffer<SpritePartsParamValue>(root))
                     extras.ParamValues = em.GetBuffer<SpritePartsParamValue>(root).AsNativeArray().Reinterpret<float>();
                 if (set.Jiggles.Length > 0 && em.HasBuffer<SpritePartJiggleState>(root))
@@ -770,6 +820,7 @@ namespace InvertLab.Sprites.DOTS
             EnsureBuffer<SpritePartFinalPose>(em, root);
             EnsureBuffer<SpritePartPoseSource>(em, root);
             EnsureBuffer<SpritePartsAnimLayer>(em, root);
+            EnsureBuffer<SpritePartsMixEntry>(em, root);
             EnsureBuffer<SpritePartSocketBinding>(em, root);
             EnsureBuffer<SpritePartSocketWorld>(em, root);
             EnsureBuffer<SpritePartHitboxBinding>(em, root);

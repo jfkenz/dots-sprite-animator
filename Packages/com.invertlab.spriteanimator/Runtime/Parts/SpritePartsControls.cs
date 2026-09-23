@@ -5,7 +5,7 @@ using Unity.Transforms;
 namespace InvertLab.Sprites.DOTS
 {
     /// <summary>Parts-specific ECS controls. SpriteAnims dispatches here by player kind.</summary>
-    public static class SpriteParts
+    public static partial class SpriteParts
     {
         public static bool IsPartsRoot(EntityManager em, Entity e)
             => em.Exists(e) && em.HasComponent<SpritePartsPlayer>(e) && em.HasComponent<SpritePartsSetRef>(e);
@@ -13,8 +13,9 @@ namespace InvertLab.Sprites.DOTS
         public static bool IsPartsEntity(EntityManager em, Entity e)
             => IsPartsRoot(em, e) || (em.Exists(e) && em.HasComponent<SpritePartSlot>(e));
 
+        /// <param name="crossfadeSeconds">Negative = the profile's mix table (pair, any, default); 0 = instant.</param>
         public static bool Play(EntityManager em, Entity e, string clipName, bool force = false,
-            float crossfadeSeconds = 0f)
+            float crossfadeSeconds = -1f)
         {
             if (!IsPartsRoot(em, e))
                 return false;
@@ -28,8 +29,9 @@ namespace InvertLab.Sprites.DOTS
             return Play(em, e, index, force, crossfadeSeconds);
         }
 
+        /// <param name="crossfadeSeconds">Negative = the profile's mix table (pair, any, default); 0 = instant.</param>
         public static bool Play(EntityManager em, Entity e, int clipIndex, bool force = false,
-            float crossfadeSeconds = 0f)
+            float crossfadeSeconds = -1f)
         {
             if (!IsPartsRoot(em, e))
                 return false;
@@ -42,7 +44,7 @@ namespace InvertLab.Sprites.DOTS
 
             var player = em.GetComponentData<SpritePartsPlayer>(e);
             bool completed = player.Completed != 0 || em.HasComponent<SpritePartsCompleted>(e);
-            if (!force)
+            if (!force && !BlendActive(em, e))
             {
                 // Same running clip: idempotent.
                 if (player.Playing != 0 && !completed && player.ClipIndex == clipIndex)
@@ -57,34 +59,8 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
 
-            float fade = math.max(0f, crossfadeSeconds);
-            if (fade > 1e-8f && player.ClipIndex != clipIndex && player.ClipIndex >= 0)
-            {
-                player.PreviousClipIndex = player.ClipIndex;
-                player.PreviousTimeSeconds = player.TimeSeconds;
-                player.BlendDuration = fade;
-                player.BlendElapsed = 0f;
-            }
-            else
-            {
-                player.PreviousClipIndex = -1;
-                player.PreviousTimeSeconds = 0f;
-                player.BlendDuration = 0f;
-                player.BlendElapsed = 0f;
-            }
-
-            player.ClipIndex = clipIndex;
-            player.TimeSeconds = 0f;
-            player.Playing = 1;
-            player.Completed = 0;
-            player.Paused = 0;
-            if (!(player.SpeedMultiplier > 0f) && player.SpeedMultiplier == 0f)
-                player.SpeedMultiplier = 1f;
-            if (!math.isfinite(player.SpeedMultiplier))
-                player.SpeedMultiplier = 1f;
-            em.SetComponentData(e, player);
-            if (em.HasComponent<SpritePartsCompleted>(e))
-                em.RemoveComponent<SpritePartsCompleted>(e);
+            ClearQueue(em, e);
+            StartClip(em, e, clipIndex, crossfadeSeconds, -1, 0f);
             SpritePartsPoseUtility.ApplyPose(em, e);
             return true;
         }
@@ -118,10 +94,8 @@ namespace InvertLab.Sprites.DOTS
             player.TimeSeconds = 0f;
             player.Completed = 0;
             player.Paused = 1;
-            player.PreviousClipIndex = -1;
-            player.PreviousTimeSeconds = 0f;
-            player.BlendDuration = 0f;
-            player.BlendElapsed = 0f;
+            player.PlayedSeconds = 0f;
+            ClearFades(em, e, ref player);
             em.SetComponentData(e, player);
             if (em.HasComponent<SpritePartsCompleted>(e))
                 em.RemoveComponent<SpritePartsCompleted>(e);
@@ -136,10 +110,8 @@ namespace InvertLab.Sprites.DOTS
             player.Playing = 1;
             player.Completed = 0;
             player.Paused = 0;
-            player.PreviousClipIndex = -1;
-            player.PreviousTimeSeconds = 0f;
-            player.BlendDuration = 0f;
-            player.BlendElapsed = 0f;
+            player.PlayedSeconds = 0f;
+            ClearFades(em, e, ref player);
             em.SetComponentData(e, player);
             if (em.HasComponent<SpritePartsCompleted>(e))
                 em.RemoveComponent<SpritePartsCompleted>(e);

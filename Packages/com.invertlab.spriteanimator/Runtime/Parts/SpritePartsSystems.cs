@@ -45,12 +45,33 @@ namespace InvertLab.Sprites.DOTS
                     Entity = entity, ClipIndex = player.ClipIndex, From = player.TimeSeconds,
                     Playing = !SpritePartsPoseWriter.IsPaused(player) && player.Completed == 0,
                 };
+                // The clip fading out keeps firing its events while it shows (when the profile asks for it).
+                var outTick = new SpritePartsEventFiring.Tick
+                {
+                    Entity = entity, ClipIndex = player.PreviousClipIndex, From = player.PreviousTimeSeconds,
+                    Playing = set.FadeOutEvents != 0 && player.PreviousClipIndex >= 0
+                              && !SpritePartsPoseWriter.IsPaused(player),
+                };
                 SpritePartsPoseWriter.TickClocks(ref player, ref set, dt);
                 tick.To = player.TimeSeconds;
-                if (tick.Playing && set.Clips[player.ClipIndex].Events.Length > 0)
+                outTick.To = player.PreviousTimeSeconds;
+                if (em.HasComponent<SpritePartsBlendState>(entity))
+                {
+                    // A blend space drives the clock: the heaviest clip at the shared cycle, for events and keys.
+                    var blend = em.GetComponentData<SpritePartsBlendState>(entity);
+                    var span = SpritePartsTransitions.TickBlend(ref set, ref blend, ref player, dt);
+                    em.SetComponentData(entity, blend);
+                    if (span.ClipIndex >= 0)
+                    {
+                        tick.ClipIndex = span.ClipIndex;
+                        tick.From = span.From;
+                        tick.To = span.To;
+                    }
+                }
+                if (tick.Playing && set.Clips[tick.ClipIndex].Events.Length > 0)
                     ticks.Add(tick);
-                if (player.Completed != 0 && !em.HasComponent<SpritePartsCompleted>(entity))
-                    commands.AddComponent(entity, new SpritePartsCompleted());
+                if (outTick.Playing && outTick.ClipIndex < set.Clips.Length && set.Clips[outTick.ClipIndex].Events.Length > 0)
+                    ticks.Add(outTick);
                 pending.Add(entity);
             }
 
@@ -65,6 +86,11 @@ namespace InvertLab.Sprites.DOTS
                 var entity = pending[i];
                 if (!em.HasComponent<SpritePartsSetRef>(entity) || !em.HasComponent<SpritePartsPlayer>(entity))
                     continue;
+                // Crossfade chain, layer fades, character fade, queued clips (a queued clip may start here).
+                SpriteParts.TickTransitions(em, entity, dt);
+                if (em.GetComponentData<SpritePartsPlayer>(entity).Completed != 0
+                    && !em.HasComponent<SpritePartsCompleted>(entity))
+                    commands.AddComponent(entity, new SpritePartsCompleted());
                 SpritePartsPoseWriter.Apply(em, entity, commands, true, dt);
             }
             commands.Playback(em);
@@ -150,8 +176,11 @@ namespace InvertLab.Sprites.DOTS
                                     {
                                         SpritePartsSampler.SampleColor(ref blob.Value, player.PreviousClipIndex, si,
                                             player.PreviousTimeSeconds, out var previous);
-                                        color = math.lerp(previous, color, math.saturate(player.BlendElapsed / player.BlendDuration));
+                                        color = math.lerp(previous, color, SpritePartsPoseWriter.IncomingWeight(player));
                                     }
+                                    // Whole-character fade / tint over the keyed colour.
+                                    if (em.HasComponent<SpritePartsCharacterTint>(root))
+                                        color *= em.GetComponentData<SpritePartsCharacterTint>(root).Value;
                                     em.SetComponentData(entity, new SpritePartKeyedTint { Value = color });
                                 }
                             }

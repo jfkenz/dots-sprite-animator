@@ -1407,6 +1407,16 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsJiggleDef> PartsJiggles = new();
         /// <summary>Control parameters: a value scrubs a clip (mouth open, head turn), set by gameplay.</summary>
         public List<SpritePartsParamDef> PartsParams = new();
+        /// <summary>Crossfade time per clip pair; <see cref="PartsDefaultMix"/> for pairs not listed.</summary>
+        public List<SpritePartsMixDef> PartsMixes = new();
+        public float PartsDefaultMix;
+        public byte PartsDefaultMixEase = (byte)SpriteEaseMode.Linear;
+        /// <summary>True: the clip fading out still fires its events during a crossfade.</summary>
+        public bool PartsFadeOutEvents;
+        /// <summary>Named part sets for layers.</summary>
+        public List<SpritePartsMaskDef> PartsMasks = new();
+        /// <summary>1D blend spaces (walk / run by speed).</summary>
+        public List<SpritePartsBlendSpaceDef> PartsBlendSpaces = new();
         public string PartsDefaultClipId = string.Empty;
         public string PartsDefaultSkinId = string.Empty;
         /// <summary>
