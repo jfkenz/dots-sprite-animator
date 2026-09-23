@@ -1705,6 +1705,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                     tx += 48f;
                 }
             }
+            if (_partsCanvasTool == PartsCanvasTool.Move && _partsMode == SpritePartsStudioMode.Animate)
+            {
+                _partsIkOn = GUI.Toggle(new Rect(tx, ty, 40f, 20f), _partsIkOn,
+                    new GUIContent("IK", "Drag a part: it and its parents turn so the grabbed point follows the mouse (Auto Key)."));
+                tx += 42f;
+                using (new EditorGUI.DisabledScope(!_partsIkOn))
+                {
+                    GUI.Label(new Rect(tx, ty + 2f, 40f, 18f), "Chain", _mutedStyle);
+                    _partsIkChain = Mathf.Clamp(EditorGUI.IntField(new Rect(tx + 40f, ty + 1f, 26f, 18f),
+                        new GUIContent(string.Empty, "How many joints turn: 1 = the part only, 2 = part + parent (elbow + shoulder), ..."),
+                        _partsIkChain), 1, 6);
+                }
+                tx += 72f;
+            }
             if (_partsCanvasTool == PartsCanvasTool.Move || _partsCanvasTool == PartsCanvasTool.Rotate)
             {
                 _partsGizmoLocal = GUI.Toggle(new Rect(tx, ty, 58f, 20f), _partsGizmoLocal,
@@ -1785,6 +1799,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsCanvasVisibilityOverlay(overlay);
             DrawPartsMeshPanel(meshPanel);
             DrawPartsDialBar(canvas);
+            DrawPartsIkOverlay();
         }
 
         /// <summary>Warp and Edit Mesh swap Onion / Debug / Root for what matters there: vertices, lines, triangles, FFD.</summary>
@@ -1930,6 +1945,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsFfdDrag = -1;
             _partsFfdDragB = -1;
             EndPartsBrush();
+            EndPartsIk();
             _partsDragUndoPending = null;
             _partsDialDragging = false;
             _partsMarqueeActive = false;
@@ -4448,6 +4464,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
+                // Move with IK on: the part and its parents turn so the grabbed point follows the mouse.
+                if (_partsCanvasTool == PartsCanvasTool.Move && _partsIkOn
+                    && (handle == ColliderHandleKind.None || handle == ColliderHandleKind.Body)
+                    && TryBeginPartsIk(canvas, slot, evt, controlId))
+                {
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
                 if (handle == ColliderHandleKind.None)
                     handle = ColliderHandleKind.Body;
                 _partsTransformHandle = handle;
@@ -4563,6 +4589,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void ApplyPartsTransformDrag(Rect canvas, Vector2 mouse)
         {
+            if (_partsIkActive)
+            {
+                ApplyPartsIk(mouse);
+                return;
+            }
             if (_partsCanvasTool == PartsCanvasTool.Warp)
             {
                 if (_partsWarpActive)
