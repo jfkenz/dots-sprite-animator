@@ -757,6 +757,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_partsMode == SpritePartsStudioMode.Skins)
                 DrawPartsSkinsInspector();
+            else
+                DrawPartsIkInspector();
 
             EditorGUIUtility.labelWidth = prevLabelWidth;
             EditorGUILayout.EndScrollView();
@@ -1802,6 +1804,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsMeshPanel(meshPanel);
             DrawPartsDialBar(canvas);
             DrawPartsIkOverlay();
+            DrawPartsIkTargets(canvas);
         }
 
         /// <summary>Warp and Edit Mesh swap Onion / Debug / Root for what matters there: vertices, lines, triangles, FFD.</summary>
