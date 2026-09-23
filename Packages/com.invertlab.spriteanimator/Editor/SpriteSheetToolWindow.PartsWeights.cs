@@ -113,12 +113,21 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     float2 start = matrices[j].c3.xy;
                     float2 end = start;
-                    for (int k = 0; k < n; k++)
+                    var def = SpritePartsAuthoringOps.FindSlot(_profile, blob.Value.Slots[j].SlotId.ToString());
+                    if (def != null && def.IsBone)
                     {
-                        if (blob.Value.Slots[k].ParentSlotIndex == j)
+                        // A bone runs along its own +X axis for its length.
+                        end = math.mul(matrices[j], new float4(def.BoneLength > 1e-4f ? def.BoneLength : 1f, 0f, 0f, 1f)).xy;
+                    }
+                    else
+                    {
+                        for (int k = 0; k < n; k++)
                         {
-                            end = matrices[k].c3.xy;
-                            break;
+                            if (blob.Value.Slots[k].ParentSlotIndex == j)
+                            {
+                                end = matrices[k].c3.xy;
+                                break;
+                            }
                         }
                     }
                     guides.Add(new PartsBoneGuide
@@ -179,7 +188,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             return true;
         }
 
-        void BindWeightBone(string boneId)
+        void BindWeightBone(string boneId) => BindWeightBones(new List<string> { boneId }, "Bind Mesh Bone");
+
+        /// <summary>Binds several joints at once (existing binds stay), then recomputes automatic weights.</summary>
+        void BindWeightBones(List<string> boneIds, string undoName)
         {
             var slot = WeightsSlot();
             var mesh = slot?.Mesh;
@@ -188,31 +200,118 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _status = "Make a mesh first (Edit Mesh).";
                 return;
             }
-            string id = SpritePartIdUtility.Canonical(boneId);
             var bones = new List<string>(mesh.Bones ?? System.Array.Empty<string>());
-            if (bones.Contains(id))
+            var adding = new List<string>();
+            foreach (string boneId in boneIds)
+            {
+                string id = SpritePartIdUtility.Canonical(boneId);
+                if (!string.IsNullOrEmpty(id) && !bones.Contains(id) && !adding.Contains(id))
+                    adding.Add(id);
+            }
+            if (adding.Count == 0)
+            {
+                _status = "Those bones are already bound.";
                 return;
-            if (bones.Count >= SpritePartsSkinning.MaxBones)
+            }
+            // The first bind also binds the part itself, so the mesh keeps following its own joint.
+            string self = SpritePartIdUtility.Canonical(slot.SlotId);
+            if (bones.Count == 0 && !adding.Contains(self))
+                bones.Add(self);
+            int room = SpritePartsSkinning.MaxBones - bones.Count;
+            if (room <= 0)
             {
                 _status = "A mesh can use up to " + SpritePartsSkinning.MaxBones + " bones.";
                 return;
             }
-            RecordPartsUndo("Bind Mesh Bone");
-            // The first bind also binds the part itself, so the mesh keeps following its own joint.
-            string self = SpritePartIdUtility.Canonical(slot.SlotId);
-            if (bones.Count == 0 && id != self)
-                bones.Add(self);
-            bones.Add(id);
+            bool clipped = adding.Count > room;
+            if (clipped)
+                adding.RemoveRange(room, adding.Count - room);
+            RecordPartsUndo(undoName);
+            var previousBones = mesh.Bones;
+            var previousWeights = mesh.Weights;
+            bones.AddRange(adding);
             mesh.Bones = bones.ToArray();
             if (!RecomputeAutoWeights(slot))
             {
-                mesh.Bones = null;
-                mesh.Weights = null;
+                mesh.Bones = previousBones;
+                mesh.Weights = previousWeights;
                 return;
             }
-            _partsWeightBone = bones.IndexOf(id);
+            _partsWeightBone = bones.IndexOf(adding[0]);
             SaveDirty();
-            _status = "Bound " + id + ". Weights computed automatically; paint to adjust.";
+            _status = "Bound " + string.Join(", ", adding) + (clipped ? " (bone limit " + SpritePartsSkinning.MaxBones + " reached)" : "")
+                      + ". Weights computed automatically; paint to adjust.";
+        }
+
+        /// <summary>Binds the bones whose segments lie on or near the mesh at rest (up to 4), then Auto.</summary>
+        void BindNearestBones()
+        {
+            var slot = WeightsSlot();
+            var mesh = slot?.Mesh;
+            if (mesh == null || !mesh.HasMesh)
+            {
+                _status = "Make a mesh first (Edit Mesh).";
+                return;
+            }
+            if (!TryGetBindSpace(slot, out var meshRest, out var size, out var pivot, out var guides))
+            {
+                _status = "Weights need the part's default appearance (its size and pivot).";
+                return;
+            }
+            // Prefer real bones; with no bones in the rig, any joint counts.
+            bool anyBone = false;
+            foreach (var s in _profile.PartsSlots)
+                anyBone |= s != null && s.IsBone;
+            string self = SpritePartIdUtility.Canonical(slot.SlotId);
+            var pool = guides.FindAll(g => g.Id != self && (!anyBone || (SpritePartsAuthoringOps.FindSlot(_profile, g.Id)?.IsBone ?? false)));
+            var verts = new List<float2>(mesh.VertexCount);
+            foreach (var uv in mesh.Vertices)
+                verts.Add(MeshUvToRoot(meshRest, size, pivot, uv));
+            // Near = within a tenth of the mesh's size.
+            float reach = math.max(size.x, size.y) * 0.1f;
+            var nearest = SpritePartsSkinning.NearestBones(verts, pool.ConvertAll(g => g.RootStart), pool.ConvertAll(g => g.RootEnd), reach, 4, mesh.Triangles);
+            if (nearest.Count == 0)
+            {
+                _status = "No " + (anyBone ? "bone" : "joint") + " lies on this mesh. Place bones over the art, or use Bind Bone.";
+                return;
+            }
+            BindWeightBones(nearest.ConvertAll(i => pool[i].Id), "Bind Nearest Bones");
+        }
+
+        /// <summary>Copies weights from one side of the Mirror axis to the other, swapping Left / Right bones.</summary>
+        void MirrorWeightsCommand(bool leftToRight)
+        {
+            var mesh = WeightsSlot()?.Mesh;
+            if (mesh == null || !mesh.HasWeights)
+                return;
+            var swap = new List<int>(mesh.BoneCount);
+            int unmatched = 0;
+            for (int b = 0; b < mesh.BoneCount; b++)
+            {
+                string other = SpritePartsSkinning.MirrorSideName(SpritePartsAuthoringOps.FindSlot(_profile, mesh.Bones[b])?.Name);
+                int match = -1;
+                if (other != null)
+                {
+                    for (int k = 0; k < mesh.BoneCount && match < 0; k++)
+                    {
+                        if (SpritePartsAuthoringOps.FindSlot(_profile, mesh.Bones[k])?.Name == other)
+                            match = k;
+                    }
+                    if (match < 0)
+                        unmatched++;
+                }
+                swap.Add(match >= 0 ? match : b);
+            }
+            RecordPartsUndo(leftToRight ? "Mirror Weights Left To Right" : "Mirror Weights Right To Left");
+            int pairs = SpritePartsSkinning.MirrorWeights(mesh, _partsMirrorAxis, leftToRight, swap);
+            if (pairs == 0)
+            {
+                _status = "No mirror pairs: no vertex sits at another's mirrored spot. Check the Mirror axis, or use Mirror Copy.";
+                return;
+            }
+            SaveDirty();
+            _status = "Mirrored weights on " + pairs + " vertex pairs " + (leftToRight ? "left → right" : "right → left")
+                      + (unmatched > 0 ? ". " + unmatched + " sided bone(s) have no bound twin: bind the other side's bone too." : ".");
         }
 
         void UnbindWeightBone(int bone)
@@ -487,6 +586,19 @@ namespace InvertLab.Sprites.DOTS.Editor
                     else
                         menu.AddItem(new GUIContent(s.Name + " (" + id + ")"), false, () => BindWeightBone(id));
                 }
+                menu.AddSeparator(string.Empty);
+                menu.AddItem(new GUIContent("Nearest Bones"), false, BindNearestBones);
+                foreach (var s in _profile.PartsSlots)
+                {
+                    if (s == null)
+                        continue;
+                    string id = SpritePartIdUtility.Canonical(s.SlotId);
+                    string label = (s.IsBone ? "◇ " : "") + s.Name + " (" + id + ")";
+                    menu.AddItem(new GUIContent("Chain Down/" + label), false,
+                        () => BindWeightBones(SpritePartsSkinning.ChainBones(_profile, id, true), "Bind Bone Chain"));
+                    menu.AddItem(new GUIContent("Chain Up/" + label), false,
+                        () => BindWeightBones(SpritePartsSkinning.ChainBones(_profile, id, false), "Bind Bone Chain"));
+                }
                 menu.ShowAsContext();
             }
             using (new EditorGUI.DisabledScope(!mesh.HasWeights))
@@ -506,6 +618,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsWeightPruneAt = EditorGUILayout.Slider(new GUIContent("Prune <", "Drop influences below this."), _partsWeightPruneAt, 0.01f, 0.5f);
             if (GUILayout.Button("Prune", GUILayout.Width(54f)))
                 PruneWeightsCommand();
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button(new GUIContent("Mirror L → R",
+                    "Copy the left side's weights onto the right across the Mirror axis (Left / Right bones swap)"), GUILayout.Height(20f)))
+                MirrorWeightsCommand(true);
+            if (GUILayout.Button(new GUIContent("R → L", "Copy the right side's weights onto the left"), GUILayout.Height(20f)))
+                MirrorWeightsCommand(false);
             EditorGUILayout.EndHorizontal();
 
             _partsWeightStrength = EditorGUILayout.Slider(new GUIContent("Brush Strength", "Weight added per brush step."), _partsWeightStrength, 0.01f, 1f);

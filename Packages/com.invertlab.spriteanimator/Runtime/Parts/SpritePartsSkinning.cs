@@ -12,7 +12,7 @@ namespace InvertLab.Sprites.DOTS
     /// <c>p = Σ w_b · (Mesh⁻¹ · Bone_b · BoneRest_b⁻¹ · MeshRest) · p_rest</c>, in part space.
     /// Deform keys stay in pre-skin space (applied first), the same as Spine deform on weighted meshes.
     /// </summary>
-    public static class SpritePartsSkinning
+    public static partial class SpritePartsSkinning
     {
         public const int MaxBones = 8;
 
