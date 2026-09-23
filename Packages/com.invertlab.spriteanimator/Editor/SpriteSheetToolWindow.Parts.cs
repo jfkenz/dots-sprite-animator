@@ -687,6 +687,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 // Transform first - most edited while posing.
                 GUILayout.Space(6f);
                 DrawPartsTransformInspector(slot, partLocked);
+                DrawPartsKeyInspector(slot, partLocked);
 
                 GUILayout.Space(6f);
                 GUILayout.Label("SELECTED PART", _sectionStyle);
@@ -3069,7 +3070,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int i = 0; i < n; i++)
             {
                 order[i] = i;
-                ranks[i] = set.Slots[i].DrawRank;
+                ranks[i] = PreviewDrawRank(ref set, i, sampleTime); // draw-order keys
             }
             System.Array.Sort(ranks, order);
 
@@ -3112,7 +3113,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     // The flat cell is the rigid picture. The bent mesh is drawn after EndClip,
                     // otherwise this texture is flushed on top of it and the drag looks frozen.
                     if (!lattice.HasMesh)
-                        DrawPartsSheetCell(tex, sheet, sheet.Columns, sheet.Rows, app.CellIndex, r, tint);
+                        DrawPartsSheetCell(tex, sheet, sheet.Columns, sheet.Rows, app.CellIndex, r,
+                            PreviewTint(ref set, i, sampleTime, tint)); // colour keys
                 }
                 else if (drawArt)
                 {
@@ -4853,7 +4855,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 for (int i = 0; i < n; i++)
                 {
                     order[i] = i;
-                    ranks[i] = -blob.Value.Slots[i].DrawRank; // front-first hit
+                    ranks[i] = -PreviewDrawRank(ref blob.Value, i, _partsPreviewTime); // front-first hit
                 }
                 System.Array.Sort(ranks, order);
                 for (int o = 0; o < order.Length; o++)

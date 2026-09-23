@@ -264,7 +264,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     for (int i = 0; i < n; i++)
                     {
                         order[i] = i;
-                        ranks[i] = blob.Value.Slots[i].DrawRank;
+                        ranks[i] = PreviewDrawRank(ref blob.Value, i, _partsPreviewTime);
                     }
                     System.Array.Sort(ranks, order);
                     for (int o = 0; o < order.Length; o++)
@@ -289,7 +289,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                         bool fy = poses[i].Scale.y < 0f;
                         if (fx || fy)
                             GUIUtility.ScaleAroundPivot(new Vector2(fx ? -1f : 1f, fy ? -1f : 1f), joint);
-                        DrawPartsWarpedSprite(tex, sheet, app.CellIndex, r, lattice, Color.white);
+                        DrawPartsWarpedSprite(tex, sheet, app.CellIndex, r, lattice,
+                            PreviewTint(ref blob.Value, i, _partsPreviewTime, Color.white));
                         GUI.matrix = prev;
                     }
                 }
