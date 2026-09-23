@@ -6,7 +6,53 @@ namespace InvertLab.Sprites.DOTS
     public static class SpriteEase
     {
         public static bool IsValidMode(byte mode)
-            => mode <= (byte)SpriteEaseMode.None;
+            => mode <= (byte)SpriteEaseMode.Bezier;
+
+        /// <summary>
+        /// Cubic Bezier ease through (0,0), (x1,y1), (x2,y2), (1,1) - <paramref name="curve"/> = (x1, y1, x2, y2),
+        /// like CSS cubic-bezier. x handles are kept in 0..1 so the curve stays a function of time; y may overshoot.
+        /// </summary>
+        public static float EvaluateBezier(float4 curve, float t)
+        {
+            t = math.saturate(t);
+            float x1 = math.saturate(curve.x), x2 = math.saturate(curve.z);
+            float y1 = curve.y, y2 = curve.w;
+            // Solve x(s) = t: Newton from s = t, bisection as the fallback.
+            float s = t;
+            for (int i = 0; i < 8; i++)
+            {
+                float x = BezierAt(x1, x2, s) - t;
+                float dx = BezierSlope(x1, x2, s);
+                if (math.abs(x) < 1e-6f)
+                    return BezierAt(y1, y2, s);
+                if (math.abs(dx) < 1e-6f)
+                    break;
+                s = math.saturate(s - x / dx);
+            }
+            float lo = 0f, hi = 1f;
+            s = t;
+            for (int i = 0; i < 24; i++)
+            {
+                float x = BezierAt(x1, x2, s);
+                if (math.abs(x - t) < 1e-6f)
+                    break;
+                if (x < t) lo = s; else hi = s;
+                s = (lo + hi) * 0.5f;
+            }
+            return BezierAt(y1, y2, s);
+        }
+
+        static float BezierAt(float p1, float p2, float s)
+        {
+            float u = 1f - s;
+            return 3f * u * u * s * p1 + 3f * u * s * s * p2 + s * s * s;
+        }
+
+        static float BezierSlope(float p1, float p2, float s)
+        {
+            float u = 1f - s;
+            return 3f * u * u * p1 + 6f * u * s * (p2 - p1) + 3f * s * s * (1f - p2);
+        }
 
         public static float Evaluate(SpriteEaseMode mode, float t)
             => Evaluate(mode, t, false);

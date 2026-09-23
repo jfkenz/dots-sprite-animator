@@ -74,6 +74,14 @@ namespace InvertLab.Sprites.DOTS
         public int AppearanceIndex;
         /// <summary>Per-vertex offsets from the slot mesh. Empty = setup mesh.</summary>
         public FixedList512Bytes<float2> Deform;
+        /// <summary>1 = <see cref="Color"/> is a colour key (tint, alpha).</summary>
+        public byte HasColor;
+        public float4 Color;
+        /// <summary>1 = <see cref="DrawOrder"/> is a draw-rank key (held until the next one).</summary>
+        public byte HasDrawOrder;
+        public int DrawOrder;
+        /// <summary>Bezier handles (x1, y1, x2, y2) when EaseMode is Bezier.</summary>
+        public float4 Curve;
     }
 
     public struct SpritePartAppearanceBlob
@@ -143,6 +151,11 @@ namespace InvertLab.Sprites.DOTS
             /// <summary>Empty = hold (-1). Unknown ids also hold.</summary>
             public string AppearanceId;
             public FixedList512Bytes<float2> Deform;
+            public bool HasColor;
+            public float4 Color;
+            public bool HasDrawOrder;
+            public int DrawOrder;
+            public float4 Curve;
         }
 
         public struct TrackInput
@@ -426,6 +439,11 @@ namespace InvertLab.Sprites.DOTS
                     EaseMode = ease,
                     AppearanceIndex = appearanceIndex,
                     Deform = k.Deform,
+                    HasColor = (byte)(k.HasColor ? 1 : 0),
+                    Color = k.HasColor ? k.Color : new float4(1f),
+                    HasDrawOrder = (byte)(k.HasDrawOrder ? 1 : 0),
+                    DrawOrder = k.DrawOrder,
+                    Curve = math.all(k.Curve == float4.zero) ? new float4(0.33f, 0f, 0.67f, 1f) : k.Curve,
                 }));
             }
             list.Sort((a, b) =>

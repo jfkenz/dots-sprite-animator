@@ -118,7 +118,29 @@ namespace InvertLab.Sprites.DOTS
                     {
                         int si = slot.ValueRO.SlotIndex;
                         if (si >= 0 && si < blob.Value.Slots.Length)
+                        {
                             rank = blob.Value.Slots[si].DrawRank;
+                            // Clip keys: draw order (held) and colour (tint / fade) on the current clip.
+                            if (em.HasComponent<SpritePartsPlayer>(root))
+                            {
+                                var player = em.GetComponentData<SpritePartsPlayer>(root);
+                                int keyed = SpritePartsSampler.SampleDrawOrder(ref blob.Value, player.ClipIndex, si, player.TimeSeconds);
+                                if (keyed >= 0)
+                                    rank = keyed;
+                                if (em.HasComponent<SpritePartKeyedTint>(entity))
+                                {
+                                    SpritePartsSampler.SampleColor(ref blob.Value, player.ClipIndex, si, player.TimeSeconds, out var color);
+                                    if (player.PreviousClipIndex >= 0 && player.BlendDuration > 0f
+                                        && player.BlendElapsed < player.BlendDuration)
+                                    {
+                                        SpritePartsSampler.SampleColor(ref blob.Value, player.PreviousClipIndex, si,
+                                            player.PreviousTimeSeconds, out var previous);
+                                        color = math.lerp(previous, color, math.saturate(player.BlendElapsed / player.BlendDuration));
+                                    }
+                                    em.SetComponentData(entity, new SpritePartKeyedTint { Value = color });
+                                }
+                            }
+                        }
                     }
                 }
                 int drawIndex = SpritePartsPlayback.DrawIndex(order, rank);

@@ -169,6 +169,14 @@ namespace InvertLab.Sprites.DOTS
         /// Non-empty must be a profile PartsAppearances id (sheet index + cell already on profile).
         /// </summary>
         public string AppearanceId = string.Empty;
+        /// <summary>Colour key: tints the part (alpha fades it). Colour keys blend with each other only.</summary>
+        public bool HasColor;
+        public Color Color = Color.white;
+        /// <summary>Draw-order key: the part's draw rank from this key on (held, no blending).</summary>
+        public bool HasDrawOrder;
+        public int DrawOrder;
+        /// <summary>Bezier handles (x1, y1, x2, y2) used when <see cref="EaseMode"/> is Bezier.</summary>
+        public Vector4 Curve = new Vector4(0.33f, 0f, 0.67f, 1f);
     }
 
     /// <summary>

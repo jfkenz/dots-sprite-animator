@@ -313,6 +313,7 @@ namespace InvertLab.Sprites.DOTS
                 Bindings = SystemAPI.GetComponentLookup<SpriteSheetBinding>(true),
                 Registered = SystemAPI.GetComponentLookup<SpriteSheetRegistered>(true),
                 PartDepths = SystemAPI.GetComponentLookup<SpritePartRenderDepth>(true),
+                KeyedTints = SystemAPI.GetComponentLookup<SpritePartKeyedTint>(true),
                 Lattices = SystemAPI.GetComponentLookup<SpritePartLattice>(true),
                 WarpScratch = SpriteRenderResources.WarpScratch,
                 WarpUvScratch = SpriteRenderResources.WarpUvScratch,
@@ -519,6 +520,7 @@ namespace InvertLab.Sprites.DOTS
             [ReadOnly] public ComponentLookup<SpriteSheetBinding> Bindings;
             [ReadOnly] public ComponentLookup<SpriteSheetRegistered> Registered;
             [ReadOnly] public ComponentLookup<SpritePartRenderDepth> PartDepths;
+            [ReadOnly] public ComponentLookup<SpritePartKeyedTint> KeyedTints;
             [ReadOnly] public ComponentLookup<SpritePartLattice> Lattices;
             [NativeDisableParallelForRestriction] public NativeArray<float2> WarpScratch;
             [NativeDisableParallelForRestriction] public NativeArray<float2> WarpUvScratch;
@@ -640,7 +642,7 @@ namespace InvertLab.Sprites.DOTS
                     FrameTRS = new float4(frame.Scale.x, frame.Scale.y, math.radians(frameRotation), LayoutXy != 0 ? 1f : 0f),
                     Flip = new float4(flip.X, flip.Y, flip.ResolvedPivot.x, flip.ResolvedPivot.y),
                     Transform2 = transform2,
-                    Color = tint.Value,
+                    Color = KeyedTints.HasComponent(entity) ? tint.Value * KeyedTints[entity].Value : tint.Value,
                     WarpMeta = new float4(warpVerts, i, warpIndices, 0f),
                 };
             }

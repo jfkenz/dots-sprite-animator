@@ -109,6 +109,7 @@ namespace InvertLab.Sprites.DOTS
                 if (slot.Hidden != 0)
                     em.SetComponentEnabled<SpriteAnimEnabled>(part, false);
                 em.AddComponentData(part, new SpriteTint { Value = tint4 });
+                em.AddComponentData(part, new SpritePartKeyedTint { Value = new float4(1f) });
                 em.AddComponentData(part, new SpriteFlip { X = 0, Y = 0, Pivot = new float2(0.5f, 0.5f) });
 
                 int appIndex = slot.DefaultAppearanceIndex;

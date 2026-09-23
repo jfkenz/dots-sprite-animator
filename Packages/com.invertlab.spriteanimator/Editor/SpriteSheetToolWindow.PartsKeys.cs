@@ -219,6 +219,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                         Scale = key.Scale,
                         Deform = key.Deform == null ? null : (Vector2[])key.Deform.Clone(),
                         EaseMode = key.EaseMode,
+                        HasColor = key.HasColor,
+                        Color = key.Color,
+                        HasDrawOrder = key.HasDrawOrder,
+                        DrawOrder = key.DrawOrder,
+                        Curve = key.Curve,
                         AppearanceId = key.AppearanceId ?? string.Empty,
                     };
                     _partsKeyClipboard.Add((

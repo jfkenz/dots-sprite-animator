@@ -243,6 +243,7 @@ namespace InvertLab.Sprites.DOTS
                     {
                         Value = new float4(authoring.Tint.r, authoring.Tint.g, authoring.Tint.b, authoring.Tint.a),
                     });
+                    AddComponent(part, new SpritePartKeyedTint { Value = new float4(1f) });
                     AddComponent(part, new SpriteFlip
                     {
                         X = 0,

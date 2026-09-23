@@ -71,6 +71,15 @@ namespace InvertLab.Sprites.DOTS
         public int SheetTableIndex;
     }
 
+    /// <summary>
+    /// Clip colour keys for this part (white when none). The renderer multiplies it into <see cref="SpriteTint"/>,
+    /// so gameplay tints and tint tweens keep working on top.
+    /// </summary>
+    public struct SpritePartKeyedTint : IComponentData
+    {
+        public float4 Value;
+    }
+
     /// <summary>Render-only depth consumed by CPU instance pack / bounds.</summary>
     public struct SpritePartRenderDepth : IComponentData
     {

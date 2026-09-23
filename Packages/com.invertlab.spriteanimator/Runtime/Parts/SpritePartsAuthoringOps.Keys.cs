@@ -206,6 +206,12 @@ namespace InvertLab.Sprites.DOTS
                 Rotation = src.Rotation,
                 Scale = SanitizeScale(src.Scale),
                 EaseMode = src.EaseMode,
+                Deform = src.Deform == null ? null : (Vector2[])src.Deform.Clone(),
+                HasColor = src.HasColor,
+                Color = src.Color,
+                HasDrawOrder = src.HasDrawOrder,
+                DrawOrder = src.DrawOrder,
+                Curve = src.Curve,
                 AppearanceId = src.AppearanceId ?? string.Empty,
             };
         }

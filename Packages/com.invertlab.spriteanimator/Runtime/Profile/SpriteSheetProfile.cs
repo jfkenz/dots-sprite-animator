@@ -43,6 +43,8 @@ namespace InvertLab.Sprites.DOTS
         BounceOut = 34,
         BounceInOut = 35,
         None = 36,
+        /// <summary>Custom curve: the key's own Bezier handles (Parts keys, <c>SpritePartsKeyDef.Curve</c>).</summary>
+        Bezier = 37,
     }
 
     public enum SpriteSocketPathMode : byte

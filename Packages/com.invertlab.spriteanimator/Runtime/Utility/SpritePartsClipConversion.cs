@@ -183,6 +183,11 @@ namespace InvertLab.Sprites.DOTS
                             EaseMode = key.EaseMode,
                             AppearanceId = appearanceId,
                             Deform = SpritePartsLattice.DeformFromArray(key.Deform, key.Deform?.Length ?? 0),
+                            HasColor = key.HasColor,
+                            Color = new float4(key.Color.r, key.Color.g, key.Color.b, key.Color.a),
+                            HasDrawOrder = key.HasDrawOrder,
+                            DrawOrder = key.DrawOrder,
+                            Curve = new float4(key.Curve.x, key.Curve.y, key.Curve.z, key.Curve.w),
                         };
                     }
                     kept.Add(new SpritePartsSetBuilder.TrackInput

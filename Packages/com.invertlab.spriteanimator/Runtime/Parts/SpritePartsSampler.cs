@@ -98,7 +98,7 @@ namespace InvertLab.Sprites.DOTS
             ref var b = ref track.Keys[i1];
             float span = b.Time - a.Time;
             float u = span > 1e-8f ? (time - a.Time) / span : 0f;
-            u = SpriteEase.Evaluate((SpriteEaseMode)a.EaseMode, u);
+            u = EaseKey(ref a, u);
             pose.Position = math.lerp(a.Position, b.Position, u);
             pose.Scale = math.lerp(a.Scale, b.Scale, u);
             pose.Rotation = LerpAngleShortest(a.Rotation, b.Rotation, u);
@@ -154,6 +154,88 @@ namespace InvertLab.Sprites.DOTS
                 return lastInClip;
             return -1;
         }
+        /// <summary>The key's ease for the span after it: preset, or its own Bezier handles.</summary>
+        public static float EaseKey(ref SpritePartsKeyBlob key, float u)
+            => key.EaseMode == (byte)SpriteEaseMode.Bezier
+                ? SpriteEase.EvaluateBezier(key.Curve, u)
+                : SpriteEase.Evaluate((SpriteEaseMode)key.EaseMode, u);
+
+        /// <summary>
+        /// Keyed colour of a slot: colour keys blend with each other only (keys without colour are skipped),
+        /// held before the first and after the last. False (white) when the clip has no colour key for it.
+        /// </summary>
+        public static bool SampleColor(ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds, out float4 color)
+        {
+            color = new float4(1f);
+            if (clipIndex < 0 || clipIndex >= set.Clips.Length)
+                return false;
+            ref var clip = ref set.Clips[clipIndex];
+            int trackIndex = TrackIndexForSlot(ref clip, slotIndex);
+            if (trackIndex < 0)
+                return false;
+            ref var track = ref clip.Tracks[trackIndex];
+            float time = WrapTime(timeSeconds, clip.Duration, clip.WrapMode);
+            int before = -1, after = -1;
+            for (int i = 0; i < track.Keys.Length; i++)
+            {
+                if (track.Keys[i].HasColor == 0)
+                    continue;
+                if (track.Keys[i].Time <= time)
+                    before = i;
+                else
+                {
+                    after = i;
+                    break;
+                }
+            }
+            if (before < 0 && after < 0)
+                return false;
+            if (before < 0)
+            {
+                color = track.Keys[after].Color;
+                return true;
+            }
+            ref var a = ref track.Keys[before];
+            if (after < 0)
+            {
+                color = a.Color;
+                return true;
+            }
+            ref var b = ref track.Keys[after];
+            float span = b.Time - a.Time;
+            float u = span > 1e-8f ? (time - a.Time) / span : 0f;
+            color = math.lerp(a.Color, b.Color, EaseKey(ref a, u));
+            return true;
+        }
+
+        /// <summary>
+        /// Keyed draw rank of a slot: the last draw-order key at or before the time (held). Loop clips carry the
+        /// last one from the previous pass. -1 = no key, use the slot's own rank.
+        /// </summary>
+        public static int SampleDrawOrder(ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds)
+        {
+            if (clipIndex < 0 || clipIndex >= set.Clips.Length)
+                return -1;
+            ref var clip = ref set.Clips[clipIndex];
+            int trackIndex = TrackIndexForSlot(ref clip, slotIndex);
+            if (trackIndex < 0)
+                return -1;
+            ref var track = ref clip.Tracks[trackIndex];
+            float time = WrapTime(timeSeconds, clip.Duration, clip.WrapMode);
+            int best = -1, lastInClip = -1;
+            for (int i = 0; i < track.Keys.Length; i++)
+            {
+                if (track.Keys[i].HasDrawOrder == 0)
+                    continue;
+                lastInClip = track.Keys[i].DrawOrder;
+                if (track.Keys[i].Time <= time + 1e-6f)
+                    best = track.Keys[i].DrawOrder;
+            }
+            if (best >= 0)
+                return best;
+            return clip.WrapMode != (byte)SpritePartsWrap.Once ? lastInClip : -1;
+        }
+
         public static float WrapTime(float time, float duration, byte wrapMode)
         {
             if (!(duration > 0f) || !math.isfinite(duration))
