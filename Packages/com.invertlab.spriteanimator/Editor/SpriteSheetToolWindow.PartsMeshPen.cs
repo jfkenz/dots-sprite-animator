@@ -22,6 +22,10 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         int _partsMeshPen = -1;
+        bool _partsMeshAutoPolygons;
+        string _partsMeshDraftHint;
+        /// <summary>Draft vertices that Make Polygons would drop (drawn yellow).</summary>
+        readonly List<int> _partsMeshOutsideLoop = new List<int>();
         bool _partsCreateClickPending;
         bool _partsCreateClickShift;
         [SerializeField] PartsCreateMode _partsCreateMode = PartsCreateMode.VertexEdge;
@@ -73,7 +77,60 @@ namespace InvertLab.Sprites.DOTS.Editor
             slot.Mesh = work;
             SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
             SaveDirty();
+            // The caller still sets selection / chain in draft indices; polygons follow on the next GUI pass.
+            _partsMeshAutoPolygons = true;
             return true;
+        }
+
+        /// <summary>
+        /// Makes the polygons as soon as every vertex sits inside a closed loop of edges, so the mesh works
+        /// without pressing Make Polygons. Never removes anything: with a vertex outside the loop the
+        /// drawing stays as it is. Part of the same undo step as the edit before it.
+        /// </summary>
+        void AutoMakeMeshPolygons()
+        {
+            _partsMeshAutoPolygons = false;
+            _partsMeshDraftHint = null;
+            _partsMeshOutsideLoop.Clear();
+            var slot = MeshEditSlot();
+            var mesh = slot?.Mesh;
+            if (mesh == null || !SpritePartsMeshOps.IsDraft(mesh) || mesh.VertexCount < 3)
+                return;
+            var work = mesh.Clone();
+            if (!SpritePartsMeshOps.TryMakePolygons(work, out var remap, out string why))
+            {
+                _partsMeshDraftHint = mesh.Edges != null && mesh.Edges.Length >= 6 ? why : null;
+                return;
+            }
+            if (System.Array.IndexOf(remap, -1) >= 0)
+            {
+                for (int i = 0; i < remap.Length; i++)
+                {
+                    if (remap[i] < 0)
+                        _partsMeshOutsideLoop.Add(i);
+                }
+                _partsMeshDraftHint = _partsMeshOutsideLoop.Count + (_partsMeshOutsideLoop.Count == 1 ? " vertex is" : " vertices are")
+                    + " outside the closed loop (yellow). Join or delete them, or Make Polygons removes them.";
+                return;
+            }
+            _partsMeshDraftHint = null;
+            RecordPartsUndo("Make Polygons");
+            slot.Mesh = work;
+            SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
+            _partsMeshPen = (uint)_partsMeshPen < (uint)remap.Length ? remap[_partsMeshPen] : -1;
+            for (int i = _partsWarpSelection.Count - 1; i >= 0; i--)
+            {
+                int v = _partsWarpSelection[i];
+                if ((uint)v < (uint)remap.Length)
+                    _partsWarpSelection[i] = remap[v];
+                else
+                    _partsWarpSelection.RemoveAt(i);
+            }
+            _partsWarpIndex = (uint)_partsWarpIndex < (uint)remap.Length ? remap[_partsWarpIndex] : -1;
+            _partsWarpHover = -1;
+            SaveDirty();
+            _status = (_status ?? string.Empty) + " Polygons made: " + work.Triangles.Length / 3 + " triangles.";
+            Repaint();
         }
 
         /// <summary>

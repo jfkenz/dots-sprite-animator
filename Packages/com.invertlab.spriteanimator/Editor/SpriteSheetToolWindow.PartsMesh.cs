@@ -407,8 +407,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.EndGUI();
 
             if (virtualQuad)
-                GUI.Label(new Rect(joint.x - 90f, rect.yMax + 6f, 260f, 16f),
-                    "Drag a corner to make a 4-vertex mesh. Double-click to edit the mesh.", _mutedStyle);
+            {
+                bool drawing = slot.Mesh != null && SpritePartsMeshOps.IsDraft(slot.Mesh) && slot.Mesh.VertexCount > 0;
+                GUI.Label(new Rect(joint.x - 90f, rect.yMax + 6f, 420f, 16f), drawing
+                    ? "Mesh drawing has no polygons yet. Double-click: Edit Mesh, close the loop or Make Polygons."
+                    : "Drag a corner to make a 4-vertex mesh. Double-click to edit the mesh.", _mutedStyle);
+            }
         }
 
         // ------------------------------------------------------------------ Warp tool (animate deform)
@@ -508,6 +512,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (selected == null || SpritePartIdUtility.Canonical(selected.SlotId) != SpritePartIdUtility.Canonical(slotId))
                 SelectPartsCanvasClicked(slotId, false, false, false);
             SetWarpSelectionSlot(slot.SlotId);
+            if (slot.Mesh != null && SpritePartsMeshOps.IsDraft(slot.Mesh) && slot.Mesh.VertexCount > 0)
+            {
+                // Never swap a drawing in progress for the 4-corner mesh.
+                _status = (slot.Name ?? slot.SlotId) + ": the mesh has no polygons yet. Double-click to open Edit Mesh and close the loop / Make Polygons.";
+                return;
+            }
 
             BeginPartsDragUndo("Deform Mesh");
             // A part without a mesh shows its image corners; the mesh is made on the first real move.
@@ -792,6 +802,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (slot.Mesh == null)
                 slot.Mesh = new SpritePartMeshDef();
             _partsMeshTool = slot.Mesh.HasMesh ? PartsMeshTool.Modify : PartsMeshTool.Create;
+            _partsMeshAutoPolygons = true; // an earlier drawing that is already closed gets its polygons
             _status = slot.Mesh.HasMesh
                 ? "Edit Mesh. 1 Modify, 2 Create, 3 Delete. Esc returns."
                 : "No mesh yet. Create: click to add vertices joined by edges, close the loop, then Make Polygons. Or press New / Trace.";
@@ -928,6 +939,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawPartsMeshEdit(Rect canvas)
         {
+            if (_partsMeshAutoPolygons && !_partsMeshDrag && !_partsWarpBox)
+                AutoMakeMeshPolygons();
             var slot = MeshEditSlot();
             string name = slot != null && !string.IsNullOrEmpty(slot.Name) ? slot.Name : _partsMeshEditSlotId;
             var banner = PartsMeshBanner(canvas);
@@ -1014,7 +1027,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 Vector2 p = MeshUvToGui(sprite, mesh.Vertices[i]);
                 bool selected = _partsWarpSelection.Contains(i);
-                var color = selected ? new Color(0.2f, 0.95f, 0.35f, 1f) : new Color(0.9f, 0.2f, 0.15f, 1f);
+                var color = selected ? new Color(0.2f, 0.95f, 0.35f, 1f)
+                    : _partsMeshOutsideLoop.Contains(i) ? new Color(1f, 0.85f, 0.1f, 1f)
+                    : new Color(0.9f, 0.2f, 0.15f, 1f);
                 float s = i < hull ? 7f : 6f;
                 EditorGUI.DrawRect(new Rect(p.x - s * 0.5f, p.y - s * 0.5f, s, s), color);
                 if (i == _partsWarpHover)
@@ -1022,7 +1037,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             string stats = mesh != null && mesh.HasMesh
                 ? n + " vertices   " + hull + " hull   " + mesh.Triangles.Length / 3 + " triangles"
-                : n > 0 ? n + " vertices   " + (mesh.Edges?.Length ?? 0) / 2 + " edges   no polygons yet: close a loop, then Make Polygons"
+                : n > 0 ? n + " vertices   " + (mesh.Edges?.Length ?? 0) / 2 + " edges   no polygons yet: "
+                    + (_partsMeshDraftHint ?? "close a loop around every vertex and the polygons appear.")
                 : "No mesh. The part draws as a rectangle.";
             GUI.Label(new Rect(sprite.x, sprite.yMax + 6f, sprite.width, 16f), stats, _mutedStyle);
         }
@@ -1294,6 +1310,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 for (int k = 0; k < indices.Count; k++)
                     next.Vertices[indices[k]] = new Vector2(Mathf.Clamp01(positions[k].x), Mathf.Clamp01(positions[k].y));
                 slot.Mesh = next;
+                _partsMeshAutoPolygons = true; // a moved vertex may now sit inside the loop
             }
             else if (SpritePartsMeshOps.TrySetVertices(next, indices, positions))
                 slot.Mesh = next;
