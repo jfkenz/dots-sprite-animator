@@ -10,6 +10,7 @@ namespace InvertLab.Sprites.DOTS.Editor
     // its End part. It follows its parent like any part and can be switched on / off with clip keys.
     //   + Clip (tree)   a clip shape fitted to the selected part's image, drawn just below it, End = that part
     //   canvas (Rig)    drag a point; click an edge to add one; right-click a point to delete it
+    //   canvas (Animate) drag a point to key the outline's deform at the playhead (the setup outline stays)
     //   CLIP SHAPE      End part, Fit to End, reset
     public sealed partial class SpriteSheetToolWindow
     {
@@ -60,8 +61,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             return new[] { C(-0.5f, -0.5f), C(0.5f, -0.5f), C(0.5f, 0.5f), C(-0.5f, 0.5f) };
         }
 
-        /// <summary>The shape on the canvas: a pink outline (points shown when selected).</summary>
-        void DrawPartsClipShape(Rect canvas, float4x4 localToRoot, SpritePartSlotDef def, bool selected)
+        /// <summary>The shape on the canvas: a pink outline (points shown when selected), with its keyed deform.</summary>
+        void DrawPartsClipShape(Rect canvas, float4x4 localToRoot, SpritePartSlotDef def, bool selected,
+            in FixedList512Bytes<float2> offsets = default)
         {
             if (Event.current.type != EventType.Repaint || def.ClipPolygon == null || def.ClipPolygon.Length < 2)
                 return;
@@ -69,8 +71,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             var pts = new Vector3[n + 1];
             for (int i = 0; i < n; i++)
             {
-                var p = def.ClipPolygon[i];
-                pts[i] = WorldToCanvas(canvas, math.mul(localToRoot, new float4(p.x, p.y, 0f, 1f)).xy);
+                float2 p = (float2)def.ClipPolygon[i] + (offsets.Length == n ? offsets[i] : float2.zero);
+                pts[i] = WorldToCanvas(canvas, math.mul(localToRoot, new float4(p, 0f, 1f)).xy);
             }
             pts[n] = pts[0];
             Handles.BeginGUI();
@@ -93,9 +95,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         /// <summary>The selected clip shape's matrix at the playhead (root space).</summary>
-        bool TryClipShapeMatrix(string slotId, out float4x4 m)
+        bool TryClipShapeMatrix(string slotId, out float4x4 m) => TryClipShapeMatrix(slotId, 0, out m, out _);
+
+        /// <summary>The matrix plus the outline's keyed deform offsets at the playhead (<paramref name="points"/> of them; null = none).</summary>
+        bool TryClipShapeMatrix(string slotId, int points, out float4x4 m, out Vector2[] offsets)
         {
             m = float4x4.identity;
+            offsets = null;
             if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), _partsPreviewTime,
                     Allocator.Temp, out var blob, out var poses, out var matrices, out _))
                 return false;
@@ -106,6 +112,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (idx < 0 || idx >= matrices.Length)
                     return false;
                 m = matrices[idx];
+                if (points > 0 && SpritePartsSampler.SampleDeformOffsets(ref blob.Value, PartsEvaluationClipIndex(), idx, _partsPreviewTime,
+                        points, out var keyed))
+                {
+                    offsets = new Vector2[points];
+                    for (int i = 0; i < points; i++)
+                        offsets[i] = keyed[i];
+                }
                 return true;
             }
             finally
@@ -114,11 +127,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
-        /// <summary>Canvas mouse on the selected clip shape's points (Rig). True when it used the event.</summary>
+        /// <summary>
+        /// Canvas mouse on the selected clip shape's points: Rig edits the setup outline, Animate keys its deform at
+        /// the playhead. True when it used the event.
+        /// </summary>
         bool HandleClipShapeInput(Rect canvas, Event evt)
         {
             var slot = CurrentPartsSlot;
-            if (slot == null || !slot.IsClipShape || slot.ClipPolygon == null || _partsMode != SpritePartsStudioMode.Rig
+            bool animate = _partsMode == SpritePartsStudioMode.Animate && CurrentPartsClip != null;
+            if (slot == null || !slot.IsClipShape || slot.ClipPolygon == null || (_partsMode != SpritePartsStudioMode.Rig && !animate)
                 || slot.EditorLocked || evt.alt)
             {
                 _clipPointDrag = -1;
@@ -127,10 +144,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             int control = GUIUtility.GetControlID(FocusType.Passive);
             if (_clipPointDrag >= 0 && GUIUtility.hotControl == _clipDragControl)
             {
-                if (evt.rawType == EventType.MouseDrag && TryClipShapeMatrix(slot.SlotId, out var dm))
+                if (evt.rawType == EventType.MouseDrag && TryClipShapeMatrix(slot.SlotId, slot.ClipPolygon.Length, out var dm, out var keyed))
                 {
                     float2 local = math.mul(math.inverse(dm), new float4(CanvasToWorld(canvas, evt.mousePosition), 0f, 1f)).xy;
-                    if ((uint)_clipPointDrag < (uint)slot.ClipPolygon.Length)
+                    if (animate && (uint)_clipPointDrag < (uint)slot.ClipPolygon.Length)
+                    {
+                        var offsets = keyed ?? new Vector2[slot.ClipPolygon.Length];
+                        offsets[_clipPointDrag] = new Vector2(local.x, local.y) - slot.ClipPolygon[_clipPointDrag];
+                        SpritePartsAuthoringOps.SetDeformKey(_profile, _partsSelectedClip, slot.SlotId, _partsPreviewTime, offsets);
+                    }
+                    else if ((uint)_clipPointDrag < (uint)slot.ClipPolygon.Length)
                         slot.ClipPolygon[_clipPointDrag] = new Vector2(local.x, local.y);
                     if (_asset != null)
                         EditorUtility.SetDirty(_asset);
@@ -150,12 +173,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             bool down = evt.type == EventType.MouseDown && (evt.button == 0 || evt.button == 1);
             bool context = evt.type == EventType.ContextClick;
-            if ((!down && !context) || !canvas.Contains(evt.mousePosition) || !TryClipShapeMatrix(slot.SlotId, out var m))
+            if ((!down && !context) || !canvas.Contains(evt.mousePosition)
+                || !TryClipShapeMatrix(slot.SlotId, slot.ClipPolygon.Length, out var m, out var shown))
                 return false;
             int n = slot.ClipPolygon.Length;
             var gui = new Vector2[n];
             for (int i = 0; i < n; i++)
-                gui[i] = WorldToCanvas(canvas, math.mul(m, new float4(slot.ClipPolygon[i].x, slot.ClipPolygon[i].y, 0f, 1f)).xy);
+            {
+                Vector2 p = slot.ClipPolygon[i] + (shown != null ? shown[i] : Vector2.zero);
+                gui[i] = WorldToCanvas(canvas, math.mul(m, new float4(p.x, p.y, 0f, 1f)).xy);
+            }
             int point = -1;
             float best = 8f * 8f;
             for (int i = 0; i < n; i++)
@@ -167,6 +194,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     point = i;
                 }
             }
+            if (animate && (context || evt.button == 1 || point < 0))
+                return false; // Animate only moves points (adding / deleting changes the setup outline)
             if (context || evt.button == 1)
             {
                 if (point < 0)
@@ -206,7 +235,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             else
             {
-                BeginPartsDragUndo("Move Clip Point");
+                BeginPartsDragUndo(animate ? "Key Clip Deform" : "Move Clip Point");
                 FlushPartsDragUndo();
             }
             _clipPointDrag = point;

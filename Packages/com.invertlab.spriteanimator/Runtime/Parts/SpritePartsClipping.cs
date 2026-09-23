@@ -108,9 +108,13 @@ namespace InvertLab.Sprites.DOTS
                     if (shape >= 0)
                     {
                         ref var clip = ref set.Slots[shape];
+                        // Deform keys move the outline's points (its convex split stays).
+                        bool deformed = SpritePartsSampler.SampleDeformOffsets(ref set, clipIndex, shape, time, clip.ClipPolygon.Length,
+                            out var offsets);
                         var shapePoints = new FixedList512Bytes<float2>();
                         for (int v = 0; v < clip.ClipPolygon.Length && shapePoints.Length < shapePoints.Capacity; v++)
-                            shapePoints.Add(ToSlotQuad(clip.ClipPolygon[v], localToRoot[shape], toSlot, ref slot));
+                            shapePoints.Add(ToSlotQuad(clip.ClipPolygon[v] + (deformed ? offsets[v] : float2.zero),
+                                localToRoot[shape], toSlot, ref slot));
                         if (TryClip(subject, shapePoints, ref clip.MaskPieces, true, default, out var cut))
                         {
                             subject = cut;

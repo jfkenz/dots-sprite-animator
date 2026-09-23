@@ -3166,7 +3166,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     // Clip shapes have no image: their outline on the main pose only.
                     if (pickable)
-                        DrawPartsClipShape(canvas, matrices[i], boneDef, IsPartsBlobSlotSelected(ref set, i));
+                    {
+                        // Its keyed deform at this time, as the game clips with it.
+                        SpritePartsSampler.SampleDeformOffsets(ref set, PartsEvaluationClipIndex(), i, sampleTime,
+                            boneDef.ClipPolygon?.Length ?? 0, out var clipOffsets);
+                        DrawPartsClipShape(canvas, matrices[i], boneDef, IsPartsBlobSlotSelected(ref set, i), clipOffsets);
+                    }
                     continue;
                 }
                 if (boneDef != null && boneDef.IsPath)

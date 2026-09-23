@@ -279,6 +279,32 @@ namespace InvertLab.Sprites.DOTS
         /// Whether a clip shape clips at the time: the last clip key at or before it (held; loops carry the last one
         /// round). On (true) when the clip has no clip key for it.
         /// </summary>
+        /// <summary>
+        /// Keyed deform offsets for a slot without a mesh (a clip shape's outline, Spine deform keys on clipping
+        /// attachments): one per outline point, blended between the keys around the time. False when none are keyed.
+        /// </summary>
+        public static bool SampleDeformOffsets(ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds, int count,
+            out FixedList512Bytes<float2> offsets)
+        {
+            offsets = default;
+            if (clipIndex < 0 || clipIndex >= set.Clips.Length || count <= 0 || count > SpritePartsLattice.MaxVertices)
+                return false;
+            ref var clip = ref set.Clips[clipIndex];
+            int trackIndex = TrackIndexForSlot(ref clip, slotIndex);
+            if (trackIndex < 0)
+                return false;
+            ref var track = ref clip.Tracks[trackIndex];
+            float time = WrapTime(timeSeconds, clip.Duration, clip.WrapMode);
+            if (!Span(ref track, SpritePartsKeyChannel.Deform, time, out int a, out int b, out float u, out _))
+                return false;
+            bool hasA = track.Keys[a].Deform.Length == count, hasB = track.Keys[b].Deform.Length == count;
+            if (!hasA && !hasB)
+                return false;
+            for (int i = 0; i < count; i++)
+                offsets.Add(math.lerp(hasA ? track.Keys[a].Deform[i] : float2.zero, hasB ? track.Keys[b].Deform[i] : float2.zero, u));
+            return true;
+        }
+
         public static bool SampleClipActive(ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds)
         {
             if (clipIndex < 0 || clipIndex >= set.Clips.Length)

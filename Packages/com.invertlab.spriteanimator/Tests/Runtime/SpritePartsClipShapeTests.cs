@@ -5,7 +5,7 @@ using Unity.Mathematics;
 
 namespace InvertLab.Sprites.DOTS.Tests
 {
-    /// <summary>Clip shapes (Spine clipping attachments): range by draw order, End part, clip keys, concave outlines.</summary>
+    /// <summary>Clip shapes (Spine clipping attachments): range by draw order, End part, clip keys, concave outlines, deform.</summary>
     public sealed class SpritePartsClipShapeTests
     {
         static SpritePartsSetBuilder.SlotInput Part(string id, float2 pos, int rank)
@@ -113,6 +113,33 @@ namespace InvertLab.Sprites.DOTS.Tests
             };
             var lat = Evaluate(new[] { Shape(0, null, Square), Part("eye", new float2(1f, 0f), 1) }, clips, 0);
             Assert.IsFalse(lat[1].HasMesh, "Switched off: the eye is whole.");
+        }
+
+        [Test]
+        public void Deform_Keys_Move_The_Outline()
+        {
+            var shift = new FixedList512Bytes<float2>();
+            for (int i = 0; i < 4; i++)
+                shift.Add(new float2(0.5f, 0f));
+            var clips = new[]
+            {
+                new SpritePartsSetBuilder.ClipInput
+                {
+                    Name = "c", ClipId = "c", Duration = 1f, SpeedMultiplier = 1f,
+                    Tracks = new[]
+                    {
+                        new SpritePartsSetBuilder.TrackInput
+                        {
+                            SlotId = "clip",
+                            Keys = new[] { new SpritePartsSetBuilder.KeyInput { Time = 0f, Scale = new float2(1f, 1f), AppearanceId = string.Empty, Deform = shift } },
+                        },
+                    },
+                },
+            };
+            var still = Evaluate(new[] { Shape(0, null, Square), Part("eye", new float2(1f, 0f), 1) });
+            var moved = Evaluate(new[] { Shape(0, null, Square), Part("eye", new float2(1f, 0f), 1) }, clips, 0);
+            Assert.AreEqual(0.5f, Area(still[1]), 1e-4f);
+            Assert.AreEqual(0.75f, Area(moved[1]), 1e-4f, "The outline moved half a unit toward the eye.");
         }
 
         [Test]
