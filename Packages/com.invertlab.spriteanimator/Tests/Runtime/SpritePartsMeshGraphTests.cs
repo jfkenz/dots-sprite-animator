@@ -228,6 +228,31 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void MirrorMap_Vertical_And_Four_Way()
+        {
+            var mesh = SpritePartsMeshOps.CreateQuad();
+            SpritePartsMeshOps.Subdivide(mesh, null, out _, out _); // 3 x 3 grid
+            int At(float x, float y) => System.Array.FindIndex(mesh.Vertices, v => Vector2.Distance(v, new Vector2(x, y)) < 1e-4f);
+            int corner = At(0f, 0f), bottomMid = At(0.5f, 0f), centre = At(0.5f, 0.5f);
+
+            var vertical = SpritePartsMeshOps.BuildMirrorMap(mesh, 0.5f, 0.5f, SpritePartsMirrorMode.Vertical);
+            Assert.AreEqual(1, vertical.Partners[corner].Count);
+            Assert.AreEqual(At(0f, 1f), vertical.Partners[corner][0].vertex, "Vertical pairs bottom with top.");
+            Assert.AreEqual(new Vector2(1f, -1f), vertical.Partners[corner][0].flip);
+            Assert.IsTrue(vertical.LockY[At(0f, 0.5f)], "On the horizontal axis: stays on it.");
+
+            var both = SpritePartsMeshOps.BuildMirrorMap(mesh, 0.5f, 0.5f, SpritePartsMirrorMode.Both);
+            var partners = both.Partners[corner].ConvertAll(p => p.vertex);
+            CollectionAssert.AreEquivalent(new[] { At(1f, 0f), At(0f, 1f), At(1f, 1f) }, partners, "A corner has three mirrors.");
+            Assert.AreEqual(new Vector2(-1f, -1f), both.Partners[corner].Find(p => p.vertex == At(1f, 1f)).flip);
+            Assert.IsTrue(both.LockX[bottomMid]);
+            Assert.AreEqual(1, both.Partners[bottomMid].Count, "On the vertical axis: only its top / bottom twin.");
+            Assert.IsTrue(both.LockX[centre] && both.LockY[centre]);
+            Assert.AreEqual(0, both.Partners[centre].Count);
+            Assert.AreEqual(new Vector2(0f, 0.3f), both.Constrain(bottomMid, new Vector2(0.2f, 0.3f)));
+        }
+
+        [Test]
         public void MirrorCopy_Adds_Twins_And_Their_Edges()
         {
             var mesh = Draft(new Vector2(0.2f, 0.3f), new Vector2(0.3f, 0.6f), new Vector2(0.5f, 0.9f));

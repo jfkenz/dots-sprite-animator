@@ -5,50 +5,89 @@ using UnityEngine;
 
 namespace InvertLab.Sprites.DOTS.Editor
 {
-    // Mirror (symmetry) for meshes: a vertical axis in image space (0..1, default the image centre).
-    //   Live Mirror   moving a vertex moves its partner the mirrored way - Warp drags, brushes, FFD, Edit Mesh
-    //   Mirror Deform copy the deform of one side onto the other on the current key
-    //   Mirror Copy   (Edit Mesh) duplicate the selected vertices and their edges across the axis
-    // Partners are the vertices at each other's mirrored spot on the setup mesh.
+    // Mirror (symmetry) for meshes, in image space (0..1, default the image centre):
+    //   Horizontal    left / right across a vertical line
+    //   Vertical      top / bottom across a horizontal line
+    //   Both          four ways: a vertex's left/right, top/bottom and opposite-corner partners all follow
+    //   Live Mirror   moving a vertex moves its partners the mirrored way - Warp drags, brushes, FFD, Edit Mesh
+    //   Mirror Deform copy one side (or one quarter) of the deform onto the others on the current key
+    //   Mirror Copy   (Edit Mesh) duplicate the selected vertices and their edges across the axes
+    // Partners are the vertices at each other's mirrored spots on the setup mesh; a vertex on an axis stays on it.
     public sealed partial class SpriteSheetToolWindow
     {
         [SerializeField] bool _partsMirrorLive;
         [SerializeField] float _partsMirrorAxis = 0.5f;
+        [SerializeField] float _partsMirrorAxisY = 0.5f;
+        [SerializeField] SpritePartsMirrorMode _partsMirrorMode = SpritePartsMirrorMode.Horizontal;
         static readonly Color PartsMirrorColor = new Color(0.3f, 0.95f, 0.85f, 0.85f);
 
+        bool MirrorUsesX => _partsMirrorMode != SpritePartsMirrorMode.Vertical;
+        bool MirrorUsesY => _partsMirrorMode != SpritePartsMirrorMode.Horizontal;
+
+        SpritePartsMeshOps.MirrorMap MirrorMapFor(SpritePartMeshDef mesh)
+            => SpritePartsMeshOps.BuildMirrorMap(mesh, _partsMirrorAxis, _partsMirrorAxisY, _partsMirrorMode);
+
+        SpritePartsMeshOps.MirrorMap MirrorMapFor(string slotId)
+            => MirrorMapFor(SpritePartsAuthoringOps.FindSlot(_profile, slotId)?.Mesh);
+
+        /// <summary>One partner per vertex for Paste Mirrored: across the vertical line (the horizontal one in Vertical mode).</summary>
         int[] MirrorPartnersFor(string slotId)
         {
             var mesh = SpritePartsAuthoringOps.FindSlot(_profile, slotId)?.Mesh;
-            return mesh != null && mesh.VertexCount > 0 ? SpritePartsMeshOps.MirrorPartners(mesh, _partsMirrorAxis) : System.Array.Empty<int>();
+            if (mesh == null || mesh.VertexCount == 0)
+                return System.Array.Empty<int>();
+            bool vertical = _partsMirrorMode == SpritePartsMirrorMode.Vertical;
+            return SpritePartsMeshOps.MirrorPartners(mesh, _partsMirrorAxis, _partsMirrorAxisY, !vertical, vertical);
+        }
+
+        /// <summary>An offset pasted through <see cref="MirrorPartnersFor"/>: flipped, or kept on the axis for a vertex that is its own partner.</summary>
+        Vector2 MirrorPasteOffset(Vector2 off, bool self)
+        {
+            bool vertical = _partsMirrorMode == SpritePartsMirrorMode.Vertical;
+            if (vertical)
+                return new Vector2(off.x, self ? 0f : -off.y);
+            return new Vector2(self ? 0f : -off.x, off.y);
         }
 
         /// <summary>
-        /// Live Mirror on a deform: every vertex that moved hands the mirrored move to its partner (x flipped),
-        /// unless the partner moved too. Vertices on the axis only move up / down.
+        /// Live Mirror on a deform: every vertex that moved hands the mirrored move to its partners, unless a partner
+        /// moved too. Vertices on an axis only move along it.
         /// </summary>
         void MirrorLatticeChanges(string slotId, in SpritePartsLattice start, ref SpritePartsLattice lattice)
         {
             if (!_partsMirrorLive)
                 return;
-            var partner = MirrorPartnersFor(slotId);
-            int n = Mathf.Min(partner.Length, Mathf.Min(start.PointCount, lattice.PointCount));
-            var change = new float2[n];
-            for (int i = 0; i < n; i++)
-                change[i] = lattice.GetPoint(i) - start.GetPoint(i);
+            var map = MirrorMapFor(slotId);
+            int n = Mathf.Min(map.Count, Mathf.Min(start.PointCount, lattice.PointCount));
+            var change = new Vector2[n];
+            var moved = new bool[n];
             for (int i = 0; i < n; i++)
             {
-                if (math.lengthsq(change[i]) < 1e-12f)
+                float2 d = lattice.GetPoint(i) - start.GetPoint(i);
+                change[i] = new Vector2(d.x, d.y);
+                moved[i] = change[i].sqrMagnitude > 1e-12f;
+            }
+            for (int i = 0; i < n; i++)
+            {
+                if (!moved[i])
                     continue;
-                int p = partner[i];
-                if (p == i)
-                    lattice.SetPoint(i, start.GetPoint(i) + new float2(0f, change[i].y));
-                else if (p >= 0 && p < n && math.lengthsq(change[p]) < 1e-12f)
-                    lattice.SetPoint(p, start.GetPoint(p) + new float2(-change[i].x, change[i].y));
+                Vector2 c = map.Constrain(i, change[i]);
+                lattice.SetPoint(i, start.GetPoint(i) + new float2(c.x, c.y));
+                foreach (var (p, flip) in map.Partners[i])
+                {
+                    if (p >= n || moved[p])
+                        continue;
+                    Vector2 m = map.Constrain(p, Vector2.Scale(c, flip));
+                    lattice.SetPoint(p, start.GetPoint(p) + new float2(m.x, m.y));
+                }
             }
         }
 
-        /// <summary>Copies the deform of one side onto the other on the current key (<paramref name="leftToRight"/>: left wins).</summary>
-        void MirrorPartsDeform(bool leftToRight)
+        /// <summary>
+        /// Copies the deform of the source side onto its mirrors on the current key. <paramref name="fromLeft"/> /
+        /// <paramref name="fromTop"/>: which side is the source (null = that axis is not used).
+        /// </summary>
+        void MirrorPartsDeform(bool? fromLeft, bool? fromTop)
         {
             var slot = CurrentPartsSlot;
             if (slot?.Mesh == null || !slot.Mesh.HasMesh)
@@ -56,61 +95,80 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _status = "Mirror Deform needs a part with a mesh.";
                 return;
             }
-            var partner = MirrorPartnersFor(slot.SlotId);
+            var map = MirrorMapFor(slot.Mesh);
             var pose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
             var lattice = pose.Lattice;
-            int n = Mathf.Min(partner.Length, lattice.PointCount);
-            int pairs = 0;
+            int n = Mathf.Min(map.Count, lattice.PointCount);
+            bool InSource(int i)
+            {
+                Vector2 v = slot.Mesh.Vertices[i];
+                bool okX = fromLeft == null || (fromLeft.Value ? v.x <= _partsMirrorAxis + 1e-4f : v.x >= _partsMirrorAxis - 1e-4f);
+                bool okY = fromTop == null || (fromTop.Value ? v.y >= _partsMirrorAxisY - 1e-4f : v.y <= _partsMirrorAxisY + 1e-4f);
+                return okX && okY;
+            }
+            int written = 0;
             for (int i = 0; i < n; i++)
             {
-                int p = partner[i];
-                if (p < 0)
+                if (!InSource(i))
                     continue;
-                float2 off = lattice.GetPoint(i) - lattice.GetRest(i);
-                if (p == i)
+                float2 raw = lattice.GetPoint(i) - lattice.GetRest(i);
+                Vector2 off = map.Constrain(i, new Vector2(raw.x, raw.y)); // the axes stay on the axes
+                lattice.SetPoint(i, lattice.GetRest(i) + new float2(off.x, off.y));
+                foreach (var (p, flip) in map.Partners[i])
                 {
-                    lattice.SetPoint(i, lattice.GetRest(i) + new float2(0f, off.y)); // the axis stays on the axis
-                    continue;
+                    if (p >= n || InSource(p))
+                        continue;
+                    Vector2 m = map.Constrain(p, Vector2.Scale(off, flip));
+                    lattice.SetPoint(p, lattice.GetRest(p) + new float2(m.x, m.y));
+                    written++;
                 }
-                bool left = slot.Mesh.Vertices[i].x < _partsMirrorAxis;
-                if (left != leftToRight)
-                    continue; // i is on the side that gets written
-                lattice.SetPoint(p, lattice.GetRest(p) + new float2(-off.x, off.y));
-                pairs++;
             }
-            if (pairs == 0)
+            if (written == 0)
             {
-                _status = "No mirror pairs: no vertex sits at another's mirrored spot. Check the axis, or use Mirror Copy in Edit Mesh.";
+                _status = "No mirror partners: no vertex sits at another's mirrored spot. Check the axes, or use Mirror Copy in Edit Mesh.";
                 return;
             }
+            string from = MirrorSideName(fromLeft, fromTop);
             pose.Lattice = lattice;
-            RecordPartsUndo(leftToRight ? "Mirror Deform Left To Right" : "Mirror Deform Right To Left");
+            RecordPartsUndo("Mirror Deform From " + from);
             ApplyPartsPoseEdit(slot.SlotId, pose);
-            _status = "Mirrored " + pairs + " vertex pairs " + (leftToRight ? "left → right." : "right → left.");
+            _status = "Mirrored the " + from.ToLowerInvariant() + " deform onto " + written + " vertices.";
         }
 
-        /// <summary>Edit Mesh drag: partners of the dragged vertices follow the mirrored way.</summary>
+        static string MirrorSideName(bool? left, bool? top)
+        {
+            string y = top == null ? "" : top.Value ? "Top" : "Bottom";
+            string x = left == null ? "" : left.Value ? "Left" : "Right";
+            return y.Length > 0 && x.Length > 0 ? y + " " + x : y + x;
+        }
+
+        /// <summary>Edit Mesh drag: partners of the dragged vertices follow the mirrored way; vertices on an axis stay on it.</summary>
         void MirrorMeshDrag(SpritePartMeshDef start, List<int> indices, List<Vector2> positions)
         {
             if (!_partsMirrorLive || start == null)
                 return;
-            var partner = SpritePartsMeshOps.MirrorPartners(start, _partsMirrorAxis);
+            var map = MirrorMapFor(start);
             int count = indices.Count;
             for (int k = 0; k < count; k++)
             {
                 int i = indices[k];
-                int p = (uint)i < (uint)partner.Length ? partner[i] : -1;
-                if (p == i)
-                    positions[k] = new Vector2(_partsMirrorAxis, positions[k].y);
-                else if (p >= 0 && !indices.Contains(p))
+                if ((uint)i >= (uint)map.Count)
+                    continue;
+                Vector2 pos = positions[k];
+                if (map.LockX[i]) pos.x = _partsMirrorAxis;
+                if (map.LockY[i]) pos.y = _partsMirrorAxisY;
+                positions[k] = pos;
+                foreach (var (p, flip) in map.Partners[i])
                 {
+                    if (indices.Contains(p))
+                        continue;
                     indices.Add(p);
-                    positions.Add(SpritePartsMeshOps.MirrorPoint(positions[k], _partsMirrorAxis));
+                    positions.Add(SpritePartsMeshOps.MirrorPoint(pos, _partsMirrorAxis, _partsMirrorAxisY, flip.x < 0f, flip.y < 0f));
                 }
             }
         }
 
-        /// <summary>Edit Mesh: duplicate the selected vertices and their edges across the axis.</summary>
+        /// <summary>Edit Mesh: duplicate the selected vertices and their edges across the axes (three copies in Both).</summary>
         void MirrorCopySelectedMesh()
         {
             var mesh = MeshEditSlot()?.Mesh;
@@ -121,11 +179,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _status = "Select vertices to mirror.";
                 return;
             }
-            List<int> added = null;
+            var added = new List<int>();
             if (!EditMeshDraft("Mirror Copy", w =>
                 {
-                    added = SpritePartsMeshOps.MirrorCopyGraph(w, sel, _partsMirrorAxis);
-                    return added.Count > 0 || w.Edges.Length != (mesh.Edges?.Length ?? 0) ? IdentityRemap(n) : null;
+                    int edgesBefore = w.Edges?.Length ?? 0;
+                    foreach (var (fx, fy) in SpritePartsMeshOps.MirrorFlips(_partsMirrorMode))
+                        added.AddRange(SpritePartsMeshOps.MirrorCopyGraph(w, sel, _partsMirrorAxis, _partsMirrorAxisY, fx, fy));
+                    return added.Count > 0 || (w.Edges?.Length ?? 0) != edgesBefore ? IdentityRemap(n) : null;
                 }))
             {
                 _status = "Nothing to mirror: those vertices already have partners.";
@@ -138,27 +198,40 @@ namespace InvertLab.Sprites.DOTS.Editor
             Repaint();
         }
 
-        /// <summary>The axis line in Edit Mesh (image space).</summary>
+        /// <summary>The axis lines in Edit Mesh (image space).</summary>
         void DrawMeshMirrorAxis(Rect sprite)
         {
             if (!_partsMirrorLive || Event.current.type != EventType.Repaint)
                 return;
             Handles.BeginGUI();
             Handles.color = PartsMirrorColor;
-            Handles.DrawDottedLine(MeshUvToGui(sprite, new Vector2(_partsMirrorAxis, SpritePartsMeshOps.MaxUv)),
-                MeshUvToGui(sprite, new Vector2(_partsMirrorAxis, SpritePartsMeshOps.MinUv)), 5f);
+            if (MirrorUsesX)
+                Handles.DrawDottedLine(MeshUvToGui(sprite, new Vector2(_partsMirrorAxis, SpritePartsMeshOps.MaxUv)),
+                    MeshUvToGui(sprite, new Vector2(_partsMirrorAxis, SpritePartsMeshOps.MinUv)), 5f);
+            if (MirrorUsesY)
+                Handles.DrawDottedLine(MeshUvToGui(sprite, new Vector2(SpritePartsMeshOps.MinUv, _partsMirrorAxisY)),
+                    MeshUvToGui(sprite, new Vector2(SpritePartsMeshOps.MaxUv, _partsMirrorAxisY)), 5f);
             Handles.EndGUI();
         }
 
-        /// <summary>The axis line through the part in Warp.</summary>
+        /// <summary>The axis lines through the part in Warp.</summary>
         void DrawWarpMirrorAxis(Rect rect, Vector2 joint, float guiDeg, bool flipX, bool flipY)
         {
             if (!_partsMirrorLive || Event.current.type != EventType.Repaint)
                 return;
-            float x = _partsMirrorAxis - 0.5f;
             Handles.color = PartsMirrorColor;
-            Handles.DrawDottedLine(PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, new float2(x, 0.65f)),
-                PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, new float2(x, -0.65f)), 5f);
+            if (MirrorUsesX)
+            {
+                float x = _partsMirrorAxis - 0.5f;
+                Handles.DrawDottedLine(PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, new float2(x, 0.65f)),
+                    PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, new float2(x, -0.65f)), 5f);
+            }
+            if (MirrorUsesY)
+            {
+                float y = _partsMirrorAxisY - 0.5f;
+                Handles.DrawDottedLine(PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, new float2(-0.65f, y)),
+                    PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, new float2(0.65f, y)), 5f);
+            }
         }
 
         void DrawPanelMirrorSection(SpritePartSlotDef slot)
@@ -166,51 +239,95 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUILayout.Space(6f);
             EditorGUILayout.LabelField("MIRROR", _sectionStyle);
             bool live = EditorGUILayout.ToggleLeft(new GUIContent("Live Mirror",
-                "Moving a vertex moves its partner (the vertex at its mirrored spot) the mirrored way: drags, brushes, FFD and Edit Mesh."),
+                "Moving a vertex moves its partners (the vertices at its mirrored spots) the mirrored way: drags, brushes, FFD and Edit Mesh."),
                 _partsMirrorLive);
-            EditorGUILayout.BeginHorizontal();
-            float axis = EditorGUILayout.Slider(new GUIContent("Axis", "Vertical mirror line in image space (0.5 = centre)"), _partsMirrorAxis, 0f, 1f);
-            if (GUILayout.Button(new GUIContent("C", "Back to the image centre"), GUILayout.Width(22f)))
-                axis = 0.5f;
-            EditorGUILayout.EndHorizontal();
-            if (live != _partsMirrorLive || !Mathf.Approximately(axis, _partsMirrorAxis))
+            var mode = (SpritePartsMirrorMode)GUILayout.Toolbar((int)_partsMirrorMode, new[]
+            {
+                new GUIContent("Horizontal", "Left / right across a vertical line"),
+                new GUIContent("Vertical", "Top / bottom across a horizontal line"),
+                new GUIContent("Both", "Four ways: left / right, top / bottom and the opposite corner"),
+            }, EditorStyles.miniButton);
+            float axis = _partsMirrorAxis, axisY = _partsMirrorAxisY;
+            if (mode != SpritePartsMirrorMode.Vertical)
+            {
+                EditorGUILayout.BeginHorizontal();
+                axis = EditorGUILayout.Slider(new GUIContent("Axis X", "The vertical mirror line in image space (0.5 = centre)"), axis, 0f, 1f);
+                if (GUILayout.Button(new GUIContent("C", "Back to the image centre"), GUILayout.Width(22f)))
+                    axis = 0.5f;
+                EditorGUILayout.EndHorizontal();
+            }
+            if (mode != SpritePartsMirrorMode.Horizontal)
+            {
+                EditorGUILayout.BeginHorizontal();
+                axisY = EditorGUILayout.Slider(new GUIContent("Axis Y", "The horizontal mirror line in image space (0.5 = centre)"), axisY, 0f, 1f);
+                if (GUILayout.Button(new GUIContent("C", "Back to the image centre"), GUILayout.Width(22f)))
+                    axisY = 0.5f;
+                EditorGUILayout.EndHorizontal();
+            }
+            if (live != _partsMirrorLive || mode != _partsMirrorMode
+                || !Mathf.Approximately(axis, _partsMirrorAxis) || !Mathf.Approximately(axisY, _partsMirrorAxisY))
             {
                 _partsMirrorLive = live;
+                _partsMirrorMode = mode;
                 _partsMirrorAxis = axis;
+                _partsMirrorAxisY = axisY;
                 Repaint();
             }
             var mesh = slot?.Mesh;
             if (mesh != null && mesh.VertexCount > 0)
             {
-                var partner = SpritePartsMeshOps.MirrorPartners(mesh, _partsMirrorAxis);
-                int pairs = 0, lone = 0;
-                for (int i = 0; i < partner.Length; i++)
+                var map = MirrorMapFor(mesh);
+                int want = SpritePartsMeshOps.MirrorFlips(_partsMirrorMode).Count;
+                int full = 0, some = 0, none = 0;
+                for (int i = 0; i < map.Count; i++)
                 {
-                    if (partner[i] > i)
-                        pairs++;
-                    else if (partner[i] < 0)
-                        lone++;
+                    // A vertex on an axis is its own partner there, so it needs fewer.
+                    int onAxes = (map.LockX[i] ? 1 : 0) + (map.LockY[i] ? 1 : 0);
+                    int need = _partsMirrorMode == SpritePartsMirrorMode.Both ? (onAxes == 2 ? 0 : onAxes == 1 ? 1 : 3) : want - onAxes;
+                    int have = map.Partners[i].Count;
+                    if (have >= need) full++;
+                    else if (have > 0) some++;
+                    else none++;
                 }
-                EditorGUILayout.LabelField(pairs + " pairs, " + lone + " without a partner.", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField(full + " vertices mirrored, " + (some > 0 ? some + " partly, " : "") + none + " without a partner.",
+                    EditorStyles.wordWrappedMiniLabel);
             }
             if (IsPartsMeshEdit())
             {
                 using (new EditorGUI.DisabledScope(_partsWarpSelection.Count == 0))
                 {
-                    if (GUILayout.Button(new GUIContent("Mirror Copy Selected", "Duplicate the selected vertices and their edges across the axis")))
+                    if (GUILayout.Button(new GUIContent("Mirror Copy Selected", "Duplicate the selected vertices and their edges across the axes")))
                         MirrorCopySelectedMesh();
                 }
                 return;
             }
-            EditorGUILayout.BeginHorizontal();
             using (new EditorGUI.DisabledScope(mesh == null || !mesh.HasMesh))
             {
-                if (GUILayout.Button(new GUIContent("Deform L → R", "Copy the left side's deform onto the right on this key")))
-                    MirrorPartsDeform(true);
-                if (GUILayout.Button(new GUIContent("R → L", "Copy the right side's deform onto the left on this key")))
-                    MirrorPartsDeform(false);
+                EditorGUILayout.BeginHorizontal();
+                switch (_partsMirrorMode)
+                {
+                    case SpritePartsMirrorMode.Horizontal:
+                        if (GUILayout.Button(new GUIContent("Deform L → R", "Copy the left side's deform onto the right on this key")))
+                            MirrorPartsDeform(true, null);
+                        if (GUILayout.Button(new GUIContent("R → L", "Copy the right side's deform onto the left on this key")))
+                            MirrorPartsDeform(false, null);
+                        break;
+                    case SpritePartsMirrorMode.Vertical:
+                        if (GUILayout.Button(new GUIContent("Deform T → B", "Copy the top half's deform onto the bottom on this key")))
+                            MirrorPartsDeform(null, true);
+                        if (GUILayout.Button(new GUIContent("B → T", "Copy the bottom half's deform onto the top on this key")))
+                            MirrorPartsDeform(null, false);
+                        break;
+                    default:
+                        GUILayout.Label(new GUIContent("Deform from", "Copy one quarter's deform onto the other three on this key"), GUILayout.Width(74f));
+                        if (GUILayout.Button(new GUIContent("TL", "Top left to the other quarters"))) MirrorPartsDeform(true, true);
+                        if (GUILayout.Button(new GUIContent("TR", "Top right to the other quarters"))) MirrorPartsDeform(false, true);
+                        if (GUILayout.Button(new GUIContent("BL", "Bottom left to the other quarters"))) MirrorPartsDeform(true, false);
+                        if (GUILayout.Button(new GUIContent("BR", "Bottom right to the other quarters"))) MirrorPartsDeform(false, false);
+                        break;
+                }
+                EditorGUILayout.EndHorizontal();
             }
-            EditorGUILayout.EndHorizontal();
         }
     }
 }

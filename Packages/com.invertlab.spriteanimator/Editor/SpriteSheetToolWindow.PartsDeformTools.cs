@@ -69,7 +69,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     continue;
                 Vector2 off = _partsDeformClip[src];
                 if (mirrored)
-                    off.x = src == i ? 0f : -off.x; // on the axis: stays on it
+                    off = MirrorPasteOffset(off, src == i); // on the axis: stays on it
                 lattice.SetPoint(i, lattice.GetRest(i) + new float2(off.x, off.y));
                 pasted++;
             }
