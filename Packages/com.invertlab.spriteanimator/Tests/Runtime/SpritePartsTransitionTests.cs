@@ -223,6 +223,72 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.AreEqual(2f, rig.BodyX, 1e-3f, "The layer started its own clock at 0, not at the base clip's 0.7.");
         }
 
+        // Tracks: "Run" keys body 5 and arm 7; "Shoot" (once, 0.5 s, event 4 at 0.1) keys only the arm (1); "Wave" keys the arm (2).
+        static BlobAssetReference<SpritePartsSetBlob> BuildTracks()
+        {
+            var slots = new[]
+            {
+                new SpritePartsSetBuilder.SlotInput { Name = "body", SlotId = "body", RestScale = new float2(1f, 1f) },
+                new SpritePartsSetBuilder.SlotInput { Name = "arm", SlotId = "arm", RestScale = new float2(1f, 1f), DrawRank = 1 },
+            };
+            SpritePartsSetBuilder.TrackInput Track(string slot, float x)
+                => new SpritePartsSetBuilder.TrackInput { SlotId = slot, Keys = new[] { Key(0f, x) } };
+            var clips = new[]
+            {
+                new SpritePartsSetBuilder.ClipInput { Name = "Run", ClipId = "Run", Duration = 1f, SpeedMultiplier = 1f, Tracks = new[] { Track("body", 5f), Track("arm", 7f) } },
+                new SpritePartsSetBuilder.ClipInput
+                {
+                    Name = "Shoot", ClipId = "Shoot", Duration = 0.5f, SpeedMultiplier = 1f, WrapMode = (byte)SpritePartsWrap.Once,
+                    Tracks = new[] { Track("arm", 1f) }, Events = new[] { new SpritePartsSetBuilder.EventInput { Time = 0.1f, Id = 4 } },
+                },
+                new SpritePartsSetBuilder.ClipInput { Name = "Wave", ClipId = "Wave", Duration = 1f, SpeedMultiplier = 1f, Tracks = new[] { Track("arm", 2f) } },
+            };
+            return SpritePartsSetBuilder.Build(Allocator.Temp, slots, System.Array.Empty<SpritePartsSetBuilder.AppearanceInput>(),
+                clips, System.Array.Empty<SpritePartsSetBuilder.SkinInput>());
+        }
+
+        [Test]
+        public void Layer_Tracks_Move_Only_What_They_Key_Fire_Events_And_Fade_At_Their_End()
+        {
+            using var rig = new Rig(BuildTracks());
+            SpriteParts.Play(rig.Em, rig.Root, "Run", force: true, crossfadeSeconds: 0f);
+            Assert.IsTrue(SpriteParts.PlayLayer(rig.Em, rig.Root, 1, "Shoot", fadeSeconds: 0f, endFadeSeconds: 0.2f));
+            rig.Tick(0.05f);
+            Assert.AreEqual(5f, rig.BodyX, 1e-4f, "Shoot does not key the body: it keeps running.");
+            Assert.AreEqual(1f, rig.ArmX, 1e-4f, "The arm shoots.");
+            rig.Tick(0.1f);
+            bool fired = false;
+            var events = rig.Em.GetBuffer<SpriteAnimEventBuffer>(rig.Root);
+            for (int i = 0; i < events.Length; i++)
+                fired |= events[i].Id == 4 && events[i].ClipIndex == 1;
+            Assert.IsTrue(fired, "The layer's clip fires its event.");
+            rig.Tick(0.4f);
+            Assert.AreEqual(0f, rig.Em.GetBuffer<SpritePartsAnimLayer>(rig.Root)[0].TargetWeight, "At its end the shot fades out.");
+            rig.Tick(0.25f);
+            Assert.AreEqual(0, rig.Em.GetBuffer<SpritePartsAnimLayer>(rig.Root).Length, "Faded out and removed.");
+            Assert.AreEqual(7f, rig.ArmX, 1e-4f, "The arm is back on the run.");
+        }
+
+        [Test]
+        public void A_New_Clip_On_A_Track_Replaces_The_Old_One()
+        {
+            using var rig = new Rig(BuildTracks());
+            SpriteParts.Play(rig.Em, rig.Root, "Run", force: true, crossfadeSeconds: 0f);
+            SpriteParts.PlayLayer(rig.Em, rig.Root, 1, "Shoot", fadeSeconds: 0f);
+            SpriteParts.PlayLayer(rig.Em, rig.Root, 1, "Wave", fadeSeconds: 0.2f);
+            var layers = rig.Em.GetBuffer<SpritePartsAnimLayer>(rig.Root);
+            Assert.AreEqual(2, layers.Length, "Shoot fades out while Wave fades in.");
+            rig.Tick(0.1f);
+            Assert.AreEqual(1.5f, rig.ArmX, 1e-3f, "Halfway: Shoot (1) under Wave (2).");
+            rig.Tick(0.15f);
+            layers = rig.Em.GetBuffer<SpritePartsAnimLayer>(rig.Root);
+            Assert.AreEqual(1, layers.Length);
+            Assert.AreEqual(2f, rig.ArmX, 1e-4f);
+            SpriteParts.StopLayer(rig.Em, rig.Root, 1, 0f);
+            rig.Tick(0.01f);
+            Assert.AreEqual(7f, rig.ArmX, 1e-4f);
+        }
+
         [Test]
         public void Named_Masks_Limit_A_Layer_To_Their_Parts()
         {

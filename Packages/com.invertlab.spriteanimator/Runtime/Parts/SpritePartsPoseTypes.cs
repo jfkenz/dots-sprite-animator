@@ -110,6 +110,10 @@ namespace InvertLab.Sprites.DOTS
         public float Time;
         /// <summary>1 = the layer is removed when a fade to 0 ends.</summary>
         public byte RemoveAtZero;
+        /// <summary>Track number (Spine's tracks 1, 2...): a new clip on the same track crossfades the old one out. 0 = none.</summary>
+        public int Track;
+        /// <summary>Seconds to fade out when an own-clock clip that plays once reaches its end (0 = hold the last pose).</summary>
+        public float EndFade;
     }
 
     [InternalBufferCapacity(4)]

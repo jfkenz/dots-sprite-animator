@@ -1,9 +1,10 @@
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 
 namespace InvertLab.Sprites.DOTS
 {
-    /// <summary>Transitions: queued clips, exit times, blend spaces, layer fades and whole-character fades.</summary>
+    /// <summary>Transitions: queued clips, exit times, blend spaces, layer tracks and fades, whole-character fades.</summary>
     public static partial class SpriteParts
     {
         // ---- Queue ----
@@ -192,6 +193,96 @@ namespace InvertLab.Sprites.DOTS
             return true;
         }
 
+        /// <summary>
+        /// Plays a clip on a layer track (Spine's tracks 1, 2...), on its own clock from its start: only the parts it keys
+        /// follow it (inside the mask, if one is named), so "Shoot" on track 1 runs over "Run" on the base.
+        /// A clip already on the track crossfades out: <paramref name="fadeSeconds"/>, or the mix table when negative.
+        /// A clip that plays once fades out over <paramref name="endFadeSeconds"/> at its end (0 = hold its last pose).
+        /// </summary>
+        public static bool PlayLayer(EntityManager em, Entity root, int track, string clipName, string maskName = null,
+            float fadeSeconds = -1f, float endFadeSeconds = 0.2f, bool additive = false)
+        {
+            if (track <= 0 || !TryClip(em, root, clipName, out int index) || !TrySet(em, root, out var blob))
+                return false;
+            ref var set = ref blob.Value;
+            uint mask = 0;
+            if (!string.IsNullOrEmpty(maskName))
+            {
+                int m = SpritePartsTransitions.FindMask(ref set, maskName);
+                if (m < 0)
+                    return false;
+                mask = set.Masks[m].Bits;
+            }
+            SpritePartsPoseWriter.EnsureBuffers(em, root);
+            var buf = em.GetBuffer<SpritePartsAnimLayer>(root);
+            int previous = -1;
+            for (int i = 0; i < buf.Length; i++)
+                if (buf[i].Track == track && buf[i].ClipIndex != index && buf[i].TargetWeight > 0f)
+                    previous = buf[i].ClipIndex;
+            SpritePartsTransitions.ResolveMix(ref set, previous, index, fadeSeconds, out float fade, out _);
+            // The clip leaving the track fades out (and goes at 0).
+            for (int i = buf.Length - 1; i >= 0; i--)
+            {
+                var old = buf[i];
+                if (old.Track != track || old.ClipIndex == index)
+                    continue;
+                if (!(fade > 1e-6f))
+                {
+                    buf.RemoveAt(i);
+                    continue;
+                }
+                old.TargetWeight = 0f;
+                old.FadeSpeed = math.max(old.Weight, 1e-3f) / fade;
+                old.RemoveAtZero = 1;
+                buf[i] = old;
+            }
+            int at = LayerIndex(buf, index);
+            var layer = at >= 0 ? buf[at] : new SpritePartsAnimLayer { ClipIndex = index };
+            layer.Track = track;
+            layer.SlotMask = mask;
+            layer.Additive = additive ? (byte)1 : (byte)0;
+            layer.OwnClock = 1;
+            layer.Time = 0f;
+            layer.EndFade = math.max(0f, endFadeSeconds);
+            layer.RemoveAtZero = 1;
+            layer.TargetWeight = 1f;
+            if (fade > 1e-6f && layer.Weight < 1f)
+                layer.FadeSpeed = (1f - layer.Weight) / fade;
+            else
+            {
+                layer.Weight = 1f;
+                layer.FadeSpeed = 0f;
+            }
+            // The incoming clip goes last so it blends over the one leaving the track.
+            if (at >= 0)
+                buf.RemoveAt(at);
+            buf.Add(layer);
+            return true;
+        }
+
+        /// <summary>Fades out whatever plays on a layer track (removed at 0).</summary>
+        public static void StopLayer(EntityManager em, Entity root, int track, float fadeSeconds = 0.2f)
+        {
+            if (!IsPartsRoot(em, root) || !em.HasBuffer<SpritePartsAnimLayer>(root))
+                return;
+            var buf = em.GetBuffer<SpritePartsAnimLayer>(root);
+            for (int i = buf.Length - 1; i >= 0; i--)
+            {
+                var layer = buf[i];
+                if (layer.Track != track)
+                    continue;
+                if (!(fadeSeconds > 1e-6f))
+                {
+                    buf.RemoveAt(i);
+                    continue;
+                }
+                layer.TargetWeight = 0f;
+                layer.FadeSpeed = math.max(layer.Weight, 1e-3f) / fadeSeconds;
+                layer.RemoveAtZero = 1;
+                buf[i] = layer;
+            }
+        }
+
         /// <summary>The part bits of a named mask from the profile (0 = no such mask).</summary>
         public static uint MaskBits(EntityManager em, Entity root, string maskName)
         {
@@ -322,7 +413,14 @@ namespace InvertLab.Sprites.DOTS
             if (em.HasBuffer<SpritePartsMixEntry>(root))
                 SpritePartsTransitions.TickChain(ref set, player, em.GetBuffer<SpritePartsMixEntry>(root), dt);
             if (em.HasBuffer<SpritePartsAnimLayer>(root))
-                SpritePartsTransitions.TickLayers(ref set, em.GetBuffer<SpritePartsAnimLayer>(root), dt, paused);
+            {
+                // Own-clock layers fire their clips' events too (after the buffer is done with: firing may add components).
+                var layerEvents = new NativeList<SpritePartsEventFiring.Tick>(2, Allocator.Temp);
+                SpritePartsTransitions.TickLayers(ref set, em.GetBuffer<SpritePartsAnimLayer>(root), dt, paused, root, layerEvents);
+                for (int i = 0; i < layerEvents.Length; i++)
+                    SpritePartsEventFiring.Fire(em, layerEvents[i]);
+                layerEvents.Dispose();
+            }
             if (em.HasComponent<SpritePartsCharacterTint>(root))
             {
                 var tint = em.GetComponentData<SpritePartsCharacterTint>(root);

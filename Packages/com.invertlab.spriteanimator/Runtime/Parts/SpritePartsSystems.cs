@@ -70,6 +70,21 @@ namespace InvertLab.Sprites.DOTS
                 }
                 if (tick.Playing && set.Clips[tick.ClipIndex].Events.Length > 0)
                     ticks.Add(tick);
+                // Layers on the player's clock fire their own clips' events over the same span.
+                if (tick.Playing && em.HasBuffer<SpritePartsAnimLayer>(entity))
+                {
+                    var layers = em.GetBuffer<SpritePartsAnimLayer>(entity, true);
+                    for (int l = 0; l < layers.Length; l++)
+                    {
+                        var layer = layers[l];
+                        if (layer.OwnClock == 0 && layer.Weight > 1e-6f && layer.ClipIndex >= 0 && layer.ClipIndex < set.Clips.Length
+                            && layer.ClipIndex != tick.ClipIndex && set.Clips[layer.ClipIndex].Events.Length > 0)
+                            ticks.Add(new SpritePartsEventFiring.Tick
+                            {
+                                Entity = entity, ClipIndex = layer.ClipIndex, From = tick.From, To = tick.To, Playing = true,
+                            });
+                    }
+                }
                 if (outTick.Playing && outTick.ClipIndex < set.Clips.Length && set.Clips[outTick.ClipIndex].Events.Length > 0)
                     ticks.Add(outTick);
                 pending.Add(entity);

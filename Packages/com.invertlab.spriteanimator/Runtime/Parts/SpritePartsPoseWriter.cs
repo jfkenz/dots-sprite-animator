@@ -246,8 +246,9 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>
-        /// Masked clip layers between the base clip and gameplay overrides. SlotMask 0 means every slot. A layer
-        /// follows the player's clock unless it has its own; an additive layer adds its change from the setup pose.
+        /// Masked clip layers between the base clip and gameplay overrides. Like a Spine track, a layer moves only the
+        /// parts its clip keys (SlotMask 0 = all of those). A layer follows the player's clock unless it has its own;
+        /// an additive layer adds its change from the setup pose.
         /// </summary>
         static void ApplyAnimationLayers(
             ref SpritePartsSetBlob set,
@@ -266,14 +267,28 @@ namespace InvertLab.Sprites.DOTS
                     continue;
                 float w = math.saturate(layer.Weight);
                 float time = layer.OwnClock != 0 ? layer.Time : player.TimeSeconds;
+                ref var layerClip = ref set.Clips[layer.ClipIndex];
+                // A track clip fading out under a new one on the same track holds full weight on the parts the new one
+                // keys too (Spine's hold), so the crossfade goes straight from one to the other without a dip.
+                int incoming = -1;
+                if (layer.Track > 0 && layer.TargetWeight <= 0f)
+                {
+                    for (int k = L + 1; k < layers.Length && incoming < 0; k++)
+                        if (layers[k].Track == layer.Track && layers[k].TargetWeight > 0f
+                            && layers[k].ClipIndex >= 0 && layers[k].ClipIndex < set.Clips.Length)
+                            incoming = layers[k].ClipIndex;
+                }
                 for (int i = 0; i < n && i < finalLocal.Length; i++)
                 {
                     if (layer.SlotMask != 0 && i < 32 && (layer.SlotMask & (1u << i)) == 0)
                         continue;
+                    if (SpritePartsSampler.TrackIndexForSlot(ref layerClip, i) < 0)
+                        continue; // not keyed by the layer's clip: the base pose stays
+                    float wi = incoming >= 0 && SpritePartsSampler.TrackIndexForSlot(ref set.Clips[incoming], i) >= 0 ? 1f : w;
                     SpritePartsSampler.SampleSlot(ref set, layer.ClipIndex, i, time, out var pose);
                     finalLocal[i] = layer.Additive != 0
-                        ? AddPose(finalLocal[i], pose, ref set.Slots[i], w)
-                        : BlendPose(finalLocal[i], pose, w);
+                        ? AddPose(finalLocal[i], pose, ref set.Slots[i], wi)
+                        : BlendPose(finalLocal[i], pose, wi);
                     if (i < sources.Length)
                     {
                         sources[i] = new SpritePartPoseSource

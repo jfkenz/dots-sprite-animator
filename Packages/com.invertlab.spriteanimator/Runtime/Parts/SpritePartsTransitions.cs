@@ -446,6 +446,11 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>Fades layer weights and runs own-clock layers. Removes layers whose fade to 0 ended with RemoveAtZero.</summary>
         public static void TickLayers(ref SpritePartsSetBlob set, DynamicBuffer<SpritePartsAnimLayer> layers, float dt, bool paused)
+            => TickLayers(ref set, layers, dt, paused, Entity.Null, default);
+
+        /// <param name="events">When created: own-clock layers add the event span they passed (for <paramref name="entity"/>).</param>
+        public static void TickLayers(ref SpritePartsSetBlob set, DynamicBuffer<SpritePartsAnimLayer> layers, float dt, bool paused,
+            Entity entity, NativeList<SpritePartsEventFiring.Tick> events)
         {
             dt = math.max(0f, dt);
             for (int L = layers.Length - 1; L >= 0; L--)
@@ -469,8 +474,22 @@ namespace InvertLab.Sprites.DOTS
                 if (layer.OwnClock != 0 && !paused && layer.ClipIndex >= 0 && layer.ClipIndex < set.Clips.Length)
                 {
                     ref var clip = ref set.Clips[layer.ClipIndex];
+                    float from = layer.Time;
                     layer.Time = SpritePartsPlayback.Tick(layer.Time, 1f, clip.SpeedMultiplier, clip.Duration,
                         clip.WrapMode, 1, 0, dt).TimeSeconds;
+                    if (events.IsCreated && clip.Events.Length > 0 && layer.Weight > 1e-6f)
+                        events.Add(new SpritePartsEventFiring.Tick
+                        {
+                            Entity = entity, ClipIndex = layer.ClipIndex, From = from, To = layer.Time, Playing = true,
+                        });
+                    // A clip that plays once fades itself out at its end (Spine's track entry mixing out).
+                    bool once = clip.WrapMode == (byte)SpritePartsWrap.Once || clip.WrapMode == SpriteAnimWrap.Once;
+                    if (once && layer.EndFade > 0f && layer.Time >= clip.Duration - 1e-5f && layer.TargetWeight > 0f)
+                    {
+                        layer.TargetWeight = 0f;
+                        layer.FadeSpeed = math.max(layer.Weight, 1e-3f) / layer.EndFade;
+                        layer.RemoveAtZero = 1;
+                    }
                 }
                 layers[L] = layer;
             }
