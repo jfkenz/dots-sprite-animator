@@ -198,6 +198,107 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
+        // ------------------------------------------------------------------ Live Mirror while creating (Edit Mesh)
+
+        /// <summary>A new vertex close to an axis lands on it, so it is its own mirror instead of getting a twin.</summary>
+        Vector2 SnapToMirrorAxes(Vector2 uv)
+        {
+            if (!_partsMirrorLive)
+                return uv;
+            float near = _partsMirrorTolerance * 0.5f;
+            if (MirrorUsesX && Mathf.Abs(uv.x - _partsMirrorAxis) <= near)
+                uv.x = _partsMirrorAxis;
+            if (MirrorUsesY && Mathf.Abs(uv.y - _partsMirrorAxisY) <= near)
+                uv.y = _partsMirrorAxisY;
+            return uv;
+        }
+
+        /// <summary>
+        /// Live Mirror in Create: the vertices in <paramref name="touched"/> get their mirrored twins (existing ones are
+        /// reused) and the edges between them are mirrored too.
+        /// </summary>
+        void MirrorCreated(SpritePartMeshDef draft, params int[] touched)
+        {
+            if (!_partsMirrorLive || draft == null)
+                return;
+            foreach (var (fx, fy) in SpritePartsMeshOps.MirrorFlips(_partsMirrorMode))
+                SpritePartsMeshOps.MirrorCopyGraph(draft, touched, _partsMirrorAxis, _partsMirrorAxisY, fx, fy, _partsMirrorTolerance);
+        }
+
+        /// <summary>
+        /// For each mirror flip, the twin line of a-b, to split later at the mirrored spot. A line that is its own
+        /// mirror (it crosses the axis) counts too: its other half gets the mirrored split.
+        /// </summary>
+        List<(int a, int b, bool fx, bool fy)> MirrorEdgeTwins(SpritePartMeshDef draft, int a, int b)
+        {
+            var twins = new List<(int, int, bool, bool)>();
+            if (!_partsMirrorLive || draft == null)
+                return twins;
+            foreach (var (fx, fy) in SpritePartsMeshOps.MirrorFlips(_partsMirrorMode))
+            {
+                var partner = SpritePartsMeshOps.MirrorPartners(draft, _partsMirrorAxis, _partsMirrorAxisY, fx, fy, _partsMirrorTolerance);
+                int ta = (uint)a < (uint)partner.Length ? partner[a] : -1;
+                int tb = (uint)b < (uint)partner.Length ? partner[b] : -1;
+                if (ta < 0 || tb < 0)
+                    continue; // no twin line
+                if (!SpritePartsMeshOps.GraphEdges(draft, false).Exists(e => (e.x == ta && e.y == tb) || (e.x == tb && e.y == ta)))
+                    continue;
+                if (!twins.Exists(t => (t.Item1 == ta && t.Item2 == tb) || (t.Item1 == tb && t.Item2 == ta)))
+                    twins.Add((ta, tb, fx, fy));
+            }
+            return twins;
+        }
+
+        /// <summary>
+        /// Splits each twin line at the mirrored spot of the new vertex. The twin may be the line that was just split
+        /// (its own mirror): then the half that holds the mirrored spot is split.
+        /// </summary>
+        void MirrorSplit(SpritePartMeshDef draft, List<(int a, int b, bool fx, bool fy)> twins, int added)
+        {
+            if (twins == null || (uint)added >= (uint)draft.VertexCount)
+                return;
+            Vector2 at = draft.Vertices[added];
+            foreach (var (a, b, fx, fy) in twins)
+            {
+                Vector2 m = SpritePartsMeshOps.MirrorPoint(at, _partsMirrorAxis, _partsMirrorAxisY, fx, fy);
+                if (Vector2.Distance(m, at) <= _partsMirrorTolerance)
+                    continue; // on the axis: its own mirror
+                int bestA = -1, bestB = -1;
+                float best = float.MaxValue;
+                foreach (var e in SpritePartsMeshOps.GraphEdges(draft, false))
+                {
+                    bool inLine = (e.x == a || e.x == b || e.x == added) && (e.y == a || e.y == b || e.y == added);
+                    if (!inLine)
+                        continue;
+                    float d = SpritePartsMeshOps.DistanceToSegment(m, draft.Vertices[e.x], draft.Vertices[e.y]);
+                    if (d < best)
+                    {
+                        best = d;
+                        bestA = e.x;
+                        bestB = e.y;
+                    }
+                }
+                if (bestA >= 0 && best <= _partsMirrorTolerance)
+                    SpritePartsMeshOps.TrySplitGraphEdge(draft, bestA, bestB, m, out _);
+            }
+        }
+
+        /// <summary>The vertex and its mirror partners (Live Mirror on), or just the vertex.</summary>
+        List<int> MirrorGroup(SpritePartMeshDef mesh, int vertex)
+        {
+            var group = new List<int> { vertex };
+            if (!_partsMirrorLive || mesh == null)
+                return group;
+            var map = MirrorMapFor(mesh);
+            if ((uint)vertex < (uint)map.Count)
+            {
+                foreach (var (p, _) in map.Partners[vertex])
+                    if (!group.Contains(p))
+                        group.Add(p);
+            }
+            return group;
+        }
+
         /// <summary>Edit Mesh: duplicate the selected vertices and their edges across the axes (three copies in Both).</summary>
         void MirrorCopySelectedMesh()
         {

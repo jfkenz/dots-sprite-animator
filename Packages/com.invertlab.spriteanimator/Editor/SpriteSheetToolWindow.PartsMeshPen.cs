@@ -215,9 +215,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (hit >= 0 && pen >= 0 && pen != hit)
                 {
                     int from = pen, to = hit;
-                    if (EditMeshDraft(cut ? "Cut Mesh Edge" : "Add Mesh Edge",
-                            w => SpritePartsMeshOps.TryConnectGraph(w, from, to, cut) ? IdentityRemap(n) : null))
-                        _status = "Edge " + from + " - " + to + ". Click another vertex to go on, right-click to stop.";
+                    if (EditMeshDraft(cut ? "Cut Mesh Edge" : "Add Mesh Edge", w =>
+                        {
+                            if (!SpritePartsMeshOps.TryConnectGraph(w, from, to, cut))
+                                return null;
+                            MirrorCreated(w, from, to);
+                            return IdentityRemap(n);
+                        }))
+                        _status = "Edge " + from + " - " + to + (_partsMirrorLive ? " (mirrored)" : "") + ". Click another vertex to go on, right-click to stop.";
                     _partsMeshPen = to;
                     SelectOnly(to);
                 }
@@ -252,9 +257,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (_partsCreateMode == PartsCreateMode.VertexEdge && pen >= 0 && pen != hit)
                 {
                     int from = pen, to = hit;
-                    if (EditMeshDraft(cut ? "Cut Mesh Edge" : "Add Mesh Edge",
-                            w => SpritePartsMeshOps.TryConnectGraph(w, from, to, cut) ? IdentityRemap(n) : null))
-                        _status = "Joined " + from + " - " + to + ". Right-click empty space to stop the chain.";
+                    if (EditMeshDraft(cut ? "Cut Mesh Edge" : "Add Mesh Edge", w =>
+                        {
+                            if (!SpritePartsMeshOps.TryConnectGraph(w, from, to, cut))
+                                return null;
+                            MirrorCreated(w, from, to);
+                            return IdentityRemap(n);
+                        }))
+                        _status = "Joined " + from + " - " + to + (_partsMirrorLive ? " (mirrored)" : "") + ". Right-click empty space to stop the chain.";
                     _partsMeshPen = to;
                     SelectOnly(to);
                     return;
@@ -275,8 +285,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             bool chain = _partsCreateMode == PartsCreateMode.VertexEdge && pen >= 0;
             int added = -1;
+            uv = SnapToMirrorAxes(uv);
             bool ok = EditMeshDraft(onEdge ? "Add Vertex On Edge" : "Add Mesh Vertex", w =>
             {
+                // The mirrored twins of the line's ends, before the split changes anything.
+                var twins = onEdge ? MirrorEdgeTwins(w, ea, eb) : null;
                 bool placed = onEdge
                     ? SpritePartsMeshOps.TrySplitGraphEdge(w, ea, eb, uv, out added)
                     : SpritePartsMeshOps.TryAddGraphVertex(w, uv, out added);
@@ -284,6 +297,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return null;
                 if (chain)
                     SpritePartsMeshOps.TryConnectGraph(w, pen, added, cut);
+                if (onEdge)
+                    MirrorSplit(w, twins, added);
+                if (chain)
+                    MirrorCreated(w, pen, added);
+                else if (!onEdge || twins.Count == 0)
+                    MirrorCreated(w, added);
                 return IdentityRemap(n);
             });
             if (!ok)
@@ -295,7 +314,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsMeshPen = _partsCreateMode == PartsCreateMode.VertexEdge ? added : -1;
             var now = MeshEditSlot()?.Mesh;
             _status = "Vertex " + added + (onEdge ? " on the edge" : string.Empty)
-                + (chain ? ", joined to " + pen : string.Empty)
+                + (chain ? ", joined to " + pen : string.Empty) + (_partsMirrorLive ? " (mirrored)" : string.Empty)
                 + ". " + (now != null && now.VertexCount >= 3 ? "Close the loop, then Make Polygons." : "Keep clicking.");
         }
 
@@ -314,7 +333,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 int[] removed = null;
                 if (EditMeshDraft("Delete Mesh Vertex", w =>
                     {
-                        SpritePartsMeshOps.TryRemoveGraphVertex(w, hit, keep, out removed);
+                        var doomed = MirrorGroup(w, hit);
+                        if (doomed.Count > 1)
+                            SpritePartsMeshOps.TryRemoveGraphVertices(w, doomed, keep, out removed);
+                        else
+                            SpritePartsMeshOps.TryRemoveGraphVertex(w, hit, keep, out removed);
                         return removed;
                     }))
                 {

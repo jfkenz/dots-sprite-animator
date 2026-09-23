@@ -1396,11 +1396,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             // Outside the image the mesh draws nothing: a faint checker says "transparent here".
             DrawMeshFreeArea(sprite, mesh);
-            DrawMeshMirrorAxis(sprite);
             EditorGUI.DrawRect(sprite, new Color(0.12f, 0.13f, 0.16f, 1f));
             if (sheet?.Texture != null && app != null)
                 DrawPartsSheetCell(sheet.Texture, sheet, sheet.Columns, sheet.Rows, app.CellIndex, sprite, Color.white);
             DrawGuiRectOutline(sprite, new Color(1f, 1f, 1f, 0.55f), 1f);
+            DrawMeshMirrorAxis(sprite); // over the image, so the axis shows across it
 
             if (Event.current.type == EventType.Repaint && mesh != null)
             {
