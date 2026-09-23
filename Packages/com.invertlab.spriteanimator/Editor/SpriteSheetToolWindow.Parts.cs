@@ -5651,6 +5651,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             DrawPartsChannelFilter(new Rect(rect.x + 446f, appY, 330f, 16f));
             DrawPartsDopesheetToggles(new Rect(rect.x + 780f, appY, 160f, 16f));
+            DrawPartsGraphToggle(new Rect(rect.x + 944f, appY, 52f, 16f));
             float tracksTop = rect.y + 48f;
             float tracksHeight = rect.height - 54f;
             var tracksRect = new Rect(rect.x + 8f, tracksTop, rect.width - 16f, tracksHeight);
@@ -5786,6 +5787,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsRange(scrubRect, duration);
             DrawPartsEventMarkers(scrubRect, clip, duration);
 
+            if (_partsGraphView)
+            {
+                DrawPartsGraph(new Rect(rect.x, rect.y + rulerH, rect.width, Mathf.Max(0f, rect.height - rulerH)), clip, duration, labelW);
+                DrawPartsPlayheadNeedle(rect, labelW, duration);
+                return;
+            }
+
             var evt = Event.current;
             float tracksTop = rect.y + rulerH;
             var keyArea = new Rect(rect.x + labelW, tracksTop, rect.width - labelW,
@@ -5878,6 +5886,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawBorder(_partsKeyMarqueeRect, new Color(0.35f, 0.72f, 1f, 0.9f), 1f);
             }
 
+            DrawPartsPlayheadNeedle(rect, labelW, duration);
+        }
+
+        void DrawPartsPlayheadNeedle(Rect rect, float labelW, float duration)
+        {
             // Playhead needle + head (Clips-style yellow)
             float pu = Mathf.Clamp01(_partsPreviewTime / duration);
             float px = Mathf.Lerp(rect.x + labelW, rect.xMax, pu);
