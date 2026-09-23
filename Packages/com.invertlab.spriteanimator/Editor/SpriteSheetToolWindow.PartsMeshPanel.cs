@@ -89,7 +89,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 var tool = (PartsMeshTool)GUILayout.Toolbar((int)_partsMeshTool,
                     new[] { new GUIContent("Modify", "1: drag vertices; the image stays flat"),
-                            new GUIContent("Create", "2: add hull / interior vertices, drag for edges"),
+                            new GUIContent("Create", "2: pen - click points joined by edges, Shift cut, Ctrl snap, Enter ends"),
                             new GUIContent("Delete", "3: click a vertex or edge"),
                             new GUIContent("Weights", "4: bind bones and paint weights") },
                     GUILayout.Height(20f));

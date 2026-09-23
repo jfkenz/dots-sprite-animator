@@ -158,6 +158,49 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void SplitEdge_UserEdgeBecomesTwoAndHullEdgeGainsHullVertex()
+        {
+            var mesh = SpritePartsMeshOps.CreateQuad();
+            SpritePartsMeshOps.TryAddInteriorVertex(mesh, new Vector2(0.3f, 0.5f), out int a, out _);
+            SpritePartsMeshOps.TryAddInteriorVertex(mesh, new Vector2(0.7f, 0.5f), out int b, out _);
+            Assert.IsTrue(SpritePartsMeshOps.TryAddEdge(mesh, a, b));
+            Assert.IsTrue(SpritePartsMeshOps.TrySplitEdgeAt(mesh, a, b, new Vector2(0.5f, 0.5f), out int mid, out _));
+            Assert.IsFalse(SpritePartsMeshOps.HasEdge(mesh, a, b));
+            Assert.IsTrue(SpritePartsMeshOps.HasEdge(mesh, a, mid));
+            Assert.IsTrue(SpritePartsMeshOps.HasEdge(mesh, mid, b));
+
+            Assert.IsTrue(SpritePartsMeshOps.TrySplitEdgeAt(mesh, 0, 1, new Vector2(0.5f, 0f), out int hull, out _));
+            Assert.AreEqual(1, hull);
+            Assert.AreEqual(5, mesh.HullCount);
+            Assert.AreEqual(1f, TriangleArea(mesh), 1e-4f);
+        }
+
+        [Test]
+        public void MergeVertices_WeldsAtMidpointAndKeepsEdges()
+        {
+            var mesh = SpritePartsMeshOps.CreateQuad();
+            SpritePartsMeshOps.TryAddInteriorVertex(mesh, new Vector2(0.4f, 0.5f), out int a, out _);
+            SpritePartsMeshOps.TryAddInteriorVertex(mesh, new Vector2(0.6f, 0.5f), out int b, out _);
+            Assert.IsTrue(SpritePartsMeshOps.TryAddEdge(mesh, b, 0));
+            Assert.IsTrue(SpritePartsMeshOps.TryMergeVertices(mesh, a, b, out int survivor, out var remap));
+            Assert.AreEqual(5, mesh.VertexCount);
+            Assert.AreEqual(-1, remap[b]);
+            Assert.AreEqual(0.5f, mesh.Vertices[survivor].x, 1e-5f);
+            Assert.IsTrue(SpritePartsMeshOps.HasEdge(mesh, survivor, 0), "The dropped vertex's edge moves to the survivor.");
+        }
+
+        [Test]
+        public void SegmentHit_FindsCrossingsOnly()
+        {
+            Assert.IsTrue(SpritePartsMeshOps.TrySegmentHit(new Vector2(0f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), out float t, out var p));
+            Assert.AreEqual(0.5f, t, 1e-5f);
+            Assert.AreEqual(new Vector2(0.5f, 0.5f), p);
+            Assert.IsFalse(SpritePartsMeshOps.TrySegmentHit(new Vector2(0f, 0f), new Vector2(1f, 0f),
+                new Vector2(0f, 1f), new Vector2(1f, 1f), out _, out _));
+        }
+
+        [Test]
         public void Generate_AddsInteriorVertices()
         {
             var mesh = SpritePartsMeshOps.CreateQuad();

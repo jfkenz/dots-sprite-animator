@@ -186,6 +186,107 @@ namespace InvertLab.Sprites.DOTS
             return false;
         }
 
+        /// <summary>
+        /// Puts a vertex on edge (a, b) at <paramref name="uv"/> (projected onto the edge).
+        /// A hull edge gains a hull vertex; a user edge is replaced by two edges through the new vertex.
+        /// </summary>
+        public static bool TrySplitEdgeAt(SpritePartMeshDef mesh, int a, int b, Vector2 uv, out int index, out int[] remap)
+        {
+            index = -1;
+            remap = null;
+            int n = mesh?.VertexCount ?? 0;
+            if (a == b || (uint)a >= (uint)n || (uint)b >= (uint)n)
+                return false;
+            Vector2 pa = mesh.Vertices[a];
+            Vector2 ab = mesh.Vertices[b] - pa;
+            float t = Mathf.Clamp(Vector2.Dot(uv - pa, ab) / Mathf.Max(1e-10f, ab.sqrMagnitude), 0.02f, 0.98f);
+            Vector2 p = pa + ab * t;
+            if (IsHullEdge(mesh, a, b))
+            {
+                int h = mesh.HullCount;
+                int edge = (a + 1) % h == b ? a : b;
+                return TryInsertHullVertex(mesh, edge, p, out index, out remap);
+            }
+            if (!HasEdge(mesh, a, b))
+                return false;
+            var work = mesh.Clone();
+            if (!TryAddInteriorVertex(work, p, out index, out remap))
+                return false;
+            var edges = new List<int>(work.Edges.Length + 2);
+            for (int i = 0; i + 1 < work.Edges.Length; i += 2)
+            {
+                int ea = work.Edges[i], eb = work.Edges[i + 1];
+                if ((ea == a && eb == b) || (ea == b && eb == a))
+                    continue;
+                edges.Add(ea);
+                edges.Add(eb);
+            }
+            edges.Add(a); edges.Add(index);
+            edges.Add(index); edges.Add(b);
+            work.Edges = edges.ToArray();
+            if (!Retriangulate(work))
+                return false;
+            Assign(mesh, work);
+            return true;
+        }
+
+        /// <summary>
+        /// Welds <paramref name="drop"/> into <paramref name="keep"/> at their midpoint.
+        /// Edges of the dropped vertex move to the kept one.
+        /// </summary>
+        public static bool TryMergeVertices(SpritePartMeshDef mesh, int keep, int drop, out int survivor, out int[] remap)
+        {
+            survivor = -1;
+            remap = null;
+            int n = mesh?.VertexCount ?? 0;
+            if (keep == drop || (uint)keep >= (uint)n || (uint)drop >= (uint)n)
+                return false;
+            var work = mesh.Clone();
+            work.Vertices[keep] = (mesh.Vertices[keep] + mesh.Vertices[drop]) * 0.5f;
+            var edges = new List<int>();
+            for (int i = 0; work.Edges != null && i + 1 < work.Edges.Length; i += 2)
+            {
+                int ea = work.Edges[i] == drop ? keep : work.Edges[i];
+                int eb = work.Edges[i + 1] == drop ? keep : work.Edges[i + 1];
+                if (ea == eb)
+                    continue;
+                bool duplicate = false;
+                for (int k = 0; k + 1 < edges.Count; k += 2)
+                    duplicate |= (edges[k] == ea && edges[k + 1] == eb) || (edges[k] == eb && edges[k + 1] == ea);
+                if (!duplicate)
+                {
+                    edges.Add(ea);
+                    edges.Add(eb);
+                }
+            }
+            work.Edges = edges.ToArray();
+            if (!TryRemoveVertices(work, new[] { drop }, out remap))
+                return false;
+            survivor = remap[keep];
+            Assign(mesh, work);
+            return survivor >= 0;
+        }
+
+        /// <summary>Where segment a-b crosses segment c-d strictly inside both (t along a-b).</summary>
+        public static bool TrySegmentHit(Vector2 a, Vector2 b, Vector2 c, Vector2 d, out float t, out Vector2 point)
+        {
+            t = 0f;
+            point = default;
+            Vector2 r = b - a;
+            Vector2 s = d - c;
+            float den = r.x * s.y - r.y * s.x;
+            if (Mathf.Abs(den) < 1e-10f)
+                return false;
+            Vector2 ca = c - a;
+            float along = (ca.x * s.y - ca.y * s.x) / den;
+            float edge = (ca.x * r.y - ca.y * r.x) / den;
+            if (along <= 0.01f || along >= 0.99f || edge <= 0.01f || edge >= 0.99f)
+                return false;
+            t = along;
+            point = a + r * along;
+            return true;
+        }
+
         public static bool TryAddInteriorVertex(SpritePartMeshDef mesh, Vector2 uv, out int index, out int[] remap)
         {
             index = -1;

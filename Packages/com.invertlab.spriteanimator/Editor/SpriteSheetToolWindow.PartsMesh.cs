@@ -803,6 +803,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!IsPartsMeshEdit())
                 return false;
             _partsMeshEditSlotId = null;
+            _partsMeshPen = -1;
             _partsMeshDrag = false;
             _partsMeshMoved = false;
             _partsMeshEdgeFrom = -1;
@@ -818,10 +819,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             _partsMeshTool = tool;
             _partsMeshEdgeFrom = -1;
+            _partsMeshPen = -1;
             _status = tool == PartsMeshTool.Modify
                 ? "Modify: drag vertices to fit the image. The image stays flat."
                 : tool == PartsMeshTool.Create
-                    ? "Create: click outside or on the hull for a hull vertex, inside for an interior vertex. Drag vertex to vertex for an edge."
+                    ? "Create (pen): click to add points joined by edges, click the first point to close. Shift cuts, Ctrl snaps, Enter ends."
                     : tool == PartsMeshTool.Delete
                         ? "Delete: click a vertex or an edge."
                         : "Weights: click a joint square to bind or pick it, drag to paint (Shift removes).";
@@ -996,6 +998,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsMeshWeights(sprite, mesh);
             if (_partsMeshEdgeFrom >= 0 && _partsMeshEdgeFrom < n)
                 DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[_partsMeshEdgeFrom]), MeshUvToGui(sprite, _partsMeshMouseUv), new Color(0.3f, 0.85f, 1f, 0.8f), 1.5f);
+            else
+                DrawMeshPenPreview(sprite, mesh);
 
             for (int i = 0; i < n; i++)
             {
@@ -1033,6 +1037,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 evt.Use();
                 return;
             }
+            if (evt.type == EventType.KeyDown && (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                && !IsEditingAnyTextField())
+            {
+                EndMeshPen();
+                evt.Use();
+                return;
+            }
             if (!TryGetPartsMeshEditLayout(canvas, out var sprite, out _, out _))
                 return;
             var slot = MeshEditSlot();
@@ -1045,7 +1056,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 _partsMeshMouseUv = MeshGuiToUvFree(sprite, evt.mousePosition);
                 int hover = HitMeshVertex(sprite, mesh, evt.mousePosition);
-                if (hover != _partsWarpHover || _partsMeshEdgeFrom >= 0)
+                if (hover != _partsWarpHover || _partsMeshEdgeFrom >= 0 || _partsMeshTool == PartsMeshTool.Create)
                 {
                     _partsWarpHover = hover;
                     Repaint();
@@ -1098,17 +1109,19 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_partsMeshTool == PartsMeshTool.Create)
             {
-                if (hit >= 0)
+                bool ctrl = evt.control || evt.command;
+                bool penLive = (uint)_partsMeshPen < (uint)mesh.VertexCount;
+                if (hit >= 0 && !penLive && !ctrl && mesh.HasMesh)
                 {
-                    SelectWarpVertex(hit, false);
-                    if (mesh.HasMesh)
-                    {
-                        _partsMeshEdgeFrom = hit;
-                        CapturePartsMeshDrag(controlId);
-                    }
+                    // Start the chain here; dragging to another vertex also draws an edge.
+                    SelectOnly(hit);
+                    _partsMeshPen = hit;
+                    _partsMeshEdgeFrom = hit;
+                    CapturePartsMeshDrag(controlId);
+                    _status = "Pen at vertex " + hit + ". Click to draw from here, Enter ends.";
                 }
                 else
-                    AddMeshVertexAt(sprite, MeshGuiToUv(sprite, evt.mousePosition));
+                    PenClick(sprite, evt.mousePosition, hit, evt.shift && !ctrl, ctrl);
                 evt.Use();
                 Repaint();
                 return;
@@ -1193,7 +1206,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 int to = HitMeshVertex(sprite, slot.Mesh, evt.mousePosition, _partsMeshEdgeFrom);
                 if (to >= 0)
+                {
                     AddMeshEdge(_partsMeshEdgeFrom, to);
+                    _partsMeshPen = to;
+                    SelectOnly(to);
+                }
             }
             if (_partsMeshMoved)
             {
@@ -1272,69 +1289,6 @@ namespace InvertLab.Sprites.DOTS.Editor
             _status = _partsWarpSelection.Count + " selected";
         }
 
-        void AddMeshVertexAt(Rect sprite, Vector2 uv)
-        {
-            var slot = MeshEditSlot();
-            if (slot == null)
-                return;
-            var mesh = slot.Mesh ??= new SpritePartMeshDef();
-            if (mesh.VertexCount >= SpritePartsMeshOps.MaxVertices)
-            {
-                _status = "Mesh is full (" + SpritePartsMeshOps.MaxVertices + " vertices).";
-                return;
-            }
-            bool hadMesh = mesh.HasMesh;
-            var work = mesh.Clone();
-            int index;
-            int[] remap;
-            bool ok;
-            string what;
-            if (!hadMesh)
-            {
-                ok = SpritePartsMeshOps.TryAppendHullVertex(work, uv, out index);
-                remap = null;
-                what = "Hull point";
-            }
-            else
-            {
-                float px = 1f / Mathf.Max(1f, Mathf.Min(sprite.width, sprite.height));
-                int edge = SpritePartsMeshOps.NearestHullEdge(work, uv, out float distance);
-                if (edge >= 0 && distance <= PartsMeshEdgeSnap * px)
-                {
-                    Vector2 a = work.Vertices[edge];
-                    Vector2 b = work.Vertices[(edge + 1) % work.HullCount];
-                    Vector2 ab = b - a;
-                    float t = Mathf.Clamp(Vector2.Dot(uv - a, ab) / Mathf.Max(1e-8f, ab.sqrMagnitude), 0.05f, 0.95f);
-                    ok = SpritePartsMeshOps.TryInsertHullVertex(work, edge, a + ab * t, out index, out remap);
-                    what = "Hull vertex";
-                }
-                else if (SpritePartsMeshOps.IsInsideHull(work, uv))
-                {
-                    ok = SpritePartsMeshOps.TryAddInteriorVertex(work, uv, out index, out remap);
-                    what = "Interior vertex";
-                }
-                else
-                {
-                    ok = SpritePartsMeshOps.TryInsertHullVertexAuto(work, uv, out index, out remap);
-                    what = "Hull vertex";
-                }
-            }
-            if (!ok)
-            {
-                _status = "A vertex there would make the hull cross itself.";
-                return;
-            }
-            RecordPartsUndo("Add Mesh Vertex");
-            slot.Mesh = work;
-            if (hadMesh && remap != null)
-                SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
-            _partsWarpSelection.Clear();
-            _partsWarpSelection.Add(index);
-            _partsWarpIndex = index;
-            SaveDirty();
-            _status = what + " " + index + (work.HasMesh ? "" : ". Keep clicking around the image.");
-        }
-
         void AddMeshEdge(int a, int b)
         {
             var slot = MeshEditSlot();
@@ -1385,6 +1339,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             RecordPartsUndo("Delete Mesh Vertices");
             slot.Mesh = work;
+            _partsMeshPen = -1;
             if (hadMesh)
                 SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
             _partsWarpSelection.Clear();
@@ -1540,6 +1495,17 @@ namespace InvertLab.Sprites.DOTS.Editor
                 menu.AddItem(new GUIContent("Remove This Edge"), false, () => RemoveMeshEdge(ea, eb));
             if (_partsWarpSelection.Count > 0)
                 menu.AddItem(new GUIContent("Delete Vertices"), false, DeleteSelectedMeshVertices);
+            if (_partsWarpSelection.Count == 2 && mesh != null && mesh.HasMesh)
+            {
+                menu.AddItem(new GUIContent("Merge"), false, MergeSelectedMeshPair);
+                int sa = _partsWarpSelection[0], sb = _partsWarpSelection[1];
+                if (SpritePartsMeshOps.HasEdge(mesh, sa, sb) || SpritePartsMeshOps.IsHullEdge(mesh, sa, sb))
+                    menu.AddItem(new GUIContent("Split"), false, SplitSelectedMeshPair);
+                else
+                    menu.AddDisabledItem(new GUIContent("Split"));
+            }
+            if ((uint)_partsMeshPen < (uint)(mesh?.VertexCount ?? 0))
+                menu.AddItem(new GUIContent("End Pen (Enter)"), false, EndMeshPen);
             menu.AddItem(new GUIContent("Select All"), false, SelectAllMeshVertices);
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Tool/Modify (1)"), _partsMeshTool == PartsMeshTool.Modify, () => SetPartsMeshTool(PartsMeshTool.Modify));
