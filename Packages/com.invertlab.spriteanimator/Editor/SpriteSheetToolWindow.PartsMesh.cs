@@ -340,7 +340,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if ((uint)a >= (uint)pts.Length || (uint)b >= (uint)pts.Length)
                         continue;
                     bool userEdge = slot.Mesh != null && SpritePartsMeshOps.HasEdge(slot.Mesh, a, b);
-                    if (!userEdge && (!_partsMeshShowTriangles || SpritePartsMeshOps.IsHullEdge(slot.Mesh, a, b)))
+                    if (userEdge ? !_partsWarpShowLines
+                            : !_partsMeshShowAutoLines || SpritePartsMeshOps.IsHullEdge(slot.Mesh, a, b))
                         continue;
                     Handles.color = userEdge ? new Color(0.3f, 0.85f, 1f, 0.9f) : PartsMeshAutoLine;
                     Handles.DrawAAPolyLine(userEdge ? 2f : 1.5f, pts[a], pts[b]);
@@ -354,7 +355,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
             Handles.color = virtualQuad ? new Color(1f, 1f, 1f, 0.35f) : new Color(1f, 0.6f, 0.2f, 0.95f);
-            for (int i = 0; i < hull; i++)
+            for (int i = 0; i < hull && (_partsWarpShowLines || virtualQuad); i++)
                 Handles.DrawAAPolyLine(virtualQuad ? 1.5f : 2.5f, pts[i], pts[(i + 1) % hull]);
 
             var red = new Color(0.9f, 0.2f, 0.15f, 1f);
@@ -407,6 +408,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 bool selected = _partsWarpSelection.Contains(i);
                 bool hover = i == _partsWarpHover;
+                if (!_partsWarpShowVerts && !selected && !hover && !virtualQuad)
+                    continue; // Vertices off: only what you picked stays visible
                 Handles.color = selected ? green
                     : weights[i] > 0f ? Color.Lerp(new Color(0.08f, 0.15f, 0.55f, 1f), new Color(0.25f, 0.9f, 1f, 1f), weights[i])
                     : virtualQuad ? Color.white : red;
@@ -979,6 +982,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (!IsPartsMeshEdit())
                 return false;
+            if (_partsFfdSession != null && _partsFfdSession.On && _partsFfdSession.Mesh)
+                ApplyPartsFfd(); // leaving Edit Mesh keeps the FFD result
             var left = MeshEditSlot()?.Mesh;
             _partsMeshEditSlotId = null;
             _partsMeshPen = -1;
@@ -1107,7 +1112,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         static Rect PartsMeshBanner(Rect canvas)
-            => new Rect(canvas.x + 8f, canvas.y + 8f, Mathf.Min(canvas.width - 16f, 790f), 46f);
+            => new Rect(canvas.x + 8f, canvas.y + 8f, Mathf.Min(canvas.width - 16f, 960f), 46f);
 
         static Vector2 MeshUvToGui(Rect sprite, Vector2 uv)
             => new Vector2(Mathf.LerpUnclamped(sprite.xMin, sprite.xMax, uv.x), Mathf.LerpUnclamped(sprite.yMax, sprite.yMin, uv.y)); // unclamped: vertices may sit past the image
@@ -1210,10 +1215,26 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (GUI.Button(new Rect(bx, by, 40f, 18f), new GUIContent("Fit", "Reset zoom and pan. Scroll zooms, middle-drag or Alt+drag pans."), _partsTabStyle))
                 FitPartsMeshView();
             GUI.Label(new Rect(bx + 44f, by + 1f, 50f, 16f), Mathf.RoundToInt(_partsMeshZoom * 100f) + "%", _mutedStyle);
+            bx += 96f;
+            if (PartsMeshFfdActive())
+            {
+                if (GUI.Button(new Rect(bx, by, 50f, 18f), new GUIContent("Apply", "Keep the FFD shape (Enter)"), _primaryStyle))
+                    ApplyPartsFfd();
+                if (GUI.Button(new Rect(bx + 52f, by, 46f, 18f), new GUIContent("Reset", "Back to the shape before this FFD"), _partsTabStyle))
+                    ResetPartsFfd();
+                if (GUI.Button(new Rect(bx + 100f, by, 54f, 18f), new GUIContent("Cancel", "Reset and leave FFD (Esc)"), _partsTabStyle))
+                    CancelPartsFfd();
+            }
+            else if (GUI.Button(new Rect(bx, by, 40f, 18f), new GUIContent("FFD",
+                         "Reshape the setup mesh with a grid around the selected vertices (or all). Grid size in the Mesh panel."), _partsTabStyle))
+                BeginMeshFfd();
         }
 
         /// <summary>Show the automatic triangle lines (Mesh panel). Off hides them; the triangles stay.</summary>
-        [SerializeField] bool _partsMeshShowTriangles = true;
+        [SerializeField] bool _partsMeshShowAutoLines; // off: like AnyPortrait, only the lines you drew show
+        [SerializeField] bool _partsShowFfd = true;
+        [SerializeField] bool _partsWarpShowVerts = true;
+        [SerializeField] bool _partsWarpShowLines = true;
         static readonly Color PartsMeshAutoLine = new Color(1f, 0.62f, 0.25f, 0.32f);
 
         /// <summary>A triangle line the triangulation made: not the outline and not an edge you drew.</summary>
@@ -1303,7 +1324,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 // Solid anti-aliased lines (rotated rects broke thin diagonals into dashes under the clip).
                 Handles.BeginGUI();
-                if (mesh.HasMesh && _partsMeshShowTriangles)
+                if (mesh.HasMesh && _partsMeshShowAutoLines)
                 {
                     // Automatic triangle lines (not the outline, not your edges): dim, like AnyPortrait's hidden edges.
                     Handles.color = PartsMeshAutoLine;
@@ -1348,7 +1369,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (i == _partsWarpHover)
                     DrawGuiRectOutline(new Rect(p.x - s * 0.5f - 2f, p.y - s * 0.5f - 2f, s + 4f, s + 4f), Color.white, 1f);
             }
-            if (MeshAxisGizmoShown() && !_partsWarpBox && TryGetMeshSelectionCentre(sprite, mesh, out var axisOrigin))
+            if (PartsMeshFfdActive())
+                DrawPartsFfd(canvas);
+            else if (MeshAxisGizmoShown() && !_partsWarpBox && TryGetMeshSelectionCentre(sprite, mesh, out var axisOrigin))
                 DrawPartsAxisGizmo(axisOrigin);
             string stats = mesh != null && mesh.HasMesh
                 ? n + " vertices   " + hull + " hull   " + mesh.Triangles.Length / 3 + " triangles"
@@ -1371,6 +1394,16 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void HandlePartsMeshEditInput(Rect canvas, Event evt, int controlId)
         {
+            if (evt.type == EventType.KeyDown && PartsMeshFfdActive() && _partsFfdDrag < 0
+                && (evt.keyCode == KeyCode.Escape || evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter))
+            {
+                if (evt.keyCode == KeyCode.Escape)
+                    CancelPartsFfd();
+                else
+                    ApplyPartsFfd();
+                evt.Use();
+                return;
+            }
             if (evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape)
             {
                 ReleasePartsCanvasCapture();
@@ -1450,6 +1483,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUIUtility.keyboardControl = 0;
             GUI.FocusControl(null);
 
+            if (PartsMeshFfdActive())
+            {
+                if (!TryBeginMeshFfdDrag(canvas, evt.mousePosition, controlId))
+                    _status = "Mesh FFD: drag a violet point or line. Apply (Enter) or Cancel (Esc) to leave FFD.";
+                evt.Use();
+                Repaint();
+                return;
+            }
             int hit = HitMeshVertex(sprite, mesh, evt.mousePosition);
             if (MeshAxisGizmoShown() && TryGetMeshSelectionCentre(sprite, mesh, out var axisOrigin))
             {
@@ -1538,7 +1579,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         /// <summary>Called by the active-drag router while Edit Mesh owns the pointer. True = handled.</summary>
         bool HandlePartsMeshEditDrag(Rect canvas, Event evt, EventType raw)
         {
-            if (!_partsMeshDrag && !_partsWarpBox && _partsMeshEdgeFrom < 0 && !_partsWeightPainting)
+            if (!_partsMeshDrag && !_partsWarpBox && _partsMeshEdgeFrom < 0 && !_partsWeightPainting && _partsFfdDrag < 0)
                 return false;
             var slot = MeshEditSlot();
             TryGetPartsMeshEditLayout(canvas, out var sprite, out _, out _);
@@ -1559,7 +1600,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (raw == EventType.MouseDrag)
             {
                 _partsMeshMouseUv = MeshGuiToUvFree(sprite, evt.mousePosition);
-                if (_partsMeshDrag)
+                if (_partsFfdDrag >= 0)
+                    ApplyMeshFfdDrag(canvas, evt.mousePosition);
+                else if (_partsMeshDrag)
                     ApplyMeshVertexDrag(sprite, evt.mousePosition);
                 else if (_partsWeightPainting)
                     PaintWeights(sprite, evt.mousePosition, evt.shift);

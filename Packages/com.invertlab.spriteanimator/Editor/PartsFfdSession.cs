@@ -10,6 +10,8 @@ namespace InvertLab.Sprites.DOTS.Editor
     internal sealed class PartsFfdSession : ScriptableObject
     {
         public bool On;
+        /// <summary>True: Edit Mesh FFD on the setup mesh (image space 0..1). False: Warp FFD on the pose.</summary>
+        public bool Mesh;
         public string SlotId;
         public float Time;
         public int Cols = 3;

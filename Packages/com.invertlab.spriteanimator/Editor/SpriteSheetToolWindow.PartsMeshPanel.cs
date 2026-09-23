@@ -68,7 +68,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                     DrawPartsMeshToolsSection();
                 }
                 else if (_partsMeshTool == PartsMeshTool.Modify)
+                {
+                    DrawPanelFfdSection();
                     DrawPanelSoftForModifyHint();
+                }
                 DrawPartsWeightsInspector(slot);
                 DrawPanelHelp();
             }
@@ -92,10 +95,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 bool show = EditorGUILayout.ToggleLeft(new GUIContent("Show triangles",
                         "The dim lines the triangulation adds between your lines. Hiding them changes nothing: " +
                         "every mesh is drawn as triangles, and a 4-sided shape always has a diagonal."),
-                    _partsMeshShowTriangles);
-                if (show != _partsMeshShowTriangles)
+                    _partsMeshShowAutoLines);
+                if (show != _partsMeshShowAutoLines)
                 {
-                    _partsMeshShowTriangles = show;
+                    _partsMeshShowAutoLines = show;
                     Repaint();
                 }
             }

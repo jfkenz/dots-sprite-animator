@@ -1769,11 +1769,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsMeshPanel(meshPanel);
         }
 
-        static Rect PartsCanvasVisibilityOverlayRect(Rect canvas)
+        /// <summary>Warp and Edit Mesh swap Onion / Debug / Root for what matters there: vertices, lines, triangles, FFD.</summary>
+        bool PartsMeshDisplayOverlay()
+            => IsPartsMeshEdit() || (_partsCanvasTool == PartsCanvasTool.Warp && _partsMode == SpritePartsStudioMode.Animate);
+
+        Rect PartsCanvasVisibilityOverlayRect(Rect canvas)
         {
             const float pad = 8f;
             const float h = 24f;
-            const float w = 244f;
+            float w = PartsMeshDisplayOverlay() ? 332f : 244f;
             return new Rect(canvas.xMax - w - pad, canvas.yMax - h - pad, w, h);
         }
 
@@ -1782,6 +1786,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.DrawRect(overlay, new Color(0.08f, 0.09f, 0.12f, 0.92f));
             float x = overlay.x + 2f;
             float y = overlay.y + 1f;
+            if (PartsMeshDisplayOverlay())
+            {
+                DrawPartsVisibilityToggle(ref x, y, 44f, ref _partsShowArt,
+                    "Art", "Show or hide the current pose sprites.");
+                DrawPartsVisibilityToggle(ref x, y, 70f, ref _partsWarpShowVerts,
+                    "Vertices", "Show the mesh vertices (Warp).");
+                DrawPartsVisibilityToggle(ref x, y, 50f, ref _partsWarpShowLines,
+                    "Lines", "Show the outline and the edges you drew.");
+                DrawPartsVisibilityToggle(ref x, y, 78f, ref _partsMeshShowAutoLines,
+                    "Triangles", "Show the dim lines the triangulation adds between your lines.");
+                DrawPartsVisibilityToggle(ref x, y, 44f, ref _partsShowFfd,
+                    "FFD", "Show the FFD grid while FFD is on.");
+                return;
+            }
             using (new EditorGUI.DisabledScope(_partsMode == SpritePartsStudioMode.Rig))
             {
                 DrawPartsVisibilityToggle(ref x, y, 62f, ref _partsOnionEnabled,

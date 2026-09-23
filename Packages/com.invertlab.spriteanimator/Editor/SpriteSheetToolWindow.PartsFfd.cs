@@ -44,12 +44,24 @@ namespace InvertLab.Sprites.DOTS.Editor
         bool PartsFfdActive()
         {
             var s = _partsFfdSession;
-            return s != null && s.On && s.Ctrl != null && s.Rest != null && s.Ctrl.Length == s.Rest.Length
-                   && _partsCanvasTool == PartsCanvasTool.Warp && _partsMode == SpritePartsStudioMode.Animate
+            return s != null && s.On && !s.Mesh && s.Ctrl != null && s.Rest != null && s.Ctrl.Length == s.Rest.Length
+                   && !IsPartsMeshEdit() && _partsCanvasTool == PartsCanvasTool.Warp && _partsMode == SpritePartsStudioMode.Animate
                    && CurrentPartsSlot != null
                    && SpritePartIdUtility.Canonical(CurrentPartsSlot.SlotId) == s.SlotId
                    && Mathf.Approximately(s.Time, _partsPreviewTime);
         }
+
+        /// <summary>Edit Mesh FFD: reshapes the setup mesh (Modify tool).</summary>
+        bool PartsMeshFfdActive()
+        {
+            var s = _partsFfdSession;
+            return s != null && s.On && s.Mesh && s.Ctrl != null && s.Rest != null && s.Ctrl.Length == s.Rest.Length
+                   && IsPartsMeshEdit() && _partsMeshTool == PartsMeshTool.Modify
+                   && SpritePartIdUtility.Canonical(_partsMeshEditSlotId) == s.SlotId
+                   && MeshEditSlot()?.Mesh != null && MeshEditSlot().Mesh.HasMesh;
+        }
+
+        bool PartsAnyFfdActive() => PartsFfdActive() || PartsMeshFfdActive();
 
         /// <summary>One undo step that covers the profile (deform key) and the FFD grid.</summary>
         void RecordPartsFfdUndo(string operation)
@@ -96,11 +108,22 @@ namespace InvertLab.Sprites.DOTS.Editor
                 for (int i = 0; i < shown.PointCount; i++)
                     verts.Add(i);
             }
-            float2 min = shown.GetPoint(verts[0]), max = min;
+            StartFfdGrid(verts, v => shown.GetPoint(v), id, false);
+            _status = "FFD: drag the violet points or lines to bend " + verts.Count + " vertices. Enter applies, Esc cancels.";
+            Repaint();
+        }
+
+        /// <summary>
+        /// Builds the grid around <paramref name="verts"/> (positions from <paramref name="at"/>) and turns FFD on,
+        /// as one undo step.
+        /// </summary>
+        void StartFfdGrid(List<int> verts, System.Func<int, float2> at, string id, bool mesh)
+        {
+            float2 min = at(verts[0]), max = min;
             foreach (int v in verts)
             {
-                min = math.min(min, shown.GetPoint(v));
-                max = math.max(max, shown.GetPoint(v));
+                min = math.min(min, at(v));
+                max = math.max(max, at(v));
             }
             // A little margin so edge vertices sit inside the grid, and never a zero-size box.
             float2 pad = math.max((max - min) * 0.06f, new float2(0.02f));
@@ -109,7 +132,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             int cols = Mathf.Clamp(_partsFfdCols, 2, 6);
             int rows = Mathf.Clamp(_partsFfdRows, 2, 6);
-            RecordPartsFfdUndo("Start FFD");
+            RecordPartsFfdUndo(mesh ? "Start Mesh FFD" : "Start FFD");
             var f = Ffd;
             f.Rest = new Vector2[cols * rows];
             for (int r = 0; r < rows; r++)
@@ -125,19 +148,105 @@ namespace InvertLab.Sprites.DOTS.Editor
             f.Param = new Vector2[verts.Count];
             for (int k = 0; k < verts.Count; k++)
             {
-                float2 t = (shown.GetPoint(verts[k]) - min) / (max - min);
+                float2 t = (at(verts[k]) - min) / (max - min);
                 f.Param[k] = new Vector2(t.x, t.y);
             }
             f.Cols = cols;
             f.Rows = rows;
             f.SlotId = id;
             f.Time = _partsPreviewTime;
+            f.Mesh = mesh;
             f.On = true;
             _partsFfdCols = cols;
             _partsFfdRows = rows;
             _partsFfdDrag = -1;
-            _status = "FFD: drag the violet points or lines to bend " + verts.Count + " vertices. Enter applies, Esc cancels.";
+        }
+
+        /// <summary>Edit Mesh FFD: a grid around the selected setup vertices (or all), in image space.</summary>
+        void BeginMeshFfd()
+        {
+            var slot = MeshEditSlot();
+            var mesh = slot?.Mesh;
+            if (mesh == null || !mesh.HasMesh)
+            {
+                _status = "FFD needs polygons. Close the loop first.";
+                return;
+            }
+            if (_partsMeshTool != PartsMeshTool.Modify)
+                SetPartsMeshTool(PartsMeshTool.Modify);
+            var verts = new List<int>();
+            foreach (int s in _partsWarpSelection)
+            {
+                if ((uint)s < (uint)mesh.VertexCount)
+                    verts.Add(s);
+            }
+            if (verts.Count < 2)
+            {
+                verts.Clear();
+                for (int i = 0; i < mesh.VertexCount; i++)
+                    verts.Add(i);
+            }
+            var uv = mesh.Vertices;
+            StartFfdGrid(verts, v => new float2(uv[v].x, uv[v].y), SpritePartIdUtility.Canonical(slot.SlotId), true);
+            _status = "Mesh FFD: drag the violet points or lines to reshape " + verts.Count + " vertices. Enter applies, Esc cancels.";
             Repaint();
+        }
+
+        /// <summary>Setup mesh: each FFD vertex moves by FFD(to) - FFD(from) from <paramref name="start"/>. Triangles stay.</summary>
+        void ApplyMeshFfdDelta(SpritePartSlotDef slot, SpritePartMeshDef start, Vector2[] from, Vector2[] to)
+        {
+            var f = Ffd;
+            var ids = new List<int>(f.Verts.Length);
+            var positions = new List<Vector2>(f.Verts.Length);
+            for (int k = 0; k < f.Verts.Length; k++)
+            {
+                int i = f.Verts[k];
+                if ((uint)i >= (uint)start.VertexCount)
+                    continue;
+                float2 d = FfdSample(to, f.Param[k]) - FfdSample(from, f.Param[k]);
+                ids.Add(i);
+                positions.Add(start.Vertices[i] + new Vector2(d.x, d.y));
+            }
+            var next = start.Clone();
+            if (SpritePartsMeshOps.TrySetVertices(next, ids, positions))
+                slot.Mesh = next;
+            if (_asset != null)
+                EditorUtility.SetDirty(_asset);
+        }
+
+        /// <summary>Edit Mesh: grab an FFD point or line. True when grabbed.</summary>
+        bool TryBeginMeshFfdDrag(Rect canvas, Vector2 mouse, int controlId)
+        {
+            if (!PartsMeshFfdActive() || !TryPartsFfdScreen(canvas, out var toScreen, out _)
+                || !HitPartsFfd(toScreen, mouse, out int a, out int b))
+                return false;
+            var slot = MeshEditSlot();
+            BeginPartsDragUndo("Mesh FFD");
+            Undo.RegisterCompleteObjectUndo(Ffd, "Mesh FFD");
+            _partsFfdDrag = a;
+            _partsFfdDragB = b;
+            _partsFfdDragMouse = mouse;
+            _partsFfdDragCtrl = (Vector2[])Ffd.Ctrl.Clone();
+            _partsMeshDragStart = slot.Mesh.Clone(); // Esc restores it
+            _partsMeshMoved = true;                  // mouse-up closes the undo step
+            CapturePartsMeshDrag(controlId);
+            return true;
+        }
+
+        void ApplyMeshFfdDrag(Rect canvas, Vector2 mouse)
+        {
+            var slot = MeshEditSlot();
+            if (_partsFfdDrag < 0 || _partsFfdDragCtrl == null || slot == null || _partsMeshDragStart == null
+                || !TryPartsFfdScreen(canvas, out _, out var toGrid))
+                return;
+            mouse = ConstrainPartsAxis(_partsFfdDragMouse, mouse);
+            Vector2 move = toGrid(mouse) - toGrid(_partsFfdDragMouse);
+            var ctrl = (Vector2[])_partsFfdDragCtrl.Clone();
+            ctrl[_partsFfdDrag] += move;
+            if (_partsFfdDragB >= 0)
+                ctrl[_partsFfdDragB] += move;
+            Ffd.Ctrl = ctrl;
+            ApplyMeshFfdDelta(slot, _partsMeshDragStart, _partsFfdDragCtrl, ctrl);
         }
 
         void ApplyPartsFfd()
@@ -154,7 +263,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         /// <summary>Reset: bends everything back to how it was when FFD started, and stays in FFD.</summary>
         void ResetPartsFfd()
         {
-            if (!PartsFfdActive())
+            if (!PartsAnyFfdActive())
                 return;
             RecordPartsFfdUndo("Reset FFD");
             BakeFfdChange(Ffd.Ctrl, Ffd.Rest);
@@ -169,7 +278,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_partsFfdSession == null || !_partsFfdSession.On)
                 return;
             RecordPartsFfdUndo("Cancel FFD");
-            if (PartsFfdActive())
+            if (PartsAnyFfdActive())
                 BakeFfdChange(Ffd.Ctrl, Ffd.Rest);
             Ffd.Ctrl = (Vector2[])Ffd.Rest.Clone();
             Ffd.On = false;
@@ -182,6 +291,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         void BakeFfdChange(Vector2[] from, Vector2[] to)
         {
             var f = Ffd;
+            if (f.Mesh)
+            {
+                var slot = MeshEditSlot();
+                if (slot?.Mesh != null)
+                    ApplyMeshFfdDelta(slot, slot.Mesh.Clone(), from, to);
+                return;
+            }
             var pose = SampleLocalPoseForSlot(f.SlotId, _partsPreviewTime);
             if (!pose.Lattice.HasMesh)
                 return;
@@ -240,6 +356,15 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             toScreen = null;
             toLattice = null;
+            if (Ffd.Mesh)
+            {
+                // Edit Mesh: the grid is in image space, the same as the setup vertices.
+                if (!TryGetPartsMeshEditLayout(canvas, out var sprite, out _, out _))
+                    return false;
+                toScreen = p => MeshUvToGui(sprite, p);
+                toLattice = m => MeshGuiToUvFree(sprite, m);
+                return true;
+            }
             if (!TryGetPartsWarpLayout(canvas, Ffd.SlotId, out var rect, out var joint, out float guiDeg,
                     out bool flipX, out bool flipY))
                 return false;
@@ -336,7 +461,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             GUILayout.Space(6f);
             EditorGUILayout.LabelField("FFD (FREE FORM)", _sectionStyle);
-            bool on = PartsFfdActive();
+            bool on = PartsAnyFfdActive();
             using (new EditorGUI.DisabledScope(on))
             {
                 EditorGUILayout.BeginHorizontal();
@@ -348,8 +473,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             if (!on)
             {
-                if (GUILayout.Button(new GUIContent("Start FFD", "A grid around the selected vertices (or the whole mesh). Drag its points or lines to bend.")))
-                    BeginPartsFfd();
+                if (GUILayout.Button(new GUIContent("Start FFD", IsPartsMeshEdit()
+                        ? "Reshape the setup mesh: a grid around the selected vertices (or all). Drag its points or lines."
+                        : "A grid around the selected vertices (or the whole mesh). Drag its points or lines to bend.")))
+                {
+                    if (IsPartsMeshEdit())
+                        BeginMeshFfd();
+                    else
+                        BeginPartsFfd();
+                }
                 return;
             }
             EditorGUILayout.LabelField(Ffd.Verts.Length + " vertices inside the grid. Drag a point, or a line to move both its points.",
@@ -366,7 +498,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawPartsFfd(Rect canvas)
         {
-            if (!PartsFfdActive() || Event.current.type != EventType.Repaint || !TryPartsFfdScreen(canvas, out var toScreen, out _))
+            if (!PartsAnyFfdActive() || !_partsShowFfd || Event.current.type != EventType.Repaint
+                || !TryPartsFfdScreen(canvas, out var toScreen, out _))
                 return;
             var f = Ffd;
             int cols = f.Cols, rows = f.Rows;
