@@ -562,6 +562,7 @@ namespace InvertLab.Sprites.DOTS
                                 ClipActive = key.ClipActive,
                                 Curve = key.Curve,
                                 Separate = key.Separate,
+                                Shear = key.Shear,
                                 AppearanceId = key.AppearanceId ?? string.Empty,
                             };
                             // Mirror clip keys only for the duplicated root slot.
@@ -1099,7 +1100,8 @@ namespace InvertLab.Sprites.DOTS
                 float4x4 local = SpritePartsHierarchy.LocalMatrix(
                     new float2(slot.RestPosition.x, slot.RestPosition.y),
                     slot.RestRotation,
-                    new float2(slot.RestScale.x, slot.RestScale.y));
+                    new float2(slot.RestScale.x, slot.RestScale.y),
+                    new float2(slot.RestShear.x, slot.RestShear.y));
                 if (string.IsNullOrWhiteSpace(slot.ParentSlotId))
                 {
                     map[id] = local;

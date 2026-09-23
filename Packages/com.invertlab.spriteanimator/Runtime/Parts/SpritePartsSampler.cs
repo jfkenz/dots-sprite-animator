@@ -14,6 +14,8 @@ namespace InvertLab.Sprites.DOTS
             public float2 Position;
             public float Rotation;
             public float2 Scale;
+            /// <summary>Shear in degrees (Spine): x tilts the X axis, y the Y axis.</summary>
+            public float2 Shear;
             public SpritePartsLattice Lattice;
         }
 
@@ -56,6 +58,7 @@ namespace InvertLab.Sprites.DOTS
                 Position = slot.RestPosition,
                 Rotation = slot.RestRotation,
                 Scale = slot.RestScale,
+                Shear = slot.RestShear,
                 Lattice = slot.Mesh,
             };
 
@@ -93,6 +96,8 @@ namespace InvertLab.Sprites.DOTS
                         Separate(ref track.Keys[a], track.Keys[a].CurveScaleY, raw, u));
                 pose.Scale = math.lerp(track.Keys[a].Scale, track.Keys[b].Scale, w);
             }
+            if (Span(ref track, SpritePartsKeyChannel.Shear, time, out a, out b, out u, out _))
+                pose.Shear = math.lerp(track.Keys[a].Shear, track.Keys[b].Shear, stepped ? 0f : u);
             if (Span(ref track, SpritePartsKeyChannel.Deform, time, out a, out b, out u, out _))
                 SpritePartsLattice.ApplyDeform(ref pose.Lattice, track.Keys[a].Deform, track.Keys[b].Deform, stepped ? 0f : u);
         }

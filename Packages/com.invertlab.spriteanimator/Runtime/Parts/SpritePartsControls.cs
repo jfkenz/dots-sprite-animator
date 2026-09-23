@@ -779,7 +779,10 @@ namespace InvertLab.Sprites.DOTS
             lt.Scale = 1f;
             em.SetComponentData(part, lt);
 
-            var scaleMatrix = SpritePartsPlayback.ScaleMatrix(pose.Scale.x, pose.Scale.y);
+            // Scale and shear (Spine) go in the post-transform; LocalTransform keeps position and rotation.
+            var scaleMatrix = math.all(pose.Shear == float2.zero)
+                ? SpritePartsPlayback.ScaleMatrix(pose.Scale.x, pose.Scale.y)
+                : SpritePartsHierarchy.ShearScaleMatrix(pose.Scale, pose.Shear);
             if (!em.HasComponent<PostTransformMatrix>(part))
                 AddComponent(em, part, new PostTransformMatrix { Value = scaleMatrix }, commands, deferred);
             else

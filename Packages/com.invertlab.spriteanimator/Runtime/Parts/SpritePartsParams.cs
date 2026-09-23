@@ -128,6 +128,7 @@ namespace InvertLab.Sprites.DOTS
             pose.Position += to.Position - from.Position;
             pose.Rotation += SpritePartsSampler.LerpAngleShortest(from.Rotation, to.Rotation, 1f) - from.Rotation;
             pose.Scale *= new float2(Ratio(to.Scale.x, from.Scale.x), Ratio(to.Scale.y, from.Scale.y));
+            pose.Shear += to.Shear - from.Shear;
             int n = pose.Lattice.PointCount;
             if (n > 0 && n == from.Lattice.PointCount && n == to.Lattice.PointCount)
             {

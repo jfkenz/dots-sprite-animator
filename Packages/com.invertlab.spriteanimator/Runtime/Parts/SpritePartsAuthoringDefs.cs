@@ -53,6 +53,8 @@ namespace InvertLab.Sprites.DOTS
         public Vector2 RestPosition = Vector2.zero;
         public float RestRotation;
         public Vector2 RestScale = Vector2.one;
+        /// <summary>Shear in degrees (Spine): X tilts the part's X axis, Y its Y axis.</summary>
+        public Vector2 RestShear;
         public string DefaultAppearanceId = string.Empty;
         public int DrawRank;
         /// <summary>
@@ -358,8 +360,12 @@ namespace InvertLab.Sprites.DOTS
         Rotation = 2,
         Scale = 4,
         Deform = 8,
+        /// <summary>Shear (Spine): keyed on its own, never by "all channels" edits, so they leave it alone.</summary>
+        Shear = 16,
         Transform = Position | Rotation | Scale,
         All = Position | Rotation | Scale | Deform,
+        /// <summary>Every channel bit, shear included (for masks).</summary>
+        Every = All | Shear,
     }
 
     /// <summary>
@@ -389,6 +395,8 @@ namespace InvertLab.Sprites.DOTS
         public Vector2 Position = Vector2.zero;
         public float Rotation;
         public Vector2 Scale = Vector2.one;
+        /// <summary>Shear in degrees, held when <see cref="Channels"/> has <see cref="SpritePartsKeyChannel.Shear"/>.</summary>
+        public Vector2 Shear;
         /// <summary>
         /// Deform key: one offset per vertex of the slot's <see cref="SpritePartSlotDef.Mesh"/>,
         /// in unit-quad space. Null or a different vertex count = the setup mesh, undeformed.

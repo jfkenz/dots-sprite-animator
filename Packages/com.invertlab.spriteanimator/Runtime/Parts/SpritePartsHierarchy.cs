@@ -37,7 +37,7 @@ namespace InvertLab.Sprites.DOTS
             if (index < 0 || index >= set.Slots.Length || done[index])
                 return;
             var pose = localPoses[index];
-            float4x4 local = LocalMatrix(pose.Position, pose.Rotation, pose.Scale);
+            float4x4 local = LocalMatrix(pose.Position, pose.Rotation, pose.Scale, pose.Shear);
             int parent = set.Slots[index].ParentSlotIndex;
             if (parent >= 0 && parent < set.Slots.Length)
             {
@@ -50,6 +50,29 @@ namespace InvertLab.Sprites.DOTS
             }
             done[index] = true;
         }
+
+        /// <summary>
+        /// Spine's bone matrix with shear: the X axis turns by rotation + shear.x, the Y axis by rotation + 90 + shear.y,
+        /// each scaled. No shear = <see cref="LocalMatrix(float2, float, float2)"/>.
+        /// </summary>
+        public static float4x4 LocalMatrix(float2 position, float rotationDeg, float2 scale, float2 shearDeg)
+        {
+            if (math.all(shearDeg == float2.zero))
+                return LocalMatrix(position, rotationDeg, scale);
+            float sx = scale.x == 0f ? 1f : scale.x;
+            float sy = scale.y == 0f ? 1f : scale.y;
+            float ax = math.radians(rotationDeg + shearDeg.x);
+            float ay = math.radians(rotationDeg + 90f + shearDeg.y);
+            return new float4x4(
+                new float4(math.cos(ax) * sx, math.sin(ax) * sx, 0f, 0f),
+                new float4(math.cos(ay) * sy, math.sin(ay) * sy, 0f, 0f),
+                new float4(0f, 0f, 1f, 0f),
+                new float4(position.x, position.y, 0f, 1f));
+        }
+
+        /// <summary>Shear then scale, without rotation or position (a part's PostTransformMatrix).</summary>
+        public static float4x4 ShearScaleMatrix(float2 scale, float2 shearDeg)
+            => LocalMatrix(float2.zero, 0f, scale, shearDeg);
 
         public static float4x4 LocalMatrix(float2 position, float rotationDeg, float2 scale)
         {

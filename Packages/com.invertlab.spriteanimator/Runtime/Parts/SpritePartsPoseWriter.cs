@@ -294,6 +294,7 @@ namespace InvertLab.Sprites.DOTS
             pose.Position += (layer.Position - slot.RestPosition) * w;
             pose.Rotation += (layer.Rotation - slot.RestRotation) * w;
             pose.Scale += (layer.Scale - slot.RestScale) * w;
+            pose.Shear += (layer.Shear - slot.RestShear) * w;
             if (pose.Lattice.PointCount == layer.Lattice.PointCount && slot.Mesh.PointCount == layer.Lattice.PointCount)
                 for (int p = 0; p < pose.Lattice.PointCount; p++)
                     pose.Lattice.Points[p] += (layer.Lattice.Points[p] - slot.Mesh.Points[p]) * w;
@@ -307,6 +308,7 @@ namespace InvertLab.Sprites.DOTS
             {
                 Position = math.lerp(from.Position, to.Position, t),
                 Scale = math.lerp(from.Scale, to.Scale, t),
+                Shear = math.lerp(from.Shear, to.Shear, t),
                 Rotation = SpritePartsSampler.LerpAngleShortest(from.Rotation, to.Rotation, t),
                 Lattice = SpritePartsLattice.Lerp(from.Lattice, to.Lattice, t),
             };
@@ -1042,7 +1044,7 @@ namespace InvertLab.Sprites.DOTS
             else if (index < finalLocal.Length)
             {
                 var pose = finalLocal[index];
-                local = SpritePartsHierarchy.LocalMatrix(pose.Position, pose.Rotation, pose.Scale);
+                local = SpritePartsHierarchy.LocalMatrix(pose.Position, pose.Rotation, pose.Scale, pose.Shear);
             }
             else
                 local = float4x4.identity;

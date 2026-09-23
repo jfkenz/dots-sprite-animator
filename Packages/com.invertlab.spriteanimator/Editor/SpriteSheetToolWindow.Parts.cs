@@ -1005,12 +1005,58 @@ namespace InvertLab.Sprites.DOTS.Editor
                     CommitPartsTransformInspectorEdit(slot, pose, isRig, "Reset Scale");
                 }
                 EditorGUILayout.EndHorizontal();
+
+                DrawPartsShearRow(slot, isRig);
             }
 
             // Pivot is art registration on the joint - shown here with TRS for one-stop editing.
             using (new EditorGUI.DisabledScope(partLocked))
                 DrawPartsAppearancePivotInspector(slot);
 
+        }
+
+        /// <summary>Shear (Spine): Rig edits the setup shear, Animate keys it (its own channel) at the playhead.</summary>
+        void DrawPartsShearRow(SpritePartSlotDef slot, bool isRig)
+        {
+            Vector2 shown = isRig ? slot.RestShear : SampleShearForSlot(slot.SlotId, _partsPreviewTime);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUI.BeginChangeCheck();
+            Vector2 shear = EditorGUILayout.Vector2Field(new GUIContent("Shear",
+                "Tilt the part's X and Y axes (degrees): skew for squash, lean and smears"), shown);
+            bool changed = EditorGUI.EndChangeCheck();
+            if (GUILayout.Button(new GUIContent("R", isRig ? "Reset Shear to 0,0" : "Key the setup shear"),
+                    GUILayout.Width(22f), GUILayout.Height(18f)))
+            {
+                shear = isRig ? Vector2.zero : slot.RestShear;
+                changed = true;
+            }
+            EditorGUILayout.EndHorizontal();
+            if (!changed || _partsPlaying)
+                return;
+            RecordPartsUndo(isRig ? "Edit Rest Shear" : "Key Shear");
+            if (isRig)
+                slot.RestShear = shear;
+            else
+                SpritePartsAuthoringOps.SetShearKey(_profile, _partsSelectedClip, slot.SlotId, _partsPreviewTime, shear);
+            SaveDirty();
+            Repaint();
+        }
+
+        Vector2 SampleShearForSlot(string slotId, float time)
+        {
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, slotId);
+            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), time, Allocator.Temp, true,
+                    out var blob, out var poses, out var matrices, out _))
+                return slot?.RestShear ?? Vector2.zero;
+            try
+            {
+                int idx = BlobSlotIndex(ref blob.Value, slotId);
+                return idx >= 0 && idx < poses.Length ? new Vector2(poses[idx].Shear.x, poses[idx].Shear.y) : slot?.RestShear ?? Vector2.zero;
+            }
+            finally
+            {
+                SpritePartsOnion.DisposeSample(blob, poses, matrices);
+            }
         }
 
         void CommitPartsTransformInspectorEdit(
@@ -3199,12 +3245,43 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (c0b.x * c1b.y - c0b.y * c1b.x < 0f)
                         flipSx = -1f;
                 }
+                Texture2D tex = sheet?.Texture;
+                var lattice = artPoses.IsCreated && i < artPoses.Length ? artPoses[i].Lattice : default;
+                if (IsSheared(matrices[i]))
+                {
+                    // Shear cannot be drawn as a turned rectangle: draw the image by its true corners.
+                    var partMatrix = matrices[i];
+                    Rect partRect = r;
+                    Vector2 partJoint = joint;
+                    System.Func<float2, Vector2> toGui = p => ShearedGui(canvas, partRect, partJoint, partMatrix, p);
+                    if (drawArt && tex != null && app != null && !lattice.HasMesh)
+                        DrawPartsWarpedSprite(tex, sheet, app.CellIndex, r, UnitQuadLattice, PreviewTint(ref set, i, sampleTime, tint), toGui);
+                    var corners = new Vector3[]
+                    {
+                        toGui(new float2(-0.5f, -0.5f)), toGui(new float2(0.5f, -0.5f)), toGui(new float2(0.5f, 0.5f)), toGui(new float2(-0.5f, 0.5f)),
+                    };
+                    bool picked = pickable && IsPartsBlobSlotSelected(ref set, i);
+                    if (Event.current.type == EventType.Repaint && (picked || (drawArt && (tex == null || app == null))))
+                    {
+                        Handles.BeginGUI();
+                        if (drawArt && (tex == null || app == null))
+                        {
+                            Handles.color = picked ? new Color(0.45f, 0.9f, 0.55f, tint.a) : new Color(0.75f, 0.78f, 0.85f, tint.a);
+                            Handles.DrawAAConvexPolygon(corners);
+                        }
+                        if (picked)
+                        {
+                            Handles.color = new Color(0.35f, 0.9f, 0.55f, 0.95f);
+                            Handles.DrawAAPolyLine(2f, corners[0], corners[1], corners[2], corners[3], corners[0]);
+                        }
+                        Handles.EndGUI();
+                    }
+                    continue;
+                }
                 Matrix4x4 prev = GUI.matrix;
                 GUIUtility.RotateAroundPivot(-worldDeg, joint);
                 if (flipSx < 0f || flipSy < 0f)
                     GUIUtility.ScaleAroundPivot(new Vector2(flipSx, flipSy), joint);
-                Texture2D tex = sheet?.Texture;
-                var lattice = artPoses.IsCreated && i < artPoses.Length ? artPoses[i].Lattice : default;
                 if (drawArt && tex != null && app != null)
                 {
                     // AnyPortrait keeps the whole image on screen. A partial polygon must not clip the rest away.

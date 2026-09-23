@@ -289,6 +289,7 @@ namespace InvertLab.Sprites.DOTS
                     RestPosition = new float2(s.RestPosition.x, s.RestPosition.y),
                     RestRotation = s.RestRotation,
                     RestScale = new float2(s.RestScale.x, s.RestScale.y),
+                    RestShear = new float2(s.RestShear.x, s.RestShear.y),
                     DefaultAppearanceId = defaultApp,
                     DrawRank = s.DrawRank,
                     // A bone never draws itself, but its children do (Hidden is per slot here).
@@ -424,6 +425,8 @@ namespace InvertLab.Sprites.DOTS
                             Position = new float2(key.Position.x, key.Position.y),
                             Rotation = key.Rotation,
                             Scale = new float2(key.Scale.x, key.Scale.y),
+                            Shear = new float2(key.Shear.x, key.Shear.y),
+                            HasShear = (key.Channels & SpritePartsKeyChannel.Shear) != 0,
                             EaseMode = key.EaseMode,
                             AppearanceId = appearanceId,
                             Deform = SpritePartsLattice.DeformFromArray(key.Deform, key.Deform?.Length ?? 0),

@@ -198,8 +198,42 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         // ------------------------------------------------------------------ rendering
 
+        static SpritePartsLattice s_unitQuadLattice;
+
+        /// <summary>The image's four corners as a lattice (unit-quad space).</summary>
+        static SpritePartsLattice UnitQuadLattice
+        {
+            get
+            {
+                if (!s_unitQuadLattice.HasMesh)
+                    s_unitQuadLattice = SpritePartsLattice.FromMesh(SpritePartsMeshOps.CreateQuad());
+                return s_unitQuadLattice;
+            }
+        }
+
+        /// <summary>True when the part's axes are not square to each other (sheared, itself or by a parent).</summary>
+        static bool IsSheared(float4x4 m)
+        {
+            float2 x = math.normalizesafe(m.c0.xy), y = math.normalizesafe(m.c1.xy);
+            return math.abs(math.dot(x, y)) > 1e-3f;
+        }
+
+        /// <summary>
+        /// A unit-quad point of a part drawn with <paramref name="rect"/> around <paramref name="joint"/>, placed by the
+        /// part's full matrix (shear included) instead of the turned rectangle.
+        /// </summary>
+        Vector2 ShearedGui(Rect canvas, Rect rect, Vector2 joint, float4x4 m, float2 p)
+        {
+            Vector2 g = LatticeGui(rect, p);
+            float pixels = 64f * Mathf.Max(0.001f, _previewZoom);
+            float sx = Mathf.Max(1e-5f, math.length(m.c0.xy)), sy = Mathf.Max(1e-5f, math.length(m.c1.xy));
+            var local = new float2((g.x - joint.x) / (pixels * sx), -(g.y - joint.y) / (pixels * sy));
+            return WorldToCanvas(canvas, math.mul(m, new float4(local, 0f, 1f)).xy);
+        }
+
         void DrawPartsWarpedSprite(
-            Texture2D tex, SpriteSheetDef sheet, int cell, Rect rect, SpritePartsLattice lattice, Color tint)
+            Texture2D tex, SpriteSheetDef sheet, int cell, Rect rect, SpritePartsLattice lattice, Color tint,
+            System.Func<float2, Vector2> toGui = null)
         {
             if (Event.current.type != EventType.Repaint || tex == null)
                 return;
@@ -235,7 +269,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 int v = lattice.GetIndex(i);
                 if ((uint)v >= (uint)verts)
                     continue;
-                Vector2 gui = GUI.matrix.MultiplyPoint(LatticeGui(rect, lattice.GetPoint(v)));
+                Vector2 gui = GUI.matrix.MultiplyPoint(toGui != null ? toGui(lattice.GetPoint(v)) : LatticeGui(rect, lattice.GetPoint(v)));
                 Vector2 screen = GUIUtility.GUIToScreenPoint(gui);
                 float2 t = lattice.GetUv(v);
                 GL.Color(tint);
@@ -303,6 +337,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                         Texture2D tex = sheet?.Texture;
                         if (tex == null || app == null)
                             continue;
+                        if (IsSheared(matrices[i]))
+                        {
+                            var partMatrix = matrices[i];
+                            Rect partRect = r;
+                            Vector2 partJoint = joint;
+                            DrawPartsWarpedSprite(tex, sheet, app.CellIndex, r, lattice,
+                                PreviewTint(ref blob.Value, i, _partsPreviewTime, Color.white),
+                                p => ShearedGui(canvas, partRect, partJoint, partMatrix, p));
+                            continue;
+                        }
                         Matrix4x4 prev = GUI.matrix;
                         GUIUtility.RotateAroundPivot(-worldDeg, joint);
                         bool fx = poses[i].Scale.x < 0f;

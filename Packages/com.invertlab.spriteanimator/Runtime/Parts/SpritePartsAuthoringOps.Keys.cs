@@ -98,6 +98,48 @@ namespace InvertLab.Sprites.DOTS
         /// Stretches (factor &gt; 1) or squeezes the keys' times around <paramref name="pivot"/>: t' = pivot + (t - pivot) x factor,
         /// kept inside the clip and snapped to frames; keys landing together merge.
         /// </summary>
+        /// <summary>
+        /// Keys a part's shear at <paramref name="time"/> (its own channel). The first shear key after the start also
+        /// anchors the setup shear at 0, like other channels.
+        /// </summary>
+        public static KeyEditResult SetShearKey(SpriteSheetProfile profile, int clipIndex, string slotId, float time, Vector2 shear)
+        {
+            var result = new KeyEditResult();
+            var clip = GetClip(profile, clipIndex);
+            var slot = FindSlot(profile, slotId ?? string.Empty);
+            if (clip == null || slot == null)
+            {
+                result.Reason = "No clip or part.";
+                return result;
+            }
+            var track = GetOrCreateTrack(clip, slotId);
+            track.Keys ??= new List<SpritePartsKeyDef>();
+            bool anyShear = track.Keys.Exists(k => k != null && (k.Channels & SpritePartsKeyChannel.Shear) != 0);
+            if (!anyShear && time > 1e-4f)
+            {
+                var zero = FindKeyAtTime(track, 0f);
+                if (zero == null)
+                {
+                    zero = new SpritePartsKeyDef { Time = 0f, Channels = SpritePartsKeyChannel.None, AppearanceId = string.Empty };
+                    track.Keys.Add(zero);
+                }
+                zero.Shear = slot.RestShear;
+                zero.Channels |= SpritePartsKeyChannel.Shear;
+            }
+            var key = FindKeyAtTime(track, time);
+            if (key == null)
+            {
+                key = new SpritePartsKeyDef { Time = time, Channels = SpritePartsKeyChannel.None, AppearanceId = string.Empty };
+                track.Keys.Add(key);
+            }
+            track.Keys.Sort((x, y) => x.Time.CompareTo(y.Time));
+            key.Shear = shear;
+            key.Channels |= SpritePartsKeyChannel.Shear;
+            result.Ok = true;
+            result.Affected = 1;
+            return result;
+        }
+
         public static KeyEditResult ScaleKeyTimes(SpriteSheetProfile profile, int clipIndex, ICollection<SpritePartsKeyDef> keys,
             float pivot, float factor, float snapFps)
         {
@@ -386,6 +428,7 @@ namespace InvertLab.Sprites.DOTS
                 ClipActive = src.ClipActive,
                 Curve = src.Curve,
                 Separate = src.Separate,
+                Shear = src.Shear,
                 AppearanceId = src.AppearanceId ?? string.Empty,
             };
         }
@@ -398,8 +441,9 @@ namespace InvertLab.Sprites.DOTS
         {
             if (into == null || from == null)
                 return;
-            var take = from.Channels & (onlyMissing ? ~into.Channels : SpritePartsKeyChannel.All);
+            var take = from.Channels & (onlyMissing ? ~into.Channels : SpritePartsKeyChannel.Every);
             if ((take & SpritePartsKeyChannel.Position) != 0) into.Position = from.Position;
+            if ((take & SpritePartsKeyChannel.Shear) != 0) into.Shear = from.Shear;
             if ((take & SpritePartsKeyChannel.Rotation) != 0) into.Rotation = from.Rotation;
             if ((take & SpritePartsKeyChannel.Scale) != 0) into.Scale = SanitizeScale(from.Scale);
             if ((take & SpritePartsKeyChannel.Deform) != 0)

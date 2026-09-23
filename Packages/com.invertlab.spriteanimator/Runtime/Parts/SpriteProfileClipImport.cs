@@ -1244,6 +1244,7 @@ namespace InvertLab.Sprites.DOTS
                             ClipActive = key.ClipActive,
                             Curve = key.Curve,
                             Separate = key.Separate,
+                            Shear = key.Shear,
                             AppearanceId = aid,
                         });
                     }

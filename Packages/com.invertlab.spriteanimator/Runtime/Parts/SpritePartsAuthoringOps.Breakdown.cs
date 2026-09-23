@@ -23,7 +23,8 @@ namespace InvertLab.Sprites.DOTS
             const float eps = 1e-4f;
             var channels = SpritePartsKeyChannel.None;
             var values = new SpritePartsKeyDef();
-            foreach (var channel in new[] { SpritePartsKeyChannel.Position, SpritePartsKeyChannel.Rotation, SpritePartsKeyChannel.Scale, SpritePartsKeyChannel.Deform })
+            foreach (var channel in new[] { SpritePartsKeyChannel.Position, SpritePartsKeyChannel.Rotation, SpritePartsKeyChannel.Scale,
+                         SpritePartsKeyChannel.Shear, SpritePartsKeyChannel.Deform })
             {
                 SpritePartsKeyDef a = null, b = null;
                 foreach (var k in track.Keys)
@@ -47,6 +48,9 @@ namespace InvertLab.Sprites.DOTS
                         break;
                     case SpritePartsKeyChannel.Scale:
                         values.Scale = Vector2.LerpUnclamped(a.Scale, b.Scale, favor);
+                        break;
+                    case SpritePartsKeyChannel.Shear:
+                        values.Shear = Vector2.LerpUnclamped(a.Shear, b.Shear, favor);
                         break;
                     case SpritePartsKeyChannel.Deform:
                         if (a.Deform == null || b.Deform == null || a.Deform.Length != b.Deform.Length)
@@ -73,6 +77,7 @@ namespace InvertLab.Sprites.DOTS
             if ((channels & SpritePartsKeyChannel.Position) != 0) key.Position = values.Position;
             if ((channels & SpritePartsKeyChannel.Rotation) != 0) key.Rotation = values.Rotation;
             if ((channels & SpritePartsKeyChannel.Scale) != 0) key.Scale = SanitizeScale(values.Scale);
+            if ((channels & SpritePartsKeyChannel.Shear) != 0) key.Shear = values.Shear;
             if ((channels & SpritePartsKeyChannel.Deform) != 0) key.Deform = values.Deform;
             key.Channels |= channels;
             result.Ok = true;

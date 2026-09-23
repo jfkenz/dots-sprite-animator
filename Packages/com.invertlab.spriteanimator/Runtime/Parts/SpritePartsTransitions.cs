@@ -426,6 +426,7 @@ namespace InvertLab.Sprites.DOTS
             {
                 Position = math.lerp(from.Position, to.Position, t),
                 Scale = math.lerp(from.Scale, to.Scale, t),
+                Shear = math.lerp(from.Shear, to.Shear, t),
                 Rotation = SpritePartsSampler.LerpAngleShortest(from.Rotation, to.Rotation, t),
                 Lattice = SpritePartsLattice.Lerp(from.Lattice, to.Lattice, t),
             };

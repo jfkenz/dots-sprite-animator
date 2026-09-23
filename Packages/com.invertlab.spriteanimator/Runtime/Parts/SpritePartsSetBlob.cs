@@ -136,6 +136,8 @@ namespace InvertLab.Sprites.DOTS
         public float2 RestPosition;
         public float RestRotation;
         public float2 RestScale;
+        /// <summary>Shear in degrees (x tilts the X axis, y the Y axis).</summary>
+        public float2 RestShear;
         public int DefaultAppearanceIndex;
         public int DrawRank;
         /// <summary>1 = do not draw this part (profile Enabled=false or hidden ancestor).</summary>
@@ -234,6 +236,7 @@ namespace InvertLab.Sprites.DOTS
         public float2 Position;
         public float Rotation;
         public float2 Scale;
+        public float2 Shear;
         public byte EaseMode;
         /// <summary>-1 = no appearance change on this key (hold previous / skin default).</summary>
         public int AppearanceIndex;
@@ -298,6 +301,7 @@ namespace InvertLab.Sprites.DOTS
             public float2 RestPosition;
             public float RestRotation;
             public float2 RestScale;
+            public float2 RestShear;
             public string DefaultAppearanceId;
             public int DrawRank;
             public byte Hidden;
@@ -332,6 +336,9 @@ namespace InvertLab.Sprites.DOTS
             public float2 Position;
             public float Rotation;
             public float2 Scale;
+            /// <summary>Shear in degrees; used only when <see cref="HasShear"/>.</summary>
+            public float2 Shear;
+            public bool HasShear;
             public byte EaseMode;
             /// <summary>Empty = hold (-1). Unknown ids also hold.</summary>
             public string AppearanceId;
@@ -587,6 +594,7 @@ namespace InvertLab.Sprites.DOTS
                         RestScale = src.RestScale.x == 0f && src.RestScale.y == 0f
                             ? new float2(1f, 1f)
                             : src.RestScale,
+                        RestShear = math.all(math.isfinite(src.RestShear)) ? src.RestShear : float2.zero,
                         DefaultAppearanceIndex = defaultApp,
                         DrawRank = src.DrawRank,
                         Hidden = src.Hidden,
@@ -1090,6 +1098,7 @@ namespace InvertLab.Sprites.DOTS
                     Position = k.Position,
                     Rotation = k.Rotation,
                     Scale = k.Scale,
+                    Shear = math.all(math.isfinite(k.Shear)) ? k.Shear : float2.zero,
                     EaseMode = ease,
                     AppearanceIndex = appearanceIndex,
                     Deform = k.Deform,
@@ -1098,7 +1107,8 @@ namespace InvertLab.Sprites.DOTS
                     HasDrawOrder = (byte)(k.HasDrawOrder ? 1 : 0),
                     DrawOrder = k.DrawOrder,
                     Curve = math.all(k.Curve == float4.zero) ? new float4(0.33f, 0f, 0.67f, 1f) : k.Curve,
-                    SkipChannels = (byte)(k.SkipChannels & (byte)SpritePartsKeyChannel.All),
+                    SkipChannels = (byte)((k.SkipChannels & (byte)SpritePartsKeyChannel.All)
+                                          | (k.HasShear ? 0 : (byte)SpritePartsKeyChannel.Shear)),
                     SeparateCurves = (byte)(k.SeparateCurves ? 1 : 0),
                     CurveY = k.CurveY,
                     CurveRotation = k.CurveRotation,
@@ -1239,7 +1249,7 @@ namespace InvertLab.Sprites.DOTS
             if (state[i] == 2)
                 return rest[i];
             var local = SpritePartsHierarchy.LocalMatrix(
-                slotArr[i].RestPosition, slotArr[i].RestRotation, slotArr[i].RestScale);
+                slotArr[i].RestPosition, slotArr[i].RestRotation, slotArr[i].RestScale, slotArr[i].RestShear);
             int parent = slotArr[i].ParentSlotIndex;
             state[i] = 1;
             if (parent >= 0 && parent < rest.Length && state[parent] != 1)
