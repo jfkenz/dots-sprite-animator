@@ -1255,6 +1255,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (GUI.Button(new Rect(bx, by, 70f, 18f), new GUIContent("Generate", "Fill the hull with interior vertices."), _partsTabStyle))
                 GeneratePartsMeshInterior();
             bx += 72f;
+            if (GUI.Button(new Rect(bx, by, 70f, 18f), new GUIContent("Subdivide",
+                    "A vertex in the middle of every line of the selected triangles (or the whole mesh)."), _partsTabStyle))
+                SubdividePartsMesh();
+            bx += 72f;
             if (GUI.Button(new Rect(bx, by, 62f, 18f), new GUIContent("Remove", "Back to a rigid rectangle."), _partsTabStyle))
                 RemovePartsMesh();
             bx += 72f;
@@ -1915,6 +1919,52 @@ namespace InvertLab.Sprites.DOTS.Editor
             _status = "Added " + added + " interior vertices.";
         }
 
+        /// <summary>A vertex in the middle of every line of the selected triangles (or the whole mesh).</summary>
+        void SubdividePartsMesh()
+        {
+            var slot = MeshEditSlot();
+            if (slot?.Mesh == null || !slot.Mesh.HasMesh)
+            {
+                _status = SpritePartsMeshOps.IsDraft(slot?.Mesh) ? "Make Polygons first." : "Draw or trace the hull first.";
+                return;
+            }
+            bool mine = SpritePartIdUtility.Canonical(slot.SlotId) == _partsWarpSelectionSlotId;
+            var only = mine ? ValidSelection(slot.Mesh.VertexCount) : new List<int>();
+            var work = slot.Mesh.Clone();
+            int added = SpritePartsMeshOps.Subdivide(work, only, out var remap, out var parents);
+            if (added == 0)
+            {
+                _status = slot.Mesh.VertexCount >= SpritePartsMeshOps.MaxVertices
+                    ? MeshFullMessage()
+                    : only.Count > 0 ? "Select all three corners of the triangles to subdivide (or select none for the whole mesh)."
+                    : "Nothing to subdivide.";
+                return;
+            }
+            RecordPartsUndo("Subdivide Mesh");
+            slot.Mesh = work;
+            SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount, parents);
+            // Keep the selection on the same area: old picks plus the new middles inside it.
+            if (only.Count > 0)
+            {
+                var sel = new List<int>();
+                foreach (int i in only)
+                    sel.Add(remap[i]);
+                for (int k = 0; k < parents.Length; k++)
+                {
+                    if (parents[k].x >= 0)
+                        sel.Add(k);
+                }
+                _partsWarpSelection.Clear();
+                _partsWarpSelection.AddRange(sel);
+            }
+            else
+                _partsWarpSelection.Clear();
+            _partsWarpIndex = -1;
+            SaveDirty();
+            _status = "Subdivided: " + added + " vertices added (" + work.VertexCount + "/" + SpritePartsMeshOps.MaxVertices + ")"
+                      + (work.VertexCount >= SpritePartsMeshOps.MaxVertices ? ", mesh full: the longest lines were split first." : ".");
+        }
+
         void TracePartsMesh()
         {
             var slot = MeshEditSlot() ?? CurrentPartsSlot;
@@ -1998,6 +2048,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             menu.AddItem(new GUIContent("Tool/Create (2)"), _partsMeshTool == PartsMeshTool.Create, () => SetPartsMeshTool(PartsMeshTool.Create));
             menu.AddItem(new GUIContent("Tool/Delete (3)"), _partsMeshTool == PartsMeshTool.Delete, () => SetPartsMeshTool(PartsMeshTool.Delete));
             menu.AddItem(new GUIContent("Generate Interior"), false, GeneratePartsMeshInterior);
+            menu.AddItem(new GUIContent("Subdivide" + (_partsWarpSelection.Count > 0 ? " Selected" : "")), false, SubdividePartsMesh);
             menu.AddItem(new GUIContent("Trace Outline"), false, TracePartsMesh);
             menu.AddItem(new GUIContent("New (Image Corners)"), false, ResetPartsMeshToQuad);
             menu.AddItem(new GUIContent("Remove Mesh"), false, RemovePartsMesh);

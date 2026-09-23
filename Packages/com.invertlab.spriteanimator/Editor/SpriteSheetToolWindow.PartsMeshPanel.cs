@@ -131,10 +131,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     ResetPartsMeshToQuad();
                 if (GUILayout.Button(new GUIContent("Trace", "Hull that follows the image alpha")))
                     TracePartsMesh();
-                if (GUILayout.Button(new GUIContent("Generate", "Fill the hull with interior vertices")))
-                    GeneratePartsMeshInterior();
                 if (GUILayout.Button(new GUIContent("Remove", "Back to a rigid rectangle")))
                     RemovePartsMesh();
+                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button(new GUIContent("Generate", "Fill the hull with interior vertices")))
+                    GeneratePartsMeshInterior();
+                if (GUILayout.Button(new GUIContent("Subdivide", "A vertex in the middle of every line of the selected triangles (or the whole mesh)")))
+                    SubdividePartsMesh();
                 EditorGUILayout.EndHorizontal();
                 if (GUILayout.Button(new GUIContent("Done (Esc)", "Leave Edit Mesh and go back to posing")))
                     TryExitPartsMeshEdit();

@@ -6,9 +6,11 @@ namespace InvertLab.Sprites.DOTS
     {
         /// <summary>
         /// After a mesh topology change, moves every deform key of the slot (all clips) onto the new
-        /// vertex order. Removed vertices drop their offsets; new vertices start at rest.
+        /// vertex order. Removed vertices drop their offsets; new vertices start at rest, or halfway
+        /// between their <paramref name="parents"/> (from Subdivide) when given.
         /// </summary>
-        public static int RemapSlotDeforms(SpriteSheetProfile profile, string slotId, int[] remap, int newCount)
+        public static int RemapSlotDeforms(SpriteSheetProfile profile, string slotId, int[] remap, int newCount,
+            Vector2Int[] parents = null)
         {
             if (profile?.PartsClips == null || remap == null)
                 return 0;
@@ -26,7 +28,9 @@ namespace InvertLab.Sprites.DOTS
                     {
                         if (key?.Deform == null)
                             continue;
-                        key.Deform = SpritePartsMeshOps.RemapDeform(key.Deform, remap, newCount);
+                        key.Deform = parents != null && parents.Length == newCount
+                            ? SpritePartsMeshOps.SubdivideDeform(key.Deform, remap, parents)
+                            : SpritePartsMeshOps.RemapDeform(key.Deform, remap, newCount);
                         changed++;
                     }
                 }
