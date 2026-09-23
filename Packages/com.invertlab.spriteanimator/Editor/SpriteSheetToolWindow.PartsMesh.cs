@@ -1037,6 +1037,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 evt.Use();
                 return;
             }
+            if ((evt.type == EventType.KeyDown || evt.type == EventType.KeyUp)
+                && evt.keyCode is KeyCode.LeftShift or KeyCode.RightShift or KeyCode.LeftControl or KeyCode.RightControl)
+                Repaint(); // pen preview: cut markers / snap line follow the modifier
             if (evt.type == EventType.KeyDown && (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
                 && !IsEditingAnyTextField())
             {

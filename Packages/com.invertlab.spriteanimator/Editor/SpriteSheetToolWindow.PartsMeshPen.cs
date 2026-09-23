@@ -122,7 +122,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             int from = pen;
             if (cut)
-                from = CutAcross(work, from, target, ref total);
+                from = CutAcross(work, from, ref target, ref total);
             if (from != target && !SpritePartsMeshOps.IsHullEdge(work, from, target)
                 && !SpritePartsMeshOps.TryAddEdge(work, from, target))
                 _status = "Could not add that edge.";
@@ -133,32 +133,87 @@ namespace InvertLab.Sprites.DOTS.Editor
             SelectOnly(target);
         }
 
-        /// <summary>Splits every user edge crossed by from-to and chains edges through the new vertices.</summary>
-        int CutAcross(SpritePartMeshDef work, int from, int to, ref int[] total)
+        /// <summary>
+        /// Cut: every outline (hull) or user edge crossed by from-&gt;to gains a vertex at the crossing,
+        /// and the chain runs through them. Splitting a hull edge shifts indices, so the next
+        /// crossing is searched again on the updated mesh each time.
+        /// </summary>
+        int CutAcross(SpritePartMeshDef work, int from, ref int to, ref int[] total)
         {
-            Vector2 a = work.Vertices[from];
-            Vector2 b = work.Vertices[to];
-            var hits = new List<(float t, int ea, int eb, Vector2 p)>();
-            for (int i = 0; work.Edges != null && i + 1 < work.Edges.Length; i += 2)
-            {
-                int ea = work.Edges[i], eb = work.Edges[i + 1];
-                if (ea == from || eb == from || ea == to || eb == to)
-                    continue;
-                if (SpritePartsMeshOps.TrySegmentHit(a, b, work.Vertices[ea], work.Vertices[eb], out float t, out var p))
-                    hits.Add((t, ea, eb, p));
-            }
-            hits.Sort((x, y) => x.t.CompareTo(y.t));
             int prev = from;
-            foreach (var h in hits)
+            for (int guard = 0; guard < SpritePartsMeshOps.MaxVertices; guard++)
             {
-                // Interior splits append the new vertex, so earlier indices stay valid.
-                if (!SpritePartsMeshOps.TrySplitEdgeAt(work, h.ea, h.eb, h.p, out int x, out var step))
-                    continue;
+                if (!TryFirstCrossing(work, prev, to, out int ea, out int eb, out var p))
+                    break;
+                if (work.VertexCount >= SpritePartsMeshOps.MaxVertices)
+                {
+                    _status = "Mesh is full; the cut stopped early.";
+                    break;
+                }
+                // Hull and user edges are split (keeping them as edges); a triangle line just gets a vertex.
+                bool stored = SpritePartsMeshOps.IsHullEdge(work, ea, eb) || SpritePartsMeshOps.HasEdge(work, ea, eb);
+                int x;
+                int[] step;
+                bool ok = stored
+                    ? SpritePartsMeshOps.TrySplitEdgeAt(work, ea, eb, p, out x, out step)
+                    : SpritePartsMeshOps.TryAddInteriorVertex(work, p, out x, out step);
+                if (!ok)
+                    break;
                 total = ComposeRemap(total, step);
+                if (step != null)
+                {
+                    prev = step[prev];
+                    to = step[to];
+                }
                 SpritePartsMeshOps.TryAddEdge(work, prev, x);
                 prev = x;
             }
             return prev;
+        }
+
+        /// <summary>Nearest drawn line (hull, user edge or triangle side) crossed by from-&gt;to, skipping lines that touch either end.</summary>
+        static bool TryFirstCrossing(SpritePartMeshDef mesh, int from, int to, out int ea, out int eb, out Vector2 point)
+        {
+            ea = eb = -1;
+            point = default;
+            float best = float.MaxValue;
+            foreach (var (a, b) in CuttableEdges(mesh))
+            {
+                if (a == from || b == from || a == to || b == to)
+                    continue;
+                if (!SpritePartsMeshOps.TrySegmentHit(mesh.Vertices[from], mesh.Vertices[to], mesh.Vertices[a], mesh.Vertices[b], out float t, out var p)
+                    || t >= best)
+                    continue;
+                best = t;
+                ea = a;
+                eb = b;
+                point = p;
+            }
+            return ea >= 0;
+        }
+
+        static IEnumerable<(int a, int b)> CuttableEdges(SpritePartMeshDef mesh)
+        {
+            int n = mesh?.VertexCount ?? 0;
+            int h = Mathf.Min(mesh?.HullCount ?? 0, n);
+            for (int i = 0; h >= 3 && i < h; i++)
+                yield return (i, (i + 1) % h);
+            for (int i = 0; mesh?.Edges != null && i + 1 < mesh.Edges.Length; i += 2)
+            {
+                if ((uint)mesh.Edges[i] < (uint)n && (uint)mesh.Edges[i + 1] < (uint)n)
+                    yield return (mesh.Edges[i], mesh.Edges[i + 1]);
+            }
+            // Triangle sides (each interior side appears twice; the duplicate just finds the same crossing).
+            for (int t = 0; mesh?.Triangles != null && t + 2 < mesh.Triangles.Length; t += 3)
+            {
+                for (int e = 0; e < 3; e++)
+                {
+                    int a = mesh.Triangles[t + e];
+                    int b = mesh.Triangles[t + (e + 1) % 3];
+                    if (a < b && (uint)b < (uint)n)
+                        yield return (a, b);
+                }
+            }
         }
 
         /// <summary>Hull edge snap, interior vertex, or a new hull vertex outside the outline.</summary>
@@ -253,12 +308,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             Vector2 from = mesh.Vertices[_partsMeshPen];
             var line = ctrl ? new Color(0.35f, 0.95f, 1f, 0.95f) : new Color(1f, 0.72f, 0.25f, 0.9f);
             DrawGuiLine(MeshUvToGui(sprite, from), MeshUvToGui(sprite, target), line, 1.5f);
-            if (!cut || mesh.Edges == null)
+            if (!cut)
                 return;
-            for (int i = 0; i + 1 < mesh.Edges.Length; i += 2)
+            foreach (var (ea, eb) in CuttableEdges(mesh))
             {
-                int ea = mesh.Edges[i], eb = mesh.Edges[i + 1];
-                if (ea == _partsMeshPen || eb == _partsMeshPen || (uint)ea >= (uint)n || (uint)eb >= (uint)n)
+                if (ea == _partsMeshPen || eb == _partsMeshPen)
                     continue;
                 if (!SpritePartsMeshOps.TrySegmentHit(from, target, mesh.Vertices[ea], mesh.Vertices[eb], out _, out var p))
                     continue;
