@@ -1675,7 +1675,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (GUI.Button(new Rect(tx, ty, 58f, 20f), new GUIContent("Apply", "Keep the FFD result (Enter)."), _primaryStyle))
                         ApplyPartsFfd();
                     tx += 60f;
-                    if (GUI.Button(new Rect(tx, ty, 58f, 20f), new GUIContent("Cancel", "Undo the FFD bend (Esc).")))
+                    if (GUI.Button(new Rect(tx, ty, 50f, 20f), new GUIContent("Reset", "Back to how the vertices were before this FFD; stay in FFD.")))
+                        ResetPartsFfd();
+                    tx += 52f;
+                    if (GUI.Button(new Rect(tx, ty, 58f, 20f), new GUIContent("Cancel", "Reset and leave FFD (Esc).")))
                         CancelPartsFfd();
                     tx += 62f;
                 }
@@ -1889,6 +1892,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsVertexAxis = 0;
             _partsMeshPanning = false;
             _partsFfdDrag = -1;
+            _partsFfdDragB = -1;
             _partsMarqueeActive = false;
             _partsWarpBox = false;
             _partsMeshDrag = false;
