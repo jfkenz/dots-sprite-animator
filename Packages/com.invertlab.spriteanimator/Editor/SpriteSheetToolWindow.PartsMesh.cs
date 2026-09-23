@@ -387,7 +387,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             for (int i = 0; i < hull && (_partsWarpShowLines || virtualQuad); i++)
                 Handles.DrawAAPolyLine(virtualQuad ? 1.5f : 2.5f, pts[i], pts[(i + 1) % hull]);
             if (!virtualQuad)
+            {
                 DrawWarpMirrorAxis(rect, joint, guiDeg, flipX, flipY);
+                DrawMirrorUnpaired(slot.Mesh, pts.Length, i => pts[i]);
+            }
 
             var red = new Color(0.9f, 0.2f, 0.15f, 1f);
             var green = new Color(0.2f, 0.95f, 0.35f, 1f);

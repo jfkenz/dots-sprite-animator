@@ -236,15 +236,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawGuiRectOutline(bar, _partsDialKind == PartsWarpBrush.Twist ? new Color(0.72f, 0.45f, 1f, 0.9f) : new Color(1f, 0.55f, 0.3f, 0.9f), 1f);
             float x = bar.x + 6f, y = bar.y + 4f;
             bool twist = _partsDialKind == PartsWarpBrush.Twist;
-            string left = twist ? "↺" : "Bloat";
-            string right = twist ? "↻" : "Pinch";
+            var left = new GUIContent("-1", twist ? "-1: a full turn counter-clockwise" : "-1: full Bloat (push out)");
+            var right = new GUIContent("1", twist ? "1: a full turn clockwise" : "1: full Pinch (pull in)");
             float amount = _partsDialAmount;
             // Reset: back to 0 (no change), the same as the "0" button.
             var reset = EditorGUIUtility.IconContent("Refresh");
             reset = reset?.image != null ? new GUIContent(reset.image, "Reset to 0 (no change)") : new GUIContent("↺", "Reset to 0 (no change)");
             if (GUI.Button(new Rect(x, y - 1f, 22f, 20f), reset, _partsTabStyle))
                 amount = 0f;
-            float labelW = twist ? 14f : 36f;
+            float labelW = 16f;
             GUI.Label(new Rect(x + 26f, y, labelW, 18f), left, _mutedStyle);
             float sliderX = x + 28f + labelW;
             float sliderW = bar.xMax - 66f - labelW - 4f - sliderX;

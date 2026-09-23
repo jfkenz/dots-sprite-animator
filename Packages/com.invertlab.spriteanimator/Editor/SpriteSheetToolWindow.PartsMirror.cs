@@ -19,13 +19,43 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] float _partsMirrorAxis = 0.5f;
         [SerializeField] float _partsMirrorAxisY = 0.5f;
         [SerializeField] SpritePartsMirrorMode _partsMirrorMode = SpritePartsMirrorMode.Horizontal;
+        /// <summary>How close (image fraction) a vertex must sit to another's mirrored spot to be its partner.</summary>
+        [SerializeField] float _partsMirrorTolerance = 0.03f;
         static readonly Color PartsMirrorColor = new Color(0.3f, 0.95f, 0.85f, 0.85f);
 
         bool MirrorUsesX => _partsMirrorMode != SpritePartsMirrorMode.Vertical;
         bool MirrorUsesY => _partsMirrorMode != SpritePartsMirrorMode.Horizontal;
 
         SpritePartsMeshOps.MirrorMap MirrorMapFor(SpritePartMeshDef mesh)
-            => SpritePartsMeshOps.BuildMirrorMap(mesh, _partsMirrorAxis, _partsMirrorAxisY, _partsMirrorMode);
+            => SpritePartsMeshOps.BuildMirrorMap(mesh, _partsMirrorAxis, _partsMirrorAxisY, _partsMirrorMode, _partsMirrorTolerance);
+
+        /// <summary>
+        /// True when Live Mirror cannot fully reach vertex <paramref name="i"/>: a mirrored spot has no vertex
+        /// (within the tolerance). A vertex on an axis is its own partner there, so it needs fewer.
+        /// </summary>
+        bool MirrorMissing(SpritePartsMeshOps.MirrorMap map, int i)
+        {
+            int onAxes = (map.LockX[i] ? 1 : 0) + (map.LockY[i] ? 1 : 0);
+            int need = _partsMirrorMode == SpritePartsMirrorMode.Both
+                ? (onAxes == 2 ? 0 : onAxes == 1 ? 1 : 3)
+                : 1 - onAxes;
+            return map.Partners[i].Count < need;
+        }
+
+        /// <summary>Red rings on the vertices Live Mirror leaves alone (no vertex at their mirrored spot).</summary>
+        void DrawMirrorUnpaired(SpritePartMeshDef mesh, int count, System.Func<int, Vector2> gui)
+        {
+            if (!_partsMirrorLive || mesh == null || Event.current.type != EventType.Repaint)
+                return;
+            // Called inside Handles.BeginGUI.
+            var map = MirrorMapFor(mesh);
+            Handles.color = new Color(1f, 0.3f, 0.3f, 0.95f);
+            for (int i = 0; i < map.Count && i < count; i++)
+            {
+                if (MirrorMissing(map, i))
+                    Handles.DrawWireDisc(gui(i), Vector3.forward, 7f);
+            }
+        }
 
         SpritePartsMeshOps.MirrorMap MirrorMapFor(string slotId)
             => MirrorMapFor(SpritePartsAuthoringOps.FindSlot(_profile, slotId)?.Mesh);
@@ -37,7 +67,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (mesh == null || mesh.VertexCount == 0)
                 return System.Array.Empty<int>();
             bool vertical = _partsMirrorMode == SpritePartsMirrorMode.Vertical;
-            return SpritePartsMeshOps.MirrorPartners(mesh, _partsMirrorAxis, _partsMirrorAxisY, !vertical, vertical);
+            return SpritePartsMeshOps.MirrorPartners(mesh, _partsMirrorAxis, _partsMirrorAxisY, !vertical, vertical, _partsMirrorTolerance);
         }
 
         /// <summary>An offset pasted through <see cref="MirrorPartnersFor"/>: flipped, or kept on the axis for a vertex that is its own partner.</summary>
@@ -211,6 +241,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (MirrorUsesY)
                 Handles.DrawDottedLine(MeshUvToGui(sprite, new Vector2(SpritePartsMeshOps.MinUv, _partsMirrorAxisY)),
                     MeshUvToGui(sprite, new Vector2(SpritePartsMeshOps.MaxUv, _partsMirrorAxisY)), 5f);
+            var mesh = MeshEditSlot()?.Mesh;
+            if (mesh?.Vertices != null)
+                DrawMirrorUnpaired(mesh, mesh.VertexCount, i => MeshUvToGui(sprite, mesh.Vertices[i]));
             Handles.EndGUI();
         }
 
@@ -264,6 +297,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     axisY = 0.5f;
                 EditorGUILayout.EndHorizontal();
             }
+            float tolerance = EditorGUILayout.Slider(new GUIContent("Match Within",
+                "How close a vertex must sit to another's mirrored spot to count as its partner (fraction of the image). "
+                + "Raise it for a mesh that is only roughly symmetric."), _partsMirrorTolerance * 100f, 0.5f, 15f) / 100f;
+            if (!Mathf.Approximately(tolerance, _partsMirrorTolerance))
+            {
+                _partsMirrorTolerance = tolerance;
+                Repaint();
+            }
             if (live != _partsMirrorLive || mode != _partsMirrorMode
                 || !Mathf.Approximately(axis, _partsMirrorAxis) || !Mathf.Approximately(axisY, _partsMirrorAxisY))
             {
@@ -277,19 +318,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (mesh != null && mesh.VertexCount > 0)
             {
                 var map = MirrorMapFor(mesh);
-                int want = SpritePartsMeshOps.MirrorFlips(_partsMirrorMode).Count;
                 int full = 0, some = 0, none = 0;
                 for (int i = 0; i < map.Count; i++)
                 {
-                    // A vertex on an axis is its own partner there, so it needs fewer.
-                    int onAxes = (map.LockX[i] ? 1 : 0) + (map.LockY[i] ? 1 : 0);
-                    int need = _partsMirrorMode == SpritePartsMirrorMode.Both ? (onAxes == 2 ? 0 : onAxes == 1 ? 1 : 3) : want - onAxes;
-                    int have = map.Partners[i].Count;
-                    if (have >= need) full++;
-                    else if (have > 0) some++;
+                    if (!MirrorMissing(map, i)) full++;
+                    else if (map.Partners[i].Count > 0) some++;
                     else none++;
                 }
-                EditorGUILayout.LabelField(full + " vertices mirrored, " + (some > 0 ? some + " partly, " : "") + none + " without a partner.",
+                EditorGUILayout.LabelField(full + " vertices mirrored, " + (some > 0 ? some + " partly, " : "") + none + " without a partner"
+                    + (some + none > 0 ? " (red rings: Live Mirror leaves them alone; move them onto the mirrored spot, raise Match Within, or Mirror Copy)." : "."),
                     EditorStyles.wordWrappedMiniLabel);
             }
             if (IsPartsMeshEdit())
