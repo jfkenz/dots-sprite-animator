@@ -235,11 +235,21 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.DrawRect(bar, new Color(0.08f, 0.09f, 0.12f, 0.96f));
             DrawGuiRectOutline(bar, _partsDialKind == PartsWarpBrush.Twist ? new Color(0.72f, 0.45f, 1f, 0.9f) : new Color(1f, 0.55f, 0.3f, 0.9f), 1f);
             float x = bar.x + 6f, y = bar.y + 4f;
-            string left = _partsDialKind == PartsWarpBrush.Twist ? "↺" : "Bloat";
-            string right = _partsDialKind == PartsWarpBrush.Twist ? "↻" : "Pinch";
-            GUI.Label(new Rect(x, y, 40f, 18f), left, _mutedStyle);
-            float amount = GUI.HorizontalSlider(new Rect(x + 40f, y + 3f, bar.width - 150f, 16f), _partsDialAmount, -1f, 1f);
-            GUI.Label(new Rect(bar.xMax - 106f, y, 40f, 18f), right, _mutedStyle);
+            bool twist = _partsDialKind == PartsWarpBrush.Twist;
+            string left = twist ? "↺" : "Bloat";
+            string right = twist ? "↻" : "Pinch";
+            float amount = _partsDialAmount;
+            // Reset: back to 0 (no change), the same as the "0" button.
+            var reset = EditorGUIUtility.IconContent("Refresh");
+            reset = reset?.image != null ? new GUIContent(reset.image, "Reset to 0 (no change)") : new GUIContent("↺", "Reset to 0 (no change)");
+            if (GUI.Button(new Rect(x, y - 1f, 22f, 20f), reset, _partsTabStyle))
+                amount = 0f;
+            float labelW = twist ? 14f : 36f;
+            GUI.Label(new Rect(x + 26f, y, labelW, 18f), left, _mutedStyle);
+            float sliderX = x + 28f + labelW;
+            float sliderW = bar.xMax - 66f - labelW - 4f - sliderX;
+            amount = GUI.HorizontalSlider(new Rect(sliderX, y + 3f, sliderW, 16f), amount, -1f, 1f);
+            GUI.Label(new Rect(sliderX + sliderW + 4f, y, labelW, 18f), right, _mutedStyle);
             float typed = EditorGUI.FloatField(new Rect(bar.xMax - 62f, y, 56f, 18f), (float)System.Math.Round(amount, 2));
             if (!Mathf.Approximately(typed, (float)System.Math.Round(amount, 2)))
                 amount = typed;
