@@ -1243,6 +1243,7 @@ namespace InvertLab.Sprites.DOTS
                             HasClipActive = key.HasClipActive,
                             ClipActive = key.ClipActive,
                             Curve = key.Curve,
+                            Separate = key.Separate,
                             AppearanceId = aid,
                         });
                     }

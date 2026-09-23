@@ -9,7 +9,8 @@ namespace InvertLab.Sprites.DOTS.Editor
     //   Legend       X / Y / Rotation / Scale X / Scale Y / Values: show or hide each; Same Scale shares one height
     //   Drag a point changes that key's value (move keys in time in the dopesheet)
     //   Handles      a Bezier key shows two handles: drag them to shape its ease
-    //   Right-click  Linear / Stepped / Bezier / ease presets for that key
+    //   Right-click  Linear / Stepped / Bezier / ease presets for that key; Separate Curves gives Y, rotation and
+    //                scale their own handles (X keeps the key's)
     public sealed partial class SpriteSheetToolWindow
     {
         [SerializeField] bool _partsGraphView;
@@ -42,8 +43,10 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             public int Count => Keys != null ? Keys.Count : ValueKeys.Count;
             public float Time(int i) => Keys != null ? Keys[i].Time : ValueKeys[i].Time;
-            public byte Ease(int i) => Keys != null ? Keys[i].EaseMode : ValueKeys[i].EaseMode;
-            public Vector4 Curve(int i) => Keys != null ? Keys[i].Curve : ValueKeys[i].Curve;
+            /// <summary>True when this channel of the key eases with its own handles (separate curves).</summary>
+            public bool OwnCurve(int i) => Keys != null && Keys[i].Separate.On && Channel != GraphChannel.X;
+            public byte Ease(int i) => OwnCurve(i) ? (byte)SpriteEaseMode.Bezier : Keys != null ? Keys[i].EaseMode : ValueKeys[i].EaseMode;
+            public Vector4 Curve(int i) => OwnCurve(i) ? ChannelCurve(Keys[i].Separate, Channel) : Keys != null ? Keys[i].Curve : ValueKeys[i].Curve;
             public object Key(int i) => Keys != null ? Keys[i] : ValueKeys[i];
             public bool Held => Keys == null && ValueKind == SpritePartsValueKind.IkBend;
         }
@@ -193,6 +196,39 @@ namespace InvertLab.Sprites.DOTS.Editor
             GraphChannel.Rotation => SpritePartsKeyChannel.Rotation,
             _ => SpritePartsKeyChannel.Scale,
         };
+
+        static Vector4 ChannelCurve(in SpritePartsSeparateCurves s, GraphChannel c) => c switch
+        {
+            GraphChannel.Y => s.Y,
+            GraphChannel.Rotation => s.Rotation,
+            GraphChannel.ScaleX => s.ScaleX,
+            _ => s.ScaleY,
+        };
+
+        /// <summary>Writes one channel's handles: its own curve on a separate-curves key, else the shared one.</summary>
+        static void SetCurve(GraphCurve c, int i, Vector4 h)
+        {
+            if (c.Keys == null)
+            {
+                c.ValueKeys[i].Curve = h;
+                return;
+            }
+            var key = c.Keys[i];
+            if (!c.OwnCurve(i))
+            {
+                key.Curve = h;
+                return;
+            }
+            var s = key.Separate;
+            switch (c.Channel)
+            {
+                case GraphChannel.Y: s.Y = h; break;
+                case GraphChannel.Rotation: s.Rotation = h; break;
+                case GraphChannel.ScaleX: s.ScaleX = h; break;
+                default: s.ScaleY = h; break;
+            }
+            key.Separate = s;
+        }
 
         static float PoseValue(SpritePartsKeyDef k, GraphChannel c) => c switch
         {
@@ -488,11 +524,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 h.z = hx;
                 h.w = hy;
             }
-            if (curve.Keys != null)
-                curve.Keys[index].Curve = h;
-            else
-                curve.ValueKeys[index].Curve = h;
+            SetCurve(curve, index, h);
         }
+
+        static readonly Vector4 LinearHandles = new Vector4(1f / 3f, 1f / 3f, 2f / 3f, 2f / 3f);
 
         void ShowGraphKeyMenu(GraphCurve curve, int index)
         {
@@ -501,11 +536,31 @@ namespace InvertLab.Sprites.DOTS.Editor
                                                 + " at " + curve.Time(index).ToString("0.###") + "s"));
             menu.AddSeparator(string.Empty);
             byte current = curve.Ease(index);
-            AddEase("Linear", SpriteEaseMode.Linear, new Vector4(1f / 3f, 1f / 3f, 2f / 3f, 2f / 3f));
+            bool own = curve.OwnCurve(index);
+            if (curve.Keys != null)
+            {
+                var poseKey = curve.Keys[index];
+                menu.AddItem(new GUIContent("Separate Curves"), poseKey.Separate.On, () =>
+                {
+                    RecordPartsUndo("Separate Curves");
+                    if (poseKey.Separate.On)
+                        poseKey.Separate.On = false;
+                    else
+                    {
+                        // Start every channel from what the key does now, so nothing moves until a handle is dragged.
+                        if (poseKey.EaseMode != (byte)SpriteEaseMode.Bezier)
+                            poseKey.Curve = LinearHandles;
+                        poseKey.EaseMode = (byte)SpriteEaseMode.Bezier;
+                        poseKey.Separate = SpritePartsSeparateCurves.From(poseKey.Curve);
+                    }
+                    SaveDirty();
+                    Repaint();
+                });
+                menu.AddSeparator(string.Empty);
+            }
+            AddEase("Linear", SpriteEaseMode.Linear, LinearHandles);
             AddEase("Stepped", SpriteEaseMode.Step, default);
-            AddEase("Bezier", SpriteEaseMode.Bezier, current == (byte)SpriteEaseMode.Bezier
-                ? curve.Curve(index)
-                : new Vector4(1f / 3f, 1f / 3f, 2f / 3f, 2f / 3f));
+            AddEase("Bezier", SpriteEaseMode.Bezier, current == (byte)SpriteEaseMode.Bezier ? curve.Curve(index) : LinearHandles);
             AddEase("Presets/Ease In Out", SpriteEaseMode.Bezier, new Vector4(0.42f, 0f, 0.58f, 1f));
             AddEase("Presets/Ease In", SpriteEaseMode.Bezier, new Vector4(0.42f, 0f, 1f, 1f));
             AddEase("Presets/Ease Out", SpriteEaseMode.Bezier, new Vector4(0f, 0f, 0.58f, 1f));
@@ -517,14 +572,21 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 bool on = label == "Bezier" ? current == (byte)SpriteEaseMode.Bezier : !label.StartsWith("Presets") && current == (byte)mode;
                 object key = curve.Key(index);
-                menu.AddItem(new GUIContent(label), on, () =>
+                menu.AddItem(new GUIContent(own ? label + " (this channel)" : label), on, () =>
                 {
                     RecordPartsUndo("Curve Ease");
-                    if (key is SpritePartsKeyDef pose)
+                    if (own && mode != SpriteEaseMode.Step)
+                    {
+                        // Separate curves: only this channel's handles change (linear = straight handles).
+                        SetCurve(curve, index, mode == SpriteEaseMode.Linear ? LinearHandles : handles);
+                    }
+                    else if (key is SpritePartsKeyDef pose)
                     {
                         pose.EaseMode = (byte)mode;
                         if (mode == SpriteEaseMode.Bezier)
                             pose.Curve = handles;
+                        if (mode == SpriteEaseMode.Step)
+                            pose.Separate.On = false;
                     }
                     else if (key is SpritePartsValueKeyDef value)
                     {

@@ -433,6 +433,11 @@ namespace InvertLab.Sprites.DOTS
                             DrawOrder = key.DrawOrder,
                             Curve = new float4(key.Curve.x, key.Curve.y, key.Curve.z, key.Curve.w),
                             SkipChannels = (byte)(~(byte)key.Channels & (byte)SpritePartsKeyChannel.All),
+                            SeparateCurves = key.Separate.On,
+                            CurveY = key.Separate.Y,
+                            CurveRotation = key.Separate.Rotation,
+                            CurveScaleX = key.Separate.ScaleX,
+                            CurveScaleY = key.Separate.ScaleY,
                             HasClipActive = key.HasClipActive,
                             ClipActive = key.ClipActive,
                         };

@@ -280,6 +280,7 @@ namespace InvertLab.Sprites.DOTS
                             HasClipActive = key.HasClipActive,
                             ClipActive = key.ClipActive,
                             Curve = key.Curve,
+                            Separate = key.Separate,
                             AppearanceId = RemapAppearanceId(destination, key.AppearanceId),
                         };
                         if (mode == RestDeltaMode.RestDelta &&

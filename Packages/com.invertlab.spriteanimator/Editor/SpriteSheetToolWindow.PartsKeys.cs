@@ -243,6 +243,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         HasClipActive = key.HasClipActive,
                         ClipActive = key.ClipActive,
                         Curve = key.Curve,
+                        Separate = key.Separate,
                         AppearanceId = key.AppearanceId ?? string.Empty,
                     };
                     _partsKeyClipboard.Add((

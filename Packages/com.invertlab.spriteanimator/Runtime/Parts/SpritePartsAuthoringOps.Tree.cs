@@ -561,6 +561,7 @@ namespace InvertLab.Sprites.DOTS
                                 HasClipActive = key.HasClipActive,
                                 ClipActive = key.ClipActive,
                                 Curve = key.Curve,
+                                Separate = key.Separate,
                                 AppearanceId = key.AppearanceId ?? string.Empty,
                             };
                             // Mirror clip keys only for the duplicated root slot.

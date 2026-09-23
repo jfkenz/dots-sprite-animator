@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace InvertLab.Sprites.DOTS.Tests
 {
-    /// <summary>Breakdown keys (favor between neighbours) and audio events.</summary>
+    /// <summary>Breakdown keys (favor between neighbours), audio events and separate curves.</summary>
     public sealed class SpritePartsBreakdownAudioTests
     {
         static SpriteSheetProfile Profile(out int clipIndex)
@@ -88,6 +88,40 @@ namespace InvertLab.Sprites.DOTS.Tests
             {
                 SpritePartsAudio.Handler = null;
                 Object.DestroyImmediate(sound);
+            }
+        }
+
+        [Test]
+        public void Separate_Curves_Ease_Each_Channel_On_Its_Own()
+        {
+            var linear = new Unity.Mathematics.float4(1f / 3f, 1f / 3f, 2f / 3f, 2f / 3f);
+            var slow = new Unity.Mathematics.float4(0.9f, 0f, 1f, 0.1f);
+            var slots = new[] { new SpritePartsSetBuilder.SlotInput { Name = "a", SlotId = "a", RestScale = new Unity.Mathematics.float2(1f, 1f) } };
+            SpritePartsSetBuilder.KeyInput Key(float t, float v, bool separate) => new SpritePartsSetBuilder.KeyInput
+            {
+                Time = t, Position = new Unity.Mathematics.float2(v, v), Scale = new Unity.Mathematics.float2(1f, 1f), AppearanceId = string.Empty,
+                EaseMode = (byte)SpriteEaseMode.Bezier, Curve = linear,
+                SeparateCurves = separate, CurveY = slow, CurveRotation = linear, CurveScaleX = linear, CurveScaleY = linear,
+            };
+            var clips = new[]
+            {
+                new SpritePartsSetBuilder.ClipInput
+                {
+                    Name = "c", ClipId = "c", Duration = 1f, SpeedMultiplier = 1f,
+                    Tracks = new[] { new SpritePartsSetBuilder.TrackInput { SlotId = "a", Keys = new[] { Key(0f, 0f, true), Key(1f, 10f, false) } } },
+                },
+            };
+            var blob = SpritePartsSetBuilder.Build(Allocator.Temp, slots, System.Array.Empty<SpritePartsSetBuilder.AppearanceInput>(),
+                clips, System.Array.Empty<SpritePartsSetBuilder.SkinInput>());
+            try
+            {
+                SpritePartsSampler.SampleSlot(ref blob.Value, 0, 0, 0.5f, out var pose);
+                Assert.AreEqual(5f, pose.Position.x, 0.05f, "X keeps the key's (linear) curve.");
+                Assert.Less(pose.Position.y, 1f, "Y eases on its own slow-start curve.");
+            }
+            finally
+            {
+                blob.Dispose();
             }
         }
 

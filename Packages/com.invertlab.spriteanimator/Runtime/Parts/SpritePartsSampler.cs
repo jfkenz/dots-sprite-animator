@@ -76,13 +76,24 @@ namespace InvertLab.Sprites.DOTS
 
             // Each channel blends between the keys that hold it (Spine timelines): a rotation key does not pin
             // the position, so each channel keeps its own timing. Held before its first and after its last key.
-            if (Span(ref track, SpritePartsKeyChannel.Position, time, out int a, out int b, out float u))
-                pose.Position = math.lerp(track.Keys[a].Position, track.Keys[b].Position, stepped ? 0f : u);
-            if (Span(ref track, SpritePartsKeyChannel.Rotation, time, out a, out b, out u))
-                pose.Rotation = LerpAngleShortest(track.Keys[a].Rotation, track.Keys[b].Rotation, stepped ? 0f : u);
-            if (Span(ref track, SpritePartsKeyChannel.Scale, time, out a, out b, out u))
-                pose.Scale = math.lerp(track.Keys[a].Scale, track.Keys[b].Scale, stepped ? 0f : u);
-            if (Span(ref track, SpritePartsKeyChannel.Deform, time, out a, out b, out u))
+            // Separate curves: each value eases with its own Bezier from the raw span position.
+            if (Span(ref track, SpritePartsKeyChannel.Position, time, out int a, out int b, out float u, out float raw))
+            {
+                float2 w = stepped ? 0f : new float2(u, Separate(ref track.Keys[a], track.Keys[a].CurveY, raw, u));
+                pose.Position = math.lerp(track.Keys[a].Position, track.Keys[b].Position, w);
+            }
+            if (Span(ref track, SpritePartsKeyChannel.Rotation, time, out a, out b, out u, out raw))
+                pose.Rotation = LerpAngleShortest(track.Keys[a].Rotation, track.Keys[b].Rotation,
+                    stepped ? 0f : Separate(ref track.Keys[a], track.Keys[a].CurveRotation, raw, u));
+            if (Span(ref track, SpritePartsKeyChannel.Scale, time, out a, out b, out u, out raw))
+            {
+                float2 w = stepped
+                    ? 0f
+                    : new float2(Separate(ref track.Keys[a], track.Keys[a].CurveScaleX, raw, u),
+                        Separate(ref track.Keys[a], track.Keys[a].CurveScaleY, raw, u));
+                pose.Scale = math.lerp(track.Keys[a].Scale, track.Keys[b].Scale, w);
+            }
+            if (Span(ref track, SpritePartsKeyChannel.Deform, time, out a, out b, out u, out _))
                 SpritePartsLattice.ApplyDeform(ref pose.Lattice, track.Keys[a].Deform, track.Keys[b].Deform, stepped ? 0f : u);
         }
 
@@ -91,11 +102,17 @@ namespace InvertLab.Sprites.DOTS
         /// them (the earlier key's ease). Before the first / after the last such key both are that key. False when
         /// no key holds the channel.
         /// </summary>
-        static bool Span(ref SpritePartsTrackBlob track, SpritePartsKeyChannel channel, float time, out int a, out int b, out float u)
+        /// <summary>A separate-curve key's own Bezier for one value; otherwise the shared eased weight.</summary>
+        static float Separate(ref SpritePartsKeyBlob key, float4 curve, float raw, float shared)
+            => key.SeparateCurves != 0 ? SpriteEase.EvaluateBezier(curve, raw) : shared;
+
+        static bool Span(ref SpritePartsTrackBlob track, SpritePartsKeyChannel channel, float time, out int a, out int b, out float u,
+            out float raw)
         {
             a = -1;
             b = -1;
             u = 0f;
+            raw = 0f;
             for (int i = 0; i < track.Keys.Length; i++)
             {
                 if (!track.Keys[i].Holds(channel))
@@ -122,7 +139,8 @@ namespace InvertLab.Sprites.DOTS
             }
             ref var ka = ref track.Keys[a];
             float span = track.Keys[b].Time - ka.Time;
-            u = EaseKey(ref ka, span > 1e-8f ? (time - ka.Time) / span : 0f);
+            raw = span > 1e-8f ? (time - ka.Time) / span : 0f;
+            u = EaseKey(ref ka, raw);
             return true;
         }
 

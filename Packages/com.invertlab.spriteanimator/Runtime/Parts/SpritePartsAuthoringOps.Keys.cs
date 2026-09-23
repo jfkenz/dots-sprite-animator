@@ -385,6 +385,7 @@ namespace InvertLab.Sprites.DOTS
                 HasClipActive = src.HasClipActive,
                 ClipActive = src.ClipActive,
                 Curve = src.Curve,
+                Separate = src.Separate,
                 AppearanceId = src.AppearanceId ?? string.Empty,
             };
         }

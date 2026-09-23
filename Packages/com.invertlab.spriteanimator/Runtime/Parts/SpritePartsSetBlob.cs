@@ -249,6 +249,12 @@ namespace InvertLab.Sprites.DOTS
         public float4 Curve;
         /// <summary>Channels this key does NOT hold (<see cref="SpritePartsKeyChannel"/> bits). 0 = all of them.</summary>
         public byte SkipChannels;
+        /// <summary>1 = position Y, rotation and scale X / Y ease with their own Bezier handles below (X uses Curve).</summary>
+        public byte SeparateCurves;
+        public float4 CurveY;
+        public float4 CurveRotation;
+        public float4 CurveScaleX;
+        public float4 CurveScaleY;
         /// <summary>1 = a clip key: <see cref="ClipActive"/> from here on (held).</summary>
         public byte HasClipActive;
         public byte ClipActive;
@@ -337,6 +343,12 @@ namespace InvertLab.Sprites.DOTS
             public float4 Curve;
             /// <summary>Channels this key does NOT hold. 0 (default) = all.</summary>
             public byte SkipChannels;
+            /// <summary>Per-channel Bezier handles (position Y, rotation, scale X, scale Y); X uses <see cref="Curve"/>.</summary>
+            public bool SeparateCurves;
+            public float4 CurveY;
+            public float4 CurveRotation;
+            public float4 CurveScaleX;
+            public float4 CurveScaleY;
             public bool HasClipActive;
             public bool ClipActive;
         }
@@ -1087,6 +1099,11 @@ namespace InvertLab.Sprites.DOTS
                     DrawOrder = k.DrawOrder,
                     Curve = math.all(k.Curve == float4.zero) ? new float4(0.33f, 0f, 0.67f, 1f) : k.Curve,
                     SkipChannels = (byte)(k.SkipChannels & (byte)SpritePartsKeyChannel.All),
+                    SeparateCurves = (byte)(k.SeparateCurves ? 1 : 0),
+                    CurveY = k.CurveY,
+                    CurveRotation = k.CurveRotation,
+                    CurveScaleX = k.CurveScaleX,
+                    CurveScaleY = k.CurveScaleY,
                     HasClipActive = (byte)(k.HasClipActive ? 1 : 0),
                     ClipActive = (byte)(k.ClipActive ? 1 : 0),
                 }));

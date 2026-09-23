@@ -362,6 +362,24 @@ namespace InvertLab.Sprites.DOTS
         All = Position | Rotation | Scale | Deform,
     }
 
+    /// <summary>
+    /// Per-channel Bezier handles for a key (Spine 4's separate curves): position Y, rotation, scale X and scale Y each
+    /// ease on their own toward the next key; position X and deform use the key's <c>Curve</c>.
+    /// </summary>
+    [Serializable]
+    public struct SpritePartsSeparateCurves
+    {
+        public bool On;
+        public Vector4 Y;
+        public Vector4 Rotation;
+        public Vector4 ScaleX;
+        public Vector4 ScaleY;
+
+        /// <summary>Every channel starting from the same handles.</summary>
+        public static SpritePartsSeparateCurves From(Vector4 curve)
+            => new SpritePartsSeparateCurves { On = true, Y = curve, Rotation = curve, ScaleX = curve, ScaleY = curve };
+    }
+
     [Serializable]
     public class SpritePartsKeyDef
     {
@@ -390,6 +408,8 @@ namespace InvertLab.Sprites.DOTS
         public int DrawOrder;
         /// <summary>Bezier handles (x1, y1, x2, y2) used when <see cref="EaseMode"/> is Bezier.</summary>
         public Vector4 Curve = new Vector4(0.33f, 0f, 0.67f, 1f);
+        /// <summary>Separate curves: when on, Y, rotation and scale each ease with their own Bezier (X keeps <see cref="Curve"/>).</summary>
+        public SpritePartsSeparateCurves Separate;
         /// <summary>Clip key (clip shapes): from this key on the shape clips (<see cref="ClipActive"/>) or not. Held.</summary>
         public bool HasClipActive;
         public bool ClipActive = true;
