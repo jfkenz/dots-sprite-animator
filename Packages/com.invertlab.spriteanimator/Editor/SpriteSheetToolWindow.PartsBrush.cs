@@ -99,6 +99,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return true;
             }
             string id = SpritePartIdUtility.Canonical(slot.SlotId);
+            // Ctrl+drag, or a press away from the part: box-select vertices instead of painting.
+            if (evt.control || evt.command || !BrushReachesPart(canvas, id, evt.mousePosition))
+                return false;
             var pose = SampleLocalPoseForSlot(id, _partsPreviewTime);
             if (!pose.Lattice.HasMesh || !TryGetPartsWarpLayout(canvas, id, out var rect, out _, out _, out _, out _))
                 return false;
@@ -108,7 +111,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 shown = pose.Lattice;
                 _partsBrushSkinInverse = null;
             }
-            BeginPartsDragUndo("Brush " + _partsWarpBrush);
+            BeginPartsDragUndoDeferred("Brush " + _partsWarpBrush); // opens on the first stroke change
             _partsBrushStartPose = pose;
             _partsBrushShownStart = shown;
             _partsBrushWork = new Vector2[shown.PointCount];
@@ -180,16 +183,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             float radius = Mathf.Max(4f, _partsBrushSize);
             float strength = Mathf.Clamp01(_partsBrushStrength);
             var work = _partsBrushWork;
+            var before = (Vector2[])work.Clone(); // Smooth reads the positions from before this step
             if (_partsWarpBrush == PartsWarpBrush.Bend)
             {
                 BendPartsBrush(work, m);
-                WritePartsBrushPose(rect);
+                if (PartsBrushMoved(before, work))
+                    WritePartsBrushPose(rect);
                 return;
             }
-            var before = (Vector2[])work.Clone(); // Smooth reads the positions from before this step
+            bool onlySelected = BrushSelectionOnly();
             for (int i = 0; i < work.Length; i++)
             {
-                if (IsWarpPinned(_partsDragSlotId, i))
+                if (IsWarpPinned(_partsDragSlotId, i) || (onlySelected && !_partsWarpSelection.Contains(i)))
                     continue;
                 float d = Vector2.Distance(work[i], m);
                 if (d >= radius)
@@ -230,7 +235,38 @@ namespace InvertLab.Sprites.DOTS.Editor
                     }
                 }
             }
-            WritePartsBrushPose(rect);
+            if (PartsBrushMoved(before, work)) // nothing moved: no key write, no empty undo step
+                WritePartsBrushPose(rect);
+        }
+
+        /// <summary>With vertices selected on the painted part, brushes only move those (a mask).</summary>
+        bool BrushSelectionOnly()
+            => _partsWarpSelection.Count > 0
+               && SpritePartIdUtility.Canonical(_partsDragSlotId) == _partsWarpSelectionSlotId;
+
+        /// <summary>True when a vertex of the part is inside the brush circle at <paramref name="mouse"/>.</summary>
+        bool BrushReachesPart(Rect canvas, string slotId, Vector2 mouse)
+        {
+            if (!TryGetPartsWarpLayout(canvas, slotId, out var rect, out var joint, out float guiDeg, out bool flipX, out bool flipY))
+                return false;
+            var lattice = ShownLattice(slotId);
+            float r = Mathf.Max(4f, _partsBrushSize);
+            for (int i = 0; i < lattice.PointCount; i++)
+            {
+                if ((PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, lattice.GetPoint(i)) - mouse).sqrMagnitude < r * r)
+                    return true;
+            }
+            return false;
+        }
+
+        static bool PartsBrushMoved(Vector2[] before, Vector2[] after)
+        {
+            for (int i = 0; i < before.Length; i++)
+            {
+                if ((before[i] - after[i]).sqrMagnitude > 1e-6f)
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -247,10 +283,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             Vector2 n = new Vector2(-a.y, a.x);
             float theta = Vector2.SignedAngle(axis, mouse - _partsBrushBase) * Mathf.Deg2Rad * Mathf.Lerp(0.5f, 1.5f, _partsBrushStrength);
             float k = theta / length; // curvature: this angle is reached at the grab point
+            bool onlySelected = BrushSelectionOnly();
             for (int i = 0; i < work.Length; i++)
             {
                 Vector2 p0 = _partsBrushStartWork[i];
-                if (IsWarpPinned(_partsDragSlotId, i))
+                if (IsWarpPinned(_partsDragSlotId, i) || (onlySelected && !_partsWarpSelection.Contains(i)))
                 {
                     work[i] = p0;
                     continue;
@@ -385,6 +422,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUILayout.EndHorizontal();
             if (pinned > 0)
                 EditorGUILayout.LabelField(pinned + " pinned (white ring).", EditorStyles.wordWrappedMiniLabel);
+            if (_partsWarpBrush != PartsWarpBrush.Off)
+                EditorGUILayout.LabelField(
+                    "Paint near the part. Drag away from it (or Ctrl+drag) to box-select: then brushes only move the selected vertices. Click empty space to clear.",
+                    EditorStyles.wordWrappedMiniLabel);
         }
     }
 }

@@ -558,7 +558,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            BeginPartsDragUndo("Deform Mesh");
+            BeginPartsDragUndoDeferred("Deform Mesh");
             // A part without a mesh shows its image corners; the mesh is made on the first real move.
             _partsWarpNeedsMesh = slot.Mesh == null || !slot.Mesh.HasMesh;
 
@@ -601,6 +601,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 var slot = SpritePartsAuthoringOps.FindSlot(_profile, _partsDragSlotId);
                 if (slot == null)
                     return;
+                FlushPartsDragUndo(); // the new mesh belongs to this drag's undo step
                 // Spine converts a region to a mesh with the four image corners.
                 slot.Mesh = SpritePartsMeshOps.CreateQuad();
                 SpritePartsAuthoringOps.ClearSlotDeforms(_profile, slot.SlotId);

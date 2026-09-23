@@ -1926,6 +1926,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsFfdDrag = -1;
             _partsFfdDragB = -1;
             EndPartsBrush();
+            _partsDragUndoPending = null;
             _partsMarqueeActive = false;
             _partsWarpBox = false;
             _partsMeshDrag = false;
@@ -3605,10 +3606,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _partsGroupTempPoses.Clear();
                     _partsHasTempPose = false;
                 }
-                else
+                else if (_partsDragUndoGroup >= 0)
                     ApplyPartsPoseEdit(_partsDragSlotId, _partsDragStartPose);
+                // Only undo when this drag changed something; otherwise PerformUndo would take back an older edit.
+                bool changed = _partsDragUndoGroup >= 0;
+                _partsDragUndoPending = null;
                 EndPartsDragUndo();
-                Undo.PerformUndo();
+                if (changed)
+                    Undo.PerformUndo();
                 ReleasePartsCanvasCapture();
                 _status = "Cancelled drag";
                 evt.Use();
@@ -3654,7 +3659,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 string moved = _partsDragSlotId ?? "part";
                 if (_partsGroupMoveMembers.Count > 1)
+                {
+                    FlushPartsDragUndo();
                     CommitPartsGroupMoveOffsets();
+                }
                 bool warpDrag = _partsCanvasTool == PartsCanvasTool.Warp;
                 EndPartsDragUndo();
                 ReleasePartsCanvasCapture();
@@ -4463,7 +4471,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                        !isRotateHandle && !isAxisMove && !isFreeMove)
                         ? "Scale Parts"
                         : "Move Parts";
-                BeginPartsDragUndo(_partsMode == SpritePartsStudioMode.Rig
+                BeginPartsDragUndoDeferred(_partsMode == SpritePartsStudioMode.Rig
                     ? op + " Rest"
                     : op + " Key");
                 _status = op + ": " + (slot.Name ?? slot.SlotId);
@@ -4952,6 +4960,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 PauseForImportPreview("pose edit");
                 return;
             }
+            FlushPartsDragUndo(); // first real change of a drag: its undo step starts here
 
             // Animate: always keep a live temp overlay so the canvas moves even when
             // Auto Key is on (key->blob sample can lag / reject without a clip).
@@ -5018,6 +5027,29 @@ namespace InvertLab.Sprites.DOTS.Editor
                         : "Animate: keyed pose";
             }
         }
+
+        /// <summary>
+        /// Drags that start on a press: the undo step opens on the first real change
+        /// (<see cref="FlushPartsDragUndo"/>), so a click that moves nothing leaves no empty undo / History entry
+        /// - those used to sit on top of the real keyframe edit, so Undo seemed to skip it.
+        /// </summary>
+        void BeginPartsDragUndoDeferred(string operation)
+        {
+            _partsDragUndoPending = operation;
+        }
+
+        /// <summary>Opens the pending drag undo step, if any. True when it was opened now.</summary>
+        bool FlushPartsDragUndo()
+        {
+            if (string.IsNullOrEmpty(_partsDragUndoPending))
+                return false;
+            string op = _partsDragUndoPending;
+            _partsDragUndoPending = null;
+            BeginPartsDragUndo(op);
+            return true;
+        }
+
+        string _partsDragUndoPending;
 
         void BeginPartsDragUndo(string operation)
         {

@@ -221,8 +221,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 || !HitPartsFfd(toScreen, mouse, out int a, out int b))
                 return false;
             var slot = MeshEditSlot();
-            BeginPartsDragUndo("Mesh FFD");
-            Undo.RegisterCompleteObjectUndo(Ffd, "Mesh FFD");
+            BeginPartsDragUndoDeferred("Mesh FFD");
             _partsFfdDrag = a;
             _partsFfdDragB = b;
             _partsFfdDragMouse = mouse;
@@ -240,6 +239,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 || !TryPartsFfdScreen(canvas, out _, out var toGrid))
                 return;
             mouse = ConstrainPartsAxis(_partsFfdDragMouse, mouse);
+            if ((mouse - _partsFfdDragMouse).sqrMagnitude < 4f)
+                return;
+            if (FlushPartsDragUndo())
+                Undo.RegisterCompleteObjectUndo(Ffd, "Mesh FFD");
             Vector2 move = toGrid(mouse) - toGrid(_partsFfdDragMouse);
             var ctrl = (Vector2[])_partsFfdDragCtrl.Clone();
             ctrl[_partsFfdDrag] += move;
@@ -425,8 +428,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 || !HitPartsFfd(toScreen, mouse, out int a, out int b))
                 return false;
             var f = Ffd;
-            BeginPartsDragUndo("FFD");
-            Undo.RegisterCompleteObjectUndo(f, "FFD");
+            BeginPartsDragUndoDeferred("FFD");
             _partsFfdDrag = a;
             _partsFfdDragB = b;
             _partsFfdDragMouse = mouse;
@@ -448,6 +450,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             var f = Ffd;
             mouse = ConstrainPartsAxis(_partsFfdDragMouse, mouse);
+            if ((mouse - _partsFfdDragMouse).sqrMagnitude < 4f)
+                return;
+            if (FlushPartsDragUndo())
+                Undo.RegisterCompleteObjectUndo(f, "FFD"); // the grid moves back with the key on Undo
             Vector2 move = toLattice(mouse) - toLattice(_partsFfdDragMouse);
             var ctrl = (Vector2[])_partsFfdDragCtrl.Clone();
             ctrl[_partsFfdDrag] += move;
