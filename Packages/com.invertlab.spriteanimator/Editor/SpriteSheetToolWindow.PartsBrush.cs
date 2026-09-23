@@ -46,17 +46,23 @@ namespace InvertLab.Sprites.DOTS.Editor
         Vector2 _partsBrushBase;        // Bend: the part's pivot (unrotated rect pixels)
         List<int>[] _partsBrushNeighbours;
 
-        // Pins (Warp): per part, for this editor session.
+        // Pins (Warp): saved on each part's mesh, so they stay across parts, reloads and sessions, follow the
+        // vertices when the mesh changes, and go through Undo. Read through a small cache (checked per vertex).
         readonly HashSet<int> _partsWarpPins = new HashSet<int>();
-        string _partsWarpPinSlot;
+        int[] _partsWarpPinsSource;
+        static readonly HashSet<int> NoPins = new HashSet<int>();
 
         HashSet<int> WarpPinsFor(string slotId)
         {
-            string id = SpritePartIdUtility.Canonical(slotId);
-            if (_partsWarpPinSlot != id)
+            var pins = SpritePartsAuthoringOps.FindSlot(_profile, slotId ?? string.Empty)?.Mesh?.Pins;
+            if (pins == null || pins.Length == 0)
+                return NoPins;
+            if (!ReferenceEquals(pins, _partsWarpPinsSource))
             {
                 _partsWarpPins.Clear();
-                _partsWarpPinSlot = id;
+                foreach (int v in pins)
+                    _partsWarpPins.Add(v);
+                _partsWarpPinsSource = pins;
             }
             return _partsWarpPins;
         }
@@ -66,19 +72,29 @@ namespace InvertLab.Sprites.DOTS.Editor
         void PinSelectedWarpVertices(bool pin)
         {
             var slot = CurrentPartsSlot;
-            if (slot == null)
+            var mesh = slot?.Mesh;
+            if (mesh == null || !mesh.HasMesh)
                 return;
-            var pins = WarpPinsFor(slot.SlotId);
+            var next = new HashSet<int>(mesh.Pins ?? System.Array.Empty<int>());
             if (!pin && _partsWarpSelection.Count == 0)
-                pins.Clear();
+                next.Clear();
             foreach (int v in _partsWarpSelection)
             {
+                if ((uint)v >= (uint)mesh.VertexCount)
+                    continue;
                 if (pin)
-                    pins.Add(v);
+                    next.Add(v);
                 else
-                    pins.Remove(v);
+                    next.Remove(v);
             }
-            _status = pins.Count + " pinned vertices. Pinned vertices never move.";
+            var sorted = new List<int>(next);
+            sorted.Sort();
+            if (mesh.Pins != null && sorted.Count == mesh.Pins.Length && sorted.TrueForAll(v => System.Array.IndexOf(mesh.Pins, v) >= 0))
+                return; // nothing changed: no empty undo step
+            RecordPartsUndo(pin ? "Pin Vertices" : "Unpin Vertices");
+            mesh.Pins = sorted.ToArray();
+            SaveDirty();
+            _status = sorted.Count + " pinned vertices on " + slot.Name + ". Pinned vertices never move; pins are saved with the part.";
             Repaint();
         }
 

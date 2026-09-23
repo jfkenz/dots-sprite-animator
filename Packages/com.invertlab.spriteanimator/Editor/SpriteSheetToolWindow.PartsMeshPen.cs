@@ -810,6 +810,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             slot.Mesh = work;
             if (hadMesh)
                 SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
+            else
+                SpritePartsAuthoringOps.RemapSlotPins(_profile, slot.SlotId, remap, work.VertexCount);
             SelectOnly(survivor);
             _partsMeshPen = -1;
             SaveDirty();

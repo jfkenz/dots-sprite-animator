@@ -12,6 +12,7 @@ namespace InvertLab.Sprites.DOTS
         public static int RemapSlotDeforms(SpriteSheetProfile profile, string slotId, int[] remap, int newCount,
             Vector2Int[] parents = null)
         {
+            RemapSlotPins(profile, slotId, remap, newCount);
             if (profile?.PartsClips == null || remap == null)
                 return 0;
             string id = SpritePartIdUtility.Canonical(slotId);
@@ -36,6 +37,23 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
             return changed;
+        }
+
+        /// <summary>Pins follow their vertices across a topology change; pins on removed vertices go.</summary>
+        public static void RemapSlotPins(SpriteSheetProfile profile, string slotId, int[] remap, int newCount)
+        {
+            var mesh = FindSlot(profile, slotId)?.Mesh;
+            if (mesh?.Pins == null || mesh.Pins.Length == 0 || remap == null)
+                return;
+            var next = new System.Collections.Generic.List<int>(mesh.Pins.Length);
+            foreach (int v in mesh.Pins)
+            {
+                int to = (uint)v < (uint)remap.Length ? remap[v] : -1;
+                if ((uint)to < (uint)newCount && !next.Contains(to))
+                    next.Add(to);
+            }
+            next.Sort();
+            mesh.Pins = next.ToArray();
         }
 
         /// <summary>Drops every deform key of the slot, e.g. when its mesh is removed.</summary>

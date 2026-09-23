@@ -108,6 +108,10 @@ namespace InvertLab.Sprites.DOTS
         public string[] Bones;
         /// <summary>Per vertex, one weight per bone: <c>Weights[vertex * Bones.Length + bone]</c>, each row sums to 1.</summary>
         public float[] Weights;
+        /// <summary>Editor: vertices pinned in Warp (brushes, drags and FFD leave them). Not used by the game.</summary>
+        public int[] Pins;
+        /// <summary>Editor: bit b set = bone b's weights are locked (painting, Smooth, Prune and Auto leave them).</summary>
+        public int LockedBones;
 
         public int VertexCount => Vertices?.Length ?? 0;
 
@@ -128,6 +132,8 @@ namespace InvertLab.Sprites.DOTS
             Triangles = Triangles == null ? null : (int[])Triangles.Clone(),
             Bones = Bones == null ? null : (string[])Bones.Clone(),
             Weights = Weights == null ? null : (float[])Weights.Clone(),
+            Pins = Pins == null ? null : (int[])Pins.Clone(),
+            LockedBones = LockedBones,
         };
     }
 
