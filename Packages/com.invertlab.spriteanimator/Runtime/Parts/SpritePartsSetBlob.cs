@@ -16,6 +16,19 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<SpritePartsIkBlob> IkConstraints;
         /// <summary>Jiggle joints, parents before children.</summary>
         public BlobArray<SpritePartsJiggleBlob> Jiggles;
+        /// <summary>Control parameters; values live on the character (<see cref="SpritePartsParamValue"/>).</summary>
+        public BlobArray<SpritePartsParamBlob> Params;
+    }
+
+    /// <summary>A control parameter: its value scrubs <see cref="ClipIndex"/> from start (Min) to end (Max).</summary>
+    public struct SpritePartsParamBlob
+    {
+        public FixedString64Bytes Name;
+        public int ClipIndex;
+        public float Min;
+        public float Max;
+        public float Default;
+        public byte Additive;
     }
 
     /// <summary>One spring joint: its tip (in the joint's space) swings behind the animated tip.</summary>
@@ -233,6 +246,16 @@ namespace InvertLab.Sprites.DOTS
             public float Mix;
         }
 
+        public struct ParamInput
+        {
+            public string Name;
+            public string ClipId;
+            public float Min;
+            public float Max;
+            public float Default;
+            public bool Additive;
+        }
+
         public struct SkinInput
         {
             public string SkinId;
@@ -246,7 +269,8 @@ namespace InvertLab.Sprites.DOTS
             ClipInput[] clips,
             SkinInput[] skins,
             IkInput[] ik = null,
-            JiggleInput[] jiggles = null)
+            JiggleInput[] jiggles = null,
+            ParamInput[] parameters = null)
         {
             if (slots == null || slots.Length == 0)
                 throw new ArgumentException("Parts set requires at least one slot.");
@@ -500,6 +524,30 @@ namespace InvertLab.Sprites.DOTS
                 var jiggleArr = builder.Allocate(ref root.Jiggles, springs.Count);
                 for (int k = 0; k < springs.Count; k++)
                     jiggleArr[k] = springs[k].blob;
+
+                // Parameters: the clip is found by id; one with no clip (or an empty range) is kept but does nothing.
+                parameters ??= Array.Empty<ParamInput>();
+                var paramArr = builder.Allocate(ref root.Params, parameters.Length);
+                for (int k = 0; k < parameters.Length; k++)
+                {
+                    var pin = parameters[k];
+                    int clipIndex = -1;
+                    string cid = SpritePartIdUtility.Canonical(pin.ClipId ?? string.Empty);
+                    for (int c = 0; c < clips.Length && clipIndex < 0 && cid.Length > 0; c++)
+                    {
+                        if (SpritePartIdUtility.Canonical(clips[c].ClipId ?? string.Empty) == cid)
+                            clipIndex = c;
+                    }
+                    paramArr[k] = new SpritePartsParamBlob
+                    {
+                        Name = Truncate64(pin.Name),
+                        ClipIndex = math.abs(pin.Max - pin.Min) > 1e-6f ? clipIndex : -1,
+                        Min = pin.Min,
+                        Max = pin.Max,
+                        Default = pin.Default,
+                        Additive = pin.Additive ? (byte)1 : (byte)0,
+                    };
+                }
 
                 return builder.CreateBlobAssetReference<SpritePartsSetBlob>(allocator);
             }

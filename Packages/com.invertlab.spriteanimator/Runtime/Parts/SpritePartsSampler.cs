@@ -37,6 +37,12 @@ namespace InvertLab.Sprites.DOTS
         public static void SampleSlot(
             ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds,
             out Pose pose)
+            => SampleSlot(ref set, clipIndex, slotIndex, timeSeconds, true, out pose);
+
+        /// <param name="wrap">False: the time is clamped to the clip instead of wrapped (control parameters).</param>
+        internal static void SampleSlot(
+            ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds, bool wrap,
+            out Pose pose)
         {
             ref var slot = ref set.Slots[slotIndex];
             pose = new Pose
@@ -51,7 +57,9 @@ namespace InvertLab.Sprites.DOTS
                 return;
 
             ref var clip = ref set.Clips[clipIndex];
-            float time = WrapTime(timeSeconds, clip.Duration, clip.WrapMode);
+            float time = wrap
+                ? WrapTime(timeSeconds, clip.Duration, clip.WrapMode)
+                : math.clamp(timeSeconds, 0f, math.max(0f, clip.Duration));
             int trackIndex = TrackIndexForSlot(ref clip, slotIndex);
             if (trackIndex < 0)
                 return;
@@ -267,7 +275,7 @@ namespace InvertLab.Sprites.DOTS
             return fromDeg + delta * t;
         }
 
-        static int TrackIndexForSlot(ref SpritePartsClipBlob clip, int slotIndex)
+        internal static int TrackIndexForSlot(ref SpritePartsClipBlob clip, int slotIndex)
         {
             if (slotIndex < 0)
                 return -1;

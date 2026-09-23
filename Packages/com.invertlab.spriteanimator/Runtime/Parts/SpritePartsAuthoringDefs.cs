@@ -179,6 +179,23 @@ namespace InvertLab.Sprites.DOTS
     }
 
     /// <summary>
+    /// A control parameter (AnyPortrait-style): a value from <see cref="Min"/> to <see cref="Max"/> scrubs a clip
+    /// from its start to its end, so a "Mouth" clip keyed closed → open becomes a slider. Gameplay sets the
+    /// value at runtime. Additive adds the change from the <see cref="Default"/> pose on top of whatever plays.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsParamDef
+    {
+        public string Name = "Param";
+        public string ClipId = string.Empty;
+        public float Min;
+        public float Max = 1f;
+        public float Default;
+        /// <summary>True: add the change from the default pose. False: the parts the clip keys take its pose.</summary>
+        public bool Additive = true;
+    }
+
+    /// <summary>
     /// Jiggle (spring physics): the joint and <see cref="ChainLength"/> - 1 joints under it (first child each)
     /// swing behind their animated pose, for hair, tails, cloth and ears. Simulated at runtime every frame.
     /// </summary>

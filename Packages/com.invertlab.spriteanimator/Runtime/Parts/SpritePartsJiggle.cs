@@ -19,8 +19,10 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>One per <see cref="SpritePartsSetBlob.Jiggles"/>; not created = no jiggle.</summary>
         public NativeArray<SpritePartJiggleState> Jiggle;
         public float DeltaTime;
-        /// <summary>The keyed pose only: no IK, no jiggle (the editor writes keys from this).</summary>
+        /// <summary>The keyed pose only: no parameters, IK or jiggle (the editor writes keys from this).</summary>
         public bool KeyedPoseOnly;
+        /// <summary>One value per <see cref="SpritePartsSetBlob.Params"/>; not created (or short) = defaults.</summary>
+        public NativeArray<float> ParamValues;
     }
 
     /// <summary>

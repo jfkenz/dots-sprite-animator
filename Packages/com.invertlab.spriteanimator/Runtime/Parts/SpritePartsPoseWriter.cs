@@ -182,6 +182,8 @@ namespace InvertLab.Sprites.DOTS
             }
 
             ApplyAnimationLayers(ref set, player, layers, finalLocal, sources);
+            if (set.Params.Length > 0 && !extras.KeyedPoseOnly)
+                SpritePartsParams.Apply(ref set, player.ClipIndex, extras.ParamValues, finalLocal);
             ApplyLocalOverrides(overrides, finalLocal, sources, n);
             SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
             ApplySpaceOverrides(ref set, overrides, finalLocal, localToRoot, sources, n, rootWorld, flipX, flipY);
@@ -678,6 +680,8 @@ namespace InvertLab.Sprites.DOTS
                 float4x4 rootWorld = CurrentEntityWorld(em, root);
 
                 var extras = new SpritePartsEvalExtras { DeltaTime = deltaTime };
+                if (set.Params.Length > 0 && em.HasBuffer<SpritePartsParamValue>(root))
+                    extras.ParamValues = em.GetBuffer<SpritePartsParamValue>(root).AsNativeArray().Reinterpret<float>();
                 if (set.Jiggles.Length > 0 && em.HasBuffer<SpritePartJiggleState>(root))
                 {
                     var jiggle = em.GetBuffer<SpritePartJiggleState>(root);
@@ -769,6 +773,12 @@ namespace InvertLab.Sprites.DOTS
             EnsureBuffer<SpritePartHitboxWorld>(em, root);
             if (BlobHasJiggles(em, root))
                 EnsureBuffer<SpritePartJiggleState>(em, root);
+            if (em.HasComponent<SpritePartsSetRef>(root))
+            {
+                var set = em.GetComponentData<SpritePartsSetRef>(root).Set;
+                if (set.IsCreated && set.Value.Params.Length > 0)
+                    SpritePartsParams.EnsureValues(em, root, ref set.Value);
+            }
             if (!em.HasComponent<SpritePartsPoseDiagnostics>(root))
                 em.AddComponentData(root, new SpritePartsPoseDiagnostics { PreviousClipIndex = -1 });
         }

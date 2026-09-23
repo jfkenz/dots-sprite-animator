@@ -62,7 +62,7 @@ namespace InvertLab.Sprites.DOTS
                 var clips = CreateClips(bakeProfile);
                 var skins = CreateSkins(bakeProfile);
                 blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins, CreateIk(bakeProfile),
-                    CreateJiggles(bakeProfile));
+                    CreateJiggles(bakeProfile), CreateParams(bakeProfile));
                 return true;
             }
             catch (Exception ex)
@@ -89,6 +89,24 @@ namespace InvertLab.Sprites.DOTS
                     ChainLength = Mathf.Clamp(c.ChainLength, 1, 2),
                     BendPositive = c.BendPositive,
                     Mix = c.Mix,
+                });
+            }
+            return result.ToArray();
+        }
+
+        public static SpritePartsSetBuilder.ParamInput[] CreateParams(SpriteSheetProfile profile)
+        {
+            var list = profile?.PartsParams;
+            if (list == null || list.Count == 0)
+                return Array.Empty<SpritePartsSetBuilder.ParamInput>();
+            var result = new System.Collections.Generic.List<SpritePartsSetBuilder.ParamInput>(list.Count);
+            foreach (var p in list)
+            {
+                if (p == null)
+                    continue;
+                result.Add(new SpritePartsSetBuilder.ParamInput
+                {
+                    Name = p.Name, ClipId = p.ClipId, Min = p.Min, Max = p.Max, Default = p.Default, Additive = p.Additive,
                 });
             }
             return result.ToArray();
@@ -373,7 +391,8 @@ namespace InvertLab.Sprites.DOTS
                     clips,
                     System.Array.Empty<SpritePartsSetBuilder.SkinInput>(),
                     CreateIk(profile),
-                    CreateJiggles(profile));
+                    CreateJiggles(profile),
+                    CreateParams(profile));
                 return true;
             }
             catch (Exception ex)
@@ -425,7 +444,8 @@ namespace InvertLab.Sprites.DOTS
                     clips,
                     System.Array.Empty<SpritePartsSetBuilder.SkinInput>(),
                     CreateIk(profile),
-                    CreateJiggles(profile));
+                    CreateJiggles(profile),
+                    CreateParams(profile));
                 return true;
             }
             catch (Exception ex)

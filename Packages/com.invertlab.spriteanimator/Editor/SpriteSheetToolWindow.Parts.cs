@@ -761,6 +761,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 DrawPartsIkInspector();
                 DrawPartsJiggleInspector();
+                DrawPartsParamsInspector();
             }
 
             EditorGUIUtility.labelWidth = prevLabelWidth;

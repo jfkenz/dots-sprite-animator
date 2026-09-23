@@ -113,6 +113,9 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static bool PreviewPhysics;
 
+        /// <summary>Editor preview values of control parameters, by name. Missing = the parameter's default.</summary>
+        public static readonly Dictionary<string, float> PreviewParams = new Dictionary<string, float>();
+
         /// <summary>
         /// Build a pose-only blob and sample all slots at time (local + root matrices), as shown: IK and,
         /// with <see cref="PreviewPhysics"/>, jiggle. Caller must <see cref="DisposeSample"/>.
@@ -165,13 +168,39 @@ namespace InvertLab.Sprites.DOTS
             localPoses = new NativeArray<SpritePartsSampler.Pose>(n, allocator);
             localToRoot = new NativeArray<float4x4>(n, allocator);
             if (keyedPose)
+            {
                 SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot,
                     new SpritePartsEvalExtras { KeyedPoseOnly = true });
-            else if (PreviewPhysics && blob.Value.Jiggles.Length > 0)
-                EvaluateWithPhysics(profile, ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot);
-            else
-                SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot);
+                return true;
+            }
+            var values = PreviewParamValues(ref blob.Value);
+            try
+            {
+                if (PreviewPhysics && blob.Value.Jiggles.Length > 0)
+                    EvaluateWithPhysics(profile, ref blob.Value, clipIndex, timeSeconds, values, localPoses, localToRoot);
+                else
+                    SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot,
+                        new SpritePartsEvalExtras { ParamValues = values });
+            }
+            finally
+            {
+                if (values.IsCreated)
+                    values.Dispose();
+            }
             return true;
+        }
+
+        static NativeArray<float> PreviewParamValues(ref SpritePartsSetBlob set)
+        {
+            if (set.Params.Length == 0 || PreviewParams.Count == 0)
+                return default;
+            var values = new NativeArray<float>(set.Params.Length, Allocator.Temp);
+            for (int i = 0; i < values.Length; i++)
+            {
+                string name = set.Params[i].Name.ToString();
+                values[i] = PreviewParams.TryGetValue(name, out float v) ? v : set.Params[i].Default;
+            }
+            return values;
         }
 
         const float PreviewStep = 1f / 60f;
@@ -185,7 +214,7 @@ namespace InvertLab.Sprites.DOTS
         /// loop too), or warms up over the second before <paramref name="time"/> when it cannot. Deterministic.
         /// </summary>
         static void EvaluateWithPhysics(SpriteSheetProfile profile, ref SpritePartsSetBlob set, int clip, float time,
-            NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
+            NativeArray<float> values, NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
         {
             int count = set.Jiggles.Length;
             float duration = clip >= 0 && clip < set.Clips.Length ? set.Clips[clip].Duration : 0f;
@@ -205,18 +234,18 @@ namespace InvertLab.Sprites.DOTS
                 {
                     from = math.max(0f, time - 1f);
                     wrapped = false;
-                    var init = new SpritePartsEvalExtras { Jiggle = states, DeltaTime = 0f };
+                    var init = new SpritePartsEvalExtras { Jiggle = states, DeltaTime = 0f, ParamValues = values };
                     SpritePartsPoseWriter.EvaluateEditor(ref set, clip, from, local, localToRoot, init);
                 }
                 if (wrapped)
                 {
-                    StepTo(ref set, clip, ref from, duration, states, local, localToRoot);
+                    StepTo(ref set, clip, ref from, duration, states, values, local, localToRoot);
                     from = 0f;
                 }
-                StepTo(ref set, clip, ref from, time, states, local, localToRoot);
+                StepTo(ref set, clip, ref from, time, states, values, local, localToRoot);
                 // Final pose at exactly this time (no further motion).
                 SpritePartsPoseWriter.EvaluateEditor(ref set, clip, time, local, localToRoot,
-                    new SpritePartsEvalExtras { Jiggle = states, DeltaTime = 0f });
+                    new SpritePartsEvalExtras { Jiggle = states, DeltaTime = 0f, ParamValues = values });
                 s_physicsState ??= new SpritePartJiggleState[0];
                 if (s_physicsState.Length != count)
                     s_physicsState = new SpritePartJiggleState[count];
@@ -232,14 +261,14 @@ namespace InvertLab.Sprites.DOTS
         }
 
         static void StepTo(ref SpritePartsSetBlob set, int clip, ref float t, float end, NativeArray<SpritePartJiggleState> states,
-            NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
+            NativeArray<float> values, NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
         {
             while (t < end - 1e-5f)
             {
                 float h = math.min(PreviewStep, end - t);
                 t += h;
                 SpritePartsPoseWriter.EvaluateEditor(ref set, clip, t, local, localToRoot,
-                    new SpritePartsEvalExtras { Jiggle = states, DeltaTime = h });
+                    new SpritePartsEvalExtras { Jiggle = states, DeltaTime = h, ParamValues = values });
             }
         }
 

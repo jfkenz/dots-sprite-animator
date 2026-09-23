@@ -1405,6 +1405,8 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsIkConstraintDef> PartsIkConstraints = new();
         /// <summary>Spring physics on joint chains (hair, tails), simulated after IK.</summary>
         public List<SpritePartsJiggleDef> PartsJiggles = new();
+        /// <summary>Control parameters: a value scrubs a clip (mouth open, head turn), set by gameplay.</summary>
+        public List<SpritePartsParamDef> PartsParams = new();
         public string PartsDefaultClipId = string.Empty;
         public string PartsDefaultSkinId = string.Empty;
         /// <summary>
