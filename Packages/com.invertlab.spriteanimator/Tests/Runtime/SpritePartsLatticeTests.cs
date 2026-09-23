@@ -201,6 +201,22 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void LargeMesh_UpTo63VerticesTriangulatesAndRenders()
+        {
+            var mesh = SpritePartsMeshOps.CreateQuad();
+
+            for (int y = 1; y < 10 && mesh.VertexCount < SpritePartsMeshOps.MaxVertices; y++)
+            for (int x = 1; x < 9 && mesh.VertexCount < SpritePartsMeshOps.MaxVertices; x++)
+                Assert.IsTrue(SpritePartsMeshOps.TryAddInteriorVertex(mesh, new Vector2(x / 9f + 0.01f * (y % 2), y / 10f), out _, out _));
+            Assert.AreEqual(SpritePartsMeshOps.MaxVertices, mesh.VertexCount);
+            Assert.AreEqual(1f, TriangleArea(mesh), 1e-4f);
+            Assert.IsFalse(SpritePartsMeshOps.TryAddInteriorVertex(mesh, new Vector2(0.5f, 0.51f), out _, out _), "Full mesh refuses.");
+            var lattice = SpritePartsLattice.FromMesh(mesh);
+            Assert.IsTrue(lattice.HasMesh);
+            Assert.AreEqual(mesh.Triangles.Length, lattice.IndexCount);
+        }
+
+        [Test]
         public void Generate_AddsInteriorVertices()
         {
             var mesh = SpritePartsMeshOps.CreateQuad();

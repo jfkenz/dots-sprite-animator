@@ -15,6 +15,11 @@ namespace InvertLab.Sprites.DOTS.Editor
     public sealed partial class SpriteSheetToolWindow
     {
         int _partsMeshPen = -1;
+        /// <summary>On: a pen click joins the new vertex to the previous one. Off: free vertices.</summary>
+        [SerializeField] bool _partsMeshAutoConnect = true;
+
+        string MeshFullMessage()
+            => "Mesh is full (" + SpritePartsMeshOps.MaxVertices + " vertices). Delete or merge some vertices first.";
 
         void EndMeshPen()
         {
@@ -67,7 +72,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 var pending = mesh.Clone();
                 if (!SpritePartsMeshOps.TryAppendHullVertex(pending, uv, out int added))
                 {
-                    _status = "Mesh is full (" + SpritePartsMeshOps.MaxVertices + " vertices).";
+                    _status = MeshFullMessage();
                     return;
                 }
                 RecordPartsUndo("Pen Hull Point");
@@ -81,7 +86,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
-            int pen = (uint)_partsMeshPen < (uint)mesh.VertexCount ? _partsMeshPen : -1;
+            // Auto Connect off: every click is a free vertex (Ctrl / Shift still draw from the pen).
+            int pen = (uint)_partsMeshPen < (uint)mesh.VertexCount && (_partsMeshAutoConnect || snap || cut)
+                ? _partsMeshPen
+                : -1;
             if (snap && pen >= 0)
                 hit = NearestMeshVertex(mesh, uv, pen);
 
@@ -93,7 +101,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 if (!TryPlaceMeshVertex(work, sprite, uv, out target, out var placed, out what))
                 {
-                    _status = "A vertex there would make the hull cross itself.";
+                    _status = work.VertexCount >= SpritePartsMeshOps.MaxVertices
+                        ? MeshFullMessage()
+                        : "A vertex there would make the hull cross itself.";
                     return;
                 }
                 total = ComposeRemap(total, placed);
@@ -116,7 +126,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 CommitPen(slot, mesh, work, total, "Pen Point");
                 _partsMeshPen = target;
                 SelectOnly(target);
-                _status = what + ". Next click draws an edge from it.";
+                _status = _partsMeshAutoConnect
+                    ? what + ". Next click draws an edge from it."
+                    : what + " (free, Auto Connect off).";
                 return;
             }
 
@@ -147,7 +159,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     break;
                 if (work.VertexCount >= SpritePartsMeshOps.MaxVertices)
                 {
-                    _status = "Mesh is full; the cut stopped early.";
+                    _status = MeshFullMessage() + " The cut stopped early.";
                     break;
                 }
                 // Hull and user edges are split (keeping them as edges); a triangle line just gets a vertex.
@@ -298,6 +310,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             bool ctrl = Event.current.control || Event.current.command;
             bool cut = Event.current.shift && !ctrl;
+            if (!_partsMeshAutoConnect && !ctrl && !cut)
+                return; // free vertices: no rubber band
             Vector2 target = mouseUv;
             if (ctrl)
             {

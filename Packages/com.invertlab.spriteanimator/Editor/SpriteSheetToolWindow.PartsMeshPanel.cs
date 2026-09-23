@@ -95,6 +95,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                     GUILayout.Height(20f));
                 if (tool != _partsMeshTool)
                     SetPartsMeshTool(tool);
+                if (_partsMeshTool == PartsMeshTool.Create)
+                    _partsMeshAutoConnect = EditorGUILayout.ToggleLeft(
+                        new GUIContent("Auto Connect",
+                            "On: each click joins the new vertex to the previous one with an edge. " +
+                            "Off: clicks add free vertices; Shift (cut) and Ctrl (snap) still draw an edge. " +
+                            "Triangle lines always appear: a mesh is drawn as triangles."),
+                        _partsMeshAutoConnect);
                 EditorGUILayout.BeginHorizontal();
                 if (GUILayout.Button(new GUIContent("New", "The four image corners")))
                     ResetPartsMeshToQuad();

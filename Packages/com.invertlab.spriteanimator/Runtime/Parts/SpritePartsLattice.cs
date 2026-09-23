@@ -13,13 +13,14 @@ namespace InvertLab.Sprites.DOTS
     /// </summary>
     public struct SpritePartsLattice
     {
-        public const int MaxVertices = 32;
-        /// <summary>Enough for a fully triangulated 32-vertex mesh (2n - hull - 2 triangles).</summary>
-        public const int MaxIndices = 180;
+        /// <summary>FixedList512Bytes&lt;float2&gt; holds 63 entries.</summary>
+        public const int MaxVertices = 63;
+        /// <summary>Enough for a fully triangulated 63-vertex mesh (2n - hull - 2 triangles, hull &gt;= 3).</summary>
+        public const int MaxIndices = 366;
 
         public FixedList512Bytes<float2> Points;
         public FixedList512Bytes<float2> Uvs;
-        /// <summary>Triangle list. Vertex indices fit in a byte (MaxVertices = 32).</summary>
+        /// <summary>Triangle list. Vertex indices fit in a byte (MaxVertices = 63).</summary>
         public FixedList512Bytes<byte> Indices;
 
         public int PointCount => Points.Length;
