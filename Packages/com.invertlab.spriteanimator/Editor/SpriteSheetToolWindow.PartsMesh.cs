@@ -136,8 +136,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         static Vector2 LatticeGui(Rect unrotated, float2 p)
         {
             return new Vector2(
-                Mathf.Lerp(unrotated.xMin, unrotated.xMax, p.x + 0.5f),
-                Mathf.Lerp(unrotated.yMax, unrotated.yMin, p.y + 0.5f));
+                Mathf.LerpUnclamped(unrotated.xMin, unrotated.xMax, p.x + 0.5f),
+                Mathf.LerpUnclamped(unrotated.yMax, unrotated.yMin, p.y + 0.5f));
         }
 
         static Vector2 PartsWarpPointGui(
@@ -1055,7 +1055,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             => new Rect(canvas.x + 8f, canvas.y + 8f, Mathf.Min(canvas.width - 16f, 790f), 46f);
 
         static Vector2 MeshUvToGui(Rect sprite, Vector2 uv)
-            => new Vector2(Mathf.Lerp(sprite.xMin, sprite.xMax, uv.x), Mathf.Lerp(sprite.yMax, sprite.yMin, uv.y));
+            => new Vector2(Mathf.LerpUnclamped(sprite.xMin, sprite.xMax, uv.x), Mathf.LerpUnclamped(sprite.yMax, sprite.yMin, uv.y)); // unclamped: vertices may sit past the image
 
         static Vector2 MeshGuiToUvFree(Rect sprite, Vector2 gui)
             => new Vector2(
@@ -1157,6 +1157,67 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUI.Label(new Rect(bx + 44f, by + 1f, 50f, 16f), Mathf.RoundToInt(_partsMeshZoom * 100f) + "%", _mutedStyle);
         }
 
+        /// <summary>One solid anti-aliased line (Repaint only).</summary>
+        static void DrawMeshLine(Vector2 a, Vector2 b, Color color, float width)
+        {
+            if (Event.current.type != EventType.Repaint)
+                return;
+            Handles.BeginGUI();
+            Handles.color = color;
+            Handles.DrawAAPolyLine(width, a, b);
+            Handles.EndGUI();
+        }
+
+        static Texture2D s_meshChecker;
+
+        /// <summary>
+        /// Where vertices may go (<see cref="SpritePartsMeshOps.MinUv"/>..<see cref="SpritePartsMeshOps.MaxUv"/>):
+        /// a faint checker (drawn transparent), and a dashed limit line once a vertex gets near it.
+        /// </summary>
+        void DrawMeshFreeArea(Rect sprite, SpritePartMeshDef mesh)
+        {
+            if (Event.current.type != EventType.Repaint)
+                return;
+            Vector2 lo = MeshUvToGui(sprite, new Vector2(SpritePartsMeshOps.MinUv, SpritePartsMeshOps.MaxUv));
+            Vector2 hi = MeshUvToGui(sprite, new Vector2(SpritePartsMeshOps.MaxUv, SpritePartsMeshOps.MinUv));
+            var free = Rect.MinMaxRect(lo.x, lo.y, hi.x, hi.y);
+            if (s_meshChecker == null)
+            {
+                s_meshChecker = new Texture2D(2, 2, TextureFormat.RGBA32, false)
+                {
+                    hideFlags = HideFlags.HideAndDontSave,
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Repeat,
+                };
+                var a = new Color(1f, 1f, 1f, 0.035f);
+                var b = new Color(1f, 1f, 1f, 0f);
+                s_meshChecker.SetPixels(new[] { a, b, b, a });
+                s_meshChecker.Apply();
+            }
+            const float cell = 12f; // checker squares stay 12px at any zoom
+            GUI.DrawTextureWithTexCoords(free, s_meshChecker,
+                new Rect(0f, 0f, free.width / (cell * 2f), free.height / (cell * 2f)));
+
+            // Limit line only when something comes close, so it never clutters the normal view.
+            float near = 0.25f;
+            bool close = false;
+            for (int i = 0; i < (mesh?.VertexCount ?? 0) && !close; i++)
+            {
+                Vector2 v = mesh.Vertices[i];
+                close = v.x < SpritePartsMeshOps.MinUv + near || v.x > SpritePartsMeshOps.MaxUv - near
+                        || v.y < SpritePartsMeshOps.MinUv + near || v.y > SpritePartsMeshOps.MaxUv - near;
+            }
+            if (!close)
+                return;
+            Handles.BeginGUI();
+            Handles.color = new Color(1f, 0.85f, 0.3f, 0.8f);
+            Handles.DrawDottedLine(new Vector3(free.xMin, free.yMin), new Vector3(free.xMax, free.yMin), 4f);
+            Handles.DrawDottedLine(new Vector3(free.xMax, free.yMin), new Vector3(free.xMax, free.yMax), 4f);
+            Handles.DrawDottedLine(new Vector3(free.xMax, free.yMax), new Vector3(free.xMin, free.yMax), 4f);
+            Handles.DrawDottedLine(new Vector3(free.xMin, free.yMax), new Vector3(free.xMin, free.yMin), 4f);
+            Handles.EndGUI();
+        }
+
         void DrawPartsMeshEditView(Rect canvas, SpritePartSlotDef slot)
         {
             if (!TryGetPartsMeshEditLayout(canvas, out var sprite, out var app, out var sheet))
@@ -1164,51 +1225,47 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUI.Label(new Rect(canvas.x + 12f, canvas.y + 62f, canvas.width - 24f, 20f), "This part has no art.", _mutedStyle);
                 return;
             }
-            EditorGUI.DrawRect(sprite, new Color(0.12f, 0.13f, 0.16f, 1f));
-            if (sheet?.Texture != null && app != null)
-                DrawPartsSheetCell(sheet.Texture, sheet, sheet.Columns, sheet.Rows, app.CellIndex, sprite, Color.white);
-            DrawGuiRectOutline(sprite, new Color(1f, 1f, 1f, 0.25f), 1f);
-
             var mesh = slot?.Mesh;
             int n = mesh?.VertexCount ?? 0;
             int hull = Mathf.Clamp(mesh?.HullCount ?? 0, 0, n);
-            var orange = new Color(1f, 0.6f, 0.2f, 1f);
-            if (mesh != null && mesh.HasMesh)
+
+            // Outside the image the mesh draws nothing: a faint checker says "transparent here".
+            DrawMeshFreeArea(sprite, mesh);
+            EditorGUI.DrawRect(sprite, new Color(0.12f, 0.13f, 0.16f, 1f));
+            if (sheet?.Texture != null && app != null)
+                DrawPartsSheetCell(sheet.Texture, sheet, sheet.Columns, sheet.Rows, app.CellIndex, sprite, Color.white);
+            DrawGuiRectOutline(sprite, new Color(1f, 1f, 1f, 0.55f), 1f);
+
+            if (Event.current.type == EventType.Repaint && mesh != null)
             {
-                var faint = new Color(1f, 0.6f, 0.2f, 0.45f);
-                for (int t = 0; t + 2 < mesh.Triangles.Length; t += 3)
+                // Solid anti-aliased lines (rotated rects broke thin diagonals into dashes under the clip).
+                Handles.BeginGUI();
+                if (mesh.HasMesh)
                 {
-                    int a = mesh.Triangles[t], b = mesh.Triangles[t + 1], c = mesh.Triangles[t + 2];
-                    if ((uint)a >= (uint)n || (uint)b >= (uint)n || (uint)c >= (uint)n)
-                        continue;
-                    Vector2 pa = MeshUvToGui(sprite, mesh.Vertices[a]);
-                    Vector2 pb = MeshUvToGui(sprite, mesh.Vertices[b]);
-                    Vector2 pc = MeshUvToGui(sprite, mesh.Vertices[c]);
-                    DrawGuiLine(pa, pb, faint, 1f);
-                    DrawGuiLine(pb, pc, faint, 1f);
-                    DrawGuiLine(pc, pa, faint, 1f);
+                    Handles.color = new Color(1f, 0.62f, 0.25f, 0.7f);
+                    foreach (var e in SpritePartsMeshOps.GraphEdges(mesh))
+                        Handles.DrawAAPolyLine(1.5f, MeshUvToGui(sprite, mesh.Vertices[e.x]), MeshUvToGui(sprite, mesh.Vertices[e.y]));
                 }
-            }
-            for (int i = 0; i < hull; i++)
-            {
-                if (i == hull - 1 && hull < 3)
-                    break;
-                DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[i]), MeshUvToGui(sprite, mesh.Vertices[(i + 1) % hull]), orange, 2f);
-            }
-            if (mesh?.Edges != null)
-            {
-                var cyan = new Color(0.3f, 0.85f, 1f, 1f);
-                for (int e = 0; e + 1 < mesh.Edges.Length; e += 2)
+                Handles.color = new Color(1f, 0.6f, 0.2f, 1f);
+                for (int i = 0; i < hull; i++)
+                {
+                    if (i == hull - 1 && hull < 3)
+                        break;
+                    Handles.DrawAAPolyLine(2.5f, MeshUvToGui(sprite, mesh.Vertices[i]), MeshUvToGui(sprite, mesh.Vertices[(i + 1) % hull]));
+                }
+                Handles.color = new Color(0.3f, 0.85f, 1f, 1f);
+                for (int e = 0; mesh.Edges != null && e + 1 < mesh.Edges.Length; e += 2)
                 {
                     int a = mesh.Edges[e], b = mesh.Edges[e + 1];
                     if ((uint)a < (uint)n && (uint)b < (uint)n)
-                        DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[a]), MeshUvToGui(sprite, mesh.Vertices[b]), cyan, 2f);
+                        Handles.DrawAAPolyLine(2f, MeshUvToGui(sprite, mesh.Vertices[a]), MeshUvToGui(sprite, mesh.Vertices[b]));
                 }
+                Handles.EndGUI();
             }
             if (_partsMeshTool == PartsMeshTool.Weights)
                 DrawPartsMeshWeights(sprite, mesh);
             if (_partsMeshEdgeFrom >= 0 && _partsMeshEdgeFrom < n)
-                DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[_partsMeshEdgeFrom]), MeshUvToGui(sprite, _partsMeshMouseUv), new Color(0.3f, 0.85f, 1f, 0.8f), 1.5f);
+                DrawMeshLine(MeshUvToGui(sprite, mesh.Vertices[_partsMeshEdgeFrom]), MeshUvToGui(sprite, _partsMeshMouseUv), new Color(0.3f, 0.85f, 1f, 0.8f), 1.5f);
             else
                 DrawMeshCreatePreview(sprite, mesh);
 

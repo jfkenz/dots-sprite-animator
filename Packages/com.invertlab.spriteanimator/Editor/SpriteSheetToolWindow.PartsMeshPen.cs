@@ -562,7 +562,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             int pen = (uint)_partsMeshPen < (uint)n ? _partsMeshPen : -1;
 
             if (_partsWarpHover < 0 && !ctrl && HitMeshGraphEdge(sprite, mesh, mouse, out int ha, out int hb))
-                DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[ha]), MeshUvToGui(sprite, mesh.Vertices[hb]), Color.white, 3f);
+                DrawMeshLine(MeshUvToGui(sprite, mesh.Vertices[ha]), MeshUvToGui(sprite, mesh.Vertices[hb]), Color.white, 3f);
 
             if (_partsMeshTool != PartsMeshTool.Create || pen < 0 || _partsCreateMode == PartsCreateMode.Vertex)
                 return;
@@ -579,7 +579,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return; // the Edge tool only joins existing vertices
             Vector2 from = mesh.Vertices[pen];
             var line = ctrl ? new Color(0.35f, 0.95f, 1f, 0.95f) : new Color(1f, 0.72f, 0.25f, 0.9f);
-            DrawGuiLine(MeshUvToGui(sprite, from), MeshUvToGui(sprite, target), line, 1.5f);
+            DrawMeshLine(MeshUvToGui(sprite, from), MeshUvToGui(sprite, target), line, 1.5f);
             if (!cut)
                 return;
             foreach (var e in SpritePartsMeshOps.GraphEdges(mesh))

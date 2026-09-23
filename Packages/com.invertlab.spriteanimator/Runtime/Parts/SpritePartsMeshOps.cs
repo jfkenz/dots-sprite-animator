@@ -903,10 +903,10 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Vertices may sit outside the image (Spine / AnyPortrait do this to leave room for deforms);
-        /// that area draws transparent. Limited to one image size past each side.
+        /// that area draws transparent. Limited to two image sizes past each side.
         /// </summary>
-        public const float MinUv = -1f;
-        public const float MaxUv = 2f;
+        public const float MinUv = -2f;
+        public const float MaxUv = 3f;
 
         public static Vector2 ClampUv(Vector2 p)
             => new Vector2(Mathf.Clamp(p.x, MinUv, MaxUv), Mathf.Clamp(p.y, MinUv, MaxUv));

@@ -465,7 +465,11 @@ namespace InvertLab.Sprites.DOTS
             mesh.SetUVs(2, insets);
             mesh.SetColors(colors);
             mesh.SetIndices(indices, MeshTopology.Triangles, 0);
-            mesh.bounds = bounds;
+            // Mesh vertices may sit past the image, so the batch radius alone could cull them early.
+            mesh.RecalculateBounds();
+            var meshBounds = mesh.bounds;
+            meshBounds.Encapsulate(bounds);
+            mesh.bounds = meshBounds;
 
             var material = SpriteRenderResources.WarpMeshMaterial;
             if (material == null)

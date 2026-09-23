@@ -1286,6 +1286,12 @@ namespace InvertLab.Sprites.DOTS
                 EncapsulateVisualCorner(ref min, ref max, m, geo, new float2(0.5f, -0.5f));
                 EncapsulateVisualCorner(ref min, ref max, m, geo, new float2(0.5f, 0.5f));
                 EncapsulateVisualCorner(ref min, ref max, m, geo, new float2(-0.5f, 0.5f));
+                // Mesh vertices may sit past the image; the bounds include them.
+                if (slot?.Mesh != null && slot.Mesh.HasMesh)
+                {
+                    foreach (var v in slot.Mesh.Vertices)
+                        EncapsulateVisualCorner(ref min, ref max, m, geo, new float2(v.x - 0.5f, v.y - 0.5f));
+                }
                 any = true;
             }
 
