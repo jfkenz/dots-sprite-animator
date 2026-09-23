@@ -197,21 +197,32 @@ namespace InvertLab.Sprites.DOTS
             }
 
             ApplyAnimationLayers(ref set, player, layers, finalLocal, sources);
-            if (set.Params.Length > 0 && !extras.KeyedPoseOnly)
-                SpritePartsParams.Apply(ref set, player.ClipIndex, extras.ParamValues, finalLocal);
-            ApplyLocalOverrides(overrides, finalLocal, sources, n);
-            SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
-            ApplySpaceOverrides(ref set, overrides, finalLocal, localToRoot, sources, n, rootWorld, flipX, flipY);
-            SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
-            ApplyLookAtOverrides(ref set, overrides, finalLocal, localToRoot, sources, n, rootWorld, flipX, flipY);
-            SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
-            // IK constraints last, so they reach targets that clips or gameplay overrides moved.
-            if (set.IkConstraints.Length > 0 && !extras.KeyedPoseOnly)
-                SpritePartsIk.Apply(ref set, finalLocal, localToRoot);
-            // Jiggle after IK: springs swing behind the final animated pose.
-            if (set.Jiggles.Length > 0 && !extras.KeyedPoseOnly && extras.Jiggle.IsCreated)
-                SpritePartsJiggle.Apply(ref set, finalLocal, localToRoot, extras.Jiggle, extras.DeltaTime,
-                    math.mul(rootWorld, SpritePartsPlayback.FacingMatrix(flipX, flipY)));
+            // Keyed IK / jiggle / parameter values of the playing clips (setup values when none are keyed).
+            var keyed = extras.KeyedPoseOnly
+                ? default
+                : SpritePartsValueTracks.Resolve(ref set, player, incoming, extras.ParamValues, extras.Stepped);
+            try
+            {
+                if (set.Params.Length > 0 && !extras.KeyedPoseOnly)
+                    SpritePartsParams.Apply(ref set, player.ClipIndex, keyed.IsCreated ? keyed.Params : extras.ParamValues, finalLocal);
+                ApplyLocalOverrides(overrides, finalLocal, sources, n);
+                SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
+                ApplySpaceOverrides(ref set, overrides, finalLocal, localToRoot, sources, n, rootWorld, flipX, flipY);
+                SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
+                ApplyLookAtOverrides(ref set, overrides, finalLocal, localToRoot, sources, n, rootWorld, flipX, flipY);
+                SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
+                // IK constraints last, so they reach targets that clips or gameplay overrides moved.
+                if (set.IkConstraints.Length > 0 && !extras.KeyedPoseOnly)
+                    SpritePartsIk.Apply(ref set, finalLocal, localToRoot, keyed.IkMix, keyed.IkBend);
+                // Jiggle after IK: springs swing behind the final animated pose.
+                if (set.Jiggles.Length > 0 && !extras.KeyedPoseOnly && extras.Jiggle.IsCreated)
+                    SpritePartsJiggle.Apply(ref set, finalLocal, localToRoot, extras.Jiggle, extras.DeltaTime,
+                        math.mul(rootWorld, SpritePartsPlayback.FacingMatrix(flipX, flipY)), keyed.JiggleMix);
+            }
+            finally
+            {
+                keyed.Dispose();
+            }
             // Clipping masks last: they cut the final (weighted) meshes.
             if (extras.Clip && !extras.KeyedPoseOnly && SpritePartsClipping.Any(ref set))
                 SpritePartsClipping.Apply(ref set, finalLocal, localToRoot, player.ClipIndex, player.TimeSeconds);

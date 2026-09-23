@@ -44,8 +44,10 @@ namespace InvertLab.Sprites.DOTS
         const float Step = 1f / 120f;
         const float MaxFrame = 0.1f;
 
+        /// <param name="mix">Per spring (keyed values); not created = each spring's own Mix.</param>
         public static void Apply(ref SpritePartsSetBlob set, NativeArray<SpritePartsSampler.Pose> local,
-            NativeArray<float4x4> localToRoot, NativeArray<SpritePartJiggleState> states, float dt, float4x4 worldFromCharacter)
+            NativeArray<float4x4> localToRoot, NativeArray<SpritePartJiggleState> states, float dt, float4x4 worldFromCharacter,
+            NativeArray<float> mix = default)
         {
             if (!states.IsCreated || set.Jiggles.Length == 0)
                 return;
@@ -54,7 +56,8 @@ namespace InvertLab.Sprites.DOTS
             for (int c = 0; c < set.Jiggles.Length && c < states.Length; c++)
             {
                 ref var j = ref set.Jiggles[c];
-                if (j.Slot < 0 || j.Slot >= local.Length || j.Mix <= 0f)
+                float jMix = mix.IsCreated && c < mix.Length ? mix[c] : j.Mix;
+                if (j.Slot < 0 || j.Slot >= local.Length || jMix <= 0f)
                     continue;
                 float4x4 m = localToRoot[j.Slot];
                 float2 jointC = m.c3.xy;
@@ -96,7 +99,7 @@ namespace InvertLab.Sprites.DOTS
                 states[c] = st;
 
                 float2 simC = Point(characterFromWorld, st.Tip);
-                float delta = SpritePartsIk.SignedAngle(tipC - jointC, simC - jointC) * j.Mix;
+                float delta = SpritePartsIk.SignedAngle(tipC - jointC, simC - jointC) * jMix;
                 if (math.abs(delta) < 1e-5f)
                     continue;
                 SpritePartsIk.Turn(ref set, j.Slot, delta, local, localToRoot);

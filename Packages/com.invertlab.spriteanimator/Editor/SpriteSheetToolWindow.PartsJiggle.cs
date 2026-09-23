@@ -101,20 +101,29 @@ namespace InvertLab.Sprites.DOTS.Editor
                 float stiffness = EditorGUILayout.Slider(new GUIContent("Stiffness", "0 = loose and slow, 1 = snaps back quickly"), j.Stiffness, 0f, 1f);
                 float damping = EditorGUILayout.Slider(new GUIContent("Damping", "0 = bouncy, 1 = no overshoot"), j.Damping, 0f, 1f);
                 float gravity = EditorGUILayout.FloatField(new GUIContent("Gravity", "World units / s² pulling the tips down"), j.Gravity);
-                float mix = EditorGUILayout.Slider(new GUIContent("Mix", "0 = the animation only, 1 = full swing"), j.Mix, 0f, 1f);
+                bool mixKeyed = TryKeyedValue(SpritePartsValueKind.JiggleMix, j.Name, j.Mix, out float mixShown);
+                EditorGUILayout.BeginHorizontal();
+                float mix = EditorGUILayout.Slider(new GUIContent("Mix", "0 = the animation only, 1 = full swing"), mixShown, 0f, 1f);
+                ValueKeyButton(SpritePartsValueKind.JiggleMix, j.Name, mixShown, "Jiggle Mix");
+                EditorGUILayout.EndHorizontal();
                 string chainText = JiggleChainText(ids[slot], chain);
                 if (!string.IsNullOrEmpty(chainText))
                     EditorGUILayout.LabelField(chainText, EditorStyles.wordWrappedMiniLabel);
                 if (EditorGUI.EndChangeCheck())
                 {
+                    bool mixToKey = !Mathf.Approximately(mix, mixShown)
+                                    && KeyEditedValue(SpritePartsValueKind.JiggleMix, j.Name, mix, "Jiggle Mix");
                     RecordPartsUndo(remove ? "Remove Jiggle" : "Edit Jiggle");
                     if (remove)
                     {
+                        SpritePartsAuthoringOps.RemoveValueTracks(_profile, j.Name, SpritePartsValueKind.JiggleMix);
                         list.RemoveAt(c);
                         SaveDirty();
                         EditorGUILayout.EndVertical();
                         break;
                     }
+                    if (name != j.Name)
+                        SpritePartsAuthoringOps.RenameValueTarget(_profile, j.Name, name, SpritePartsValueKind.JiggleMix);
                     j.Enabled = enabled;
                     j.Name = name;
                     j.SlotId = ids[slot];
@@ -122,7 +131,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     j.Stiffness = stiffness;
                     j.Damping = damping;
                     j.Gravity = gravity;
-                    j.Mix = mix;
+                    if (!mixKeyed && !mixToKey)
+                        j.Mix = mix;
                     SaveDirty();
                 }
                 EditorGUILayout.EndVertical();

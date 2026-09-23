@@ -363,6 +363,51 @@ namespace InvertLab.Sprites.DOTS
         };
     }
 
+    /// <summary>What a value track keys (Spine's constraint timelines, AnyPortrait's animated control parameters).</summary>
+    public enum SpritePartsValueKind : byte
+    {
+        /// <summary>An IK constraint's Mix (0 = clip pose, 1 = solved).</summary>
+        IkMix = 0,
+        /// <summary>An IK constraint's bend direction (+1 / -1), held until the next key.</summary>
+        IkBend = 1,
+        /// <summary>A jiggle chain's Mix.</summary>
+        JiggleMix = 2,
+        /// <summary>A control parameter's value.</summary>
+        Param = 3,
+    }
+
+    [Serializable]
+    public class SpritePartsValueKeyDef
+    {
+        public float Time;
+        public float Value;
+        public byte EaseMode = (byte)SpriteEaseMode.Linear;
+        /// <summary>Bezier handles (x1, y1, x2, y2) used when <see cref="EaseMode"/> is Bezier.</summary>
+        public Vector4 Curve = new Vector4(0.33f, 0f, 0.67f, 1f);
+
+        public SpritePartsValueKeyDef Clone() => (SpritePartsValueKeyDef)MemberwiseClone();
+    }
+
+    /// <summary>
+    /// Keys one IK / jiggle / parameter value (found by name) over a clip. While the clip plays its keys replace the
+    /// setup value (a parameter's gameplay value too) and crossfade with the clip.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsValueTrackDef
+    {
+        public SpritePartsValueKind Kind;
+        /// <summary>The IK constraint, jiggle or parameter name.</summary>
+        public string Target = string.Empty;
+        public List<SpritePartsValueKeyDef> Keys = new();
+
+        public SpritePartsValueTrackDef Clone() => new SpritePartsValueTrackDef
+        {
+            Kind = Kind,
+            Target = Target,
+            Keys = Keys == null ? new List<SpritePartsValueKeyDef>() : Keys.ConvertAll(k => k.Clone()),
+        };
+    }
+
     [Serializable]
     public class SpritePartsClipDef
     {
@@ -374,6 +419,8 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsTrackDef> Tracks = new();
         /// <summary>Events that fire as playback passes their time.</summary>
         public List<SpritePartsEventMarker> Events = new();
+        /// <summary>Keyed IK / jiggle / parameter values.</summary>
+        public List<SpritePartsValueTrackDef> ValueTracks = new();
         /// <summary>Display-only provenance when this clip was copied from another profile.</summary>
         public SpriteImportProvenance Import;
     }

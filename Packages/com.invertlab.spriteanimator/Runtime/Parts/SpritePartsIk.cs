@@ -11,17 +11,25 @@ namespace InvertLab.Sprites.DOTS
     public static class SpritePartsIk
     {
         public static void Apply(ref SpritePartsSetBlob set, NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
+            => Apply(ref set, local, localToRoot, default, default);
+
+        /// <param name="mix">Per constraint (keyed values); not created = each constraint's own Mix.</param>
+        /// <param name="bend">Per constraint, +1 / -1; not created = each constraint's own bend.</param>
+        public static void Apply(ref SpritePartsSetBlob set, NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot,
+            NativeArray<float> mix, NativeArray<float> bend)
         {
             for (int c = 0; c < set.IkConstraints.Length; c++)
             {
                 ref var ik = ref set.IkConstraints[c];
-                if (ik.Mix <= 0f || !Valid(ik.Effector, local) || !Valid(ik.Lower, local) || !Valid(ik.Target, local))
+                float m = mix.IsCreated && c < mix.Length ? mix[c] : ik.Mix;
+                float b = bend.IsCreated && c < bend.Length ? bend[c] : ik.BendSign;
+                if (m <= 0f || !Valid(ik.Effector, local) || !Valid(ik.Lower, local) || !Valid(ik.Target, local))
                     continue;
                 float2 target = localToRoot[ik.Target].c3.xy;
                 if (ik.Upper >= 0 && Valid(ik.Upper, local))
-                    SolveTwo(ref set, ref ik, target, local, localToRoot);
+                    SolveTwo(ref set, ref ik, target, m, b, local, localToRoot);
                 else
-                    SolveOne(ref set, ik.Lower, ik.Effector, target, ik.Mix, local, localToRoot);
+                    SolveOne(ref set, ik.Lower, ik.Effector, target, m, local, localToRoot);
                 SpritePartsHierarchy.ComposeLocalToRoot(ref set, local, localToRoot);
             }
         }
@@ -38,7 +46,7 @@ namespace InvertLab.Sprites.DOTS
             Turn(ref set, joint, delta * mix, local, localToRoot);
         }
 
-        static void SolveTwo(ref SpritePartsSetBlob set, ref SpritePartsIkBlob ik, float2 target,
+        static void SolveTwo(ref SpritePartsSetBlob set, ref SpritePartsIkBlob ik, float2 target, float mix, float bendSign,
             NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
         {
             float2 a = localToRoot[ik.Upper].c3.xy;
@@ -48,7 +56,7 @@ namespace InvertLab.Sprites.DOTS
             float l2 = math.distance(b, e);
             if (l1 < 1e-5f || l2 < 1e-5f)
             {
-                SolveOne(ref set, ik.Lower, ik.Effector, target, ik.Mix, local, localToRoot);
+                SolveOne(ref set, ik.Lower, ik.Effector, target, mix, local, localToRoot);
                 return;
             }
             float2 toTarget = target - a;
@@ -56,12 +64,12 @@ namespace InvertLab.Sprites.DOTS
             // Angle at the upper joint between the reach line and the upper bone (law of cosines).
             float cosA = math.clamp((l1 * l1 + d * d - l2 * l2) / (2f * l1 * d), -1f, 1f);
             float reach = math.atan2(toTarget.y, toTarget.x);
-            float upperWanted = reach + ik.BendSign * math.acos(cosA);
+            float upperWanted = reach + bendSign * math.acos(cosA);
             float upperNow = math.atan2(b.y - a.y, b.x - a.x);
-            Turn(ref set, ik.Upper, WrapDeg(math.degrees(upperWanted - upperNow)) * ik.Mix, local, localToRoot);
+            Turn(ref set, ik.Upper, WrapDeg(math.degrees(upperWanted - upperNow)) * mix, local, localToRoot);
             SpritePartsHierarchy.ComposeLocalToRoot(ref set, local, localToRoot);
             // Then aim the lower bone's effector at the target.
-            SolveOne(ref set, ik.Lower, ik.Effector, target, ik.Mix, local, localToRoot);
+            SolveOne(ref set, ik.Lower, ik.Effector, target, mix, local, localToRoot);
         }
 
         /// <summary>A turn in root space as a local rotation change (a mirrored parent flips its sign).</summary>

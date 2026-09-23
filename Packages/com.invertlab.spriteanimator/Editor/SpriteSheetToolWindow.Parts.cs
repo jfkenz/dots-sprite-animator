@@ -5791,8 +5791,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             var keyArea = new Rect(rect.x + labelW, tracksTop, rect.width - labelW,
                 Mathf.Max(0f, rect.height - rulerH));
 
+            // Keyed IK / jiggle / parameter rows sit under the part rows.
+            float valueTop = tracksTop + _profile.PartsSlots.Count * rowH;
+            bool valueHit = !_partsKeyDragging && HandlePartsValueRowInput(rect, clip, duration, labelW, rowH, valueTop);
+
             // Active key drag is owned by HandleActivePartsKeyDrag (early OnGUI).
-            if (!_partsKeyDragging)
+            if (!_partsKeyDragging && !valueHit)
                 HandlePartsKeyAreaInput(rect, clip, duration, labelW, rowH, rulerH, keyControlId, keyArea);
 
             for (int i = 0; i < _profile.PartsSlots.Count; i++)
@@ -5865,6 +5869,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     }
                 }
             }
+
+            DrawPartsValueRows(rect, clip, duration, labelW, rowH, valueTop);
 
             if (_partsKeyMarqueeActive)
             {

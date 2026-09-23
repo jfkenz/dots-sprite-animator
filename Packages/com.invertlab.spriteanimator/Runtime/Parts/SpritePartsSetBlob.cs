@@ -146,6 +146,26 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<SpritePartsTrackBlob> Tracks;
         /// <summary>Events by time.</summary>
         public BlobArray<SpritePartsEventBlob> Events;
+        /// <summary>Keyed IK / jiggle / parameter values.</summary>
+        public BlobArray<SpritePartsValueTrackBlob> ValueTracks;
+    }
+
+    /// <summary>Keys for one named value; <see cref="Targets"/> are the IK, jiggle or parameter indices it drives.</summary>
+    public struct SpritePartsValueTrackBlob
+    {
+        /// <summary><see cref="SpritePartsValueKind"/>.</summary>
+        public byte Kind;
+        public BlobArray<int> Targets;
+        /// <summary>By time.</summary>
+        public BlobArray<SpritePartsValueKeyBlob> Keys;
+    }
+
+    public struct SpritePartsValueKeyBlob
+    {
+        public float Time;
+        public float Value;
+        public byte EaseMode;
+        public float4 Curve;
     }
 
     public struct SpritePartsEventBlob
@@ -291,6 +311,23 @@ namespace InvertLab.Sprites.DOTS
             public byte WrapMode;
             public TrackInput[] Tracks;
             public EventInput[] Events;
+            public ValueTrackInput[] ValueTracks;
+        }
+
+        public struct ValueTrackInput
+        {
+            public byte Kind;
+            /// <summary>The IK, jiggle or parameter name.</summary>
+            public string Target;
+            public ValueKeyInput[] Keys;
+        }
+
+        public struct ValueKeyInput
+        {
+            public float Time;
+            public float Value;
+            public byte EaseMode;
+            public float4 Curve;
         }
 
         public struct EventInput
@@ -310,6 +347,8 @@ namespace InvertLab.Sprites.DOTS
 
         public struct IkInput
         {
+            /// <summary>Clips key its Mix and bend by this name.</summary>
+            public string Name;
             public string EffectorSlotId;
             public string TargetSlotId;
             public int ChainLength;
@@ -319,6 +358,8 @@ namespace InvertLab.Sprites.DOTS
 
         public struct JiggleInput
         {
+            /// <summary>Clips key its Mix by this name (every joint of a chain shares it).</summary>
+            public string Name;
             public string SlotId;
             /// <summary>Where the swinging tip sits in the joint's own space (its child, or along the bone).</summary>
             public float2 TipLocal;
@@ -609,8 +650,16 @@ namespace InvertLab.Sprites.DOTS
                     }
                 }
 
+                // Names some clip keys: a constraint set to Mix 0 stays when a clip turns it on.
+                var keyedNames = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+                foreach (var clipIn in clips)
+                    foreach (var vt in clipIn.ValueTracks ?? Array.Empty<ValueTrackInput>())
+                        if (vt.Keys != null && vt.Keys.Length > 0)
+                            keyedNames.Add(vt.Kind + ":" + (vt.Target ?? string.Empty).Trim());
+
                 // IK: effector -> its parent (lower) -> grandparent (upper, chain 2). Unresolvable ones are dropped.
                 var resolved = new System.Collections.Generic.List<SpritePartsIkBlob>();
+                var ikNames = new System.Collections.Generic.List<string>();
                 foreach (var c in ik ?? Array.Empty<IkInput>())
                 {
                     if (!slotIndex.TryGetValue(SpritePartIdUtility.Canonical(c.EffectorSlotId ?? string.Empty), out int eff)
@@ -629,16 +678,19 @@ namespace InvertLab.Sprites.DOTS
                         BendSign = c.BendPositive ? 1f : -1f,
                         Mix = math.saturate(c.Mix),
                     });
+                    ikNames.Add((c.Name ?? string.Empty).Trim());
                 }
                 var ikArr = builder.Allocate(ref root.IkConstraints, resolved.Count);
                 for (int k = 0; k < resolved.Count; k++)
                     ikArr[k] = resolved[k];
 
                 // Jiggle: unknown slots and zero-length tips are dropped; parents solve before children.
-                var springs = new System.Collections.Generic.List<(int depth, SpritePartsJiggleBlob blob)>();
+                var springs = new System.Collections.Generic.List<(int depth, SpritePartsJiggleBlob blob, string name)>();
                 foreach (var j in jiggles ?? Array.Empty<JiggleInput>())
                 {
-                    if (j.Mix <= 0f || math.lengthsq(j.TipLocal) < 1e-10f
+                    string jName = (j.Name ?? string.Empty).Trim();
+                    bool keyedMix = keyedNames.Contains((byte)SpritePartsValueKind.JiggleMix + ":" + jName);
+                    if ((j.Mix <= 0f && !keyedMix) || math.lengthsq(j.TipLocal) < 1e-10f
                         || !slotIndex.TryGetValue(SpritePartIdUtility.Canonical(j.SlotId ?? string.Empty), out int s))
                         continue;
                     int depth = 0;
@@ -654,7 +706,7 @@ namespace InvertLab.Sprites.DOTS
                         Damping = 2f * math.sqrt(spring) * math.lerp(0.05f, 1f, math.saturate(j.Damping)),
                         Gravity = j.Gravity,
                         Mix = math.saturate(j.Mix),
-                    }));
+                    }, jName));
                 }
                 springs.Sort((a, b) => a.depth != b.depth ? a.depth.CompareTo(b.depth) : a.blob.Slot.CompareTo(b.blob.Slot));
                 var jiggleArr = builder.Allocate(ref root.Jiggles, springs.Count);
@@ -683,6 +735,67 @@ namespace InvertLab.Sprites.DOTS
                         Default = pin.Default,
                         Additive = pin.Additive ? (byte)1 : (byte)0,
                     };
+                }
+
+                // Keyed values: each track drives every IK / jiggle / parameter with its name.
+                for (int ci = 0; ci < clips.Length; ci++)
+                {
+                    var tracksIn = clips[ci].ValueTracks ?? Array.Empty<ValueTrackInput>();
+                    float clipDuration = math.max(1e-3f, clips[ci].Duration);
+                    var kept = new System.Collections.Generic.List<(ValueTrackInput input, System.Collections.Generic.List<int> targets)>();
+                    foreach (var vt in tracksIn)
+                    {
+                        if (vt.Keys == null || vt.Keys.Length == 0)
+                            continue;
+                        string target = (vt.Target ?? string.Empty).Trim();
+                        var targets = new System.Collections.Generic.List<int>();
+                        switch ((SpritePartsValueKind)vt.Kind)
+                        {
+                            case SpritePartsValueKind.IkMix:
+                            case SpritePartsValueKind.IkBend:
+                                for (int k = 0; k < ikNames.Count; k++)
+                                    if (ikNames[k] == target)
+                                        targets.Add(k);
+                                break;
+                            case SpritePartsValueKind.JiggleMix:
+                                for (int k = 0; k < springs.Count; k++)
+                                    if (springs[k].name == target)
+                                        targets.Add(k);
+                                break;
+                            case SpritePartsValueKind.Param:
+                                for (int k = 0; k < parameters.Length; k++)
+                                    if ((parameters[k].Name ?? string.Empty).Trim() == target)
+                                        targets.Add(k);
+                                break;
+                        }
+                        if (targets.Count > 0)
+                            kept.Add((vt, targets));
+                    }
+                    var valueArr = builder.Allocate(ref clipArr[ci].ValueTracks, kept.Count);
+                    for (int v = 0; v < kept.Count; v++)
+                    {
+                        valueArr[v].Kind = kept[v].input.Kind;
+                        var targetArr = builder.Allocate(ref valueArr[v].Targets, kept[v].targets.Count);
+                        for (int k = 0; k < kept[v].targets.Count; k++)
+                            targetArr[k] = kept[v].targets[k];
+                        var keys = new System.Collections.Generic.List<SpritePartsValueKeyBlob>();
+                        foreach (var key in kept[v].input.Keys)
+                        {
+                            if (!math.isfinite(key.Time) || !math.isfinite(key.Value))
+                                continue;
+                            keys.Add(new SpritePartsValueKeyBlob
+                            {
+                                Time = math.clamp(key.Time, 0f, clipDuration),
+                                Value = key.Value,
+                                EaseMode = SpriteEase.IsValidMode(key.EaseMode) ? key.EaseMode : (byte)SpriteEaseMode.Linear,
+                                Curve = key.Curve,
+                            });
+                        }
+                        keys.Sort((a, b) => a.Time.CompareTo(b.Time));
+                        var keyArr = builder.Allocate(ref valueArr[v].Keys, keys.Count);
+                        for (int k = 0; k < keys.Count; k++)
+                            keyArr[k] = keys[k];
+                    }
                 }
 
                 // Transitions: mix table, masks, blend spaces (clips found by id; unknown ones dropped).

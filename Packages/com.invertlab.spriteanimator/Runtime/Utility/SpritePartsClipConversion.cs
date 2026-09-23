@@ -80,10 +80,12 @@ namespace InvertLab.Sprites.DOTS
             var result = new System.Collections.Generic.List<SpritePartsSetBuilder.IkInput>(list.Count);
             foreach (var c in list)
             {
-                if (c == null || !c.Enabled || c.Mix <= 0f)
+                if (c == null || !c.Enabled
+                    || (c.Mix <= 0f && !IsKeyed(profile, SpritePartsValueKind.IkMix, c.Name)))
                     continue;
                 result.Add(new SpritePartsSetBuilder.IkInput
                 {
+                    Name = c.Name,
                     EffectorSlotId = c.EffectorSlotId,
                     TargetSlotId = c.TargetSlotId,
                     ChainLength = Mathf.Clamp(c.ChainLength, 1, 2),
@@ -155,7 +157,8 @@ namespace InvertLab.Sprites.DOTS
             var seen = new System.Collections.Generic.HashSet<string>();
             foreach (var c in list)
             {
-                if (c == null || !c.Enabled || c.Mix <= 0f)
+                if (c == null || !c.Enabled
+                    || (c.Mix <= 0f && !IsKeyed(profile, SpritePartsValueKind.JiggleMix, c.Name)))
                     continue;
                 var slot = SpritePartsAuthoringOps.FindSlot(profile, c.SlotId ?? string.Empty);
                 for (int n = 0; slot != null && n < Mathf.Clamp(c.ChainLength, 1, 8); n++)
@@ -166,6 +169,7 @@ namespace InvertLab.Sprites.DOTS
                     {
                         result.Add(new SpritePartsSetBuilder.JiggleInput
                         {
+                            Name = c.Name,
                             SlotId = id,
                             TipLocal = JiggleTip(profile, slot, child),
                             Stiffness = c.Stiffness,
@@ -178,6 +182,17 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
             return result.ToArray();
+        }
+
+        /// <summary>True when some clip keys this IK / jiggle (so it stays even at a setup Mix of 0).</summary>
+        static bool IsKeyed(SpriteSheetProfile profile, SpritePartsValueKind kind, string name)
+        {
+            string target = (name ?? string.Empty).Trim();
+            foreach (var clip in profile.PartsClips)
+                foreach (var t in clip?.ValueTracks ?? new List<SpritePartsValueTrackDef>())
+                    if (t != null && t.Kind == kind && (t.Target ?? string.Empty).Trim() == target && t.Keys != null && t.Keys.Count > 0)
+                        return true;
+            return false;
         }
 
         static SpritePartSlotDef FirstChild(SpriteSheetProfile profile, string canonicalId)
@@ -385,6 +400,18 @@ namespace InvertLab.Sprites.DOTS
                         {
                             Time = e.Time, Id = e.EventId, IntPayload = e.IntPayload, FloatPayload = e.FloatPayload,
                             TextPayload = e.TextPayload,
+                        }).ToArray(),
+                    ValueTracks = (clip.ValueTracks ?? new List<SpritePartsValueTrackDef>()).FindAll(t => t != null)
+                        .ConvertAll(t => new SpritePartsSetBuilder.ValueTrackInput
+                        {
+                            Kind = (byte)t.Kind,
+                            Target = t.Target,
+                            Keys = (t.Keys ?? new List<SpritePartsValueKeyDef>()).FindAll(k => k != null)
+                                .ConvertAll(k => new SpritePartsSetBuilder.ValueKeyInput
+                                {
+                                    Time = k.Time, Value = k.Value, EaseMode = k.EaseMode,
+                                    Curve = new float4(k.Curve.x, k.Curve.y, k.Curve.z, k.Curve.w),
+                                }).ToArray(),
                         }).ToArray(),
                 };
             }

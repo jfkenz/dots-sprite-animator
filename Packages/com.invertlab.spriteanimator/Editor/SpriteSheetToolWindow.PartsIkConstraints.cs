@@ -107,33 +107,51 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Mathf.Max(0, ids.IndexOf(SpritePartIdUtility.Canonical(ik.EffectorSlotId ?? string.Empty))), names.ToArray());
                 int tgt = EditorGUILayout.Popup(new GUIContent("Target", "Usually a bone; move or key it"),
                     Mathf.Max(0, ids.IndexOf(SpritePartIdUtility.Canonical(ik.TargetSlotId ?? string.Empty))), names.ToArray());
+                // Mix and bend show the open clip's keys at the playhead (Animate mode), else the setup values.
+                bool mixKeyed = TryKeyedValue(SpritePartsValueKind.IkMix, ik.Name, ik.Mix, out float mixShown);
+                bool bendKeyed = TryKeyedValue(SpritePartsValueKind.IkBend, ik.Name, ik.BendPositive ? 1f : -1f, out float bendValue);
+                bool bendShown = bendValue >= 0f;
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField(new GUIContent("Chain", "1 = turn the parent only, 2 = parent + grandparent (elbow + shoulder)"), GUILayout.Width(40f));
                 int chain = GUILayout.Toolbar(Mathf.Clamp(ik.ChainLength, 1, 2) - 1, new[] { "1", "2" }, GUILayout.Width(60f)) + 1;
-                bool bend = GUILayout.Toggle(ik.BendPositive, new GUIContent(ik.BendPositive ? "Bend +" : "Bend −", "Which way the middle joint bends"),
+                bool bend = GUILayout.Toggle(bendShown, new GUIContent(bendShown ? "Bend +" : "Bend −", "Which way the middle joint bends"),
                     EditorStyles.miniButton, GUILayout.Width(56f));
+                ValueKeyButton(SpritePartsValueKind.IkBend, ik.Name, bendShown ? 1f : -1f, "IK Bend");
                 EditorGUILayout.EndHorizontal();
-                float mix = EditorGUILayout.Slider(new GUIContent("Mix", "0 = clip pose, 1 = fully solved"), ik.Mix, 0f, 1f);
+                EditorGUILayout.BeginHorizontal();
+                float mix = EditorGUILayout.Slider(new GUIContent("Mix", "0 = clip pose, 1 = fully solved"), mixShown, 0f, 1f);
+                ValueKeyButton(SpritePartsValueKind.IkMix, ik.Name, mixShown, "IK Mix");
+                EditorGUILayout.EndHorizontal();
                 string chainText = IkChainText(ik);
                 if (!string.IsNullOrEmpty(chainText))
                     EditorGUILayout.LabelField(chainText, EditorStyles.miniLabel);
                 if (EditorGUI.EndChangeCheck())
                 {
+                    // A changed Mix / bend the open clip keys goes into a key at the playhead, not the setup.
+                    bool mixToKey = !Mathf.Approximately(mix, mixShown)
+                                    && KeyEditedValue(SpritePartsValueKind.IkMix, ik.Name, mix, "IK Mix");
+                    bool bendToKey = bend != bendShown
+                                     && KeyEditedValue(SpritePartsValueKind.IkBend, ik.Name, bend ? 1f : -1f, "IK Bend");
                     RecordPartsUndo(remove ? "Remove IK" : "Edit IK");
                     if (remove)
                     {
+                        SpritePartsAuthoringOps.RemoveValueTracks(_profile, ik.Name, SpritePartsValueKind.IkMix, SpritePartsValueKind.IkBend);
                         list.RemoveAt(c);
                         SaveDirty();
                         EditorGUILayout.EndVertical();
                         break;
                     }
+                    if (name != ik.Name)
+                        SpritePartsAuthoringOps.RenameValueTarget(_profile, ik.Name, name, SpritePartsValueKind.IkMix, SpritePartsValueKind.IkBend);
                     ik.Enabled = enabled;
                     ik.Name = name;
                     ik.EffectorSlotId = ids[eff];
                     ik.TargetSlotId = ids[tgt];
                     ik.ChainLength = chain;
-                    ik.BendPositive = bend;
-                    ik.Mix = mix;
+                    if (!bendKeyed && !bendToKey)
+                        ik.BendPositive = bend;
+                    if (!mixKeyed && !mixToKey)
+                        ik.Mix = mix;
                     SaveDirty();
                 }
                 EditorGUILayout.EndVertical();

@@ -104,19 +104,25 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }, EditorStyles.miniButton);
                 bool changed = EditorGUI.EndChangeCheck();
 
-                // Preview: not saved, only moves the canvas.
+                // Preview: not saved, only moves the canvas. When the open clip keys the value, it shows and edits the key.
                 float lo = Mathf.Min(p.Min, p.Max), hi = Mathf.Max(p.Min, p.Max);
                 SpritePartsOnion.PreviewParams.TryGetValue(p.Name ?? string.Empty, out float shown);
                 if (!SpritePartsOnion.PreviewParams.ContainsKey(p.Name ?? string.Empty))
                     shown = p.Default;
+                bool keyedHere = TryKeyedValue(SpritePartsValueKind.Param, p.Name, shown, out shown);
                 EditorGUILayout.BeginHorizontal();
-                float preview = EditorGUILayout.Slider(new GUIContent("Preview", "Try the value on the canvas (not saved)"),
+                float preview = EditorGUILayout.Slider(new GUIContent(keyedHere ? "Keyed" : "Preview", keyedHere
+                        ? "The value this clip keys at the playhead: changing it keys it"
+                        : "Try the value on the canvas (not saved). ◆ keys it in the open clip"),
                     Mathf.Clamp(shown, lo, hi), lo, hi);
-                if (!Mathf.Approximately(preview, shown))
+                if (!Mathf.Approximately(preview, shown)
+                    && !KeyEditedValue(SpritePartsValueKind.Param, p.Name, preview, "Parameter"))
                 {
                     SpritePartsOnion.PreviewParams[p.Name ?? string.Empty] = preview;
                     Repaint();
                 }
+                if (SpritePartsAuthoringOps.FindClipIndex(_profile, p.ClipId ?? string.Empty) != _partsSelectedClip)
+                    ValueKeyButton(SpritePartsValueKind.Param, p.Name, Mathf.Clamp(shown, lo, hi), "Parameter");
                 if (GUILayout.Button(new GUIContent("Edit Clip", "Open this parameter's clip to key its poses"), EditorStyles.miniButton, GUILayout.Width(62f)))
                     EditPartsParamClip(SpritePartsAuthoringOps.FindClipIndex(_profile, p.ClipId));
                 EditorGUILayout.EndHorizontal();
@@ -130,11 +136,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                     if (remove)
                     {
                         SpritePartsOnion.PreviewParams.Remove(p.Name ?? string.Empty);
+                        SpritePartsAuthoringOps.RemoveValueTracks(_profile, p.Name, SpritePartsValueKind.Param);
                         list.RemoveAt(k);
                         SaveDirty();
                         EditorGUILayout.EndVertical();
                         break;
                     }
+                    if (name != p.Name)
+                        SpritePartsAuthoringOps.RenameValueTarget(_profile, p.Name, name, SpritePartsValueKind.Param);
                     if (name != p.Name && SpritePartsOnion.PreviewParams.TryGetValue(p.Name ?? string.Empty, out float carried))
                     {
                         SpritePartsOnion.PreviewParams.Remove(p.Name ?? string.Empty);
