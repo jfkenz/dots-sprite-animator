@@ -1405,6 +1405,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (GUILayout.Button(new GUIContent("+ Bone", "A joint with no image, under the selected part (or at the root). Parts under it follow it."),
                     GUILayout.Width(56f)))
                 AddPartsBone();
+            if (GUILayout.Button(new GUIContent("PSD", "Import a Photoshop file: every layer becomes a part where it sits, groups become bones."),
+                    GUILayout.Width(40f)))
+                OpenPsdImport();
             using (new EditorGUI.DisabledScope(CurrentPartsSlot == null))
             {
                 if (GUILayout.Button(new GUIContent("Dup", "Duplicate selected part + children. Ctrl+D / Ctrl+Shift+D mirror."),
