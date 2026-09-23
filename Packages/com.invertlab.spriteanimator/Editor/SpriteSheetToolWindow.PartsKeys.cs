@@ -56,15 +56,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 if (!_partsKeyDragUndoRecorded)
                 {
-                    BeginPartsDragUndo("Move Parts Keys");
+                    BeginPartsDragUndo(_partsKeyChannelFilter == SpritePartsKeyChannel.All ? "Move Parts Keys" : "Move " + PartsChannelName(_partsKeyChannelFilter) + " Keys");
                     _partsKeyDragUndoRecorded = true;
+                    SplitDraggedKeysForFilter();
                 }
                 float deltaSec = (evt.mousePosition.x - _partsKeyDragStartX) /
                                  Mathf.Max(1f, _partsKeyDragTrackWidth) * _partsKeyDragDuration;
                 bool snap = !evt.shift;
                 SpritePartsAuthoringOps.MoveKeys(
                     _profile, _partsSelectedClip, _partsKeyDragKeys, _partsKeyDragStartTimes,
-                    deltaSec, _partsDisplayFps, snap);
+                    deltaSec, _partsDisplayFps, snap, merge: false);
                 if (_partsKeyDragKeys.Count > 0)
                     _partsPreviewTime = _partsKeyDragKeys[0].Time;
                 evt.Use();
@@ -73,7 +74,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             if (_partsKeyDragUndoRecorded)
+            {
+                // Keys that landed on another key's time merge now (not while passing over them).
+                SpritePartsAuthoringOps.MergeKeyCollisions(_profile, _partsSelectedClip, _partsKeyDragKeys);
+                PrunePartsKeySelection();
                 EndPartsDragUndo();
+            }
             GUIUtility.hotControl = 0;
             _partsKeyHotControl = 0;
             _partsKeyDragging = false;
@@ -110,7 +116,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 for (int k = 0; k < track.Keys.Count; k++)
                 {
                     var cand = track.Keys[k];
-                    if (cand == null) continue;
+                    if (cand == null || !PartsKeyVisible(cand)) continue;
                     float u = cand.Time / duration;
                     float kx = Mathf.Lerp(lane.x, lane.xMax, u);
                     var hit = new Rect(kx - hitPad, rowY, hitPad * 2f, rowH);
@@ -158,6 +164,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
             if (_partsSelectedKeys.Count == 0) return;
+            if (_partsKeyChannelFilter != SpritePartsKeyChannel.All)
+            {
+                RecordPartsUndo("Delete " + PartsChannelName(_partsKeyChannelFilter) + " Keys");
+                int n = SpritePartsAuthoringOps.RemoveKeyChannels(_profile, _partsSelectedClip, _partsSelectedKeys, _partsKeyChannelFilter);
+                ClearPartsKeySelection();
+                SaveDirty();
+                _status = "Removed " + PartsChannelName(_partsKeyChannelFilter) + " from " + n + " key" + (n == 1 ? "" : "s") + ".";
+                Repaint();
+                return;
+            }
             RecordPartsUndo("Delete Parts Keys");
             var result = SpritePartsAuthoringOps.DeleteKeys(
                 _profile, _partsSelectedClip, _partsSelectedKeys);
@@ -223,6 +239,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         Color = key.Color,
                         HasDrawOrder = key.HasDrawOrder,
                         DrawOrder = key.DrawOrder,
+                        Channels = key.Channels,
                         Curve = key.Curve,
                         AppearanceId = key.AppearanceId ?? string.Empty,
                     };

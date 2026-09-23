@@ -58,7 +58,8 @@ namespace InvertLab.Sprites.DOTS
             IList<float> startTimes,
             float deltaTime,
             float snapFps,
-            bool snap)
+            bool snap,
+            bool merge = true)
         {
             var result = new KeyEditResult();
             var clip = GetClip(profile, clipIndex);
@@ -84,10 +85,97 @@ namespace InvertLab.Sprites.DOTS
                     t = SnapTime(t, snapFps, duration);
                 key.Time = t;
             }
-            MergeSameTrackTimeCollisions(clip, keys);
+            if (merge)
+                MergeSameTrackTimeCollisions(clip, keys);
+            else
+                SortTracks(clip);
             result.Ok = true;
             result.Affected = keys.Count;
             return result;
+        }
+
+        /// <summary>After a drag: keys that landed on the same time merge (the moved ones win on their channels).</summary>
+        public static void MergeKeyCollisions(SpriteSheetProfile profile, int clipIndex, IList<SpritePartsKeyDef> moved)
+        {
+            var clip = GetClip(profile, clipIndex);
+            if (clip != null)
+                MergeSameTrackTimeCollisions(clip, moved ?? new List<SpritePartsKeyDef>());
+        }
+
+        static void SortTracks(SpritePartsClipDef clip)
+        {
+            if (clip?.Tracks == null) return;
+            foreach (var track in clip.Tracks)
+                track?.Keys?.Sort((a, b) => (a?.Time ?? 0f).CompareTo(b?.Time ?? 0f));
+        }
+
+        /// <summary>
+        /// Splits <paramref name="channels"/> off each key into its own key at the same time (for moving one channel's
+        /// timing alone). A key that holds only those channels is returned as it is. Returns the keys to move.
+        /// </summary>
+        public static List<SpritePartsKeyDef> SplitKeyChannels(
+            SpriteSheetProfile profile, int clipIndex, IEnumerable<SpritePartsKeyDef> keys, SpritePartsKeyChannel channels)
+        {
+            var result = new List<SpritePartsKeyDef>();
+            var clip = GetClip(profile, clipIndex);
+            if (clip?.Tracks == null || keys == null)
+                return result;
+            foreach (var key in keys)
+            {
+                if (key == null)
+                    continue;
+                var take = key.Channels & channels;
+                if (take == SpritePartsKeyChannel.None)
+                    continue;
+                bool alone = (key.Channels & ~channels) == SpritePartsKeyChannel.None && !key.HasColor && !key.HasDrawOrder;
+                if (alone)
+                {
+                    result.Add(key);
+                    continue;
+                }
+                var track = clip.Tracks.Find(t => t?.Keys != null && t.Keys.Contains(key));
+                if (track == null)
+                    continue;
+                var part = CloneKey(key);
+                part.Channels = take;
+                part.HasColor = false;
+                part.HasDrawOrder = false;
+                part.AppearanceId = string.Empty;
+                key.Channels &= ~take;
+                track.Keys.Insert(track.Keys.IndexOf(key) + 1, part);
+                result.Add(part);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Takes <paramref name="channels"/> out of the keys; a key left with nothing (no channel, colour, draw order
+        /// or sprite) is deleted. Returns how many keys changed.
+        /// </summary>
+        public static int RemoveKeyChannels(
+            SpriteSheetProfile profile, int clipIndex, ICollection<SpritePartsKeyDef> keys, SpritePartsKeyChannel channels)
+        {
+            var clip = GetClip(profile, clipIndex);
+            if (clip?.Tracks == null || keys == null)
+                return 0;
+            int changed = 0;
+            foreach (var track in clip.Tracks)
+            {
+                if (track?.Keys == null)
+                    continue;
+                for (int k = track.Keys.Count - 1; k >= 0; k--)
+                {
+                    var key = track.Keys[k];
+                    if (key == null || !keys.Contains(key) || (key.Channels & channels) == 0)
+                        continue;
+                    key.Channels &= ~channels;
+                    changed++;
+                    if (key.Channels == SpritePartsKeyChannel.None && !key.HasColor && !key.HasDrawOrder
+                        && string.IsNullOrWhiteSpace(key.AppearanceId))
+                        track.Keys.RemoveAt(k);
+                }
+            }
+            return changed;
         }
 
         public static KeyEditResult DuplicateKeys(
@@ -211,9 +299,37 @@ namespace InvertLab.Sprites.DOTS
                 Color = src.Color,
                 HasDrawOrder = src.HasDrawOrder,
                 DrawOrder = src.DrawOrder,
+                Channels = src.Channels,
                 Curve = src.Curve,
                 AppearanceId = src.AppearanceId ?? string.Empty,
             };
+        }
+
+        /// <summary>
+        /// Copies <paramref name="from"/>'s channels (and colour / draw order) into <paramref name="into"/>.
+        /// <paramref name="onlyMissing"/>: only channels <paramref name="into"/> does not hold yet.
+        /// </summary>
+        public static void MergeKeyChannels(SpritePartsKeyDef into, SpritePartsKeyDef from, bool onlyMissing)
+        {
+            if (into == null || from == null)
+                return;
+            var take = from.Channels & (onlyMissing ? ~into.Channels : SpritePartsKeyChannel.All);
+            if ((take & SpritePartsKeyChannel.Position) != 0) into.Position = from.Position;
+            if ((take & SpritePartsKeyChannel.Rotation) != 0) into.Rotation = from.Rotation;
+            if ((take & SpritePartsKeyChannel.Scale) != 0) into.Scale = SanitizeScale(from.Scale);
+            if ((take & SpritePartsKeyChannel.Deform) != 0)
+                into.Deform = from.Deform == null ? null : (Vector2[])from.Deform.Clone();
+            into.Channels |= take;
+            if (from.HasColor && (!onlyMissing || !into.HasColor))
+            {
+                into.HasColor = true;
+                into.Color = from.Color;
+            }
+            if (from.HasDrawOrder && (!onlyMissing || !into.HasDrawOrder))
+            {
+                into.HasDrawOrder = true;
+                into.DrawOrder = from.DrawOrder;
+            }
         }
 
         static SpritePartsKeyDef UpsertOrMergeKey(SpritePartsTrackDef track, SpritePartsKeyDef incoming)
@@ -226,12 +342,10 @@ namespace InvertLab.Sprites.DOTS
                 if (k == null) continue;
                 if (Mathf.Abs(k.Time - incoming.Time) <= eps)
                 {
-                    // Prefer incoming (moved/pasted) values; keep existing instance.
+                    // Prefer incoming (moved/pasted) values on the channels it holds; keep existing instance.
                     if (!ReferenceEquals(k, incoming))
                     {
-                        k.Position = incoming.Position;
-                        k.Rotation = incoming.Rotation;
-                        k.Scale = SanitizeScale(incoming.Scale);
+                        MergeKeyChannels(k, incoming, false);
                         k.EaseMode = incoming.EaseMode;
                         k.AppearanceId = incoming.AppearanceId ?? string.Empty;
                     }
@@ -269,8 +383,8 @@ namespace InvertLab.Sprites.DOTS
                     SpritePartsKeyDef drop = ReferenceEquals(keep, a) ? b : a;
                     if (!ReferenceEquals(keep, drop))
                     {
-                        keep.Position = keep.Position;
-                        // already has keep's TRS
+                        // The kept key wins on its channels; the dropped one's other channels move into it.
+                        MergeKeyChannels(keep, drop, true);
                         track.Keys.Remove(drop);
                     }
                 }

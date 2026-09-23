@@ -90,6 +90,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             var first = keys[0];
             using (new EditorGUI.DisabledScope(partLocked))
             {
+                DrawPartsKeyChannelToggles(keys);
+
                 // Ease to the next key.
                 var ease = SpriteEase.IsValidMode(first.EaseMode) ? (SpriteEaseMode)first.EaseMode : SpriteEaseMode.Linear;
                 EditorGUI.BeginChangeCheck();

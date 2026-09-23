@@ -312,6 +312,7 @@ namespace InvertLab.Sprites.DOTS
                             HasDrawOrder = key.HasDrawOrder,
                             DrawOrder = key.DrawOrder,
                             Curve = new float4(key.Curve.x, key.Curve.y, key.Curve.z, key.Curve.w),
+                            SkipChannels = (byte)(~(byte)key.Channels & (byte)SpritePartsKeyChannel.All),
                         };
                     }
                     kept.Add(new SpritePartsSetBuilder.TrackInput

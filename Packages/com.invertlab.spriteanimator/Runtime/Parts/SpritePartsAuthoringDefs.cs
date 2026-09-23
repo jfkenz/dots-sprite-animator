@@ -226,10 +226,28 @@ namespace InvertLab.Sprites.DOTS
         [Range(0f, 1f)] public float Mix = 1f;
     }
 
+    /// <summary>
+    /// Which transform channels a key holds (Spine keys translate, rotate, scale and deform separately, so each
+    /// can have its own timing). A channel a key does not hold is skipped when that channel is blended.
+    /// </summary>
+    [Flags]
+    public enum SpritePartsKeyChannel : byte
+    {
+        None = 0,
+        Position = 1,
+        Rotation = 2,
+        Scale = 4,
+        Deform = 8,
+        Transform = Position | Rotation | Scale,
+        All = Position | Rotation | Scale | Deform,
+    }
+
     [Serializable]
     public class SpritePartsKeyDef
     {
         public float Time;
+        /// <summary>The channels this key holds. Old keys (and "Key Pose") hold all of them.</summary>
+        public SpritePartsKeyChannel Channels = SpritePartsKeyChannel.All;
         public Vector2 Position = Vector2.zero;
         public float Rotation;
         public Vector2 Scale = Vector2.one;

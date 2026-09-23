@@ -181,7 +181,8 @@ namespace InvertLab.Sprites.DOTS
             float timeSeconds,
             PoseEdit pose,
             bool autoKey,
-            float snapFps = DefaultDisplayFps)
+            float snapFps = DefaultDisplayFps,
+            SpritePartsKeyChannel channels = SpritePartsKeyChannel.All)
         {
             var result = new WriteResult();
             if (profile == null)
@@ -233,20 +234,26 @@ namespace InvertLab.Sprites.DOTS
             var clip = profile.PartsClips[clipIndex];
             float duration = Mathf.Max(1e-3f, clip.Duration);
             float time = SnapTime(Mathf.Clamp(timeSeconds, 0f, duration), snapFps, duration);
+            if (channels == SpritePartsKeyChannel.None)
+            {
+                result.Rejected = true;
+                result.Reason = "Nothing changed.";
+                return result;
+            }
             var track = GetOrCreateTrack(clip, slot.SlotId);
-            bool emptyBefore = track.Keys.Count == 0;
-            UpsertKey(track, time, pose);
+            // A channel's first key after t=0 also anchors that channel at rest at t=0, in the same operation.
+            var unkeyed = channels & ~ChannelsKeyed(track);
+            UpsertKey(track, time, pose, channels);
             result.WroteKey = true;
-
-            // First key after t=0 also inserts a rest key at t=0 in the same operation.
-            if (emptyBefore && time > 1e-5f)
+            if (unkeyed != SpritePartsKeyChannel.None && time > 1e-5f)
             {
                 UpsertKey(track, 0f, new PoseEdit
                 {
                     Position = slot.RestPosition,
                     Rotation = slot.RestRotation,
                     Scale = slot.RestScale,
-                });
+                    Lattice = SpritePartsLattice.FromMesh(slot.Mesh),
+                }, unkeyed, onlyNewChannels: true);
                 result.InsertedRestAnchorAtZero = true;
             }
             return result;
@@ -1182,36 +1189,57 @@ namespace InvertLab.Sprites.DOTS
             channel.Keys.Sort((a, b) => a.Time.CompareTo(b.Time));
         }
 
+        /// <summary>Every channel some key on the track holds.</summary>
+        public static SpritePartsKeyChannel ChannelsKeyed(SpritePartsTrackDef track)
+        {
+            var any = SpritePartsKeyChannel.None;
+            if (track?.Keys == null)
+                return any;
+            foreach (var k in track.Keys)
+                if (k != null) any |= k.Channels;
+            return any;
+        }
+
+        /// <summary>
+        /// Writes <paramref name="channels"/> of the pose into the key at <paramref name="time"/> (made when missing);
+        /// the key's other channels stay as they are. <paramref name="onlyNewChannels"/>: leave channels the key
+        /// already holds (the rest anchor never overwrites a key at 0).
+        /// </summary>
         static void UpsertKey(
             SpritePartsTrackDef track,
             float time,
             PoseEdit pose,
+            SpritePartsKeyChannel channels = SpritePartsKeyChannel.All,
+            bool onlyNewChannels = false,
             string appearanceId = null,
             bool setAppearance = false)
         {
             track.Keys ??= new List<SpritePartsKeyDef>();
-            var existing = FindKeyAtTime(track, time);
-            if (existing != null)
+            var key = FindKeyAtTime(track, time);
+            if (key == null)
             {
-                existing.Position = pose.Position;
-                existing.Rotation = pose.Rotation;
-                existing.Scale = SanitizeScale(pose.Scale);
-                existing.Deform = pose.Lattice.OffsetArray();
-                if (setAppearance)
-                    existing.AppearanceId = appearanceId ?? string.Empty;
-                return;
+                key = new SpritePartsKeyDef
+                {
+                    Time = time,
+                    Channels = SpritePartsKeyChannel.None,
+                    Position = pose.Position,
+                    Rotation = pose.Rotation,
+                    Scale = SanitizeScale(pose.Scale),
+                    EaseMode = (byte)SpriteEaseMode.Linear,
+                    AppearanceId = string.Empty,
+                };
+                track.Keys.Add(key);
+                track.Keys.Sort((a, b) => a.Time.CompareTo(b.Time));
             }
-            track.Keys.Add(new SpritePartsKeyDef
-            {
-                Time = time,
-                Position = pose.Position,
-                Rotation = pose.Rotation,
-                Scale = SanitizeScale(pose.Scale),
-                Deform = pose.Lattice.OffsetArray(),
-                EaseMode = (byte)SpriteEaseMode.Linear,
-                AppearanceId = setAppearance ? (appearanceId ?? string.Empty) : string.Empty,
-            });
-            track.Keys.Sort((a, b) => a.Time.CompareTo(b.Time));
+            if (onlyNewChannels)
+                channels &= ~key.Channels;
+            if ((channels & SpritePartsKeyChannel.Position) != 0) key.Position = pose.Position;
+            if ((channels & SpritePartsKeyChannel.Rotation) != 0) key.Rotation = pose.Rotation;
+            if ((channels & SpritePartsKeyChannel.Scale) != 0) key.Scale = SanitizeScale(pose.Scale);
+            if ((channels & SpritePartsKeyChannel.Deform) != 0) key.Deform = pose.Lattice.OffsetArray();
+            key.Channels |= channels;
+            if (setAppearance)
+                key.AppearanceId = appearanceId ?? string.Empty;
         }
 
         static Vector2 SanitizeScale(Vector2 scale)

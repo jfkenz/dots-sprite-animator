@@ -5052,6 +5052,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             // Auto Key is on (key->blob sample can lag / reject without a clip).
             if (_partsMode == SpritePartsStudioMode.Animate)
             {
+                // Spine-style: only the channels this edit changed are keyed (a rotation does not pin the position).
+                var channels = ChangedPartsChannels(slotId, pose);
                 if (!EnsurePartsClipForAnimate())
                 {
                     _partsHasTempPose = true;
@@ -5069,9 +5071,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
+                if (channels == SpritePartsKeyChannel.None)
+                    return; // nothing moved
                 var keyResult = SpritePartsAuthoringOps.ApplyPoseEdit(
                     _profile, _partsMode, _partsSelectedClip, slotId, _partsPreviewTime, pose, true,
-                    _partsDisplayFps);
+                    _partsDisplayFps, channels);
                 if (keyResult.Rejected)
                 {
                     _status = keyResult.Reason;
@@ -5596,6 +5600,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
 
+            DrawPartsChannelFilter(new Rect(rect.x + 446f, appY, 330f, 16f));
             float tracksTop = rect.y + 48f;
             float tracksHeight = rect.height - 54f;
             var tracksRect = new Rect(rect.x + 8f, tracksTop, rect.width - 16f, tracksHeight);
@@ -5768,9 +5773,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                         if (key == null) continue;
                         float u = key.Time / duration;
                         float kx = Mathf.Lerp(trackRect.x, trackRect.xMax, u);
+                        if (!PartsKeyVisible(key))
+                            continue;
                         bool keySelected = _partsSelectedKeys.Contains(key);
                         bool hasSprite = !string.IsNullOrWhiteSpace(key.AppearanceId);
-                        DrawPartsKeyDiamond(kx, rowY + rowH * 0.5f, keySelected, hasSprite);
+                        DrawPartsKeyDiamond(kx, rowY + rowH * 0.5f, keySelected, hasSprite, PartsKeyColor(key));
                         var hit = new Rect(kx - 9f, rowY, 18f, rowH);
                         EditorGUIUtility.AddCursorRect(hit, MouseCursor.MoveArrow);
                         if (hit.Contains(evt.mousePosition))
@@ -5994,7 +6001,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 for (int k = 0; k < track.Keys.Count; k++)
                 {
                     var key = track.Keys[k];
-                    if (key == null) continue;
+                    if (key == null || !PartsKeyVisible(key)) continue;
                     float kx = Mathf.Lerp(rect.x + labelW, rect.xMax, key.Time / duration);
                     var point = new Vector2(kx, rowY + rowH * 0.5f);
                     if (!_partsKeyMarqueeRect.Contains(point)) continue;
@@ -6165,14 +6172,22 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
         }
 
-        void DrawPartsKeyDiamond(float x, float y, bool selected, bool hasSpriteChange = false)
+        void DrawPartsKeyDiamond(float x, float y, bool selected, bool hasSpriteChange = false, Color? channelColor = null)
         {
-            float s = selected ? 5f : 4f;
+            float s = selected ? 5.5f : 4.5f;
             Handles.BeginGUI();
+            if (selected)
+            {
+                // Selected: a bright outline around the channel colour.
+                Handles.color = new Color(0.4f, 1f, 0.55f);
+                Handles.DrawAAConvexPolygon(
+                    new Vector3(x, y - s - 1.5f), new Vector3(x + s + 1.5f, y),
+                    new Vector3(x, y + s + 1.5f), new Vector3(x - s - 1.5f, y));
+            }
             if (hasSpriteChange)
-                Handles.color = selected ? new Color(1f, 0.75f, 0.2f) : new Color(1f, 0.55f, 0.15f);
+                Handles.color = new Color(1f, 0.55f, 0.15f);
             else
-                Handles.color = selected ? new Color(0.4f, 1f, 0.55f) : new Color(0.7f, 0.85f, 1f);
+                Handles.color = channelColor ?? new Color(0.7f, 0.85f, 1f);
             Handles.DrawAAConvexPolygon(
                 new Vector3(x, y - s), new Vector3(x + s, y),
                 new Vector3(x, y + s), new Vector3(x - s, y));

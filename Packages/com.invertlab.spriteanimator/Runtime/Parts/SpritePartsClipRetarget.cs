@@ -274,6 +274,7 @@ namespace InvertLab.Sprites.DOTS
                             Color = key.Color,
                             HasDrawOrder = key.HasDrawOrder,
                             DrawOrder = key.DrawOrder,
+                            Channels = key.Channels,
                             Curve = key.Curve,
                             AppearanceId = RemapAppearanceId(destination, key.AppearanceId),
                         };

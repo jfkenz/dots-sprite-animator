@@ -67,50 +67,57 @@ namespace InvertLab.Sprites.DOTS
             ref var track = ref clip.Tracks[trackIndex];
             if (track.Keys.Length == 0)
                 return;
-            if (track.Keys.Length == 1)
-            {
-                ref var only = ref track.Keys[0];
-                pose.Position = only.Position;
-                pose.Rotation = only.Rotation;
-                pose.Scale = only.Scale;
-                SpritePartsLattice.ApplyDeform(ref pose.Lattice, only.Deform, only.Deform, 0f);
-                return;
-            }
 
-            // Before first / after last: hold nearest key.
-            if (time <= track.Keys[0].Time)
-            {
-                ref var first = ref track.Keys[0];
-                pose.Position = first.Position;
-                pose.Rotation = first.Rotation;
-                pose.Scale = first.Scale;
-                SpritePartsLattice.ApplyDeform(ref pose.Lattice, first.Deform, first.Deform, 0f);
-                return;
-            }
-            int last = track.Keys.Length - 1;
-            if (time >= track.Keys[last].Time)
-            {
-                ref var end = ref track.Keys[last];
-                pose.Position = end.Position;
-                pose.Rotation = end.Rotation;
-                pose.Scale = end.Scale;
-                SpritePartsLattice.ApplyDeform(ref pose.Lattice, end.Deform, end.Deform, 0f);
-                return;
-            }
+            // Each channel blends between the keys that hold it (Spine timelines): a rotation key does not pin
+            // the position, so each channel keeps its own timing. Held before its first and after its last key.
+            if (Span(ref track, SpritePartsKeyChannel.Position, time, out int a, out int b, out float u))
+                pose.Position = math.lerp(track.Keys[a].Position, track.Keys[b].Position, u);
+            if (Span(ref track, SpritePartsKeyChannel.Rotation, time, out a, out b, out u))
+                pose.Rotation = LerpAngleShortest(track.Keys[a].Rotation, track.Keys[b].Rotation, u);
+            if (Span(ref track, SpritePartsKeyChannel.Scale, time, out a, out b, out u))
+                pose.Scale = math.lerp(track.Keys[a].Scale, track.Keys[b].Scale, u);
+            if (Span(ref track, SpritePartsKeyChannel.Deform, time, out a, out b, out u))
+                SpritePartsLattice.ApplyDeform(ref pose.Lattice, track.Keys[a].Deform, track.Keys[b].Deform, u);
+        }
 
-            int i1 = 1;
-            while (i1 < track.Keys.Length && track.Keys[i1].Time < time)
-                i1++;
-            int i0 = i1 - 1;
-            ref var a = ref track.Keys[i0];
-            ref var b = ref track.Keys[i1];
-            float span = b.Time - a.Time;
-            float u = span > 1e-8f ? (time - a.Time) / span : 0f;
-            u = EaseKey(ref a, u);
-            pose.Position = math.lerp(a.Position, b.Position, u);
-            pose.Scale = math.lerp(a.Scale, b.Scale, u);
-            pose.Rotation = LerpAngleShortest(a.Rotation, b.Rotation, u);
-            SpritePartsLattice.ApplyDeform(ref pose.Lattice, a.Deform, b.Deform, u);
+        /// <summary>
+        /// The keys around <paramref name="time"/> that hold <paramref name="channel"/> and the eased blend between
+        /// them (the earlier key's ease). Before the first / after the last such key both are that key. False when
+        /// no key holds the channel.
+        /// </summary>
+        static bool Span(ref SpritePartsTrackBlob track, SpritePartsKeyChannel channel, float time, out int a, out int b, out float u)
+        {
+            a = -1;
+            b = -1;
+            u = 0f;
+            for (int i = 0; i < track.Keys.Length; i++)
+            {
+                if (!track.Keys[i].Holds(channel))
+                    continue;
+                if (track.Keys[i].Time <= time)
+                    a = i;
+                else
+                {
+                    b = i;
+                    break;
+                }
+            }
+            if (a < 0 && b < 0)
+                return false;
+            if (a < 0)
+            {
+                a = b;
+                return true;
+            }
+            if (b < 0)
+            {
+                b = a;
+                return true;
+            }
+            ref var ka = ref track.Keys[a];
+            float span = track.Keys[b].Time - ka.Time;
+            u = EaseKey(ref ka, span > 1e-8f ? (time - ka.Time) / span : 0f);
+            return true;
         }
 
         /// <summary>

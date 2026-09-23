@@ -131,6 +131,10 @@ namespace InvertLab.Sprites.DOTS
         public int DrawOrder;
         /// <summary>Bezier handles (x1, y1, x2, y2) when EaseMode is Bezier.</summary>
         public float4 Curve;
+        /// <summary>Channels this key does NOT hold (<see cref="SpritePartsKeyChannel"/> bits). 0 = all of them.</summary>
+        public byte SkipChannels;
+
+        public bool Holds(SpritePartsKeyChannel channel) => (SkipChannels & (byte)channel) == 0;
     }
 
     public struct SpritePartAppearanceBlob
@@ -206,6 +210,8 @@ namespace InvertLab.Sprites.DOTS
             public bool HasDrawOrder;
             public int DrawOrder;
             public float4 Curve;
+            /// <summary>Channels this key does NOT hold. 0 (default) = all.</summary>
+            public byte SkipChannels;
         }
 
         public struct TrackInput
@@ -605,6 +611,7 @@ namespace InvertLab.Sprites.DOTS
                     HasDrawOrder = (byte)(k.HasDrawOrder ? 1 : 0),
                     DrawOrder = k.DrawOrder,
                     Curve = math.all(k.Curve == float4.zero) ? new float4(0.33f, 0f, 0.67f, 1f) : k.Curve,
+                    SkipChannels = (byte)(k.SkipChannels & (byte)SpritePartsKeyChannel.All),
                 }));
             }
             list.Sort((a, b) =>
