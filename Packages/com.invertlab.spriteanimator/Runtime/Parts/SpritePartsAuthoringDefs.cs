@@ -77,6 +77,11 @@ namespace InvertLab.Sprites.DOTS
         /// Posed and keyed like any part; can drive mesh weights and IK.
         /// </summary>
         public bool IsBone;
+        /// <summary>
+        /// Clipping mask: this part only shows inside the part with this id (its mesh outline, or its rectangle).
+        /// Empty = not clipped.
+        /// </summary>
+        public string ClipMaskSlotId = string.Empty;
         /// <summary>Bone length in world units along its +X axis (editor drawing, IK tips). 0 = 1.</summary>
         public float BoneLength = 1f;
     }

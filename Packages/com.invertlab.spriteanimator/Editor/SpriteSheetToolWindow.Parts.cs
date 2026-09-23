@@ -723,6 +723,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 EditorGUILayout.LabelField("Sibling Order", slot.SiblingOrder.ToString());
                 DrawPartsZOrderInspector(slot);
                 DrawPartsArtInspector(slot);
+                DrawPartsClipMaskInspector(slot, partLocked);
                 if (_partsMode == SpritePartsStudioMode.Rig)
                 {
                     using (new EditorGUI.DisabledScope(partLocked || _partsDragActive))
@@ -3075,6 +3076,24 @@ namespace InvertLab.Sprites.DOTS.Editor
             NativeArray<SpritePartsSampler.Pose> poses, NativeArray<float4x4> matrices,
             Color tint, bool pickable, float sampleTime, bool drawArt)
         {
+            // A clipped part is a mesh now, so the flat pass must skip it (the mesh pass draws it cut).
+            var artPoses = ClippedArtPoses(ref set, poses, matrices, out bool ownArt);
+            try
+            {
+                DrawPartsPoseQuadsCore(canvas, ref set, poses, artPoses, matrices, tint, pickable, sampleTime, drawArt);
+            }
+            finally
+            {
+                if (ownArt)
+                    artPoses.Dispose();
+            }
+        }
+
+        void DrawPartsPoseQuadsCore(
+            Rect canvas, ref SpritePartsSetBlob set,
+            NativeArray<SpritePartsSampler.Pose> poses, NativeArray<SpritePartsSampler.Pose> artPoses, NativeArray<float4x4> matrices,
+            Color tint, bool pickable, float sampleTime, bool drawArt)
+        {
             // Draw by DrawRank ascending (back to front).
             int n = set.Slots.Length;
             var order = new int[n];
@@ -3127,7 +3146,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (flipSx < 0f || flipSy < 0f)
                     GUIUtility.ScaleAroundPivot(new Vector2(flipSx, flipSy), joint);
                 Texture2D tex = sheet?.Texture;
-                var lattice = poses.IsCreated && i < poses.Length ? poses[i].Lattice : default;
+                var lattice = artPoses.IsCreated && i < artPoses.Length ? artPoses[i].Lattice : default;
                 if (drawArt && tex != null && app != null)
                 {
                     // AnyPortrait keeps the whole image on screen. A partial polygon must not clip the rest away.

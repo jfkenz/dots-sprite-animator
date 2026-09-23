@@ -23,6 +23,8 @@ namespace InvertLab.Sprites.DOTS
         public bool KeyedPoseOnly;
         /// <summary>One value per <see cref="SpritePartsSetBlob.Params"/>; not created (or short) = defaults.</summary>
         public NativeArray<float> ParamValues;
+        /// <summary>Cut clipped parts to their masks (the game). The editor clips only when it draws art.</summary>
+        public bool Clip;
     }
 
     /// <summary>

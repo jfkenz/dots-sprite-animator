@@ -30,7 +30,7 @@ namespace InvertLab.Sprites.DOTS
             if ((uint)slotIndex >= (uint)set.Slots.Length || !localToRoot.IsCreated)
                 return;
             ref var slot = ref set.Slots[slotIndex];
-            if (!IsSkinned(ref slot) || lattice.PointCount != slot.Mesh.PointCount)
+            if (!IsSkinned(ref slot) || lattice.PointCount != slot.Mesh.PointCount || lattice.Final != 0)
                 return;
             var bones = new FixedList4096Bytes<float4x4>();
             if (!TryBoneTransforms(ref set, slotIndex, localToRoot, ref bones))

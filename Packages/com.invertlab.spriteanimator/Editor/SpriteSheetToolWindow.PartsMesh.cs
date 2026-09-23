@@ -247,6 +247,22 @@ namespace InvertLab.Sprites.DOTS.Editor
             GL.sRGBWrite = prevWrite;
         }
 
+        /// <summary>
+        /// Poses for drawing art: a clipped copy when any part has a clipping mask (<paramref name="owned"/>, dispose
+        /// it), else <paramref name="poses"/> itself. Editing tools keep reading the uncut poses.
+        /// </summary>
+        static NativeArray<SpritePartsSampler.Pose> ClippedArtPoses(ref SpritePartsSetBlob set,
+            NativeArray<SpritePartsSampler.Pose> poses, NativeArray<float4x4> matrices, out bool owned)
+        {
+            owned = false;
+            if (!poses.IsCreated || !SpritePartsClipping.Any(ref set))
+                return poses;
+            var copy = new NativeArray<SpritePartsSampler.Pose>(poses, Allocator.Temp);
+            SpritePartsClipping.Apply(ref set, copy, matrices);
+            owned = true;
+            return copy;
+        }
+
         /// <summary>Meshed parts are skipped by the flat quad pass and drawn here, then the deform gizmo on top.</summary>
         void DrawPartsPoseWarpOverlay(Rect canvas)
         {
@@ -258,6 +274,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ApplyTempPoseToSample(ref blob.Value, poses, matrices);
                 if (_partsShowArt)
                 {
+                    // Clipping masks cut the art only; the deform gizmo keeps the whole mesh.
+                    var artPoses = ClippedArtPoses(ref blob.Value, poses, matrices, out bool ownArt);
+                    try
+                    {
                     int n = blob.Value.Slots.Length;
                     var order = new int[n];
                     var ranks = new int[n];
@@ -273,7 +293,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         string sid = blob.Value.Slots[i].SlotId.ToString();
                         if (SpritePartsAuthoringOps.SlotOrAncestorHidden(_profile, sid))
                             continue;
-                        var lattice = poses.IsCreated && i < poses.Length ? poses[i].Lattice : default;
+                        var lattice = artPoses.IsCreated && i < artPoses.Length ? artPoses[i].Lattice : default;
                         SpritePartsSkinning.Apply(ref blob.Value, i, matrices, ref lattice);
                         if (!lattice.HasMesh)
                             continue;
@@ -292,6 +312,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                         DrawPartsWarpedSprite(tex, sheet, app.CellIndex, r, lattice,
                             PreviewTint(ref blob.Value, i, _partsPreviewTime, Color.white));
                         GUI.matrix = prev;
+                    }
+                    }
+                    finally
+                    {
+                        if (ownArt)
+                            artPoses.Dispose();
                     }
                 }
             }

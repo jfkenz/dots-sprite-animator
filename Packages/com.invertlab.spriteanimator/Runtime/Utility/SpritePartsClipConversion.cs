@@ -206,7 +206,15 @@ namespace InvertLab.Sprites.DOTS
                     Hidden = s.IsBone || SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
                         ? (byte)1 : (byte)0,
                     Mesh = SpritePartsLattice.FromMesh(s.Mesh),
+                    ClipMaskSlotId = s.ClipMaskSlotId,
                 };
+                // Clipping maps between part images: masks and clipped parts need their image size and pivot.
+                bool clipping = !string.IsNullOrWhiteSpace(s.ClipMaskSlotId) || IsClipMask(profile, s.SlotId);
+                if (clipping && SpritePartsSkinning.TryResolveQuad(profile, s, out var clipSize, out var clipPivot))
+                {
+                    result[i].SkinQuadSize = clipSize;
+                    result[i].SkinQuadPivot = clipPivot;
+                }
                 if (s.Mesh != null && s.Mesh.HasWeights
                     && SpritePartsSkinning.TryResolveQuad(profile, s, out var quadSize, out var quadPivot))
                 {
@@ -217,6 +225,17 @@ namespace InvertLab.Sprites.DOTS
                 }
             }
             return result;
+        }
+
+        static bool IsClipMask(SpriteSheetProfile profile, string slotId)
+        {
+            string id = SpritePartIdUtility.Canonical(slotId);
+            foreach (var s in profile.PartsSlots)
+            {
+                if (s != null && !string.IsNullOrWhiteSpace(s.ClipMaskSlotId) && SpritePartIdUtility.Canonical(s.ClipMaskSlotId) == id)
+                    return true;
+            }
+            return false;
         }
 
         public static SpritePartsSetBuilder.AppearanceInput[] CreateAppearances(

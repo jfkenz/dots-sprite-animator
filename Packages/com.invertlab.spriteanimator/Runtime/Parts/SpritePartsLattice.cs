@@ -22,6 +22,8 @@ namespace InvertLab.Sprites.DOTS
         public FixedList512Bytes<float2> Uvs;
         /// <summary>Triangle list. Vertex indices fit in a byte (MaxVertices = 63).</summary>
         public FixedList512Bytes<byte> Indices;
+        /// <summary>1 = already weighted and clipped (a clipping result): skinning leaves it alone.</summary>
+        public byte Final;
 
         public int PointCount => Points.Length;
         public int IndexCount => Indices.Length;

@@ -80,6 +80,13 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Default appearance quad: unit quad q maps to <c>(q + 0.5 - pivot) * size</c> in part space.</summary>
         public float2 SkinQuadSize;
         public float2 SkinQuadPivot;
+        /// <summary>The slot this part is clipped to (-1 = none).</summary>
+        public int ClipMaskIndex;
+        /// <summary>
+        /// When this slot is a mask with a mesh: its rest mesh split into convex polygons, flattened as
+        /// [count, vertex, vertex, ..., count, ...]. Empty = use its triangles (or its rectangle).
+        /// </summary>
+        public BlobArray<int> MaskPieces;
     }
 
     public struct SpritePartsClipBlob
@@ -170,6 +177,7 @@ namespace InvertLab.Sprites.DOTS
             public float[] SkinWeights;
             public float2 SkinQuadSize;
             public float2 SkinQuadPivot;
+            public string ClipMaskSlotId;
         }
 
         public struct AppearanceInput
@@ -634,6 +642,12 @@ namespace InvertLab.Sprites.DOTS
             for (int i = 0; i < n; i++)
             {
                 var src = slots[i];
+                slotArr[i].SkinQuadSize = src.SkinQuadSize;
+                slotArr[i].SkinQuadPivot = src.SkinQuadPivot;
+                slotArr[i].ClipMaskIndex = -1;
+                if (!string.IsNullOrWhiteSpace(src.ClipMaskSlotId)
+                    && slotIndex.TryGetValue(SpritePartIdUtility.Canonical(src.ClipMaskSlotId), out int maskIndex) && maskIndex != i)
+                    slotArr[i].ClipMaskIndex = maskIndex;
                 int vertices = slotArr[i].Mesh.PointCount;
                 int bones = src.SkinBones?.Length ?? 0;
                 bool ok = bones > 0 && vertices >= 3
@@ -650,8 +664,24 @@ namespace InvertLab.Sprites.DOTS
                 var weightArr = builder.Allocate(ref slotArr[i].SkinWeights, src.SkinWeights.Length);
                 for (int w = 0; w < src.SkinWeights.Length; w++)
                     weightArr[w] = math.isfinite(src.SkinWeights[w]) ? math.max(0f, src.SkinWeights[w]) : 0f;
-                slotArr[i].SkinQuadSize = src.SkinQuadSize;
-                slotArr[i].SkinQuadPivot = src.SkinQuadPivot;
+            }
+
+            // Masks with a mesh: split once into convex pieces for the per-frame clip.
+            var isMask = new bool[n];
+            for (int i = 0; i < n; i++)
+            {
+                int m = slotArr[i].ClipMaskIndex;
+                if (m >= 0 && m < n)
+                    isMask[m] = true;
+            }
+            for (int i = 0; i < n; i++)
+            {
+                if (!isMask[i] || !slotArr[i].Mesh.HasMesh)
+                    continue;
+                var flat = SpritePartsClipping.ConvexPieces(ref slotArr[i].Mesh);
+                var pieces = builder.Allocate(ref slotArr[i].MaskPieces, flat.Count);
+                for (int k = 0; k < flat.Count; k++)
+                    pieces[k] = flat[k];
             }
         }
 

@@ -197,6 +197,9 @@ namespace InvertLab.Sprites.DOTS
             if (set.Jiggles.Length > 0 && !extras.KeyedPoseOnly && extras.Jiggle.IsCreated)
                 SpritePartsJiggle.Apply(ref set, finalLocal, localToRoot, extras.Jiggle, extras.DeltaTime,
                     math.mul(rootWorld, SpritePartsPlayback.FacingMatrix(flipX, flipY)));
+            // Clipping masks last: they cut the final (weighted) meshes.
+            if (extras.Clip && !extras.KeyedPoseOnly && SpritePartsClipping.Any(ref set))
+                SpritePartsClipping.Apply(ref set, finalLocal, localToRoot);
             if (flipX || flipY)
             {
                 for (int i = 0; i < sources.Length && i < n; i++)
@@ -679,7 +682,7 @@ namespace InvertLab.Sprites.DOTS
                 }
                 float4x4 rootWorld = CurrentEntityWorld(em, root);
 
-                var extras = new SpritePartsEvalExtras { DeltaTime = deltaTime };
+                var extras = new SpritePartsEvalExtras { DeltaTime = deltaTime, Clip = true };
                 if (set.Params.Length > 0 && em.HasBuffer<SpritePartsParamValue>(root))
                     extras.ParamValues = em.GetBuffer<SpritePartsParamValue>(root).AsNativeArray().Reinterpret<float>();
                 if (set.Jiggles.Length > 0 && em.HasBuffer<SpritePartJiggleState>(root))
