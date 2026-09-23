@@ -65,6 +65,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         [SerializeField] bool _partsShowArt = true;
         [SerializeField] bool _partsShowDebug = true;
         [SerializeField] bool _partsShowRoot = true;
+        [SerializeField] bool _partsShowAxes = true;
         [SerializeField] SpritePartsAlignPivot _partsAlignPivot = SpritePartsAlignPivot.Center;
         [SerializeField] float _partsDisplayFps = SpritePartsAuthoringOps.DefaultDisplayFps;
         // Preview: wrap playhead at last key time instead of Duration.
@@ -1835,7 +1836,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             const float pad = 8f;
             const float h = 24f;
-            float w = PartsMeshDisplayOverlay() ? 390f : 244f;
+            float w = PartsMeshDisplayOverlay() ? 390f : 296f;
             return new Rect(canvas.xMax - w - pad, canvas.yMax - h - pad, w, h);
         }
 
@@ -1871,6 +1872,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 "Debug", "Show or hide part names, onion labels, and transform gizmos.");
             DrawPartsVisibilityToggle(ref x, y, 48f, ref _partsShowRoot,
                 "Root", "Show the character origin square (same pivot as the scene GameObject).");
+            DrawPartsVisibilityToggle(ref x, y, 48f, ref _partsShowAxes,
+                "Axes", "Show the X / Y axes through the character origin (the middle), like Spine.");
+        }
+
+        /// <summary>The X (red) and Y (green) axes through the character origin, across the whole canvas.</summary>
+        void DrawPartsOriginAxes(Rect canvas)
+        {
+            if (!_partsShowAxes || Event.current.type != EventType.Repaint)
+                return;
+            Vector2 o = WorldToCanvas(canvas, float2.zero);
+            if (o.y >= canvas.yMin && o.y <= canvas.yMax)
+                EditorGUI.DrawRect(new Rect(canvas.xMin, Mathf.Round(o.y), canvas.width, 1f), new Color(1f, 0.35f, 0.35f, 0.45f));
+            if (o.x >= canvas.xMin && o.x <= canvas.xMax)
+                EditorGUI.DrawRect(new Rect(Mathf.Round(o.x), canvas.yMin, 1f, canvas.height), new Color(0.4f, 1f, 0.45f, 0.45f));
         }
 
         void DrawPartsToolToggle(ref float x, float y, string label, PartsCanvasTool tool)
@@ -2445,6 +2460,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsMeshEdit(canvas);
                 return;
             }
+
+            DrawPartsOriginAxes(canvas); // behind the art
 
             var clip = CurrentPartsClip;
             int clipIndex = PartsEvaluationClipIndex();
