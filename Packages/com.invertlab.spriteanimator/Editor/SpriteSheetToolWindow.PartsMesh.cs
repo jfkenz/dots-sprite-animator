@@ -978,7 +978,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                     DrawGuiLine(pc, pa, faint, 1f);
                 }
             }
-            for (int i = 0; i < hull; i++)
+            // Free points (Auto Connect off) have no drawn outline until the mesh exists.
+            bool freePoints = mesh != null && !mesh.HasMesh && !_partsMeshAutoConnect;
+            for (int i = 0; i < hull && !freePoints; i++)
             {
                 if (i == hull - 1 && hull < 3)
                     break;
@@ -1013,7 +1015,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             string stats = mesh != null && mesh.HasMesh
                 ? n + " vertices   " + hull + " hull   " + mesh.Triangles.Length / 3 + " triangles"
-                : n > 0 ? n + " hull points. Keep clicking around the image." : "No mesh. The part draws as a rectangle.";
+                : n > 0 ? (_partsMeshAutoConnect ? n + " hull points. Keep clicking around the image." : n + " free points. The mesh appears at 3.") : "No mesh. The part draws as a rectangle.";
             GUI.Label(new Rect(sprite.x, sprite.yMax + 6f, sprite.width, 16f), stats, _mutedStyle);
         }
 

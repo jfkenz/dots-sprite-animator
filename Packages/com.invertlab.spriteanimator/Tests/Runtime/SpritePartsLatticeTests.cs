@@ -217,6 +217,27 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void FromPoints_OutermostPointsBecomeTheOutline()
+        {
+            var points = new List<Vector2>
+            {
+                new Vector2(0.5f, 0.5f), // inside
+                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f),
+                new Vector2(0.5f, 0f),   // on the outline edge, kept as a non-hull vertex
+            };
+            var mesh = SpritePartsMeshOps.FromPoints(points, out var remap);
+            Assert.IsTrue(mesh.HasMesh);
+            Assert.AreEqual(4, mesh.HullCount);
+            Assert.AreEqual(6, mesh.VertexCount);
+            Assert.GreaterOrEqual(remap[0], 4, "The middle point is interior.");
+            Assert.AreEqual(1f, TriangleArea(mesh), 1e-4f);
+
+            var two = SpritePartsMeshOps.FromPoints(new List<Vector2> { Vector2.zero, Vector2.one }, out _);
+            Assert.IsFalse(two.HasMesh, "Two points make no mesh yet.");
+            Assert.AreEqual(2, two.VertexCount);
+        }
+
+        [Test]
         public void Generate_AddsInteriorVertices()
         {
             var mesh = SpritePartsMeshOps.CreateQuad();

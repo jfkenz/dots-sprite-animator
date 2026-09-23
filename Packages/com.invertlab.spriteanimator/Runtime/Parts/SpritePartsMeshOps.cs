@@ -187,6 +187,70 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>
+        /// Free points (no drawn outline): the convex hull becomes the outline, every other point an
+        /// interior vertex. <paramref name="remap"/>[i] = new index of input point i.
+        /// With fewer than 3 non-collinear points the result has no triangles yet.
+        /// </summary>
+        public static SpritePartMeshDef FromPoints(IReadOnlyList<Vector2> points, out int[] remap)
+        {
+            int n = Mathf.Min(points?.Count ?? 0, MaxVertices);
+            remap = new int[n];
+            if (n == 0)
+                return new SpritePartMeshDef { Vertices = Array.Empty<Vector2>(), Edges = Array.Empty<int>() };
+            var order = new List<int>(n);
+            for (int i = 0; i < n; i++)
+                order.Add(i);
+            order.Sort((a, b) =>
+            {
+                int c = points[a].x.CompareTo(points[b].x);
+                return c != 0 ? c : points[a].y.CompareTo(points[b].y);
+            });
+            // Andrew's monotone chain, counter-clockwise, collinear points left inside.
+            var hull = new List<int>(n + 1);
+            for (int pass = 0; pass < 2; pass++)
+            {
+                int start = hull.Count;
+                for (int k = 0; k < n; k++)
+                {
+                    int i = pass == 0 ? order[k] : order[n - 1 - k];
+                    while (hull.Count >= start + 2
+                           && Orient(points[hull[hull.Count - 2]], points[hull[hull.Count - 1]], points[i]) <= Eps)
+                        hull.RemoveAt(hull.Count - 1);
+                    hull.Add(i);
+                }
+                hull.RemoveAt(hull.Count - 1);
+            }
+            bool closed = hull.Count >= 3;
+            var used = new bool[n];
+            var verts = new List<Vector2>(n);
+            if (closed)
+            {
+                foreach (int i in hull)
+                {
+                    remap[i] = verts.Count;
+                    verts.Add(Clamp01(points[i]));
+                    used[i] = true;
+                }
+            }
+            for (int i = 0; i < n; i++)
+            {
+                if (used[i])
+                    continue;
+                remap[i] = verts.Count;
+                verts.Add(Clamp01(points[i]));
+            }
+            var mesh = new SpritePartMeshDef
+            {
+                Vertices = verts.ToArray(),
+                HullCount = closed ? hull.Count : verts.Count,
+                Edges = Array.Empty<int>(),
+            };
+            if (closed)
+                Retriangulate(mesh);
+            return mesh;
+        }
+
+        /// <summary>
         /// Puts a vertex on edge (a, b) at <paramref name="uv"/> (projected onto the edge).
         /// A hull edge gains a hull vertex; a user edge is replaced by two edges through the new vertex.
         /// </summary>

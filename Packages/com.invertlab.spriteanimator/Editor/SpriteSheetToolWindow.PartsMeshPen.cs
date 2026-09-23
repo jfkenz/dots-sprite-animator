@@ -69,6 +69,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SelectWarpVertex(hit, false);
                     return;
                 }
+                if (!_partsMeshAutoConnect)
+                {
+                    PlaceFreePoint(slot, mesh, uv);
+                    return;
+                }
                 var pending = mesh.Clone();
                 if (!SpritePartsMeshOps.TryAppendHullVertex(pending, uv, out int added))
                 {
@@ -143,6 +148,26 @@ namespace InvertLab.Sprites.DOTS.Editor
             CommitPen(slot, mesh, work, total, cut ? "Pen Cut" : "Pen Edge");
             _partsMeshPen = target;
             SelectOnly(target);
+        }
+
+        /// <summary>Auto Connect off, no mesh yet: free points; the outermost ones become the outline.</summary>
+        void PlaceFreePoint(SpritePartSlotDef slot, SpritePartMeshDef mesh, Vector2 uv)
+        {
+            if (mesh.VertexCount >= SpritePartsMeshOps.MaxVertices)
+            {
+                _status = MeshFullMessage();
+                return;
+            }
+            var points = new List<Vector2>(mesh.Vertices ?? System.Array.Empty<Vector2>()) { uv };
+            var next = SpritePartsMeshOps.FromPoints(points, out var remap);
+            RecordPartsUndo("Place Mesh Point");
+            slot.Mesh = next;
+            _partsMeshPen = -1;
+            SelectOnly(remap[points.Count - 1]);
+            SaveDirty();
+            _status = next.HasMesh
+                ? "Mesh around " + next.VertexCount + " points (" + next.HullCount + " outline). Keep clicking to add more."
+                : points.Count + " free points. The mesh appears at 3.";
         }
 
         /// <summary>
@@ -298,7 +323,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             int n = mesh.VertexCount;
             if (!mesh.HasMesh)
             {
-                if (n == 0)
+                if (n == 0 || !_partsMeshAutoConnect)
                     return;
                 var faint = new Color(1f, 0.72f, 0.25f, 0.8f);
                 DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[n - 1]), MeshUvToGui(sprite, mouseUv), faint, 1.5f);
