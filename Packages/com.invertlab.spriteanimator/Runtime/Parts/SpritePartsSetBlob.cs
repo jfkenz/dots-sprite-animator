@@ -14,6 +14,21 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<SpritePartsSkinBlob> SkinPatches;
         /// <summary>IK constraints in solve order.</summary>
         public BlobArray<SpritePartsIkBlob> IkConstraints;
+        /// <summary>Jiggle joints, parents before children.</summary>
+        public BlobArray<SpritePartsJiggleBlob> Jiggles;
+    }
+
+    /// <summary>One spring joint: its tip (in the joint's space) swings behind the animated tip.</summary>
+    public struct SpritePartsJiggleBlob
+    {
+        public int Slot;
+        public float2 TipLocal;
+        /// <summary>Spring constant (1/s²).</summary>
+        public float Spring;
+        /// <summary>Velocity damping (1/s).</summary>
+        public float Damping;
+        public float Gravity;
+        public float Mix;
     }
 
     /// <summary>Resolved IK constraint: slot indices, -1 Upper for a one-joint chain.</summary>
@@ -205,6 +220,19 @@ namespace InvertLab.Sprites.DOTS
             public float Mix;
         }
 
+        public struct JiggleInput
+        {
+            public string SlotId;
+            /// <summary>Where the swinging tip sits in the joint's own space (its child, or along the bone).</summary>
+            public float2 TipLocal;
+            /// <summary>0..1 (loose .. stiff).</summary>
+            public float Stiffness;
+            /// <summary>0..1 (bouncy .. critically damped).</summary>
+            public float Damping;
+            public float Gravity;
+            public float Mix;
+        }
+
         public struct SkinInput
         {
             public string SkinId;
@@ -217,7 +245,8 @@ namespace InvertLab.Sprites.DOTS
             AppearanceInput[] appearances,
             ClipInput[] clips,
             SkinInput[] skins,
-            IkInput[] ik = null)
+            IkInput[] ik = null,
+            JiggleInput[] jiggles = null)
         {
             if (slots == null || slots.Length == 0)
                 throw new ArgumentException("Parts set requires at least one slot.");
@@ -444,6 +473,33 @@ namespace InvertLab.Sprites.DOTS
                 var ikArr = builder.Allocate(ref root.IkConstraints, resolved.Count);
                 for (int k = 0; k < resolved.Count; k++)
                     ikArr[k] = resolved[k];
+
+                // Jiggle: unknown slots and zero-length tips are dropped; parents solve before children.
+                var springs = new System.Collections.Generic.List<(int depth, SpritePartsJiggleBlob blob)>();
+                foreach (var j in jiggles ?? Array.Empty<JiggleInput>())
+                {
+                    if (j.Mix <= 0f || math.lengthsq(j.TipLocal) < 1e-10f
+                        || !slotIndex.TryGetValue(SpritePartIdUtility.Canonical(j.SlotId ?? string.Empty), out int s))
+                        continue;
+                    int depth = 0;
+                    for (int p = ParentIndex(slots, slotIndex, s); p >= 0 && depth < 256; p = ParentIndex(slots, slotIndex, p))
+                        depth++;
+                    float stiff = math.saturate(j.Stiffness);
+                    float spring = math.lerp(15f, 600f, stiff * stiff);
+                    springs.Add((depth, new SpritePartsJiggleBlob
+                    {
+                        Slot = s,
+                        TipLocal = j.TipLocal,
+                        Spring = spring,
+                        Damping = 2f * math.sqrt(spring) * math.lerp(0.05f, 1f, math.saturate(j.Damping)),
+                        Gravity = j.Gravity,
+                        Mix = math.saturate(j.Mix),
+                    }));
+                }
+                springs.Sort((a, b) => a.depth != b.depth ? a.depth.CompareTo(b.depth) : a.blob.Slot.CompareTo(b.blob.Slot));
+                var jiggleArr = builder.Allocate(ref root.Jiggles, springs.Count);
+                for (int k = 0; k < springs.Count; k++)
+                    jiggleArr[k] = springs[k].blob;
 
                 return builder.CreateBlobAssetReference<SpritePartsSetBlob>(allocator);
             }

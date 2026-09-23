@@ -758,7 +758,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_partsMode == SpritePartsStudioMode.Skins)
                 DrawPartsSkinsInspector();
             else
+            {
                 DrawPartsIkInspector();
+                DrawPartsJiggleInspector();
+            }
 
             EditorGUIUtility.labelWidth = prevLabelWidth;
             EditorGUILayout.EndScrollView();
@@ -2404,6 +2407,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void DrawPartsCanvasContents(Rect canvas)
         {
+            // Jiggle springs move only while the preview plays, so a paused frame shows exactly what is keyed.
+            SpritePartsOnion.PreviewPhysics = _partsPlaying && _partsPhysicsPreview;
             if (_profile?.PartsSlots == null || _profile.PartsSlots.Count == 0)
             {
                 GUI.Label(new Rect(canvas.x + 12f, canvas.y + 12f, canvas.width - 24f, 40f),
@@ -4927,7 +4932,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 SpritePartIdUtility.Canonical(_partsTempSlotId) == SpritePartIdUtility.Canonical(slotId))
                 return _partsTempPose;
 
-            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), time, Allocator.Temp,
+            if (!SpritePartsOnion.TrySampleCharacter(_profile, PartsEvaluationClipIndex(), time, Allocator.Temp, true,
                     out var blob, out var poses, out var matrices, out _))
                 return fallback;
             try

@@ -139,6 +139,23 @@ namespace InvertLab.Sprites.DOTS
             float4x4 rootWorld,
             bool flipX,
             bool flipY)
+            => Evaluate(ref set, player, overrides, layers, basePoses, finalLocal, localToRoot, sources, appearances,
+                rootWorld, flipX, flipY, default);
+
+        public static void Evaluate(
+            ref SpritePartsSetBlob set,
+            in SpritePartsPlayer player,
+            NativeArray<SpritePartsPoseOverride> overrides,
+            NativeArray<SpritePartsAnimLayer> layers,
+            NativeArray<SpritePartsSampler.Pose> basePoses,
+            NativeArray<SpritePartsSampler.Pose> finalLocal,
+            NativeArray<float4x4> localToRoot,
+            NativeArray<SpritePartPoseSource> sources,
+            NativeArray<int> appearances,
+            float4x4 rootWorld,
+            bool flipX,
+            bool flipY,
+            in SpritePartsEvalExtras extras)
         {
             int n = set.Slots.Length;
             float incoming = IncomingWeight(player);
@@ -172,8 +189,12 @@ namespace InvertLab.Sprites.DOTS
             ApplyLookAtOverrides(ref set, overrides, finalLocal, localToRoot, sources, n, rootWorld, flipX, flipY);
             SpritePartsHierarchy.ComposeLocalToRoot(ref set, finalLocal, localToRoot);
             // IK constraints last, so they reach targets that clips or gameplay overrides moved.
-            if (set.IkConstraints.Length > 0)
+            if (set.IkConstraints.Length > 0 && !extras.KeyedPoseOnly)
                 SpritePartsIk.Apply(ref set, finalLocal, localToRoot);
+            // Jiggle after IK: springs swing behind the final animated pose.
+            if (set.Jiggles.Length > 0 && !extras.KeyedPoseOnly && extras.Jiggle.IsCreated)
+                SpritePartsJiggle.Apply(ref set, finalLocal, localToRoot, extras.Jiggle, extras.DeltaTime,
+                    math.mul(rootWorld, SpritePartsPlayback.FacingMatrix(flipX, flipY)));
             if (flipX || flipY)
             {
                 for (int i = 0; i < sources.Length && i < n; i++)
@@ -555,6 +576,15 @@ namespace InvertLab.Sprites.DOTS
             float timeSeconds,
             NativeArray<SpritePartsSampler.Pose> localPoses,
             NativeArray<float4x4> localToRoot)
+            => EvaluateEditor(ref set, clipIndex, timeSeconds, localPoses, localToRoot, default);
+
+        public static void EvaluateEditor(
+            ref SpritePartsSetBlob set,
+            int clipIndex,
+            float timeSeconds,
+            NativeArray<SpritePartsSampler.Pose> localPoses,
+            NativeArray<float4x4> localToRoot,
+            in SpritePartsEvalExtras extras)
         {
             int n = set.Slots.Length;
             var player = DefaultPlayer(clipIndex, playing: false);
@@ -566,8 +596,8 @@ namespace InvertLab.Sprites.DOTS
             var apps = new NativeArray<int>(n, Allocator.Temp);
             try
             {
-                Evaluate(ref set, player, emptyOv, basePoses, localPoses, localToRoot, sources, apps,
-                    float4x4.identity, false, false);
+                Evaluate(ref set, player, emptyOv, default, basePoses, localPoses, localToRoot, sources, apps,
+                    float4x4.identity, false, false, extras);
             }
             finally
             {
@@ -579,6 +609,10 @@ namespace InvertLab.Sprites.DOTS
         }
 
         public static void Apply(EntityManager em, Entity root, EntityCommandBuffer commands, bool deferred)
+            => Apply(em, root, commands, deferred, 0f);
+
+        /// <param name="deltaTime">Frame time for jiggle springs (0 holds them still).</param>
+        public static void Apply(EntityManager em, Entity root, EntityCommandBuffer commands, bool deferred, float deltaTime)
         {
             if (!em.HasComponent<SpritePartsSetRef>(root) || !em.HasComponent<SpritePartsPlayer>(root))
                 return;
@@ -643,8 +677,20 @@ namespace InvertLab.Sprites.DOTS
                 }
                 float4x4 rootWorld = CurrentEntityWorld(em, root);
 
+                var extras = new SpritePartsEvalExtras { DeltaTime = deltaTime };
+                if (set.Jiggles.Length > 0 && em.HasBuffer<SpritePartJiggleState>(root))
+                {
+                    var jiggle = em.GetBuffer<SpritePartJiggleState>(root);
+                    if (jiggle.Length != set.Jiggles.Length)
+                    {
+                        jiggle.Clear();
+                        jiggle.Resize(set.Jiggles.Length, NativeArrayOptions.ClearMemory);
+                    }
+                    extras.Jiggle = jiggle.AsNativeArray();
+                }
+
                 Evaluate(ref set, player, overrides, layers, basePoses, finalLocal, localToRoot, sources, apps,
-                    rootWorld, flipX, flipY);
+                    rootWorld, flipX, flipY, extras);
 
                 WritePoseBuffers(em, root, basePoses, finalLocal, sources, n);
                 if (!em.HasComponent<SpritePartsVisualRootRef>(root)
@@ -721,8 +767,18 @@ namespace InvertLab.Sprites.DOTS
             EnsureBuffer<SpritePartSocketWorld>(em, root);
             EnsureBuffer<SpritePartHitboxBinding>(em, root);
             EnsureBuffer<SpritePartHitboxWorld>(em, root);
+            if (BlobHasJiggles(em, root))
+                EnsureBuffer<SpritePartJiggleState>(em, root);
             if (!em.HasComponent<SpritePartsPoseDiagnostics>(root))
                 em.AddComponentData(root, new SpritePartsPoseDiagnostics { PreviousClipIndex = -1 });
+        }
+
+        static bool BlobHasJiggles(EntityManager em, Entity root)
+        {
+            if (!em.HasComponent<SpritePartsSetRef>(root))
+                return false;
+            var blob = em.GetComponentData<SpritePartsSetRef>(root).Set;
+            return blob.IsCreated && blob.Value.Jiggles.Length > 0;
         }
 
         static void EnsureBuffer<T>(EntityManager em, Entity root)

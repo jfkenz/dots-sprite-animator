@@ -178,6 +178,26 @@ namespace InvertLab.Sprites.DOTS
         [Range(0f, 1f)] public float Mix = 1f;
     }
 
+    /// <summary>
+    /// Jiggle (spring physics): the joint and <see cref="ChainLength"/> - 1 joints under it (first child each)
+    /// swing behind their animated pose, for hair, tails, cloth and ears. Simulated at runtime every frame.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsJiggleDef
+    {
+        public string Name = "Jiggle";
+        public bool Enabled = true;
+        public string SlotId = string.Empty;
+        [Range(1, 8)] public int ChainLength = 1;
+        /// <summary>0 = loose and slow, 1 = stiff: snaps back to the animated pose quickly.</summary>
+        [Range(0f, 1f)] public float Stiffness = 0.5f;
+        /// <summary>0 = bouncy, 1 = no overshoot.</summary>
+        [Range(0f, 1f)] public float Damping = 0.35f;
+        /// <summary>World units / s² pulling the tip down.</summary>
+        public float Gravity;
+        [Range(0f, 1f)] public float Mix = 1f;
+    }
+
     [Serializable]
     public class SpritePartsKeyDef
     {

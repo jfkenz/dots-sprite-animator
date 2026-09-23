@@ -50,7 +50,7 @@ namespace InvertLab.Sprites.DOTS
                 var entity = pending[i];
                 if (!em.HasComponent<SpritePartsSetRef>(entity) || !em.HasComponent<SpritePartsPlayer>(entity))
                     continue;
-                SpritePartsPoseWriter.Apply(em, entity, commands, true);
+                SpritePartsPoseWriter.Apply(em, entity, commands, true, dt);
             }
             commands.Playback(em);
         }

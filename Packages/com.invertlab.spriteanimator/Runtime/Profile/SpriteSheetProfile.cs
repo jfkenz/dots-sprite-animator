@@ -1403,6 +1403,8 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsSkinDef> PartsSkins = new();
         /// <summary>Runtime IK constraints, solved after the clip every frame.</summary>
         public List<SpritePartsIkConstraintDef> PartsIkConstraints = new();
+        /// <summary>Spring physics on joint chains (hair, tails), simulated after IK.</summary>
+        public List<SpritePartsJiggleDef> PartsJiggles = new();
         public string PartsDefaultClipId = string.Empty;
         public string PartsDefaultSkinId = string.Empty;
         /// <summary>

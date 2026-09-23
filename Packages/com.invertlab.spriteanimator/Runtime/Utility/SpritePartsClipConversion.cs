@@ -61,7 +61,8 @@ namespace InvertLab.Sprites.DOTS
                     return false;
                 var clips = CreateClips(bakeProfile);
                 var skins = CreateSkins(bakeProfile);
-                blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins, CreateIk(bakeProfile));
+                blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins, CreateIk(bakeProfile),
+                    CreateJiggles(bakeProfile));
                 return true;
             }
             catch (Exception ex)
@@ -91,6 +92,69 @@ namespace InvertLab.Sprites.DOTS
                 });
             }
             return result.ToArray();
+        }
+
+        /// <summary>
+        /// Each jiggle chain as one spring per joint. The tip of a joint is its first child, else the end of the
+        /// bone, else the centre of its image, else one unit down.
+        /// </summary>
+        public static SpritePartsSetBuilder.JiggleInput[] CreateJiggles(SpriteSheetProfile profile)
+        {
+            var list = profile?.PartsJiggles;
+            if (list == null || list.Count == 0)
+                return Array.Empty<SpritePartsSetBuilder.JiggleInput>();
+            var result = new System.Collections.Generic.List<SpritePartsSetBuilder.JiggleInput>();
+            var seen = new System.Collections.Generic.HashSet<string>();
+            foreach (var c in list)
+            {
+                if (c == null || !c.Enabled || c.Mix <= 0f)
+                    continue;
+                var slot = SpritePartsAuthoringOps.FindSlot(profile, c.SlotId ?? string.Empty);
+                for (int n = 0; slot != null && n < Mathf.Clamp(c.ChainLength, 1, 8); n++)
+                {
+                    string id = SpritePartIdUtility.Canonical(slot.SlotId);
+                    var child = FirstChild(profile, id);
+                    if (seen.Add(id))
+                    {
+                        result.Add(new SpritePartsSetBuilder.JiggleInput
+                        {
+                            SlotId = id,
+                            TipLocal = JiggleTip(profile, slot, child),
+                            Stiffness = c.Stiffness,
+                            Damping = c.Damping,
+                            Gravity = c.Gravity,
+                            Mix = c.Mix,
+                        });
+                    }
+                    slot = child;
+                }
+            }
+            return result.ToArray();
+        }
+
+        static SpritePartSlotDef FirstChild(SpriteSheetProfile profile, string canonicalId)
+        {
+            foreach (var s in profile.PartsSlots)
+            {
+                if (s != null && !string.IsNullOrWhiteSpace(s.ParentSlotId) && SpritePartIdUtility.Canonical(s.ParentSlotId) == canonicalId)
+                    return s;
+            }
+            return null;
+        }
+
+        static Unity.Mathematics.float2 JiggleTip(SpriteSheetProfile profile, SpritePartSlotDef slot, SpritePartSlotDef child)
+        {
+            if (child != null && child.RestPosition.sqrMagnitude > 1e-8f)
+                return new Unity.Mathematics.float2(child.RestPosition.x, child.RestPosition.y);
+            if (slot.IsBone)
+                return new Unity.Mathematics.float2(slot.BoneLength > 1e-4f ? slot.BoneLength : 1f, 0f);
+            if (SpritePartsSkinning.TryResolveQuad(profile, slot, out var size, out var pivot))
+            {
+                var centre = (new Unity.Mathematics.float2(0.5f, 0.5f) - pivot) * size;
+                if (Unity.Mathematics.math.lengthsq(centre) > 1e-8f)
+                    return centre;
+            }
+            return new Unity.Mathematics.float2(0f, -1f);
         }
 
         public static SpritePartsSetBuilder.SlotInput[] CreateSlots(SpriteSheetProfile profile)
@@ -308,7 +372,8 @@ namespace InvertLab.Sprites.DOTS
                     System.Array.Empty<SpritePartsSetBuilder.AppearanceInput>(),
                     clips,
                     System.Array.Empty<SpritePartsSetBuilder.SkinInput>(),
-                    CreateIk(profile));
+                    CreateIk(profile),
+                    CreateJiggles(profile));
                 return true;
             }
             catch (Exception ex)
@@ -359,7 +424,8 @@ namespace InvertLab.Sprites.DOTS
                     System.Array.Empty<SpritePartsSetBuilder.AppearanceInput>(),
                     clips,
                     System.Array.Empty<SpritePartsSetBuilder.SkinInput>(),
-                    CreateIk(profile));
+                    CreateIk(profile),
+                    CreateJiggles(profile));
                 return true;
             }
             catch (Exception ex)

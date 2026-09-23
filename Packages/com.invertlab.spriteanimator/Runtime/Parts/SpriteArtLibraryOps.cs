@@ -759,6 +759,8 @@ namespace InvertLab.Sprites.DOTS
                 PartsSlots = source.PartsSlots,
                 PartsClips = source.PartsClips,
                 PartsSkins = source.PartsSkins,
+                PartsIkConstraints = source.PartsIkConstraints,
+                PartsJiggles = source.PartsJiggles,
                 ArtLibraries = source.ArtLibraries,
             };
             if (source.Sheets != null)

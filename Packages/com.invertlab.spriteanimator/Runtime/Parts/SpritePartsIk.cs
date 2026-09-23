@@ -65,7 +65,7 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>A turn in root space as a local rotation change (a mirrored parent flips its sign).</summary>
-        static void Turn(ref SpritePartsSetBlob set, int joint, float degrees, NativeArray<SpritePartsSampler.Pose> local,
+        internal static void Turn(ref SpritePartsSetBlob set, int joint, float degrees, NativeArray<SpritePartsSampler.Pose> local,
             NativeArray<float4x4> localToRoot)
         {
             if (math.abs(degrees) < 1e-6f)

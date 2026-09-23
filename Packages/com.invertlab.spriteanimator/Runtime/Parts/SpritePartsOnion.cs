@@ -108,14 +108,36 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>
-        /// Build a pose-only blob and sample all slots at time (local + root matrices).
-        /// Caller must <see cref="DisposeSample"/>.
+        /// Editor preview switch: simulate jiggle springs in <see cref="TrySampleCharacter"/>. The editor turns it
+        /// on while its preview plays; the game never reads it.
+        /// </summary>
+        public static bool PreviewPhysics;
+
+        /// <summary>
+        /// Build a pose-only blob and sample all slots at time (local + root matrices), as shown: IK and,
+        /// with <see cref="PreviewPhysics"/>, jiggle. Caller must <see cref="DisposeSample"/>.
         /// </summary>
         public static bool TrySampleCharacter(
             SpriteSheetProfile profile,
             int clipIndex,
             float timeSeconds,
             Allocator allocator,
+            out BlobAssetReference<SpritePartsSetBlob> blob,
+            out NativeArray<SpritePartsSampler.Pose> localPoses,
+            out NativeArray<float4x4> localToRoot,
+            out string error)
+            => TrySampleCharacter(profile, clipIndex, timeSeconds, allocator, false,
+                out blob, out localPoses, out localToRoot, out error);
+
+        /// <param name="keyedPose">
+        /// True: the pose the keys store (no IK, no jiggle), for writing keys. False: the pose as shown.
+        /// </param>
+        public static bool TrySampleCharacter(
+            SpriteSheetProfile profile,
+            int clipIndex,
+            float timeSeconds,
+            Allocator allocator,
+            bool keyedPose,
             out BlobAssetReference<SpritePartsSetBlob> blob,
             out NativeArray<SpritePartsSampler.Pose> localPoses,
             out NativeArray<float4x4> localToRoot,
@@ -142,8 +164,83 @@ namespace InvertLab.Sprites.DOTS
             int n = blob.Value.Slots.Length;
             localPoses = new NativeArray<SpritePartsSampler.Pose>(n, allocator);
             localToRoot = new NativeArray<float4x4>(n, allocator);
-            SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot);
+            if (keyedPose)
+                SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot,
+                    new SpritePartsEvalExtras { KeyedPoseOnly = true });
+            else if (PreviewPhysics && blob.Value.Jiggles.Length > 0)
+                EvaluateWithPhysics(profile, ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot);
+            else
+                SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot);
             return true;
+        }
+
+        const float PreviewStep = 1f / 60f;
+        static SpriteSheetProfile s_physicsProfile;
+        static int s_physicsClip = -1;
+        static float s_physicsTime = -1f;
+        static SpritePartJiggleState[] s_physicsState;
+
+        /// <summary>
+        /// Jiggle in the editor preview: carries the spring state from the last preview time forward (across a
+        /// loop too), or warms up over the second before <paramref name="time"/> when it cannot. Deterministic.
+        /// </summary>
+        static void EvaluateWithPhysics(SpriteSheetProfile profile, ref SpritePartsSetBlob set, int clip, float time,
+            NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
+        {
+            int count = set.Jiggles.Length;
+            float duration = clip >= 0 && clip < set.Clips.Length ? set.Clips[clip].Duration : 0f;
+            var states = new NativeArray<SpritePartJiggleState>(count, Allocator.Temp);
+            try
+            {
+                bool same = ReferenceEquals(profile, s_physicsProfile) && clip == s_physicsClip
+                            && s_physicsState != null && s_physicsState.Length == count;
+                float from = s_physicsTime;
+                bool wrapped = same && time < from && duration > 1e-4f && from - time > duration * 0.5f;
+                float span = wrapped ? duration - from + time : time - from;
+                if (same && span >= 0f && span <= 0.25f)
+                {
+                    states.CopyFrom(s_physicsState);
+                }
+                else
+                {
+                    from = math.max(0f, time - 1f);
+                    wrapped = false;
+                    var init = new SpritePartsEvalExtras { Jiggle = states, DeltaTime = 0f };
+                    SpritePartsPoseWriter.EvaluateEditor(ref set, clip, from, local, localToRoot, init);
+                }
+                if (wrapped)
+                {
+                    StepTo(ref set, clip, ref from, duration, states, local, localToRoot);
+                    from = 0f;
+                }
+                StepTo(ref set, clip, ref from, time, states, local, localToRoot);
+                // Final pose at exactly this time (no further motion).
+                SpritePartsPoseWriter.EvaluateEditor(ref set, clip, time, local, localToRoot,
+                    new SpritePartsEvalExtras { Jiggle = states, DeltaTime = 0f });
+                s_physicsState ??= new SpritePartJiggleState[0];
+                if (s_physicsState.Length != count)
+                    s_physicsState = new SpritePartJiggleState[count];
+                states.CopyTo(s_physicsState);
+                s_physicsProfile = profile;
+                s_physicsClip = clip;
+                s_physicsTime = time;
+            }
+            finally
+            {
+                states.Dispose();
+            }
+        }
+
+        static void StepTo(ref SpritePartsSetBlob set, int clip, ref float t, float end, NativeArray<SpritePartJiggleState> states,
+            NativeArray<SpritePartsSampler.Pose> local, NativeArray<float4x4> localToRoot)
+        {
+            while (t < end - 1e-5f)
+            {
+                float h = math.min(PreviewStep, end - t);
+                t += h;
+                SpritePartsPoseWriter.EvaluateEditor(ref set, clip, t, local, localToRoot,
+                    new SpritePartsEvalExtras { Jiggle = states, DeltaTime = h });
+            }
         }
 
         /// <summary>
