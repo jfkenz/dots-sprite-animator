@@ -173,6 +173,34 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void Merge_Joins_Vertices_At_Their_Centre_And_Keeps_Their_Edges()
+        {
+            var mesh = Draft(new Vector2(0.1f, 0.5f), new Vector2(0.4f, 0.5f), new Vector2(0.6f, 0.5f), new Vector2(0.9f, 0.5f));
+            SpritePartsMeshOps.TryConnectGraph(mesh, 0, 1, false);
+            SpritePartsMeshOps.TryConnectGraph(mesh, 1, 2, false);
+            SpritePartsMeshOps.TryConnectGraph(mesh, 2, 3, false);
+            Assert.IsTrue(SpritePartsMeshOps.TryMergeGraphVertices(mesh, new[] { 2, 1 }, out int survivor, out var remap));
+            Assert.AreEqual(3, mesh.VertexCount);
+            Assert.AreEqual(1, survivor);
+            Assert.AreEqual(-1, remap[2], "Merged away into vertex 1.");
+            Assert.AreEqual(2, remap[3]);
+            Assert.AreEqual(0.5f, mesh.Vertices[survivor].x, 1e-5f);
+            Assert.IsTrue(SpritePartsMeshOps.HasEdge(mesh, 0, 1));
+            Assert.IsTrue(SpritePartsMeshOps.HasEdge(mesh, 1, 2));
+            Assert.AreEqual(4, mesh.Edges.Length, "The edge between the merged vertices is gone.");
+        }
+
+        [Test]
+        public void Delete_Several_Vertices_Gives_One_Remap()
+        {
+            var mesh = Draft(new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.1f), new Vector2(0.9f, 0.9f), new Vector2(0.1f, 0.9f));
+            Loop(mesh, 4);
+            Assert.IsTrue(SpritePartsMeshOps.TryRemoveGraphVertices(mesh, new[] { 0, 2 }, false, out var remap));
+            CollectionAssert.AreEqual(new[] { -1, 0, -1, 1 }, remap);
+            Assert.AreEqual(0, mesh.Edges.Length);
+        }
+
+        [Test]
         public void AutoLink_Fills_The_Loop_With_Edges()
         {
             var mesh = Draft(

@@ -133,6 +133,77 @@ namespace InvertLab.Sprites.DOTS
             return true;
         }
 
+        /// <summary>Deletes several vertices (see <see cref="TryRemoveGraphVertex"/>); one remap for all of them.</summary>
+        public static bool TryRemoveGraphVertices(SpritePartMeshDef mesh, IReadOnlyCollection<int> indices, bool keepEdges, out int[] remap)
+        {
+            remap = null;
+            int n = mesh?.VertexCount ?? 0;
+            if (!IsDraft(mesh) || indices == null || indices.Count == 0)
+                return false;
+            var sorted = new List<int>();
+            foreach (int i in indices)
+            {
+                if ((uint)i < (uint)n && !sorted.Contains(i))
+                    sorted.Add(i);
+            }
+            sorted.Sort();
+            remap = Identity(n);
+            for (int k = sorted.Count - 1; k >= 0; k--)
+            {
+                if (!TryRemoveGraphVertex(mesh, sorted[k], keepEdges, out var step))
+                    return false;
+                for (int i = 0; i < n; i++)
+                    remap[i] = remap[i] >= 0 ? step[remap[i]] : -1;
+            }
+            return sorted.Count > 0;
+        }
+
+        /// <summary>
+        /// Merges vertices into one at their centre. Their edges now meet there.
+        /// <paramref name="survivor"/> is the merged vertex in the new order.
+        /// </summary>
+        public static bool TryMergeGraphVertices(SpritePartMeshDef mesh, IReadOnlyCollection<int> indices, out int survivor, out int[] remap)
+        {
+            survivor = -1;
+            remap = null;
+            int n = mesh?.VertexCount ?? 0;
+            if (!IsDraft(mesh) || indices == null)
+                return false;
+            var merge = new List<int>();
+            Vector2 centre = Vector2.zero;
+            foreach (int i in indices)
+            {
+                if ((uint)i >= (uint)n || merge.Contains(i))
+                    continue;
+                merge.Add(i);
+                centre += mesh.Vertices[i];
+            }
+            if (merge.Count < 2)
+                return false;
+            merge.Sort();
+            int keep = merge[0];
+            var verts = (Vector2[])mesh.Vertices.Clone();
+            verts[keep] = centre / merge.Count;
+            var edges = new List<int>();
+            for (int i = 0; mesh.Edges != null && i + 1 < mesh.Edges.Length; i += 2)
+            {
+                int a = merge.Contains(mesh.Edges[i]) ? keep : mesh.Edges[i];
+                int b = merge.Contains(mesh.Edges[i + 1]) ? keep : mesh.Edges[i + 1];
+                if (a != b && !ContainsEdge(edges, a, b))
+                {
+                    edges.Add(a);
+                    edges.Add(b);
+                }
+            }
+            mesh.Vertices = verts;
+            mesh.Edges = edges.ToArray();
+            merge.RemoveAt(0);
+            if (!TryRemoveGraphVertices(mesh, merge, false, out remap))
+                return false;
+            survivor = remap[keep];
+            return true;
+        }
+
         /// <summary>
         /// Joins <paramref name="from"/> to <paramref name="to"/>. <paramref name="cut"/>: every edge the
         /// line crosses gains a vertex at the crossing and the new edge runs through them (Shift in AnyPortrait).

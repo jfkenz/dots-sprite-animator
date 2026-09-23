@@ -22,6 +22,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         int _partsMeshPen = -1;
+        bool _partsCreateClickPending;
+        bool _partsCreateClickShift;
         [SerializeField] PartsCreateMode _partsCreateMode = PartsCreateMode.VertexEdge;
 
         string MeshFullMessage()
@@ -64,16 +66,54 @@ namespace InvertLab.Sprites.DOTS.Editor
             return true;
         }
 
-        void CreateLeftClick(Rect sprite, Event evt, int controlId, SpritePartMeshDef mesh)
+        /// <summary>
+        /// Left press in Create. On empty space it waits: a drag draws a selection box, a plain click
+        /// adds the vertex on release (<see cref="FinishCreateBoxOrClick"/>).
+        /// </summary>
+        void CreateMouseDown(Rect sprite, Event evt, int controlId, SpritePartMeshDef mesh)
         {
             bool ctrl = evt.control || evt.command;
-            bool cut = evt.shift && !ctrl;
-            Vector2 uv = MeshGuiToUv(sprite, evt.mousePosition);
+            if (!ctrl && HitMeshVertex(sprite, mesh, evt.mousePosition) < 0
+                && !HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out _, out _))
+            {
+                _partsWarpBox = true;
+                _partsWarpBoxStart = evt.mousePosition;
+                _partsWarpBoxEnd = evt.mousePosition;
+                _partsCreateClickPending = true;
+                _partsCreateClickShift = evt.shift;
+                CapturePartsMeshDrag(controlId);
+                return;
+            }
+            CreateLeftClick(sprite, evt.mousePosition, evt.shift, ctrl, controlId, mesh);
+        }
+
+        /// <summary>Release after a press on empty space: a click adds a vertex, a drag selects.</summary>
+        void FinishCreateBoxOrClick(Rect sprite, Vector2 mouse, bool shift)
+        {
+            _partsCreateClickPending = false;
+            var mesh = MeshEditSlot()?.Mesh;
+            if (mesh == null)
+                return;
+            if ((mouse - _partsWarpBoxStart).sqrMagnitude < 36f)
+            {
+                CreateLeftClick(sprite, _partsWarpBoxStart, _partsCreateClickShift, false, 0, mesh);
+                return;
+            }
+            FinishMeshBox(sprite, mouse, shift);
+            _partsMeshPen = -1; // a selection ends the chain; right-click for Connect / Merge
+            if (_partsWarpSelection.Count > 1)
+                _status = _partsWarpSelection.Count + " selected. Right-click: connect, merge, delete. Drag one to move them all.";
+        }
+
+        void CreateLeftClick(Rect sprite, Vector2 mouse, bool shift, bool ctrl, int controlId, SpritePartMeshDef mesh)
+        {
+            bool cut = shift && !ctrl;
+            Vector2 uv = MeshGuiToUv(sprite, mouse);
             int n = mesh.VertexCount;
             int pen = (uint)_partsMeshPen < (uint)n ? _partsMeshPen : -1;
-            int hit = ctrl && n > 0 ? NearestMeshVertex(mesh, uv, pen) : HitMeshVertex(sprite, mesh, evt.mousePosition);
+            int hit = ctrl && n > 0 ? NearestMeshVertex(mesh, uv, pen) : HitMeshVertex(sprite, mesh, mouse);
             int ea = -1, eb = -1;
-            bool onEdge = hit < 0 && HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out ea, out eb);
+            bool onEdge = hit < 0 && HitMeshGraphEdge(sprite, mesh, mouse, out ea, out eb);
 
             if (_partsCreateMode == PartsCreateMode.Edge)
             {
@@ -108,6 +148,14 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (hit >= 0)
             {
+                if (shift && (pen < 0 || _partsCreateMode == PartsCreateMode.Vertex))
+                {
+                    // No chain to cut from: Shift adds to (or removes from) the selection.
+                    SelectWarpVertex(hit, true);
+                    _partsMeshPen = -1;
+                    _status = _partsWarpSelection.Count + " selected. Right-click for Connect / Merge.";
+                    return;
+                }
                 if (_partsCreateMode == PartsCreateMode.VertexEdge && pen >= 0 && pen != hit)
                 {
                     int from = pen, to = hit;
@@ -118,10 +166,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SelectOnly(to);
                     return;
                 }
-                // Pick the vertex: the chain goes on from it, and dragging moves it.
-                SelectOnly(hit);
-                _partsMeshPen = _partsCreateMode == PartsCreateMode.VertexEdge ? hit : -1;
-                BeginMeshVertexDrag(evt, controlId, mesh);
+                // Pick the vertex: the chain goes on from it, and dragging moves it (with the rest of a selection).
+                if (!_partsWarpSelection.Contains(hit) || _partsWarpSelection.Count < 2)
+                    SelectOnly(hit);
+                _partsMeshPen = _partsCreateMode == PartsCreateMode.VertexEdge && _partsWarpSelection.Count == 1 ? hit : -1;
+                BeginMeshVertexDrag(mouse, controlId, mesh);
                 _status = "Vertex " + hit + ". Drag to move" + (_partsMeshPen >= 0 ? ", or click to draw from it." : ".");
                 return;
             }
@@ -157,11 +206,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                 + ". " + (now != null && now.VertexCount >= 3 ? "Close the loop, then Make Polygons." : "Keep clicking.");
         }
 
+        /// <summary>
+        /// Right-click in Create: deletes the vertex or edge under the mouse (AnyPortrait). On a selected
+        /// vertex of a multi-selection, or on empty space, it opens the menu (Connect, Merge, ...).
+        /// </summary>
         void CreateRightClick(Rect sprite, Event evt, SpritePartMeshDef mesh)
         {
             int n = mesh.VertexCount;
             int hit = HitMeshVertex(sprite, mesh, evt.mousePosition);
-            if (hit >= 0 && _partsCreateMode != PartsCreateMode.Edge)
+            bool inSelection = hit >= 0 && _partsWarpSelection.Count > 1 && _partsWarpSelection.Contains(hit);
+            if (hit >= 0 && !inSelection && _partsCreateMode != PartsCreateMode.Edge)
             {
                 bool keep = evt.shift;
                 int[] removed = null;
@@ -186,10 +240,156 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _status = "Edge deleted.";
                 return;
             }
-            _partsMeshPen = -1;
+            if (hit >= 0 && !inSelection)
+                SelectOnly(hit);
+            ShowCreateContextMenu(mesh);
+        }
+
+        void ShowCreateContextMenu(SpritePartMeshDef mesh)
+        {
+            var menu = new GenericMenu();
+            int n = mesh.VertexCount;
+            var sel = ValidSelection(n);
+            if (sel.Count == 2)
+            {
+                int a = sel[0], b = sel[1];
+                bool joined = SpritePartsMeshOps.GraphEdges(mesh).Exists(e => (e.x == a && e.y == b) || (e.x == b && e.y == a));
+                if (joined)
+                {
+                    menu.AddItem(new GUIContent("Disconnect"), false, DisconnectSelectedGraph);
+                    menu.AddItem(new GUIContent("Add Vertex Between"), false, () => AddVertexBetween(a, b));
+                }
+                else
+                    menu.AddItem(new GUIContent("Connect"), false, () => ConnectSelectedGraph(false));
+                menu.AddItem(new GUIContent("Merge"), false, MergeSelectedGraph);
+            }
+            else if (sel.Count > 2)
+            {
+                menu.AddItem(new GUIContent("Connect As Chain"), false, () => ConnectSelectedGraph(false));
+                menu.AddItem(new GUIContent("Connect As Loop"), false, () => ConnectSelectedGraph(true));
+                menu.AddItem(new GUIContent("Disconnect"), false, DisconnectSelectedGraph);
+                menu.AddItem(new GUIContent("Merge"), false, MergeSelectedGraph);
+            }
+            if (sel.Count > 0)
+            {
+                string what = sel.Count == 1 ? "Vertex" : sel.Count + " Vertices";
+                menu.AddItem(new GUIContent("Delete " + what), false, () => DeleteSelectedGraph(false));
+                menu.AddItem(new GUIContent("Delete " + what + ", Keep Edges"), false, () => DeleteSelectedGraph(true));
+                menu.AddSeparator(string.Empty);
+            }
+            if ((uint)_partsMeshPen < (uint)n)
+                menu.AddItem(new GUIContent("End Chain (Enter)"), false, EndMeshPen);
+            menu.AddItem(new GUIContent("Select All (Ctrl+A)"), false, SelectAllMeshVertices);
+            if (sel.Count > 0)
+                menu.AddItem(new GUIContent("Deselect"), false, () =>
+                {
+                    _partsWarpSelection.Clear();
+                    _partsWarpIndex = -1;
+                    _partsMeshPen = -1;
+                    Repaint();
+                });
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Auto Link"), false, AutoLinkMeshEdges);
+            menu.AddItem(new GUIContent("Make Polygons"), false, MakeMeshPolygons);
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent("Mode/Vertex+Edge"), _partsCreateMode == PartsCreateMode.VertexEdge, () => _partsCreateMode = PartsCreateMode.VertexEdge);
+            menu.AddItem(new GUIContent("Mode/Vertex"), _partsCreateMode == PartsCreateMode.Vertex, () => _partsCreateMode = PartsCreateMode.Vertex);
+            menu.AddItem(new GUIContent("Mode/Edge"), _partsCreateMode == PartsCreateMode.Edge, () => _partsCreateMode = PartsCreateMode.Edge);
+            menu.ShowAsContext();
+        }
+
+        /// <summary>Joins the selected vertices in the order they were picked (loop: last back to first).</summary>
+        void ConnectSelectedGraph(bool loop)
+        {
+            int n = MeshEditSlot()?.Mesh?.VertexCount ?? 0;
+            var sel = ValidSelection(n);
+            if (sel.Count < 2)
+                return;
+            int made = 0;
+            EditMeshDraft(loop ? "Connect As Loop" : "Connect Vertices", w =>
+            {
+                for (int i = 0; i + 1 < sel.Count; i++)
+                    made += SpritePartsMeshOps.TryConnectGraph(w, sel[i], sel[i + 1], false) ? 1 : 0;
+                if (loop && sel.Count > 2)
+                    made += SpritePartsMeshOps.TryConnectGraph(w, sel[sel.Count - 1], sel[0], false) ? 1 : 0;
+                return made > 0 ? IdentityRemap(n) : null;
+            });
+            _status = made > 0 ? "Connected " + sel.Count + " vertices." : "Already connected.";
+            Repaint();
+        }
+
+        void DisconnectSelectedGraph()
+        {
+            int n = MeshEditSlot()?.Mesh?.VertexCount ?? 0;
+            var sel = ValidSelection(n);
+            int removed = 0;
+            EditMeshDraft("Disconnect Vertices", w =>
+            {
+                for (int i = 0; i < sel.Count; i++)
+                {
+                    for (int j = i + 1; j < sel.Count; j++)
+                        removed += SpritePartsMeshOps.TryRemoveEdge(w, sel[i], sel[j]) ? 1 : 0;
+                }
+                return removed > 0 ? IdentityRemap(n) : null;
+            });
+            _status = removed > 0 ? "Removed " + removed + " edges." : "No edges between them.";
+            Repaint();
+        }
+
+        void MergeSelectedGraph()
+        {
+            int n = MeshEditSlot()?.Mesh?.VertexCount ?? 0;
+            var sel = ValidSelection(n);
+            if (sel.Count < 2)
+                return;
+            int survivor = -1;
+            if (!EditMeshDraft("Merge Mesh Vertices", w =>
+                    SpritePartsMeshOps.TryMergeGraphVertices(w, sel, out survivor, out var remap) ? remap : null))
+            {
+                _status = "Could not merge those vertices.";
+                return;
+            }
+            SelectOnly(survivor);
+            _partsMeshPen = _partsCreateMode == PartsCreateMode.VertexEdge ? survivor : -1;
+            _partsWarpHover = -1;
+            _status = "Merged " + sel.Count + " vertices into vertex " + survivor + ".";
+            Repaint();
+        }
+
+        void AddVertexBetween(int a, int b)
+        {
+            var mesh = MeshEditSlot()?.Mesh;
+            int n = mesh?.VertexCount ?? 0;
+            if ((uint)a >= (uint)n || (uint)b >= (uint)n)
+                return;
+            Vector2 mid = (mesh.Vertices[a] + mesh.Vertices[b]) * 0.5f;
+            int added = -1;
+            if (!EditMeshDraft("Add Vertex Between", w =>
+                    SpritePartsMeshOps.TrySplitGraphEdge(w, a, b, mid, out added) ? IdentityRemap(n) : null))
+            {
+                _status = n >= SpritePartsMeshOps.MaxVertices ? MeshFullMessage() : "Could not add a vertex there.";
+                return;
+            }
+            SelectOnly(added);
+            _status = "Vertex " + added + " between " + a + " and " + b + ".";
+            Repaint();
+        }
+
+        void DeleteSelectedGraph(bool keepEdges)
+        {
+            int n = MeshEditSlot()?.Mesh?.VertexCount ?? 0;
+            var sel = ValidSelection(n);
+            if (sel.Count == 0)
+                return;
+            if (!EditMeshDraft("Delete Mesh Vertices", w =>
+                    SpritePartsMeshOps.TryRemoveGraphVertices(w, sel, keepEdges, out var remap) ? remap : null))
+                return;
             _partsWarpSelection.Clear();
             _partsWarpIndex = -1;
-            _status = "Chain ended.";
+            _partsWarpHover = -1;
+            _partsMeshPen = -1;
+            _status = "Deleted " + sel.Count + " vertices" + (keepEdges ? ", their edges joined." : ".");
+            Repaint();
         }
 
         /// <summary>Make Polygons: triangles in every closed loop of edges; the mesh is usable again.</summary>
@@ -246,12 +446,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             _status = added > 0 ? "Auto Link added " + added + " edges. Check them, then Make Polygons." : "No edges to add.";
         }
 
-        void BeginMeshVertexDrag(Event evt, int controlId, SpritePartMeshDef mesh)
+        void BeginMeshVertexDrag(Vector2 mouse, int controlId, SpritePartMeshDef mesh)
         {
             _partsMeshDrag = true;
             _partsMeshMoved = false;
             _partsMeshDragStart = mesh.Clone();
-            _partsDragStartMouse = evt.mousePosition;
+            _partsDragStartMouse = mouse;
             CapturePartsMeshDrag(controlId);
         }
 
@@ -301,7 +501,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawMeshCreatePreview(Rect sprite, SpritePartMeshDef mesh)
         {
             if (_partsMeshTool != PartsMeshTool.Create || mesh?.Vertices == null || Event.current.type != EventType.Repaint
-                || _partsMeshDrag)
+                || _partsMeshDrag || _partsWarpBox)
                 return;
             Vector2 mouseUv = _partsMeshMouseUv;
             if (mouseUv.x < -0.2f || mouseUv.x > 1.2f || mouseUv.y < -0.2f || mouseUv.y > 1.2f)

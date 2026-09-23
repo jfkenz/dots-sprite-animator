@@ -1140,7 +1140,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_partsMeshTool == PartsMeshTool.Create)
             {
-                CreateLeftClick(sprite, evt, controlId, mesh);
+                CreateMouseDown(sprite, evt, controlId, mesh);
                 evt.Use();
                 Repaint();
                 return;
@@ -1193,6 +1193,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (_partsMeshMoved)
                     EndPartsDragUndo();
                 ReleasePartsCanvasCapture();
+                _partsCreateClickPending = false;
                 _status = "Cancelled";
                 evt.Use();
                 Repaint();
@@ -1220,7 +1221,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _status = "Weights painted.";
             }
             if (_partsWarpBox && raw == EventType.MouseUp)
-                FinishMeshBox(sprite, evt.mousePosition, evt.shift);
+            {
+                if (_partsCreateClickPending)
+                    FinishCreateBoxOrClick(sprite, evt.mousePosition, evt.shift);
+                else
+                    FinishMeshBox(sprite, evt.mousePosition, evt.shift);
+            }
+            _partsCreateClickPending = false;
             if (_partsMeshEdgeFrom >= 0 && raw == EventType.MouseUp && slot?.Mesh != null)
             {
                 int to = HitMeshVertex(sprite, slot.Mesh, evt.mousePosition, _partsMeshEdgeFrom);

@@ -138,9 +138,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (GUILayout.Button(new GUIContent("Make Polygons", "Fill every closed loop of edges with triangles"), draft ? _primaryStyle : GUI.skin.button))
                 MakeMeshPolygons();
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.LabelField(draft
-                    ? "No polygons yet. Close the loop (click the first vertex), then Make Polygons."
-                    : "Right-click deletes. Shift: vertex at each crossing. Ctrl: snap. Shift+right-click keeps edges.",
+            if (draft)
+                EditorGUILayout.LabelField("No polygons yet. Close the loop (click the first vertex), then Make Polygons.",
+                    EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField(
+                "Drag on empty space: select. Shift+click: add to selection. Right-click a vertex/edge: delete; " +
+                "on a selection or empty space: Connect, Merge, Delete... Shift: vertex at each crossing. Ctrl: snap.",
                 EditorStyles.wordWrappedMiniLabel);
         }
 
