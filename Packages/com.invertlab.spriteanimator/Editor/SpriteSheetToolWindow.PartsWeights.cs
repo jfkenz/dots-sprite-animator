@@ -184,7 +184,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 starts.Add(guide.RootStart);
                 ends.Add(guide.RootEnd);
             }
-            mesh.Weights = SpritePartsSkinning.AutoWeights(verts, starts, ends);
+            mesh.Weights = SpritePartsSkinning.KeepLocked(SpritePartsSkinning.AutoWeights(verts, starts, ends),
+                mesh.Weights, mesh.BoneCount, mesh.LockedBones);
             return true;
         }
 
@@ -343,6 +344,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 mesh.Bones = names.ToArray();
                 mesh.Weights = next;
             }
+            // Lock bits follow the bones that stay.
+            int low = mesh.LockedBones & ((1 << bone) - 1);
+            int high = (mesh.LockedBones >> (bone + 1)) << bone;
+            mesh.LockedBones = mesh.BoneCount == 0 ? 0 : low | high;
             _partsWeightBone = Mathf.Clamp(_partsWeightBone, 0, Mathf.Max(0, mesh.BoneCount - 1));
             SaveDirty();
             _status = "Bone unbound.";
@@ -356,6 +361,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             RecordPartsUndo("Unbind Mesh");
             mesh.Bones = null;
             mesh.Weights = null;
+            mesh.LockedBones = 0;
             SaveDirty();
             _status = "Mesh unweighted. It follows its own part only.";
         }
@@ -386,7 +392,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (mesh == null || !mesh.HasWeights)
                 return;
             RecordPartsUndo("Smooth Weights");
-            SpritePartsSkinning.Smooth(mesh.Weights, mesh.BoneCount, mesh.Triangles, WeightTargets());
+            SpritePartsSkinning.Smooth(mesh.Weights, mesh.BoneCount, mesh.Triangles, WeightTargets(), 0.5f, mesh.LockedBones);
             SaveDirty();
             _status = "Weights smoothed.";
         }
@@ -397,29 +403,55 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (mesh == null || !mesh.HasWeights)
                 return;
             RecordPartsUndo("Prune Weights");
-            SpritePartsSkinning.Prune(mesh.Weights, mesh.BoneCount, _partsWeightPruneAt);
+            SpritePartsSkinning.Prune(mesh.Weights, mesh.BoneCount, _partsWeightPruneAt, mesh.LockedBones);
             SaveDirty();
             _status = "Pruned weights under " + Mathf.RoundToInt(_partsWeightPruneAt * 100f) + "%.";
         }
 
-        /// <summary>Add (or remove with Shift) weight for the chosen bone under the brush.</summary>
-        void PaintWeights(Rect sprite, Vector2 mouse, bool remove)
+        /// <summary>
+        /// One brush step under the mouse: Add / Remove (Shift swaps them) / Replace toward the Value for the chosen
+        /// bone, or Smooth for every bone. Locked bones never change.
+        /// </summary>
+        void PaintWeights(Rect sprite, Vector2 mouse, bool shift)
         {
             var mesh = MeshEditSlot()?.Mesh;
             if (mesh == null || !mesh.HasWeights || (uint)_partsWeightBone >= (uint)mesh.BoneCount)
                 return;
+            int bones = mesh.BoneCount;
+            int locked = mesh.LockedBones;
+            if (_partsWeightBrush != PartsWeightBrush.Smooth && SpritePartsSkinning.IsLocked(locked, _partsWeightBone))
+            {
+                _status = BoneDisplayName(mesh.Bones[_partsWeightBone]) + " is locked. Unlock it to paint its weights.";
+                return;
+            }
             float size = Mathf.Max(1f, _partsSoftSize);
             float inner = size * (1f - Mathf.Clamp01(_partsSoftFeather));
-            int bones = mesh.BoneCount;
+            var amounts = new float[mesh.VertexCount];
             for (int v = 0; v < mesh.VertexCount; v++)
             {
                 float d = Vector2.Distance(MeshUvToGui(sprite, mesh.Vertices[v]), mouse);
                 if (d >= size)
                     continue;
                 float falloff = d <= inner ? 1f : 1f - Mathf.SmoothStep(0f, 1f, (d - inner) / Mathf.Max(1e-4f, size - inner));
-                float amount = _partsWeightStrength * falloff * (remove ? -1f : 1f);
-                float current = mesh.Weights[v * bones + _partsWeightBone];
-                SpritePartsSkinning.SetWeight(mesh.Weights, bones, v, _partsWeightBone, current + amount);
+                amounts[v] = _partsWeightStrength * falloff;
+            }
+            if (_partsWeightBrush == PartsWeightBrush.Smooth)
+                SpritePartsSkinning.SmoothBy(mesh.Weights, bones, mesh.Triangles, amounts, locked);
+            else
+            {
+                for (int v = 0; v < mesh.VertexCount; v++)
+                {
+                    if (amounts[v] <= 0f)
+                        continue;
+                    float current = mesh.Weights[v * bones + _partsWeightBone];
+                    float next = _partsWeightBrush switch
+                    {
+                        PartsWeightBrush.Replace => current + (_partsWeightReplaceValue - current) * Mathf.Clamp01(amounts[v]),
+                        PartsWeightBrush.Remove => shift ? current + amounts[v] : current - amounts[v],
+                        _ => shift ? current - amounts[v] : current + amounts[v],
+                    };
+                    SpritePartsSkinning.SetWeight(mesh.Weights, bones, v, _partsWeightBone, next, locked);
+                }
             }
             if (_asset != null)
                 EditorUtility.SetDirty(_asset);
@@ -433,7 +465,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             RecordPartsUndo("Set Weights");
             foreach (int v in targets)
-                SpritePartsSkinning.SetWeight(mesh.Weights, mesh.BoneCount, v, _partsWeightBone, value);
+                SpritePartsSkinning.SetWeight(mesh.Weights, mesh.BoneCount, v, _partsWeightBone, value, mesh.LockedBones);
             SaveDirty();
         }
 
@@ -460,23 +492,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             var guides = MeshEditBoneGuides(slot);
             int bones = mesh?.BoneCount ?? 0;
 
-            if (mesh != null && mesh.HasWeights && (uint)_partsWeightBone < (uint)bones)
-            {
-                // Heat map of the chosen bone: blue = 0%, red = 100%.
-                Handles.BeginGUI();
-                for (int t = 0; t + 2 < mesh.Triangles.Length; t += 3)
-                {
-                    int a = mesh.Triangles[t], b = mesh.Triangles[t + 1], c = mesh.Triangles[t + 2];
-                    float w = (mesh.Weights[a * bones + _partsWeightBone] + mesh.Weights[b * bones + _partsWeightBone]
-                               + mesh.Weights[c * bones + _partsWeightBone]) / 3f;
-                    var col = Color.Lerp(new Color(0.1f, 0.25f, 1f), new Color(1f, 0.15f, 0.1f), w);
-                    col.a = 0.45f;
-                    Handles.color = col;
-                    Handles.DrawAAConvexPolygon(
-                        MeshUvToGui(sprite, mesh.Vertices[a]), MeshUvToGui(sprite, mesh.Vertices[b]), MeshUvToGui(sprite, mesh.Vertices[c]));
-                }
-                Handles.EndGUI();
-            }
+            if (mesh != null && mesh.HasWeights)
+                DrawWeightColors(sprite, mesh);
 
             foreach (var g in guides)
             {
@@ -499,17 +516,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUI.Label(new Rect(a.x + 8f, a.y - 8f, 120f, 16f), g.name, _mutedStyle);
             }
 
-            if (mesh != null && mesh.HasWeights && (uint)_partsWarpHover < (uint)mesh.VertexCount)
+            if (mesh != null && mesh.HasWeights)
             {
-                var parts = new List<string>();
-                for (int b = 0; b < bones; b++)
-                {
-                    float w = mesh.Weights[_partsWarpHover * bones + b];
-                    if (w >= 0.005f)
-                        parts.Add(mesh.Bones[b] + " " + Mathf.RoundToInt(w * 100f) + "%");
-                }
-                Vector2 p = MeshUvToGui(sprite, mesh.Vertices[_partsWarpHover]);
-                GUI.Label(new Rect(p.x + 10f, p.y + 6f, 260f, 16f), string.Join("  ", parts), _mutedStyle);
+                DrawWeightPies(sprite, mesh);
+                DrawWeightHover(sprite, mesh);
             }
         }
 
@@ -556,21 +566,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUILayout.Label("WEIGHTS", _sectionStyle);
             if (!mesh.HasWeights)
                 EditorGUILayout.LabelField("Unweighted: the mesh follows this part only.", _mutedStyle);
-            for (int b = 0; b < mesh.BoneCount; b++)
-            {
-                EditorGUILayout.BeginHorizontal();
-                var swatch = GUILayoutUtility.GetRect(12f, 18f, GUILayout.Width(12f));
-                EditorGUI.DrawRect(new Rect(swatch.x, swatch.y + 4f, 10f, 10f), BoneColor(b));
-                bool on = b == _partsWeightBone;
-                if (GUILayout.Toggle(on, mesh.Bones[b], EditorStyles.miniButton) && !on)
-                    _partsWeightBone = b;
-                if (GUILayout.Button(new GUIContent("x", "Unbind this bone"), GUILayout.Width(22f)))
-                {
-                    UnbindWeightBone(b);
-                    GUIUtility.ExitGUI();
-                }
-                EditorGUILayout.EndHorizontal();
-            }
+            DrawWeightBoneRows(mesh);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button(new GUIContent("Bind Bone", "Bind a part joint; weights are computed automatically."), GUILayout.Height(20f)))
             {
@@ -628,7 +624,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 MirrorWeightsCommand(false);
             EditorGUILayout.EndHorizontal();
 
-            _partsWeightStrength = EditorGUILayout.Slider(new GUIContent("Brush Strength", "Weight added per brush step."), _partsWeightStrength, 0.01f, 1f);
+            DrawWeightViewOptions();
+            _partsWeightStrength = EditorGUILayout.Slider(new GUIContent("Brush Strength", "How much each brush step changes."), _partsWeightStrength, 0.01f, 1f);
             _partsSoftSize = EditorGUILayout.Slider(new GUIContent("Brush Size", "Pixels. Shared with Soft Selection."), _partsSoftSize, 5f, 400f);
 
             var targets = WeightTargets();
@@ -646,12 +643,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 avg = count > 0 ? avg / count : 0f;
                 EditorGUI.BeginChangeCheck();
                 float value = EditorGUILayout.Slider(
-                    new GUIContent("Direct: " + mesh.Bones[_partsWeightBone], "Exact weight of the chosen bone on the selected vertices."),
+                    new GUIContent("Direct: " + BoneDisplayName(mesh.Bones[_partsWeightBone]), "Exact weight of the chosen bone on the selected vertices."),
                     avg, 0f, 1f);
                 if (EditorGUI.EndChangeCheck())
                     SetSelectedWeight(value);
             }
-            EditorGUILayout.LabelField("Edit Mesh > 4 Weights: drag paints (Shift removes). Click a joint to bind or pick it.", _mutedStyle);
+            EditorGUILayout.LabelField("Edit Mesh > 4 Weights: drag to brush (Shift swaps Add and Remove). Click a joint to bind or pick it. Hover a vertex for its split.", _mutedStyle);
         }
     }
 }

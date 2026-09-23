@@ -172,21 +172,98 @@ namespace InvertLab.Sprites.DOTS
             }
         }
 
-        /// <summary>Spine Prune: drops influences below <paramref name="threshold"/> and renormalizes.</summary>
-        public static void Prune(float[] weights, int bones, float threshold)
+        /// <summary>
+        /// Spine Prune: drops influences below <paramref name="threshold"/> and renormalizes. Locked bones
+        /// (bit b of <paramref name="locked"/>) keep their weights; the others share what is left.
+        /// </summary>
+        public static void Prune(float[] weights, int bones, float threshold, int locked = 0)
         {
             if (weights == null || bones <= 0)
                 return;
-            for (int i = 0; i < weights.Length; i++)
+            if (locked == 0)
             {
-                if (weights[i] < threshold)
-                    weights[i] = 0f;
+                for (int i = 0; i < weights.Length; i++)
+                {
+                    if (weights[i] < threshold)
+                        weights[i] = 0f;
+                }
+                Normalize(weights, bones);
+                return;
             }
-            Normalize(weights, bones);
+            for (int row = 0; row + bones <= weights.Length; row += bones)
+            {
+                int strongest = -1;
+                for (int b = 0; b < bones; b++)
+                {
+                    if (IsLocked(locked, b))
+                        continue;
+                    if (strongest < 0 || weights[row + b] > weights[row + strongest])
+                        strongest = b;
+                }
+                for (int b = 0; b < bones; b++)
+                {
+                    if (!IsLocked(locked, b) && weights[row + b] < threshold)
+                        weights[row + b] = 0f;
+                }
+                RescaleUnlocked(weights, row, bones, locked, strongest);
+            }
+        }
+
+        public static bool IsLocked(int locked, int bone) => bone >= 0 && bone < 32 && (locked & (1 << bone)) != 0;
+
+        /// <summary>
+        /// Scales the unlocked weights of one row so the row sums to 1 around the locked ones. With nothing left
+        /// on the unlocked bones, <paramref name="fallback"/> takes the rest.
+        /// </summary>
+        static void RescaleUnlocked(float[] weights, int row, int bones, int locked, int fallback)
+        {
+            float lockedSum = 0f, free = 0f;
+            for (int b = 0; b < bones; b++)
+            {
+                float w = weights[row + b] = math.max(0f, weights[row + b]);
+                if (IsLocked(locked, b)) lockedSum += w;
+                else free += w;
+            }
+            float room = math.max(0f, 1f - lockedSum);
+            if (free > 1e-8f)
+            {
+                for (int b = 0; b < bones; b++)
+                {
+                    if (!IsLocked(locked, b))
+                        weights[row + b] *= room / free;
+                }
+            }
+            else if ((uint)fallback < (uint)bones)
+                weights[row + fallback] = room;
+        }
+
+        /// <summary>
+        /// Auto weights with locks: the locked bones keep their old weights and the fresh weights of the others
+        /// are scaled into what is left.
+        /// </summary>
+        public static float[] KeepLocked(float[] fresh, float[] old, int bones, int locked)
+        {
+            if (locked == 0 || old == null || fresh == null || old.Length != fresh.Length)
+                return fresh;
+            var result = (float[])fresh.Clone();
+            for (int row = 0; row + bones <= result.Length; row += bones)
+            {
+                int strongest = -1;
+                for (int b = 0; b < bones; b++)
+                {
+                    if (IsLocked(locked, b))
+                        result[row + b] = old[row + b];
+                    else if (strongest < 0 || fresh[row + b] > fresh[row + strongest])
+                        strongest = b;
+                }
+                RescaleUnlocked(result, row, bones, locked, strongest);
+            }
+            return result;
         }
 
         /// <summary>Spine Smooth: averages each chosen vertex with its triangle neighbours.</summary>
-        public static void Smooth(float[] weights, int bones, int[] triangles, IReadOnlyCollection<int> only, float amount = 0.5f)
+        public static void Smooth(float[] weights, int bones, int[] triangles, IReadOnlyCollection<int> only, float amount = 0.5f,
+            int locked = 0)
         {
             if (weights == null || bones <= 0 || triangles == null)
                 return;
@@ -213,46 +290,90 @@ namespace InvertLab.Sprites.DOTS
                     continue;
                 if (neighbours[v].Count == 0)
                     continue;
+                int strongest = -1;
                 for (int b = 0; b < bones; b++)
                 {
+                    if (IsLocked(locked, b))
+                        continue;
                     float avg = 0f;
                     foreach (int u in neighbours[v])
                         avg += source[u * bones + b];
                     avg /= neighbours[v].Count;
                     weights[v * bones + b] = math.lerp(source[v * bones + b], avg, amount);
+                    if (strongest < 0 || weights[v * bones + b] > weights[v * bones + strongest])
+                        strongest = b;
                 }
+                if (locked != 0)
+                    RescaleUnlocked(weights, v * bones, bones, locked, strongest);
             }
-            Normalize(weights, bones);
+            if (locked == 0)
+                Normalize(weights, bones);
+        }
+
+        /// <summary>
+        /// Smooth with a per-vertex amount (a brush): each vertex moves toward its neighbours' average by
+        /// <paramref name="amounts"/>[v]. Locked bones stay.
+        /// </summary>
+        public static void SmoothBy(float[] weights, int bones, int[] triangles, float[] amounts, int locked = 0)
+        {
+            if (weights == null || amounts == null || bones <= 0)
+                return;
+            var only = new List<int>();
+            for (int v = 0; v < amounts.Length; v++)
+            {
+                if (amounts[v] > 1e-4f)
+                    only.Add(v);
+            }
+            if (only.Count == 0)
+                return;
+            var before = (float[])weights.Clone();
+            Smooth(weights, bones, triangles, only, 1f, locked);
+            foreach (int v in only)
+            {
+                float t = math.saturate(amounts[v]);
+                for (int b = 0; b < bones; b++)
+                    weights[v * bones + b] = math.lerp(before[v * bones + b], weights[v * bones + b], t);
+            }
         }
 
         /// <summary>
         /// Sets one bone's weight on a vertex and rescales the others so the row still sums to 1
         /// (Spine Direct / Add / Remove).
         /// </summary>
-        public static void SetWeight(float[] weights, int bones, int vertex, int bone, float value)
+        public static void SetWeight(float[] weights, int bones, int vertex, int bone, float value, int locked = 0)
         {
-            if (weights == null || (uint)bone >= (uint)bones)
+            if (weights == null || (uint)bone >= (uint)bones || IsLocked(locked, bone))
                 return;
             int row = vertex * bones;
             if (row < 0 || row + bones > weights.Length)
                 return;
-            value = math.saturate(value);
-            float others = 0f;
-            for (int b = 0; b < bones; b++)
-            {
-                if (b != bone)
-                    others += weights[row + b];
-            }
-            float rest = 1f - value;
+            // Locked bones keep theirs; the chosen bone and the other free bones share the rest.
+            float lockedSum = 0f, others = 0f;
+            int free = 0;
             for (int b = 0; b < bones; b++)
             {
                 if (b == bone)
                     continue;
-                weights[row + b] = others > 1e-8f
-                    ? weights[row + b] / others * rest
-                    : bones > 1 ? rest / (bones - 1) : 0f;
+                if (IsLocked(locked, b))
+                    lockedSum += weights[row + b];
+                else
+                {
+                    others += weights[row + b];
+                    free++;
+                }
             }
-            weights[row + bone] = bones == 1 ? 1f : value;
+            float room = math.max(0f, 1f - lockedSum);
+            value = math.clamp(value, 0f, room);
+            if (free == 0)
+                value = room; // nothing else can take the rest
+            float rest = room - value;
+            for (int b = 0; b < bones; b++)
+            {
+                if (b == bone || IsLocked(locked, b))
+                    continue;
+                weights[row + b] = others > 1e-8f ? weights[row + b] / others * rest : rest / free;
+            }
+            weights[row + bone] = value;
         }
 
         /// <summary>
