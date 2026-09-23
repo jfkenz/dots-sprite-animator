@@ -94,6 +94,88 @@ namespace InvertLab.Sprites.DOTS
             return result;
         }
 
+        /// <summary>
+        /// Stretches (factor &gt; 1) or squeezes the keys' times around <paramref name="pivot"/>: t' = pivot + (t - pivot) x factor,
+        /// kept inside the clip and snapped to frames; keys landing together merge.
+        /// </summary>
+        public static KeyEditResult ScaleKeyTimes(SpriteSheetProfile profile, int clipIndex, ICollection<SpritePartsKeyDef> keys,
+            float pivot, float factor, float snapFps)
+        {
+            var result = new KeyEditResult();
+            var clip = GetClip(profile, clipIndex);
+            if (clip == null || keys == null || keys.Count == 0 || !(factor > 0f) || float.IsInfinity(factor))
+            {
+                result.Reason = "Select keys and a scale above 0.";
+                return result;
+            }
+            float duration = Mathf.Max(1e-3f, clip.Duration);
+            var moved = new List<SpritePartsKeyDef>();
+            foreach (var key in keys)
+            {
+                if (key == null) continue;
+                key.Time = SnapTime(Mathf.Clamp(pivot + (key.Time - pivot) * factor, 0f, duration), snapFps, duration);
+                moved.Add(key);
+            }
+            MergeSameTrackTimeCollisions(clip, moved);
+            result.Ok = true;
+            result.Affected = moved.Count;
+            return result;
+        }
+
+        /// <summary>
+        /// Spine's Offset: the selected keys of each part move <paramref name="step"/> seconds more than the previous
+        /// part's (part order = <paramref name="slotOrder"/>), for overlapping motion. Loop clips wrap keys around the
+        /// end; Once clips clamp. Keys landing together merge.
+        /// </summary>
+        public static KeyEditResult OffsetKeysByPart(SpriteSheetProfile profile, int clipIndex, ICollection<SpritePartsKeyDef> keys,
+            IList<string> slotOrder, float step, float snapFps)
+        {
+            var result = new KeyEditResult();
+            var clip = GetClip(profile, clipIndex);
+            if (clip?.Tracks == null || keys == null || keys.Count == 0 || slotOrder == null)
+            {
+                result.Reason = "Select keys on two or more parts.";
+                return result;
+            }
+            float duration = Mathf.Max(1e-3f, clip.Duration);
+            bool loop = clip.WrapMode != (byte)SpritePartsWrap.Once;
+            var set = keys as HashSet<SpritePartsKeyDef> ?? new HashSet<SpritePartsKeyDef>(keys);
+            var moved = new List<SpritePartsKeyDef>();
+            int rank = 0;
+            foreach (string slotId in slotOrder)
+            {
+                string id = SpritePartIdUtility.Canonical(slotId);
+                bool any = false;
+                foreach (var track in clip.Tracks)
+                {
+                    if (track?.Keys == null || SpritePartIdUtility.Canonical(track.SlotId) != id)
+                        continue;
+                    foreach (var key in track.Keys)
+                    {
+                        if (key == null || !set.Contains(key))
+                            continue;
+                        float t = key.Time + rank * step;
+                        if (loop)
+                        {
+                            t %= duration;
+                            if (t < 0f) t += duration;
+                        }
+                        key.Time = SnapTime(Mathf.Clamp(t, 0f, duration), snapFps, duration);
+                        moved.Add(key);
+                        any = true;
+                    }
+                }
+                if (any)
+                    rank++;
+            }
+            MergeSameTrackTimeCollisions(clip, moved);
+            result.Ok = moved.Count > 0;
+            result.Affected = moved.Count;
+            if (!result.Ok)
+                result.Reason = "No selected keys on those parts.";
+            return result;
+        }
+
         /// <summary>After a drag: keys that landed on the same time merge (the moved ones win on their channels).</summary>
         public static void MergeKeyCollisions(SpriteSheetProfile profile, int clipIndex, IList<SpritePartsKeyDef> moved)
         {

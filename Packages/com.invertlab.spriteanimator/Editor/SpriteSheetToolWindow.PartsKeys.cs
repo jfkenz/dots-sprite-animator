@@ -367,6 +367,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 CopySelectedPartsKeys();
             });
+            if (_partsSelectedKeys.Count >= 2)
+            {
+                menu.AddSeparator(string.Empty);
+                AddPartsKeyTimingMenu(menu);
+            }
             menu.ShowAsContext();
         }
 

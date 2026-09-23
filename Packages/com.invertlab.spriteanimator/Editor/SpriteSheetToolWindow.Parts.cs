@@ -537,6 +537,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 _partsPreviewTime = SpritePartsSampler.WrapTime(_partsPreviewTime, duration, clip.WrapMode);
             }
+            ApplyPartsRange(duration);
             }
             finally
             {
@@ -2421,6 +2422,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             // Jiggle springs move only while the preview plays, so a paused frame shows exactly what is keyed.
             SpritePartsOnion.PreviewPhysics = _partsPlaying && _partsPhysicsPreview;
+            SpritePartsOnion.PreviewStepped = _partsSteppedPreview;
             if (_profile?.PartsSlots == null || _profile.PartsSlots.Count == 0)
             {
                 GUI.Label(new Rect(canvas.x + 12f, canvas.y + 12f, canvas.width - 24f, 40f),
@@ -5611,6 +5613,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             DrawPartsChannelFilter(new Rect(rect.x + 446f, appY, 330f, 16f));
+            DrawPartsDopesheetToggles(new Rect(rect.x + 780f, appY, 160f, 16f));
             float tracksTop = rect.y + 48f;
             float tracksHeight = rect.height - 54f;
             var tracksRect = new Rect(rect.x + 8f, tracksTop, rect.width - 16f, tracksHeight);
@@ -5741,6 +5744,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!HandlePartsEventMarkers(scrubRect, clip, duration))
                 HandlePartsTimelineScrub(scrubRect, duration, scrubControlId);
             DrawPartsTimelineRuler(rulerRect, labelW, duration);
+            DrawPartsRange(scrubRect, duration);
             DrawPartsEventMarkers(scrubRect, clip, duration);
 
             var evt = Event.current;

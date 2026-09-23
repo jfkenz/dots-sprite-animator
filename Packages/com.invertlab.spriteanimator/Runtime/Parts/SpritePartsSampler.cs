@@ -43,6 +43,12 @@ namespace InvertLab.Sprites.DOTS
         internal static void SampleSlot(
             ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds, bool wrap,
             out Pose pose)
+            => SampleSlot(ref set, clipIndex, slotIndex, timeSeconds, wrap, false, out pose);
+
+        /// <param name="stepped">True: hold each key's pose until the next key (pose-to-pose blocking preview).</param>
+        internal static void SampleSlot(
+            ref SpritePartsSetBlob set, int clipIndex, int slotIndex, float timeSeconds, bool wrap, bool stepped,
+            out Pose pose)
         {
             ref var slot = ref set.Slots[slotIndex];
             pose = new Pose
@@ -71,13 +77,13 @@ namespace InvertLab.Sprites.DOTS
             // Each channel blends between the keys that hold it (Spine timelines): a rotation key does not pin
             // the position, so each channel keeps its own timing. Held before its first and after its last key.
             if (Span(ref track, SpritePartsKeyChannel.Position, time, out int a, out int b, out float u))
-                pose.Position = math.lerp(track.Keys[a].Position, track.Keys[b].Position, u);
+                pose.Position = math.lerp(track.Keys[a].Position, track.Keys[b].Position, stepped ? 0f : u);
             if (Span(ref track, SpritePartsKeyChannel.Rotation, time, out a, out b, out u))
-                pose.Rotation = LerpAngleShortest(track.Keys[a].Rotation, track.Keys[b].Rotation, u);
+                pose.Rotation = LerpAngleShortest(track.Keys[a].Rotation, track.Keys[b].Rotation, stepped ? 0f : u);
             if (Span(ref track, SpritePartsKeyChannel.Scale, time, out a, out b, out u))
-                pose.Scale = math.lerp(track.Keys[a].Scale, track.Keys[b].Scale, u);
+                pose.Scale = math.lerp(track.Keys[a].Scale, track.Keys[b].Scale, stepped ? 0f : u);
             if (Span(ref track, SpritePartsKeyChannel.Deform, time, out a, out b, out u))
-                SpritePartsLattice.ApplyDeform(ref pose.Lattice, track.Keys[a].Deform, track.Keys[b].Deform, u);
+                SpritePartsLattice.ApplyDeform(ref pose.Lattice, track.Keys[a].Deform, track.Keys[b].Deform, stepped ? 0f : u);
         }
 
         /// <summary>

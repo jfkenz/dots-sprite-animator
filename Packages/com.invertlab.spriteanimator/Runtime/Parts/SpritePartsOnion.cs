@@ -113,6 +113,9 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static bool PreviewPhysics;
 
+        /// <summary>Editor preview switch: stepped playback (each key's pose held until the next key).</summary>
+        public static bool PreviewStepped;
+
         /// <summary>Editor preview values of control parameters, by name. Missing = the parameter's default.</summary>
         public static readonly Dictionary<string, float> PreviewParams = new Dictionary<string, float>();
 
@@ -180,7 +183,7 @@ namespace InvertLab.Sprites.DOTS
                     EvaluateWithPhysics(profile, ref blob.Value, clipIndex, timeSeconds, values, localPoses, localToRoot);
                 else
                     SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, clipIndex, timeSeconds, localPoses, localToRoot,
-                        new SpritePartsEvalExtras { ParamValues = values });
+                        new SpritePartsEvalExtras { ParamValues = values, Stepped = PreviewStepped });
             }
             finally
             {

@@ -25,6 +25,8 @@ namespace InvertLab.Sprites.DOTS
         public NativeArray<float> ParamValues;
         /// <summary>Cut clipped parts to their masks (the game). The editor clips only when it draws art.</summary>
         public bool Clip;
+        /// <summary>Hold each key's pose until the next key (editor blocking preview).</summary>
+        public bool Stepped;
     }
 
     /// <summary>

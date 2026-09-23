@@ -163,7 +163,7 @@ namespace InvertLab.Sprites.DOTS
 
             for (int i = 0; i < n; i++)
             {
-                SpritePartsSampler.SampleSlot(ref set, player.ClipIndex, i, player.TimeSeconds, out var pose);
+                SpritePartsSampler.SampleSlot(ref set, player.ClipIndex, i, player.TimeSeconds, true, extras.Stepped, out var pose);
                 if (player.PreviousClipIndex >= 0 && incoming < 1f)
                 {
                     SpritePartsSampler.SampleSlot(
