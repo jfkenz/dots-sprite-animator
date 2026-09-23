@@ -76,6 +76,7 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.IsTrue(shader.isSupported, shaderName);
             var mat = new Material(shader);
             using var buffer = new ComputeBuffer(2, gpu ? SpriteGpuAnimResources.Stride : SpriteRenderResources.Stride);
+            using var warp = new ComputeBuffer(1, sizeof(float) * 2);
             if (gpu)
                 buffer.SetData(new[]
                 {
@@ -90,6 +91,11 @@ namespace InvertLab.Sprites.DOTS.Tests
                 });
             mat.SetTexture("_MainTex", texture);
             mat.SetBuffer("_InstanceData", buffer);
+            if (!gpu)
+            {
+                mat.SetBuffer("_WarpOffsets", warp);
+                mat.SetFloat("_WarpResolution", 0f);
+            }
             mat.SetFloat("_LayoutXy", 1);
             mat.SetFloat("_CellAspect", 1);
             mat.SetFloat("_Cutoff", 0); // zero alpha must be discarded even with cutoff disabled

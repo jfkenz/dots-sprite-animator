@@ -812,6 +812,15 @@ namespace InvertLab.Sprites.DOTS
                 AddComponent(em, part, new PostTransformMatrix { Value = scaleMatrix }, commands, deferred);
             else
                 em.SetComponentData(part, new PostTransformMatrix { Value = scaleMatrix });
+
+            var lattice = new SpritePartLattice { Value = pose.Lattice };
+            if (!em.HasComponent<SpritePartLattice>(part))
+            {
+                if (!pose.Lattice.IsIdentity)
+                    AddComponent(em, part, lattice, commands, deferred);
+            }
+            else
+                em.SetComponentData(part, lattice);
         }
 
         public static void ApplyFacing(EntityManager em, Entity root)

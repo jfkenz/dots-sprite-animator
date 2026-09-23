@@ -70,6 +70,53 @@ namespace InvertLab.Sprites.DOTS
         public string GroupId = string.Empty;
         /// <summary>Optional outfit role for Apply Outfit. None = ignored by role mapping.</summary>
         public SpritePartSemanticRole SemanticRole;
+        /// <summary>Setup mesh. Empty = the part draws as a rigid rectangle.</summary>
+        public SpritePartMeshDef Mesh = new SpritePartMeshDef();
+    }
+
+    /// <summary>
+    /// Setup mesh of one part, the same model as a Spine mesh attachment.
+    /// Vertices are texture coordinates of the part image (0..1, y up) and also the rest shape.
+    /// The first <see cref="HullCount"/> vertices are the outline in order; the rest sit inside it.
+    /// Triangles are generated from the hull, the interior vertices and <see cref="Edges"/>.
+    /// Animation only stores per-vertex offsets (<see cref="SpritePartsKeyDef.Deform"/>).
+    /// </summary>
+    [Serializable]
+    public class SpritePartMeshDef
+    {
+        public Vector2[] Vertices;
+        public int HullCount;
+        /// <summary>Index pairs the triangulation must keep, besides the hull outline.</summary>
+        public int[] Edges;
+        public int[] Triangles;
+        /// <summary>
+        /// Spine weights: slot ids this mesh is bound to (the bones). Empty = unweighted,
+        /// the mesh just follows its own part.
+        /// </summary>
+        public string[] Bones;
+        /// <summary>Per vertex, one weight per bone: <c>Weights[vertex * Bones.Length + bone]</c>, each row sums to 1.</summary>
+        public float[] Weights;
+
+        public int VertexCount => Vertices?.Length ?? 0;
+
+        public bool HasMesh =>
+            Vertices != null && Vertices.Length >= 3 && HullCount >= 3 &&
+            Triangles != null && Triangles.Length >= 3;
+
+        public int BoneCount => Bones?.Length ?? 0;
+
+        public bool HasWeights =>
+            BoneCount > 0 && Weights != null && Weights.Length == VertexCount * BoneCount;
+
+        public SpritePartMeshDef Clone() => new SpritePartMeshDef
+        {
+            Vertices = Vertices == null ? null : (Vector2[])Vertices.Clone(),
+            HullCount = HullCount,
+            Edges = Edges == null ? null : (int[])Edges.Clone(),
+            Triangles = Triangles == null ? null : (int[])Triangles.Clone(),
+            Bones = Bones == null ? null : (string[])Bones.Clone(),
+            Weights = Weights == null ? null : (float[])Weights.Clone(),
+        };
     }
 
     /// <summary>
@@ -111,6 +158,11 @@ namespace InvertLab.Sprites.DOTS
         public Vector2 Position = Vector2.zero;
         public float Rotation;
         public Vector2 Scale = Vector2.one;
+        /// <summary>
+        /// Deform key: one offset per vertex of the slot's <see cref="SpritePartSlotDef.Mesh"/>,
+        /// in unit-quad space. Null or a different vertex count = the setup mesh, undeformed.
+        /// </summary>
+        public Vector2[] Deform;
         public byte EaseMode = (byte)SpriteEaseMode.Linear;
         /// <summary>
         /// Optional. Empty = hold previous keyed appearance (or skin/default when none active).

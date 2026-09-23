@@ -100,7 +100,16 @@ namespace InvertLab.Sprites.DOTS
                     DrawRank = s.DrawRank,
                     Hidden = SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
                         ? (byte)1 : (byte)0,
+                    Mesh = SpritePartsLattice.FromMesh(s.Mesh),
                 };
+                if (s.Mesh != null && s.Mesh.HasWeights
+                    && SpritePartsSkinning.TryResolveQuad(profile, s, out var quadSize, out var quadPivot))
+                {
+                    result[i].SkinBones = s.Mesh.Bones;
+                    result[i].SkinWeights = s.Mesh.Weights;
+                    result[i].SkinQuadSize = quadSize;
+                    result[i].SkinQuadPivot = quadPivot;
+                }
             }
             return result;
         }
@@ -173,6 +182,7 @@ namespace InvertLab.Sprites.DOTS
                             Scale = new float2(key.Scale.x, key.Scale.y),
                             EaseMode = key.EaseMode,
                             AppearanceId = appearanceId,
+                            Deform = SpritePartsLattice.DeformFromArray(key.Deform, key.Deform?.Length ?? 0),
                         };
                     }
                     kept.Add(new SpritePartsSetBuilder.TrackInput

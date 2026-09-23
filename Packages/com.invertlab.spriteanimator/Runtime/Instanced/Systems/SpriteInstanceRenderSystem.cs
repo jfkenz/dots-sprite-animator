@@ -41,6 +41,7 @@ namespace InvertLab.Sprites.DOTS
         public float4 Flip;       // xy = flip flags, zw = normalized pivot
         public float4 Transform2; // xy = entity scale (world), z = entity rotation radians, w = reserved
         public float4 Color;      // rgba tint
+        public float4 WarpMeta;   // x = polygon vertex count (0 = rigid quad), y = scratch index, z = index count
     }
 
     /// <summary>
@@ -50,11 +51,61 @@ namespace InvertLab.Sprites.DOTS
     /// </summary>
     public static class SpriteRenderResources
     {
-        public const int Stride = 96; // 6 * float4
+        public const int Stride = 112; // 7 * float4 (rigid quad; warp points live in WarpScratch)
 
         public static NativeArray<SpriteInstanceData> Staging;  // pack target (indexed by entity)
         public static NativeArray<SpriteInstanceData> Sorted;   // scatter target (grouped by record)
-        public static NativeArray<int> RecordIds;               // record index per packed instance
+        public static NativeArray<int> RecordIds;
+        public static NativeArray<float2> WarpScratch;
+        public static NativeArray<float2> WarpUvScratch;
+        public static NativeArray<int> WarpIndexScratch;
+        public static ComputeBuffer WarpDummy;
+        public static ComputeBuffer WarpInstances;
+        public static ComputeBuffer WarpPoints;
+        public static int WarpInstanceCapacity;
+        public static int WarpPointCapacity;
+        public static Mesh WarpCombined;
+        public static Material WarpMeshMaterial;
+
+        public static void DestroyWarpResources()
+        {
+            if (WarpScratch.IsCreated) WarpScratch.Dispose();
+            if (WarpUvScratch.IsCreated) WarpUvScratch.Dispose();
+            if (WarpIndexScratch.IsCreated) WarpIndexScratch.Dispose();
+            WarpScratch = default;
+            WarpUvScratch = default;
+            WarpIndexScratch = default;
+            WarpDummy?.Dispose();
+            WarpInstances?.Dispose();
+            WarpPoints?.Dispose();
+            WarpDummy = null;
+            WarpInstances = null;
+            WarpPoints = null;
+            WarpInstanceCapacity = 0;
+            WarpPointCapacity = 0;
+            SpriteRenderResourceLifetimeSystem.DestroyOwnedObject(WarpCombined);
+            SpriteRenderResourceLifetimeSystem.DestroyOwnedObject(WarpMeshMaterial);
+            WarpCombined = null;
+            WarpMeshMaterial = null;
+        }
+
+        public static void EnsureWarpBuffers(int instances, int points)
+        {
+            if (WarpDummy == null)
+                WarpDummy = new ComputeBuffer(1, sizeof(float) * 2);
+            if (WarpInstances == null || instances > WarpInstanceCapacity)
+            {
+                WarpInstances?.Dispose();
+                WarpInstanceCapacity = math.max(64, instances);
+                WarpInstances = new ComputeBuffer(WarpInstanceCapacity, Stride);
+            }
+            if (WarpPoints == null || points > WarpPointCapacity)
+            {
+                WarpPoints?.Dispose();
+                WarpPointCapacity = math.max(64, points);
+                WarpPoints = new ComputeBuffer(WarpPointCapacity, sizeof(float) * 2);
+            }
+        }
         public static Material Material;                        // legacy default-sheet material
         public static Mesh Quad;
         public static Texture2D Sheet;
@@ -66,13 +117,20 @@ namespace InvertLab.Sprites.DOTS
             if (Staging.IsCreated) Staging.Dispose();
             if (Sorted.IsCreated) Sorted.Dispose();
             if (RecordIds.IsCreated) RecordIds.Dispose();
+            if (WarpScratch.IsCreated) WarpScratch.Dispose();
+            if (WarpUvScratch.IsCreated) WarpUvScratch.Dispose();
+            if (WarpIndexScratch.IsCreated) WarpIndexScratch.Dispose();
             SpriteRenderResourceLifetimeSystem.DestroyOwnedObject(Material);
             SpriteRenderResourceLifetimeSystem.DestroyOwnedObject(Quad);
             Staging = default;
             Sorted = default;
             RecordIds = default;
+            WarpScratch = default;
+            WarpUvScratch = default;
+            WarpIndexScratch = default;
             Material = null;
             Quad = null;
+            DestroyWarpResources();
             Sheet = null;
             Capacity = 0;
         }
@@ -80,7 +138,8 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Grow the pack scratch to hold at least <paramref name="need"/> instances.</summary>
         public static void EnsureCapacity(int need)
         {
-            if (Staging.IsCreated && need <= Capacity && RecordIds.IsCreated)
+            if (Staging.IsCreated && need <= Capacity && RecordIds.IsCreated && WarpScratch.IsCreated
+                && WarpUvScratch.IsCreated && WarpIndexScratch.IsCreated)
                 return;
             int cap = math.max(4096, Capacity);
             while (cap < need) cap *= 2;
@@ -93,19 +152,31 @@ namespace InvertLab.Sprites.DOTS
                 NativeArrayOptions.UninitializedMemory);
             RecordIds = new NativeArray<int>(cap, Allocator.Persistent,
                 NativeArrayOptions.UninitializedMemory);
+            if (WarpScratch.IsCreated) WarpScratch.Dispose();
+            if (WarpUvScratch.IsCreated) WarpUvScratch.Dispose();
+            if (WarpIndexScratch.IsCreated) WarpIndexScratch.Dispose();
+            WarpScratch = new NativeArray<float2>(cap * SpritePartsLattice.MaxVertices, Allocator.Persistent,
+                NativeArrayOptions.UninitializedMemory);
+            WarpUvScratch = new NativeArray<float2>(cap * SpritePartsLattice.MaxVertices, Allocator.Persistent,
+                NativeArrayOptions.UninitializedMemory);
+            WarpIndexScratch = new NativeArray<int>(cap * SpritePartsLattice.MaxIndices, Allocator.Persistent,
+                NativeArrayOptions.UninitializedMemory);
             Capacity = cap;
         }
 
-        /// <summary>Shared procedural quad (created once, reused by every record).</summary>
+        /// <summary>Shared procedural quad. Vertices are ignored; the shader builds the quad from SV_VertexID.</summary>
         public static void EnsureQuad()
         {
             if (Quad != null)
                 return;
             Quad = new Mesh { name = "InstancedSpriteQuad" };
+            var ids = new int[6];
+            for (int i = 0; i < ids.Length; i++)
+                ids[i] = i;
             Quad.vertices = new Vector3[6];
             Quad.uv = new Vector2[6];
-            Quad.SetIndices(new[] { 0, 1, 2, 3, 4, 5 }, MeshTopology.Triangles, 0);
-            Quad.RecalculateBounds();
+            Quad.SetIndices(ids, MeshTopology.Triangles, 0);
+            Quad.bounds = new Bounds(Vector3.zero, Vector3.one * 8f);
         }
     }
 
@@ -242,6 +313,10 @@ namespace InvertLab.Sprites.DOTS
                 Bindings = SystemAPI.GetComponentLookup<SpriteSheetBinding>(true),
                 Registered = SystemAPI.GetComponentLookup<SpriteSheetRegistered>(true),
                 PartDepths = SystemAPI.GetComponentLookup<SpritePartRenderDepth>(true),
+                Lattices = SystemAPI.GetComponentLookup<SpritePartLattice>(true),
+                WarpScratch = SpriteRenderResources.WarpScratch,
+                WarpUvScratch = SpriteRenderResources.WarpUvScratch,
+                WarpIndexScratch = SpriteRenderResources.WarpIndexScratch,
                 GridCR = gridCR,
                 UseCropsArr = useCropsArr,
                 CropOffsets = cropOffsets,
@@ -299,10 +374,14 @@ namespace InvertLab.Sprites.DOTS
                 rec.Buffer.SetData(SpriteRenderResources.Sorted, cursors[r] - rec.Count, 0, rec.Count);
                 rec.Material.SetFloat("_LayoutXy", layoutXy ? 1f : 0f);
                 rec.Material.SetFloat("_CellAspect", rec.CellAspect > 0.01f ? rec.CellAspect : 1f);
+                rec.Material.SetFloat("_WarpResolution", 0f);
+                SpriteRenderResources.EnsureWarpBuffers(1, 1);
+                rec.Material.SetBuffer("_WarpOffsets", SpriteRenderResources.WarpDummy);
                 rec.Material.SetBuffer("_InstanceData", rec.Buffer);
                 Graphics.DrawMeshInstancedProcedural(
                     SpriteRenderResources.Quad, 0, rec.Material, bounds, rec.Count,
                     null, UnityEngine.Rendering.ShadowCastingMode.Off, false, 0);
+                DrawWarpedRecord(rec, start, bounds);
             }
             Active = true;
 
@@ -315,6 +394,112 @@ namespace InvertLab.Sprites.DOTS
             cursors.Dispose();
         }
 
+        static void DrawWarpedRecord(SpriteSheetRecord rec, int start, Bounds bounds)
+        {
+            int vertCount = 0;
+            int indexCount = 0;
+            for (int i = 0; i < rec.Count; i++)
+            {
+                var meta = SpriteRenderResources.Sorted[start + i].WarpMeta;
+                if (meta.x <= 0.5f)
+                    continue;
+                vertCount += (int)math.round(meta.x);
+                indexCount += (int)math.round(meta.z);
+            }
+            if (vertCount < 3 || indexCount < 3)
+                return;
+
+            var vertices = new Vector3[vertCount];
+            var uvs = new Vector2[vertCount];
+            var colors = new Color[vertCount];
+            var indices = new int[indexCount];
+            float aspect = rec.CellAspect > 0.01f ? rec.CellAspect : 1f;
+            float2 texel = rec.Texture != null
+                ? new float2(1f / math.max(1, rec.Texture.width), 1f / math.max(1, rec.Texture.height))
+                : float2.zero;
+            int vbase = 0;
+            int ibase = 0;
+            for (int i = 0; i < rec.Count; i++)
+            {
+                var data = SpriteRenderResources.Sorted[start + i];
+                int verts = (int)math.round(data.WarpMeta.x);
+                int inds = (int)math.round(data.WarpMeta.z);
+                if (verts < 3 || inds < 3)
+                    continue;
+                int src = (int)math.round(data.WarpMeta.y);
+                int pointBase = src * SpritePartsLattice.MaxVertices;
+                int indexBase = src * SpritePartsLattice.MaxIndices;
+                float2 inset = texel / math.max(data.CropST.xy, new float2(1e-5f));
+                for (int k = 0; k < verts; k++)
+                {
+                    vertices[vbase + k] = (Vector3)WarpPointWorld(data, SpriteRenderResources.WarpScratch[pointBase + k], aspect);
+                    float2 uv = math.clamp(SpriteRenderResources.WarpUvScratch[pointBase + k], inset, 1f - inset);
+                    float2 atlas = data.CropST.zw + uv * data.CropST.xy;
+                    uvs[vbase + k] = new Vector2(atlas.x, atlas.y);
+                    colors[vbase + k] = new Color(data.Color.x, data.Color.y, data.Color.z, data.Color.w);
+                }
+                for (int k = 0; k < inds; k++)
+                    indices[ibase + k] = vbase + SpriteRenderResources.WarpIndexScratch[indexBase + k];
+                vbase += verts;
+                ibase += inds;
+            }
+
+            var mesh = SpriteRenderResources.WarpCombined;
+            if (mesh == null)
+            {
+                mesh = new Mesh { name = "SpriteWarpCombined", hideFlags = HideFlags.HideAndDontSave };
+                SpriteRenderResources.WarpCombined = mesh;
+            }
+            mesh.Clear();
+            mesh.indexFormat = vertCount > 65535
+                ? UnityEngine.Rendering.IndexFormat.UInt32
+                : UnityEngine.Rendering.IndexFormat.UInt16;
+            mesh.SetVertices(vertices);
+            mesh.SetUVs(0, uvs);
+            mesh.SetColors(colors);
+            mesh.SetIndices(indices, MeshTopology.Triangles, 0);
+            mesh.bounds = bounds;
+
+            var material = SpriteRenderResources.WarpMeshMaterial;
+            if (material == null)
+            {
+                var shader = Shader.Find(SpriteShaderLibrary.WarpMeshShader);
+                if (shader == null)
+                    return;
+                material = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+                SpriteRenderResources.WarpMeshMaterial = material;
+            }
+            material.mainTexture = rec.Texture;
+            if (rec.Material != null && rec.Material.HasProperty("_Cutoff"))
+                material.SetFloat("_Cutoff", rec.Material.GetFloat("_Cutoff"));
+            Graphics.DrawMesh(mesh, Matrix4x4.identity, material, 0);
+        }
+
+        static float3 WarpPointWorld(in SpriteInstanceData d, float2 quad, float aspect)
+        {
+            float2 pivot = d.Flip.zw;
+            if (pivot.x == 0f && pivot.y == 0f)
+                pivot = new float2(0.5f, 0.5f);
+            float2 posed = quad;
+            if (d.Flip.x > 0.5f)
+                posed.x = 2f * (pivot.x - 0.5f) - quad.x;
+            if (d.Flip.y > 0.5f)
+                posed.y = 2f * (pivot.y - 0.5f) - quad.y;
+            float2 local = new float2(posed.x * d.FrameTRS.x * aspect, posed.y * d.FrameTRS.y);
+            float cs = math.cos(d.FrameTRS.z);
+            float sn = math.sin(d.FrameTRS.z);
+            float2 rotated = new float2(local.x * cs - local.y * sn, local.x * sn + local.y * cs);
+            if (d.FrameTRS.w > 0.5f)
+            {
+                float2 entityRotated = d.Transform2.xy * rotated.x + d.Transform2.zw * rotated.y;
+                return new float3(d.PosScale.x + entityRotated.x, d.PosScale.y + entityRotated.y, d.PosScale.w);
+            }
+            return new float3(
+                d.PosScale.x + rotated.x * d.PosScale.z,
+                d.PosScale.w,
+                d.PosScale.y - rotated.y * d.PosScale.z);
+        }
+
         [BurstCompile]
         partial struct PackJob : IJobEntity
         {
@@ -323,6 +508,10 @@ namespace InvertLab.Sprites.DOTS
             [ReadOnly] public ComponentLookup<SpriteSheetBinding> Bindings;
             [ReadOnly] public ComponentLookup<SpriteSheetRegistered> Registered;
             [ReadOnly] public ComponentLookup<SpritePartRenderDepth> PartDepths;
+            [ReadOnly] public ComponentLookup<SpritePartLattice> Lattices;
+            [NativeDisableParallelForRestriction] public NativeArray<float2> WarpScratch;
+            [NativeDisableParallelForRestriction] public NativeArray<float2> WarpUvScratch;
+            [NativeDisableParallelForRestriction] public NativeArray<int> WarpIndexScratch;
             [ReadOnly] public NativeArray<int2> GridCR;
             [ReadOnly] public NativeArray<byte> UseCropsArr;
             [ReadOnly] public NativeArray<int> CropOffsets;
@@ -412,6 +601,27 @@ namespace InvertLab.Sprites.DOTS
                     transform2 = new float4(1f, 1f, 0f, 0f);
                 }
 
+                int warpVerts = 0;
+                int warpIndices = 0;
+                if (Lattices.HasComponent(entity))
+                {
+                    var lattice = Lattices[entity].Value;
+                    if (lattice.HasMesh)
+                    {
+                        warpVerts = lattice.PointCount;
+                        warpIndices = lattice.IndexCount;
+                        int pointBase = i * SpritePartsLattice.MaxVertices;
+                        int indexBase = i * SpritePartsLattice.MaxIndices;
+                        for (int k = 0; k < SpritePartsLattice.MaxVertices; k++)
+                        {
+                            WarpScratch[pointBase + k] = k < warpVerts ? lattice.GetPoint(k) : float2.zero;
+                            WarpUvScratch[pointBase + k] = k < warpVerts ? lattice.GetUv(k) : float2.zero;
+                        }
+                        for (int k = 0; k < SpritePartsLattice.MaxIndices; k++)
+                            WarpIndexScratch[indexBase + k] = k < warpIndices ? lattice.GetIndex(k) : 0;
+                    }
+                }
+
                 Staging[i] = new SpriteInstanceData
                 {
                     PosScale = posScale,
@@ -420,6 +630,7 @@ namespace InvertLab.Sprites.DOTS
                     Flip = new float4(flip.X, flip.Y, flip.ResolvedPivot.x, flip.ResolvedPivot.y),
                     Transform2 = transform2,
                     Color = tint.Value,
+                    WarpMeta = new float4(warpVerts, i, warpIndices, 0f),
                 };
             }
         }

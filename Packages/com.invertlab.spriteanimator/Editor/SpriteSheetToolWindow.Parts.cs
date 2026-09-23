@@ -23,6 +23,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             Move = 0,
             Rotate = 1,
             Scale = 2,
+            Warp = 3,
         }
 
         enum PartsBrowserFocus
@@ -140,6 +141,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         // Appearance pivot clipboard (normalized 0-1).
         bool _partsPivotClipboardValid;
         Vector2 _partsPivotClipboard = new(0.5f, 0.5f);
+        string _partsPivotFocusSlotId;
+        bool _partsPivotDrag;
 
         SpritePartsClipDef CurrentPartsClip
         {
@@ -679,6 +682,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 bool partLocked = slot.EditorLocked ||
                     SpritePartsAuthoringOps.SlotOrAncestorLocked(_profile, slot.SlotId);
 
+                DrawPartsMeshInspector(slot);
+
                 // Transform first - most edited while posing.
                 GUILayout.Space(6f);
                 DrawPartsTransformInspector(slot, partLocked);
@@ -785,8 +790,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_partsMode == SpritePartsStudioMode.Skins)
             {
                 EditorGUILayout.HelpBox(
-                    "Joint Position/Rotation/Scale are off in Skins. Pivot (art on joint) stays editable below.",
-                    MessageType.Info);
+                    "Skins edits art and pivot. Double-click a part to drag its pivot. Move, Rotate, and Scale stay in Rig and Animate.",
+                    MessageType.None);
                 using (new EditorGUI.DisabledScope(partLocked))
                     DrawPartsAppearancePivotInspector(slot);
                 return;
@@ -1053,7 +1058,12 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (slot == null || _profile == null) return;
 
             GUILayout.Space(6f);
-            EditorGUILayout.LabelField("Pivot", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Pivot", EditorStyles.boldLabel, GUILayout.Width(48f));
+            if (GUILayout.Button(new GUIContent("Focus", "Double-click the part on the canvas, or click here, to drag its pivot."),
+                    GUILayout.Width(52f), GUILayout.Height(18f)))
+                EnterPartsPivotFocus(slot.SlotId);
+            EditorGUILayout.EndHorizontal();
 
             var app = SpritePartsAuthoringOps.FindAppearance(_profile, slot.DefaultAppearanceId);
             if (app == null)
@@ -1645,6 +1655,22 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsToolToggle(ref tx, ty, "Q Move", PartsCanvasTool.Move);
             DrawPartsToolToggle(ref tx, ty, "W Rotate", PartsCanvasTool.Rotate);
             DrawPartsToolToggle(ref tx, ty, "E Scale", PartsCanvasTool.Scale);
+            DrawPartsToolToggle(ref tx, ty, "R Warp", PartsCanvasTool.Warp);
+            if (_partsCanvasTool == PartsCanvasTool.Warp && _partsMode == SpritePartsStudioMode.Animate)
+            {
+                if (GUI.Button(new Rect(tx, ty, 72f, 20f), new GUIContent("Edit Mesh", "Setup mesh of the selected part: hull, interior vertices, edges. Same as double-clicking the part.")))
+                {
+                    if (CurrentPartsSlot != null)
+                        EnterPartsMeshEdit(CurrentPartsSlot.SlotId);
+                }
+                tx += 74f;
+                if (GUI.Button(new Rect(tx, ty, 90f, 20f), new GUIContent("Reset Deform", "Selected vertices, or all of them, back to the setup mesh on this key.")))
+                    ResetSelectedPartsDeform();
+                tx += 94f;
+                _partsSoftSelect = GUI.Toggle(new Rect(tx, ty, 48f, 20f), _partsSoftSelect,
+                    new GUIContent("Soft", "Soft selection: neighbours follow with a falloff. Size / Feather in the inspector."));
+                tx += 52f;
+            }
             if (_partsCanvasTool == PartsCanvasTool.Move || _partsCanvasTool == PartsCanvasTool.Rotate)
             {
                 _partsGizmoLocal = GUI.Toggle(new Rect(tx, ty, 58f, 20f), _partsGizmoLocal,
@@ -1692,17 +1718,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsCanvasZoomToolbar(rect);
 
             var canvas = new Rect(rect.x + 10f, rect.y + 84f, rect.width - 20f, rect.height - 96f);
+            var meshPanel = PartsMeshPanelRect(canvas);
             var overlay = PartsCanvasVisibilityOverlayRect(canvas);
             Event overlayEvt = Event.current;
             if (overlayEvt.type == EventType.MouseDown
                 && overlayEvt.button == 0
-                && overlay.Contains(overlayEvt.mousePosition))
+                && (overlay.Contains(overlayEvt.mousePosition) || meshPanel.Contains(overlayEvt.mousePosition)))
                 ReleasePartsCanvasCapture();
 
             EditorGUI.DrawRect(canvas, new Color(0.07f, 0.08f, 0.1f));
             // Input in window space; draw clipped so art cannot spill into the timeline.
             if (_partsMarqueeActive || _partsDragActive ||
-                !overlay.Contains(Event.current.mousePosition))
+                (!overlay.Contains(Event.current.mousePosition) && !meshPanel.Contains(Event.current.mousePosition)))
                 HandlePartsCanvasInput(canvas, partsCanvasControlId);
             GUI.BeginClip(canvas);
             try
@@ -1713,9 +1740,13 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 GUI.EndClip();
             }
+            if (Event.current.type == EventType.Repaint && !IsPartsMeshEdit() && !IsPartsPivotFocus())
+                DrawPartsPoseWarpOverlay(canvas);
 
             DrawPartsMarquee(canvas);
+            DrawPartsWarpBox(canvas);
             DrawPartsCanvasVisibilityOverlay(overlay);
+            DrawPartsMeshPanel(meshPanel);
         }
 
         static Rect PartsCanvasVisibilityOverlayRect(Rect canvas)
@@ -1775,42 +1806,6 @@ namespace InvertLab.Sprites.DOTS.Editor
             x += width + 4f;
         }
 
-        double _partsSkinsTransformWarnAt;
-
-        /// <summary>
-        /// Skins is art/pivot only (Unity Materials-panel style). Offer a jump to
-        /// Rig or Animate when the user reaches for Move/Rotate/Scale.
-        /// </summary>
-        void WarnSkinsTransformBlocked(string attempt)
-        {
-            // Avoid stacking dialogs if Q/W/E and canvas click fire together.
-            double now = EditorApplication.timeSinceStartup;
-            if (now - _partsSkinsTransformWarnAt < 0.35)
-            {
-                _status = "Skins: move/rotate/scale off - switch to Rig or Animate.";
-                return;
-            }
-            _partsSkinsTransformWarnAt = now;
-            _status = "Skins: move/rotate/scale off - switch to Rig or Animate.";
-            string body =
-                "Move, Rotate, and Scale only work in Rig (rest pose) or Animate (clip keys).\n\n" +
-                "Skins is for art libraries, skin bindings, and pivot - like Unity renderer/materials panels," +
-                " not Scene transform tools.";
-            if (!string.IsNullOrEmpty(attempt))
-                body += "\n\nTried: " + attempt;
-            body += "\n\nSwitch mode?";
-            int choice = EditorUtility.DisplayDialogComplex(
-                "Transform tools unavailable in Skins",
-                body,
-                "Go to Animate",
-                "Cancel",
-                "Go to Rig");
-            if (choice == 0)
-                SwitchPartsMode(SpritePartsStudioMode.Animate, "Switch to Animate");
-            else if (choice == 2)
-                SwitchPartsMode(SpritePartsStudioMode.Rig, "Switch to Rig");
-        }
-
         void SwitchPartsMode(SpritePartsStudioMode mode, string undoLabel)
         {
             if (_partsMode == mode) return;
@@ -1832,15 +1827,26 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (_partsCanvasTool == tool) return;
             if (_partsMode == SpritePartsStudioMode.Skins)
-                WarnSkinsTransformBlocked(tool == PartsCanvasTool.Move ? "Move (Q)"
-                    : tool == PartsCanvasTool.Rotate ? "Rotate (W)" : "Scale (E)");
+            {
+                _status = "Skins edits pivot. Double-click a part.";
+                Repaint();
+                return;
+            }
+            if (tool == PartsCanvasTool.Warp && _partsMode != SpritePartsStudioMode.Animate)
+            {
+                _status = "Warp is stored on clip keys. Switch to Animate.";
+                Repaint();
+                return;
+            }
             RecordWindowUndo("Change Parts Tool");
             _partsCanvasTool = tool;
             // Switching tools mid-drag (or with a stale hotControl) must free the canvas grab
             // so Q/W/E toggles and the left tree stay clickable.
             ReleasePartsCanvasCapture();
+            TryExitPartsMeshEdit();
             _status = tool == PartsCanvasTool.Move ? "Move (Q)"
                 : tool == PartsCanvasTool.Rotate ? "Rotate (W)"
+                : tool == PartsCanvasTool.Warp ? "Warp (R): drag mesh vertices to deform on this key. Double-click a part to edit its mesh."
                 : "Scale (E)";
             Repaint();
         }
@@ -1861,7 +1867,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
 
             _partsDragActive = false;
+            _partsWarpActive = false;
+            _partsWarpNeedsMesh = false;
             _partsMarqueeActive = false;
+            _partsWarpBox = false;
+            _partsMeshDrag = false;
+            _partsMeshMoved = false;
+            _partsMeshEdgeFrom = -1;
+            _partsWeightPainting = false;
             _partsDragSlotId = null;
             _partsDragShiftAxis = 0;
             _partsCanvasHotControl = 0;
@@ -2245,6 +2258,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 () => SetPartsCanvasTool(PartsCanvasTool.Rotate));
             menu.AddItem(new GUIContent("Tool/Scale (E)"), _partsCanvasTool == PartsCanvasTool.Scale,
                 () => SetPartsCanvasTool(PartsCanvasTool.Scale));
+            menu.AddItem(new GUIContent("Tool/Warp (R)"), _partsCanvasTool == PartsCanvasTool.Warp,
+                () => SetPartsCanvasTool(PartsCanvasTool.Warp));
             menu.ShowAsContext();
         }
 
@@ -2296,6 +2311,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             p.Position = new float2(pose.Position.x, pose.Position.y);
             p.Rotation = pose.Rotation;
             p.Scale = new float2(pose.Scale.x, pose.Scale.y);
+            p.Lattice = pose.Lattice;
             localPoses[idx] = p;
             return true;
         }
@@ -2306,6 +2322,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 GUI.Label(new Rect(canvas.x + 12f, canvas.y + 12f, canvas.width - 24f, 40f),
                     "No parts yet. Create a Parts Character.", _mutedStyle);
+                return;
+            }
+
+            if (IsPartsPivotFocus())
+            {
+                DrawPartsPivotFocus(canvas);
+                return;
+            }
+
+            if (IsPartsMeshEdit())
+            {
+                DrawPartsMeshEdit(canvas);
                 return;
             }
 
@@ -2410,6 +2438,183 @@ namespace InvertLab.Sprites.DOTS.Editor
             EditorGUI.DrawRect(banner, new Color(0.12f, 0.18f, 0.28f, 0.92f));
             GUI.Label(new Rect(banner.x + 6f, banner.y + 3f, banner.width - 12f, 16f),
                 "Isolating " + name + "  (Esc returns to group)", _mutedStyle);
+        }
+
+        bool IsPartsPivotFocus()
+            => !string.IsNullOrEmpty(_partsPivotFocusSlotId);
+
+        void EnterPartsPivotFocus(string slotId)
+        {
+            if (_profile == null || string.IsNullOrEmpty(slotId))
+                return;
+            string id = SpritePartIdUtility.Canonical(slotId);
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, id);
+            if (slot == null)
+                return;
+            var app = ResolvePartsPreviewAppearance(slot, _partsPreviewTime);
+            if (app == null)
+            {
+                _status = "Assign art before editing pivot.";
+                return;
+            }
+            ReleasePartsCanvasCapture();
+            SelectPartsSlotId(id, false, false);
+            _partsPivotFocusSlotId = id;
+            _partsPivotDrag = false;
+            _status = "Pivot focus: drag on the sprite. Esc returns.";
+            Repaint();
+        }
+
+        bool TryExitPartsPivotFocus()
+        {
+            if (!IsPartsPivotFocus())
+                return false;
+            _partsPivotFocusSlotId = null;
+            _partsPivotDrag = false;
+            _status = "Left pivot focus";
+            Repaint();
+            return true;
+        }
+
+        bool TryGetPartsPivotFocusLayout(
+            Rect canvas,
+            out Rect sprite,
+            out SpritePartAppearanceDef app,
+            out SpriteSheetDef sheet,
+            out Vector2 pivot)
+        {
+            sprite = default;
+            app = null;
+            sheet = null;
+            pivot = new Vector2(0.5f, 0.5f);
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, _partsPivotFocusSlotId);
+            if (slot == null)
+                return false;
+            app = ResolvePartsPreviewAppearance(slot, _partsPreviewTime);
+            if (app == null)
+                return false;
+            sheet = _profile.SheetAt(app.SheetIndex);
+            float2 resolved = SpritePartsGeometry.ResolvePivot(sheet, app);
+            pivot = new Vector2(resolved.x, resolved.y);
+            float aspect = 1f;
+            if (SpritePartsGeometry.TryResolve(_profile, app, false, out var geo, out _))
+                aspect = geo.LogicalWorldSize.x / math.max(1e-4f, geo.LogicalWorldSize.y);
+            aspect = Mathf.Max(0.05f, aspect);
+
+            const float pad = 36f;
+            float availW = Mathf.Max(32f, canvas.width - pad * 2f);
+            float availH = Mathf.Max(32f, canvas.height - pad * 2f - 28f);
+            float w = availW;
+            float h = w / aspect;
+            if (h > availH)
+            {
+                h = availH;
+                w = h * aspect;
+            }
+            sprite = new Rect(
+                canvas.x + (canvas.width - w) * 0.5f,
+                canvas.y + 36f + (availH - h) * 0.5f,
+                w, h);
+            return true;
+        }
+
+        void DrawPartsPivotFocus(Rect canvas)
+        {
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, _partsPivotFocusSlotId);
+            string name = slot != null && !string.IsNullOrEmpty(slot.Name) ? slot.Name : _partsPivotFocusSlotId;
+            var banner = new Rect(canvas.x + 8f, canvas.y + 8f, Mathf.Min(canvas.width - 16f, 420f), 22f);
+            EditorGUI.DrawRect(banner, new Color(0.12f, 0.18f, 0.28f, 0.94f));
+            if (GUI.Button(new Rect(banner.x + 4f, banner.y + 2f, 46f, 18f), "Back", _partsTabStyle))
+                TryExitPartsPivotFocus();
+            GUI.Label(new Rect(banner.x + 54f, banner.y + 3f, banner.width - 60f, 16f),
+                name + " pivot  —  drag on the sprite, Esc returns", _mutedStyle);
+
+            if (!TryGetPartsPivotFocusLayout(canvas, out var sprite, out var app, out var sheet, out var pivot))
+            {
+                GUI.Label(new Rect(canvas.x + 12f, canvas.y + 40f, canvas.width - 24f, 20f),
+                    "This part has no art to pivot.", _mutedStyle);
+                return;
+            }
+
+            EditorGUI.DrawRect(sprite, new Color(0.12f, 0.13f, 0.16f, 1f));
+            if (sheet?.Texture != null && app != null)
+                DrawPartsSheetCell(sheet.Texture, sheet, sheet.Columns, sheet.Rows, app.CellIndex, sprite, Color.white);
+            DrawGuiRectOutline(sprite, new Color(0.35f, 0.9f, 0.55f, 0.9f), 1f);
+
+            Vector2 handle = new Vector2(
+                Mathf.Lerp(sprite.xMin, sprite.xMax, pivot.x),
+                Mathf.Lerp(sprite.yMax, sprite.yMin, pivot.y));
+            var cross = new Color(1f, 0.85f, 0.2f, 0.95f);
+            DrawGuiLine(new Vector2(sprite.xMin, handle.y), new Vector2(sprite.xMax, handle.y), cross, 1f);
+            DrawGuiLine(new Vector2(handle.x, sprite.yMin), new Vector2(handle.x, sprite.yMax), cross, 1f);
+            EditorGUI.DrawRect(new Rect(handle.x - 4f, handle.y - 4f, 8f, 8f), cross);
+            GUI.Label(new Rect(sprite.x, sprite.yMax + 4f, sprite.width, 16f),
+                $"Pivot {pivot.x:0.00}, {pivot.y:0.00}", _mutedStyle);
+        }
+
+        void HandlePartsPivotFocusInput(Rect canvas, Event evt, int controlId)
+        {
+            if (evt.type == EventType.KeyDown && evt.keyCode == KeyCode.Escape)
+            {
+                TryExitPartsPivotFocus();
+                evt.Use();
+                return;
+            }
+            var banner = new Rect(canvas.x + 8f, canvas.y + 8f, Mathf.Min(canvas.width - 16f, 420f), 22f);
+            if (banner.Contains(evt.mousePosition))
+                return;
+            if (!TryGetPartsPivotFocusLayout(canvas, out var sprite, out _, out _, out _))
+                return;
+            bool ours = _partsPivotDrag &&
+                        (GUIUtility.hotControl == controlId || GUIUtility.hotControl == _partsCanvasHotControl);
+            if (evt.type == EventType.MouseDown && evt.button == 0 && canvas.Contains(evt.mousePosition))
+            {
+                GUIUtility.keyboardControl = 0;
+                GUI.FocusControl(null);
+                _partsPivotDrag = true;
+                _partsCanvasHotControl = controlId;
+                GUIUtility.hotControl = controlId;
+                SetPartsPivotFromGui(sprite, evt.mousePosition, true);
+                evt.Use();
+                Repaint();
+                return;
+            }
+            if (!ours)
+                return;
+            if (evt.type == EventType.MouseDrag)
+            {
+                SetPartsPivotFromGui(sprite, evt.mousePosition, false);
+                evt.Use();
+                Repaint();
+                return;
+            }
+            if (evt.type == EventType.MouseUp || evt.rawType == EventType.MouseUp)
+            {
+                SetPartsPivotFromGui(sprite, evt.mousePosition, false);
+                _partsPivotDrag = false;
+                _partsCanvasHotControl = 0;
+                if (GUIUtility.hotControl == controlId)
+                    GUIUtility.hotControl = 0;
+                SaveDirty();
+                evt.Use();
+                Repaint();
+            }
+        }
+
+        void SetPartsPivotFromGui(Rect sprite, Vector2 mouse, bool record)
+        {
+            if (sprite.width < 1f || sprite.height < 1f)
+                return;
+            var slot = SpritePartsAuthoringOps.FindSlot(_profile, _partsPivotFocusSlotId);
+            var app = ResolvePartsPreviewAppearance(slot, _partsPreviewTime);
+            if (app == null)
+                return;
+            if (record)
+                RecordPartsUndo("Move Appearance Pivot");
+            float u = Mathf.Clamp01(Mathf.InverseLerp(sprite.xMin, sprite.xMax, mouse.x));
+            float v = Mathf.Clamp01(Mathf.InverseLerp(sprite.yMax, sprite.yMin, mouse.y));
+            app.PivotSource = SpritePartPivotSource.Override;
+            app.PivotOverride = new Vector2(u, v);
         }
 
         void DrawOnionBadge(Rect canvas, NativeArray<float4x4> matrices, SpritePartsOnion.GhostSample ghost)
@@ -2821,11 +3026,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (flipSx < 0f || flipSy < 0f)
                     GUIUtility.ScaleAroundPivot(new Vector2(flipSx, flipSy), joint);
                 Texture2D tex = sheet?.Texture;
+                var lattice = poses.IsCreated && i < poses.Length ? poses[i].Lattice : default;
                 if (drawArt && tex != null && app != null)
                 {
-                    // Keep art colors. Selection outline is drawn by the transform gizmo
-                    // (Handles ignore GUI.matrix - drawing here caused a second unrotated box).
-                    DrawPartsSheetCell(tex, sheet, sheet.Columns, sheet.Rows, app.CellIndex, r, tint);
+                    // AnyPortrait keeps the whole image on screen. A partial polygon must not clip the rest away.
+                    // The flat cell is the rigid picture. The bent mesh is drawn after EndClip,
+                    // otherwise this texture is flushed on top of it and the drag looks frozen.
+                    if (!lattice.HasMesh)
+                        DrawPartsSheetCell(tex, sheet, sheet.Columns, sheet.Rows, app.CellIndex, r, tint);
                 }
                 else if (drawArt)
                 {
@@ -3180,6 +3388,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                     out var r, out var joint, out float worldDeg, out _, out _, poses))
                 return;
             float guiDeg = -worldDeg;
+            // Warp draws its vertex gizmo after the meshed art (DrawPartsPoseWarpOverlay) so it stays on top.
+            if (_partsCanvasTool == PartsCanvasTool.Warp && _partsMode == SpritePartsStudioMode.Animate)
+                return;
             var outline = new Vector3[5];
             outline[0] = PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerTL);
             outline[1] = PartsGizmoHandle(r, joint, guiDeg, ColliderHandleKind.CornerTR);
@@ -3210,7 +3421,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsMoveAxisGizmo(canvas, joint, worldDeg);
             if (_partsCanvasTool == PartsCanvasTool.Rotate && _partsMode != SpritePartsStudioMode.Skins)
                 DrawPartsRotateSphereGizmo(joint, worldDeg);
-Handles.EndGUI();
+            Handles.EndGUI();
 
             if (_partsMode == SpritePartsStudioMode.Skins) return;
 
@@ -3317,6 +3528,19 @@ Handles.EndGUI();
                 GUIUtility.hotControl = controlId;
             _partsCanvasHotControl = controlId;
 
+            // Edit Mesh works on the big flat image, not the posed part rect.
+            if (IsPartsMeshEdit())
+            {
+                if (!HandlePartsMeshEditDrag(canvas, evt, raw)
+                    && (raw == EventType.MouseUp || raw == EventType.MouseLeaveWindow
+                        || (raw == EventType.KeyDown && evt.keyCode == KeyCode.Escape)))
+                {
+                    ReleasePartsCanvasCapture();
+                    evt.Use();
+                }
+                return;
+            }
+
             if (raw == EventType.KeyDown && evt.keyCode == KeyCode.Escape)
             {
                 if (_partsGroupMoveMembers.Count > 1)
@@ -3337,6 +3561,13 @@ Handles.EndGUI();
 
             if (raw == EventType.MouseDrag)
             {
+                if (_partsWarpBox)
+                {
+                    _partsWarpBoxEnd = evt.mousePosition;
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
                 var slot = SpritePartsAuthoringOps.FindSlot(_profile, _partsDragSlotId);
                 if (slot != null)
                     ApplyPartsTransformDrag(canvas, evt.mousePosition);
@@ -3347,12 +3578,31 @@ Handles.EndGUI();
 
             if (raw == EventType.MouseUp || raw == EventType.MouseLeaveWindow)
             {
+                if (_partsWarpBox)
+                {
+                    if (raw == EventType.MouseLeaveWindow)
+                    {
+                        _partsWarpBox = false;
+                        ReleasePartsCanvasCapture();
+                        evt.Use();
+                        Repaint();
+                        return;
+                    }
+                    FinishPartsWarpBox(canvas, evt.mousePosition, evt.shift);
+                    _partsWarpBox = false;
+                    ReleasePartsCanvasCapture();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
                 string moved = _partsDragSlotId ?? "part";
                 if (_partsGroupMoveMembers.Count > 1)
                     CommitPartsGroupMoveOffsets();
+                bool warpDrag = _partsCanvasTool == PartsCanvasTool.Warp;
                 EndPartsDragUndo();
                 ReleasePartsCanvasCapture();
-                _status = "Moved " + moved;
+                if (!warpDrag)
+                    _status = "Moved " + moved;
                 evt.Use();
                 Repaint();
             }
@@ -3740,6 +3990,24 @@ Handles.EndGUI();
         Rect PartsMarqueeRect()
             => PartsMarqueeRect(_partsMarqueeStart, _partsMarqueeCurrent);
 
+        void DrawPartsWarpBox(Rect canvas)
+        {
+            if (!_partsWarpBox)
+                return;
+            var box = Rect.MinMaxRect(
+                Mathf.Min(_partsWarpBoxStart.x, _partsWarpBoxEnd.x),
+                Mathf.Min(_partsWarpBoxStart.y, _partsWarpBoxEnd.y),
+                Mathf.Max(_partsWarpBoxStart.x, _partsWarpBoxEnd.x),
+                Mathf.Max(_partsWarpBoxStart.y, _partsWarpBoxEnd.y));
+            box = Rect.MinMaxRect(
+                math.max(box.xMin, canvas.xMin), math.max(box.yMin, canvas.yMin),
+                math.min(box.xMax, canvas.xMax), math.min(box.yMax, canvas.yMax));
+            if (box.width < 1f || box.height < 1f)
+                return;
+            EditorGUI.DrawRect(box, new Color(0.25f, 0.7f, 0.95f, 0.12f));
+            DrawGuiRectOutline(box, new Color(0.35f, 0.85f, 1f, 0.95f), 1f);
+        }
+
         void DrawPartsMarquee(Rect canvas)
         {
             if (!_partsMarqueeActive)
@@ -3815,7 +4083,16 @@ Handles.EndGUI();
             if (HandlePartsMarquee(canvas, evt, controlId))
                 return;
 
-            if (evt.type == EventType.ContextClick && canvas.Contains(evt.mousePosition))
+            if (IsPartsMeshEdit() &&
+                (evt.type == EventType.ContextClick ||
+                 (evt.button == 1 && (evt.type == EventType.MouseDown || evt.type == EventType.MouseUp))))
+            {
+                // Edit Mesh owns right-click (context menu with edge / vertex actions).
+                HandlePartsMeshEditInput(canvas, evt, controlId);
+                return;
+            }
+
+            if (evt.type == EventType.ContextClick && canvas.Contains(evt.mousePosition) && !IsPartsPivotFocus())
             {
                 int hitCtx = HitTestPartsSlot(canvas, evt.mousePosition);
                 if (hitCtx >= 0)
@@ -3834,15 +4111,37 @@ Handles.EndGUI();
                 return;
             }
 
+            if (IsPartsPivotFocus())
+            {
+                HandlePartsPivotFocusInput(canvas, evt, controlId);
+                return;
+            }
+
+            if (IsPartsMeshEdit())
+            {
+                HandlePartsMeshEditInput(canvas, evt, controlId);
+                return;
+            }
+
             if (_partsMode == SpritePartsStudioMode.Skins)
             {
                 if (evt.type == EventType.MouseDown && evt.button == 0 && canvas.Contains(evt.mousePosition))
                 {
-                // Alt+LMB is canvas pan (HandlePartsCanvasNavigation).
-                if (evt.alt)
-                    return;
-
-                    WarnSkinsTransformBlocked("canvas drag");
+                    if (evt.alt)
+                        return;
+                    GUIUtility.keyboardControl = 0;
+                    GUI.FocusControl(null);
+                    int hit = HitTestPartsSlot(canvas, evt.mousePosition);
+                    string slotId = hit >= 0 ? SlotIdFromHit(hit) : null;
+                    if (!string.IsNullOrEmpty(slotId))
+                    {
+                        if (evt.clickCount >= 2)
+                            EnterPartsPivotFocus(slotId);
+                        else
+                            SelectPartsCanvasClicked(slotId, evt.shift || evt.control, false, false);
+                    }
+                    else
+                        _status = "Double-click a part to edit its pivot.";
                     evt.Use();
                 }
                 return;
@@ -3851,6 +4150,16 @@ Handles.EndGUI();
             // Active drag is owned by HandleActivePartsCanvasDrag (runs first in OnGUI).
             if (_partsDragActive)
                 return;
+
+            if (evt.type == EventType.MouseMove
+                && _partsCanvasTool == PartsCanvasTool.Warp
+                && _partsMode == SpritePartsStudioMode.Animate
+                && canvas.Contains(evt.mousePosition))
+            {
+                UpdatePartsWarpHover(canvas, evt.mousePosition);
+                if (_partsSoftSelect)
+                    Repaint(); // soft-selection radius follows the cursor
+            }
 
             if (evt.type == EventType.MouseDown && evt.button == 0 && canvas.Contains(evt.mousePosition))
             {
@@ -3865,6 +4174,29 @@ Handles.EndGUI();
                 GUIUtility.keyboardControl = 0;
                 GUI.FocusControl(null);
 
+                if (_partsCanvasTool == PartsCanvasTool.Warp
+                    && _partsMode == SpritePartsStudioMode.Animate
+                    && evt.clickCount >= 2)
+                {
+                    string focusId = null;
+                    if (TryPickPartsWarpVertex(canvas, evt.mousePosition, out string focusSlot, out _))
+                        focusId = focusSlot;
+                    else
+                    {
+                        int focusHit = HitTestPartsSlot(canvas, evt.mousePosition);
+                        focusId = focusHit >= 0 ? SlotIdFromHit(focusHit) : null;
+                    }
+                    if (string.IsNullOrEmpty(focusId) && CurrentPartsSlot != null)
+                        focusId = CurrentPartsSlot.SlotId;
+                    if (!string.IsNullOrEmpty(focusId))
+                    {
+                        EnterPartsMeshEdit(focusId);
+                        evt.Use();
+                        Repaint();
+                        return;
+                    }
+                }
+
                 int alignHit = HitPartsAlignPivot(canvas, evt.mousePosition);
                 if (alignHit >= 0)
                 {
@@ -3877,6 +4209,29 @@ Handles.EndGUI();
                         else
                             AlignSelectedPartsToRoot(pivot);
                     }
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                if (_partsCanvasTool == PartsCanvasTool.Warp
+                    && _partsMode == SpritePartsStudioMode.Animate
+                    && TryPickPartsWarpVertex(canvas, evt.mousePosition, out string warpSlot, out int warpPoint))
+                {
+                    BeginPartsWarpDrag(controlId, warpSlot, warpPoint, evt.mousePosition, evt.shift);
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                // Inside the selection box: transform the selected vertices as a group.
+                if (_partsCanvasTool == PartsCanvasTool.Warp
+                    && _partsMode == SpritePartsStudioMode.Animate
+                    && !evt.shift
+                    && TryGetWarpSelectionBox(canvas, out var warpBox)
+                    && warpBox.Contains(evt.mousePosition))
+                {
+                    BeginPartsWarpDrag(controlId, CurrentPartsSlot.SlotId, _partsWarpSelection[0], evt.mousePosition, false);
                     evt.Use();
                     Repaint();
                     return;
@@ -3899,15 +4254,16 @@ Handles.EndGUI();
                         evt.Use();
                         return;
                     }
-                    bool isolate = evt.clickCount >= 2;
-                    SelectPartsCanvasClicked(
-                        slotId, evt.shift || evt.control, isolate, evt.alt);
+                    bool isolate = evt.clickCount >= 2 && _partsCanvasTool != PartsCanvasTool.Warp;
                     if (isolate)
                     {
+                        EnterPartsPivotFocus(slotId);
                         evt.Use();
                         Repaint();
                         return;
                     }
+                    SelectPartsCanvasClicked(
+                        slotId, evt.shift || evt.control, false, evt.alt);
                 }
 
                 if (string.IsNullOrEmpty(slotId))
@@ -3919,6 +4275,21 @@ Handles.EndGUI();
                 {
                     _status = "Part is locked.";
                     evt.Use();
+                    return;
+                }
+
+                if (_partsCanvasTool == PartsCanvasTool.Warp)
+                {
+                    _partsWarpBox = true;
+                    _partsWarpBoxStart = evt.mousePosition;
+                    _partsWarpBoxEnd = evt.mousePosition;
+                    _partsDragActive = true;
+                    _partsCanvasHotControl = controlId;
+                    GUIUtility.hotControl = controlId;
+                    _partsDragSlotId = slot.SlotId;
+                    _partsDragStartMouse = evt.mousePosition;
+                    evt.Use();
+                    Repaint();
                     return;
                 }
 
@@ -4037,6 +4408,12 @@ Handles.EndGUI();
 
         void ApplyPartsTransformDrag(Rect canvas, Vector2 mouse)
         {
+            if (_partsCanvasTool == PartsCanvasTool.Warp)
+            {
+                if (_partsWarpActive)
+                    ApplyPartsWarpDrag(canvas, mouse);
+                return;
+            }
             var pose = _partsDragStartPose;
             var handle = _partsTransformHandle;
             bool rotate = handle == ColliderHandleKind.Rotate ||
@@ -4360,6 +4737,7 @@ Handles.EndGUI();
                     Position = new Vector2(p.Position.x, p.Position.y),
                     Rotation = p.Rotation,
                     Scale = new Vector2(p.Scale.x, p.Scale.y),
+                    Lattice = p.Lattice,
                 };
             }
             finally

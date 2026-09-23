@@ -604,6 +604,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             _socketLabelStyle = null;
             _socketBalloonStyle = null;
             InvalidateSheetPixelCache();
+            if (_partsWarpMaterial != null)
+            {
+                DestroyImmediate(_partsWarpMaterial);
+                _partsWarpMaterial = null;
+            }
         }
 
         void TickPreview()
@@ -6250,6 +6255,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                     Repaint();
                     return;
                 }
+                if (_studioTab == StudioTab.Parts && TryExitPartsMeshEdit())
+                {
+                    evt.Use();
+                    return;
+                }
+                if (_studioTab == StudioTab.Parts && TryExitPartsPivotFocus())
+                {
+                    evt.Use();
+                    return;
+                }
                 if (_studioTab == StudioTab.Parts && TryExitPartsIsolate())
                 {
                     evt.Use();
@@ -6281,7 +6296,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_studioTab == StudioTab.Parts &&
                 !evt.control && !evt.command && !evt.alt &&
-                (evt.keyCode == KeyCode.Q || evt.keyCode == KeyCode.W || evt.keyCode == KeyCode.E))
+                (evt.keyCode == KeyCode.Q || evt.keyCode == KeyCode.W || evt.keyCode == KeyCode.E ||
+                 evt.keyCode == KeyCode.R))
             {
                 if (IsRenamingAnything())
                     return;
@@ -6299,8 +6315,26 @@ namespace InvertLab.Sprites.DOTS.Editor
                     SetPartsCanvasTool(PartsCanvasTool.Move);
                 else if (evt.keyCode == KeyCode.W)
                     SetPartsCanvasTool(PartsCanvasTool.Rotate);
+                else if (evt.keyCode == KeyCode.R)
+                    SetPartsCanvasTool(PartsCanvasTool.Warp);
                 else
                     SetPartsCanvasTool(PartsCanvasTool.Scale);
+                evt.Use();
+                return;
+            }
+
+            if (_studioTab == StudioTab.Parts && IsPartsMeshEdit() &&
+                !evt.control && !evt.command && !evt.alt && !IsEditingAnyTextField() &&
+                (evt.keyCode == KeyCode.Alpha1 || evt.keyCode == KeyCode.Keypad1 ||
+                 evt.keyCode == KeyCode.Alpha2 || evt.keyCode == KeyCode.Keypad2 ||
+                 evt.keyCode == KeyCode.Alpha3 || evt.keyCode == KeyCode.Keypad3 ||
+                 evt.keyCode == KeyCode.Alpha4 || evt.keyCode == KeyCode.Keypad4))
+            {
+                SetPartsMeshTool(
+                    evt.keyCode == KeyCode.Alpha1 || evt.keyCode == KeyCode.Keypad1 ? PartsMeshTool.Modify
+                    : evt.keyCode == KeyCode.Alpha2 || evt.keyCode == KeyCode.Keypad2 ? PartsMeshTool.Create
+                    : evt.keyCode == KeyCode.Alpha3 || evt.keyCode == KeyCode.Keypad3 ? PartsMeshTool.Delete
+                    : PartsMeshTool.Weights);
                 evt.Use();
                 return;
             }
@@ -6403,6 +6437,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _colliderCreationMode == ColliderCreationMode.Polygon && _polygonDraftUV.Count > 0)
                 {
                     RemoveLastPolygonVertex();
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                // Mesh vertices before clip keys or the part itself.
+                if (_studioTab == StudioTab.Parts && IsPartsMeshEdit())
+                {
+                    DeleteSelectedMeshVertices();
                     evt.Use();
                     Repaint();
                     return;
@@ -6537,6 +6580,16 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
 
             bool actionModifier = evt.control || evt.command;
+            if (actionModifier && evt.keyCode == KeyCode.A &&
+                _studioTab == StudioTab.Parts &&
+                (IsPartsMeshEdit() ||
+                 (_partsCanvasTool == PartsCanvasTool.Warp && _partsMode == SpritePartsStudioMode.Animate)))
+            {
+                SelectAllMeshVertices();
+                evt.Use();
+                Repaint();
+                return;
+            }
             if (actionModifier && evt.keyCode == KeyCode.A && CurrentClip != null)
             {
                 SelectAllPreviewObjects(CurrentClip, _selectedFrame);

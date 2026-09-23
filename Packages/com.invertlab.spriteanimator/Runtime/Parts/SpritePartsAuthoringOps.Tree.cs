@@ -472,6 +472,7 @@ namespace InvertLab.Sprites.DOTS
                     DrawRank = Mathf.Clamp(nextRank++, 0, SpritePartIdUtility.MaxParts - 1),
                     Enabled = src.Enabled,
                     EditorLocked = false,
+                    Mesh = src.Mesh?.Clone() ?? new SpritePartMeshDef(),
                 };
 
                 if (isRoot)
@@ -535,6 +536,7 @@ namespace InvertLab.Sprites.DOTS
                                 Position = key.Position,
                                 Rotation = key.Rotation,
                                 Scale = SanitizeScale(key.Scale),
+                                Deform = key.Deform == null ? null : (Vector2[])key.Deform.Clone(),
                                 EaseMode = key.EaseMode,
                                 AppearanceId = key.AppearanceId ?? string.Empty,
                             };

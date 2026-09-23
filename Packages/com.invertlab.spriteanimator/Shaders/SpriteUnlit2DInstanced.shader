@@ -1,6 +1,6 @@
 // Invert Lab instanced sprite shader — ONE draw call for ALL sprites.
 // Per-instance data comes from a StructuredBuffer packed by SpriteInstanceRenderSystem.
-// Quad is built from SV_VertexID (6-vert triangle soup, mesh attributes ignored).
+// Rigid sprites use a 6-vert quad. A reshaped part is hidden here and drawn as its own polygon.
 // Default: sprites lie flat on world XZ (soldier top-down, Euler 90,0,180).
 // _LayoutXy > 0.5: sprites stand on world XY facing a 2D camera.
 Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
@@ -45,10 +45,14 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                 float4 Flip;       // xy = flip flags, zw = normalized pivot
                 float4 Transform2; // xy = entity scale (world), z = entity rotation radians
                 float4 Color;      // rgba tint
+                float4 WarpMeta;   // x = polygon vertex count (0 = rigid quad), y = scratch index, z = index count
             };
+
+            #include "SpriteWarpGrid.hlsl"
 
             StructuredBuffer<SpriteInstanceData> _InstanceData;
             sampler2D _MainTex;
+            float4 _MainTex_TexelSize;
             float _Cutoff;
             float _LayoutXy;
             float _CellAspect;
@@ -62,15 +66,24 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
 
             v2f vert(uint vid : SV_VertexID, uint iid : SV_InstanceID)
             {
-                // two triangles covering [-0.5, 0.5]^2, uv 0..1 (v up)
-                static const float2 QUAD[6] =
-                {
-                    float2(-0.5, -0.5), float2(-0.5, 0.5), float2(0.5, -0.5),
-                    float2(0.5, -0.5),  float2(-0.5, 0.5), float2(0.5, 0.5)
-                };
-
                 SpriteInstanceData d = _InstanceData[iid];
-                float2 quad = QUAD[vid];
+                float2 quad = 0;
+                float2 uv = 0;
+                bool hide = false;
+                if (_WarpResolution > 2.5)
+                    SpriteWarpGrid(vid, iid, quad, uv);
+                else if (d.WarpMeta.x > 0.5)
+                    hide = true;
+                else
+                    SpriteClassicQuad(vid, quad, uv);
+                if (hide)
+                {
+                    v2f skipped = (v2f)0;
+                    skipped.pos = float4(2.0, 2.0, 2.0, 1.0);
+                    return skipped;
+                }
+                float2 inset = _MainTex_TexelSize.xy / max(d.CropST.xy, 1e-5);
+                uv = clamp(uv, inset, 1.0 - inset);
 
                 // Mirror the QUAD around the authored pivot (geometry); UVs stay
                 // attached to their vertices. A single mirror only — also mirroring
@@ -118,8 +131,7 @@ Shader "DOTS Sprite Animator/Sprite Unlit 2D Instanced"
                     wpos.z = d.PosScale.y - rotated.y * d.PosScale.z;
                 }
 
-                // UVs unchanged (still the full cell, always inside it).
-                float2 uv = quad + 0.5;
+                // UVs stay on the undistorted grid so the image stretches with the warp.
 
                 v2f o;
                 o.pos = TransformWorldToHClip(wpos); // instance data is already in world space

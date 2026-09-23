@@ -23,7 +23,8 @@ public static class ReleaseValidation
         collection.Clear();
         foreach (var name in new[] { SpriteShaderLibrary.UnlitShader, SpriteShaderLibrary.PreviewShader,
             SpriteShaderLibrary.InstancedShader, SpriteShaderLibrary.GpuAnimShader,
-            SpriteShaderLibrary.InstancedShaderLit, SpriteShaderLibrary.GpuAnimShaderLit })
+            SpriteShaderLibrary.InstancedShaderLit, SpriteShaderLibrary.GpuAnimShaderLit,
+            SpriteShaderLibrary.WarpMeshShader })
         {
             var shader = Shader.Find(name);
             if (shader == null) throw new Exception("Shader missing: " + name);

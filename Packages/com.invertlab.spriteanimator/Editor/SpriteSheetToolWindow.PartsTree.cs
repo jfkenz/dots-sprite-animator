@@ -54,6 +54,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (!string.IsNullOrEmpty(_partsIsolatedSlotId) &&
                 SpritePartsAuthoringOps.FindSlot(_profile, _partsIsolatedSlotId) == null)
                 _partsIsolatedSlotId = null;
+            if (!string.IsNullOrEmpty(_partsPivotFocusSlotId) &&
+                SpritePartsAuthoringOps.FindSlot(_profile, _partsPivotFocusSlotId) == null)
+                _partsPivotFocusSlotId = null;
             if (!string.IsNullOrEmpty(_partsActiveGroupId) &&
                 SpritePartsAuthoringOps.FindGroup(_profile, _partsActiveGroupId) == null)
                 _partsActiveGroupId = null;
@@ -335,6 +338,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     _partsTreeRowIds.Add(SpritePartIdUtility.Canonical(item.Slot.SlotId));
                     DrawPartsTreeRow(item.Slot, item.Depth);
+                    if (IsPartsMeshEdit() &&
+                        SpritePartIdUtility.Canonical(item.Slot.SlotId) ==
+                        SpritePartIdUtility.Canonical(_partsMeshEditSlotId))
+                        DrawMeshVertexRows(item.Depth + 1);
                 }
             }
 

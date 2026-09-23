@@ -27,6 +27,17 @@ namespace InvertLab.Sprites.DOTS
         public int DrawRank;
         /// <summary>1 = do not draw this part (profile Enabled=false or hidden ancestor).</summary>
         public byte Hidden;
+        /// <summary>Setup mesh at rest. Empty = rigid rectangle. Keys only carry offsets.</summary>
+        public SpritePartsLattice Mesh;
+        /// <summary>Rest (setup) pose in character-root space; the bind pose for weights.</summary>
+        public float4x4 RestToRoot;
+        /// <summary>Weighted bones (slot indices). Empty = the mesh only follows this part.</summary>
+        public BlobArray<int> SkinBones;
+        /// <summary><c>SkinWeights[vertex * SkinBones.Length + bone]</c>.</summary>
+        public BlobArray<float> SkinWeights;
+        /// <summary>Default appearance quad: unit quad q maps to <c>(q + 0.5 - pivot) * size</c> in part space.</summary>
+        public float2 SkinQuadSize;
+        public float2 SkinQuadPivot;
     }
 
     public struct SpritePartsClipBlob
@@ -61,6 +72,8 @@ namespace InvertLab.Sprites.DOTS
         public byte EaseMode;
         /// <summary>-1 = no appearance change on this key (hold previous / skin default).</summary>
         public int AppearanceIndex;
+        /// <summary>Per-vertex offsets from the slot mesh. Empty = setup mesh.</summary>
+        public FixedList512Bytes<float2> Deform;
     }
 
     public struct SpritePartAppearanceBlob
@@ -102,6 +115,11 @@ namespace InvertLab.Sprites.DOTS
             public string DefaultAppearanceId;
             public int DrawRank;
             public byte Hidden;
+            public SpritePartsLattice Mesh;
+            public string[] SkinBones;
+            public float[] SkinWeights;
+            public float2 SkinQuadSize;
+            public float2 SkinQuadPivot;
         }
 
         public struct AppearanceInput
@@ -124,6 +142,7 @@ namespace InvertLab.Sprites.DOTS
             public byte EaseMode;
             /// <summary>Empty = hold (-1). Unknown ids also hold.</summary>
             public string AppearanceId;
+            public FixedList512Bytes<float2> Deform;
         }
 
         public struct TrackInput
@@ -225,8 +244,11 @@ namespace InvertLab.Sprites.DOTS
                         DefaultAppearanceIndex = defaultApp,
                         DrawRank = src.DrawRank,
                         Hidden = src.Hidden,
+                        Mesh = src.Mesh,
                     };
                 }
+
+                WriteSkins(ref builder, slotArr, slots, slotIndex);
 
                 var appArr = builder.Allocate(ref root.Appearances, appearances.Length);
                 for (int i = 0; i < appearances.Length; i++)
@@ -403,6 +425,7 @@ namespace InvertLab.Sprites.DOTS
                     Scale = k.Scale,
                     EaseMode = ease,
                     AppearanceIndex = appearanceIndex,
+                    Deform = k.Deform,
                 }));
             }
             list.Sort((a, b) =>
@@ -421,6 +444,59 @@ namespace InvertLab.Sprites.DOTS
                     unique.Add(list[i].key);
             }
             return unique.ToArray();
+        }
+
+        /// <summary>
+        /// Bind pose (rest matrices) for every slot, and bone indices + weights for weighted meshes.
+        /// A mesh whose weights do not match its vertices, or name an unknown bone, stays unweighted.
+        /// </summary>
+        static void WriteSkins(
+            ref BlobBuilder builder, BlobBuilderArray<SpritePartSlotBlob> slotArr, SlotInput[] slots,
+            System.Collections.Generic.Dictionary<string, int> slotIndex)
+        {
+            int n = slots.Length;
+            var rest = new float4x4[n];
+            var state = new byte[n]; // 0 = todo, 1 = visiting, 2 = done
+            for (int i = 0; i < n; i++)
+                slotArr[i].RestToRoot = RestToRoot(slotArr, rest, state, i);
+
+            for (int i = 0; i < n; i++)
+            {
+                var src = slots[i];
+                int vertices = slotArr[i].Mesh.PointCount;
+                int bones = src.SkinBones?.Length ?? 0;
+                bool ok = bones > 0 && vertices >= 3
+                    && src.SkinWeights != null && src.SkinWeights.Length == vertices * bones
+                    && src.SkinQuadSize.x > 1e-6f && src.SkinQuadSize.y > 1e-6f;
+                var indices = new int[bones];
+                for (int b = 0; ok && b < bones; b++)
+                    ok = slotIndex.TryGetValue(SpritePartIdUtility.Canonical(src.SkinBones[b]), out indices[b]);
+                if (!ok)
+                    continue;
+                var boneArr = builder.Allocate(ref slotArr[i].SkinBones, bones);
+                for (int b = 0; b < bones; b++)
+                    boneArr[b] = indices[b];
+                var weightArr = builder.Allocate(ref slotArr[i].SkinWeights, src.SkinWeights.Length);
+                for (int w = 0; w < src.SkinWeights.Length; w++)
+                    weightArr[w] = math.isfinite(src.SkinWeights[w]) ? math.max(0f, src.SkinWeights[w]) : 0f;
+                slotArr[i].SkinQuadSize = src.SkinQuadSize;
+                slotArr[i].SkinQuadPivot = src.SkinQuadPivot;
+            }
+        }
+
+        static float4x4 RestToRoot(BlobBuilderArray<SpritePartSlotBlob> slotArr, float4x4[] rest, byte[] state, int i)
+        {
+            if (state[i] == 2)
+                return rest[i];
+            var local = SpritePartsHierarchy.LocalMatrix(
+                slotArr[i].RestPosition, slotArr[i].RestRotation, slotArr[i].RestScale);
+            int parent = slotArr[i].ParentSlotIndex;
+            state[i] = 1;
+            if (parent >= 0 && parent < rest.Length && state[parent] != 1)
+                local = math.mul(RestToRoot(slotArr, rest, state, parent), local);
+            rest[i] = local;
+            state[i] = 2;
+            return local;
         }
 
         static FixedString64Bytes Truncate64(string value)

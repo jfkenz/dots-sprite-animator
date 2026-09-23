@@ -14,6 +14,7 @@ namespace InvertLab.Sprites.DOTS
             public float2 Position;
             public float Rotation;
             public float2 Scale;
+            public SpritePartsLattice Lattice;
         }
 
         /// <summary>
@@ -43,6 +44,7 @@ namespace InvertLab.Sprites.DOTS
                 Position = slot.RestPosition,
                 Rotation = slot.RestRotation,
                 Scale = slot.RestScale,
+                Lattice = slot.Mesh,
             };
 
             if (clipIndex < 0 || clipIndex >= set.Clips.Length)
@@ -63,6 +65,7 @@ namespace InvertLab.Sprites.DOTS
                 pose.Position = only.Position;
                 pose.Rotation = only.Rotation;
                 pose.Scale = only.Scale;
+                SpritePartsLattice.ApplyDeform(ref pose.Lattice, only.Deform, only.Deform, 0f);
                 return;
             }
 
@@ -73,6 +76,7 @@ namespace InvertLab.Sprites.DOTS
                 pose.Position = first.Position;
                 pose.Rotation = first.Rotation;
                 pose.Scale = first.Scale;
+                SpritePartsLattice.ApplyDeform(ref pose.Lattice, first.Deform, first.Deform, 0f);
                 return;
             }
             int last = track.Keys.Length - 1;
@@ -82,6 +86,7 @@ namespace InvertLab.Sprites.DOTS
                 pose.Position = end.Position;
                 pose.Rotation = end.Rotation;
                 pose.Scale = end.Scale;
+                SpritePartsLattice.ApplyDeform(ref pose.Lattice, end.Deform, end.Deform, 0f);
                 return;
             }
 
@@ -97,6 +102,7 @@ namespace InvertLab.Sprites.DOTS
             pose.Position = math.lerp(a.Position, b.Position, u);
             pose.Scale = math.lerp(a.Scale, b.Scale, u);
             pose.Rotation = LerpAngleShortest(a.Rotation, b.Rotation, u);
+            SpritePartsLattice.ApplyDeform(ref pose.Lattice, a.Deform, b.Deform, u);
         }
 
         /// <summary>

@@ -217,6 +217,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         Position = key.Position,
                         Rotation = key.Rotation,
                         Scale = key.Scale,
+                        Deform = key.Deform == null ? null : (Vector2[])key.Deform.Clone(),
                         EaseMode = key.EaseMode,
                         AppearanceId = key.AppearanceId ?? string.Empty,
                     };

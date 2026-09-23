@@ -70,6 +70,7 @@ namespace InvertLab.Sprites.DOTS
             public Vector2 Position;
             public float Rotation;
             public Vector2 Scale;
+            public SpritePartsLattice Lattice;
         }
 
         public struct WriteResult
@@ -1195,6 +1196,7 @@ namespace InvertLab.Sprites.DOTS
                 existing.Position = pose.Position;
                 existing.Rotation = pose.Rotation;
                 existing.Scale = SanitizeScale(pose.Scale);
+                existing.Deform = pose.Lattice.OffsetArray();
                 if (setAppearance)
                     existing.AppearanceId = appearanceId ?? string.Empty;
                 return;
@@ -1205,6 +1207,7 @@ namespace InvertLab.Sprites.DOTS
                 Position = pose.Position,
                 Rotation = pose.Rotation,
                 Scale = SanitizeScale(pose.Scale),
+                Deform = pose.Lattice.OffsetArray(),
                 EaseMode = (byte)SpriteEaseMode.Linear,
                 AppearanceId = setAppearance ? (appearanceId ?? string.Empty) : string.Empty,
             });

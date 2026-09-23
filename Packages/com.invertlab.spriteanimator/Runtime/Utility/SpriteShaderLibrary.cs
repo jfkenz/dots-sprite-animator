@@ -15,6 +15,7 @@ namespace InvertLab.Sprites.DOTS
         // textures; toggled from Tools > DOTS Sprite Animator) ----
         public const string InstancedShaderLit = "DOTS Sprite Animator/Sprite Unlit 2D Instanced Lit";
         public const string GpuAnimShaderLit = "DOTS Sprite Animator/Sprite Unlit 2D GPU Anim Lit";
+        public const string WarpMeshShader = "DOTS Sprite Animator/Sprite Warp Mesh";
 
         /// <summary>True = sprites composite with URP 2D lights (lit shaders).</summary>
         public static bool UseLit;
@@ -30,15 +31,16 @@ namespace InvertLab.Sprites.DOTS
             var preview = Shader.Find(PreviewShader);
             var instancedLit = Shader.Find(InstancedShaderLit);
             var gpuAnimLit = Shader.Find(GpuAnimShaderLit);
+            var warpMesh = Shader.Find(WarpMeshShader);
             if (unlit != null && instanced != null && gpuAnim != null && preview != null &&
-                instancedLit != null && gpuAnimLit != null)
+                instancedLit != null && gpuAnimLit != null && warpMesh != null)
             {
                 message = "All DOTS Sprite Animator shaders found.";
                 return true;
             }
 
             message =
-                $"Missing shaders. Unlit={unlit != null}, Instanced={instanced != null}, GPUAnim={gpuAnim != null}, Preview={preview != null}, InstancedLit={instancedLit != null}, GPUAnimLit={gpuAnimLit != null}";
+                $"Missing shaders. Unlit={unlit != null}, Instanced={instanced != null}, GPUAnim={gpuAnim != null}, Preview={preview != null}, InstancedLit={instancedLit != null}, GPUAnimLit={gpuAnimLit != null}, WarpMesh={warpMesh != null}";
             return false;
         }
     }

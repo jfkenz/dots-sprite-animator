@@ -231,6 +231,7 @@ namespace InvertLab.Sprites.DOTS
                 Position = math.lerp(from.Position, to.Position, t),
                 Scale = math.lerp(from.Scale, to.Scale, t),
                 Rotation = SpritePartsSampler.LerpAngleShortest(from.Rotation, to.Rotation, t),
+                Lattice = SpritePartsLattice.Lerp(from.Lattice, to.Lattice, t),
             };
         }
 
@@ -670,10 +671,13 @@ namespace InvertLab.Sprites.DOTS
                         }
                         if (physics)
                             continue;
+                        // Weighted meshes follow their bound bones (Spine weights); keys stay pre-skin.
+                        var partPose = finalLocal[slot];
+                        SpritePartsSkinning.Apply(ref set, slot, localToRoot, ref partPose.Lattice);
                         if (deferred)
-                            SpritePartsPoseUtility.ApplyPartTransform(em, part, finalLocal[slot], commands);
+                            SpritePartsPoseUtility.ApplyPartTransform(em, part, partPose, commands);
                         else
-                            SpritePartsPoseUtility.ApplyPartTransform(em, part, finalLocal[slot]);
+                            SpritePartsPoseUtility.ApplyPartTransform(em, part, partPose);
                         if (deferred)
                             SpriteParts.ApplySampledAppearance(em, root, part, slot, apps[slot], ref set, commands);
                         else
