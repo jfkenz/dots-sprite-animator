@@ -7,9 +7,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 {
     // Liquify brushes for the Warp tool (neither Spine nor AnyPortrait has these): paint over the part
     // and its mesh vertices move. Each stroke is one undo step and writes an ordinary deform key.
-    //   Twist   hold to swirl vertices around the brush centre (Shift: the other way) - inner turns most
+    //   Twist   click: a dial with a -1..1 bar (PartsTwist.cs) - inner vertices turn most, a spiral
     //   Push    drag to smear vertices along the stroke
-    //   Pinch   hold to pull vertices toward the centre; Bloat pushes them out
+    //   Pinch   click: the same dial, Bloat..Pinch (pull in / push out)
     //   Smooth  hold to relax vertices toward their neighbours (removes creases and bunching)
     //   Bend    grab near the tip and drag sideways: the part curves along an arc from its pivot
     //           (no bend at the pivot, most at the tip) - tails, antennae, arms, flags, no bones needed
@@ -99,6 +99,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return true;
             }
             string id = SpritePartIdUtility.Canonical(slot.SlotId);
+            if (PartsDialBrush(_partsWarpBrush))
+                return false; // Twist / Pinch / Bloat use the click-and-set dial (PartsTwist.cs)
             // Ctrl+drag, or a press away from the part: box-select vertices instead of painting.
             if (evt.control || evt.command || !BrushReachesPart(canvas, id, evt.mousePosition))
                 return false;
@@ -308,7 +310,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         /// <summary>Stroke positions (pixels, unrotated rect) to a deform key, through the inverse skin on weighted meshes.</summary>
-        void WritePartsBrushPose(Rect rect)
+        void WritePartsBrushPose(Rect rect, string slotId = null)
         {
             var pose = _partsBrushStartPose;
             var start = pose.Lattice;
@@ -326,7 +328,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 lattice.SetPoint(i, start.GetPoint(i) + delta);
             }
             pose.Lattice = lattice;
-            ApplyPartsPoseEdit(_partsDragSlotId, pose);
+            ApplyPartsPoseEdit(slotId ?? _partsDragSlotId, pose);
         }
 
         static List<int>[] MeshNeighbours(SpritePartMeshDef mesh)
@@ -388,10 +390,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 new[]
                 {
                     new GUIContent("Off", "Normal vertex editing"),
-                    new GUIContent("Twist", "Hold to swirl vertices around the brush centre; inner ones turn most. Shift: other way."),
+                    new GUIContent("Twist", "Click the part: a dial and a -1..1 bar appear. Drag left / right or use the bar to swirl; inner vertices turn most."),
                     new GUIContent("Push", "Drag to smear vertices along the stroke."),
-                    new GUIContent("Pinch", "Hold to pull vertices toward the centre."),
-                    new GUIContent("Bloat", "Hold to push vertices away from the centre."),
+                    new GUIContent("Pinch", "Click the part: a dial with a Bloat..Pinch bar. Drag right to pull vertices in."),
+                    new GUIContent("Bloat", "Click the part: a dial with a Bloat..Pinch bar. Drag left to push vertices out."),
                     new GUIContent("Smooth", "Hold to relax vertices toward their neighbours."),
                     new GUIContent("Bend", "Grab near the tip and drag sideways: the part curves along an arc from its pivot."),
                 }, 4);

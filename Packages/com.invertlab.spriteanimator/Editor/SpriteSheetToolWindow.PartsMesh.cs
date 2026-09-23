@@ -434,6 +434,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.DrawWireDisc(joint, Vector3.forward, 6f);
             Handles.EndGUI();
             DrawPartsBrushCursor(canvas);
+            DrawPartsDialRing(canvas);
             if (PartsFfdActive())
                 DrawPartsFfd(canvas);
             else if (TryGetWarpSelectionCentre(canvas, out var axisOrigin)) // arrows always move, whatever the vertex tool
@@ -588,6 +589,11 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_partsBrushActive)
             {
                 PartsBrushDrag(canvas, mouse, Event.current != null && Event.current.shift);
+                return;
+            }
+            if (_partsDialDragging)
+            {
+                PartsDialDrag(canvas, mouse);
                 return;
             }
             if (!_partsWarpActive || _partsWarpSelection.Count == 0)

@@ -6294,6 +6294,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
+            // Twist / Pinch dial: Enter keeps it, Esc takes it back.
+            if (_studioTab == StudioTab.Parts && PartsDialActive() && !_partsDialDragging && !IsEditingAnyTextField()
+                && (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter || evt.keyCode == KeyCode.Escape))
+            {
+                if (evt.keyCode == KeyCode.Escape)
+                    CancelPartsDial();
+                else
+                    ApplyPartsDial();
+                evt.Use();
+                return;
+            }
+
             // FFD: Enter keeps the bend, Esc takes it back.
             if (_studioTab == StudioTab.Parts && PartsFfdActive() && _partsFfdDrag < 0 && !IsEditingAnyTextField()
                 && (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter || evt.keyCode == KeyCode.Escape))

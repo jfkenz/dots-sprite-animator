@@ -1754,16 +1754,19 @@ namespace InvertLab.Sprites.DOTS.Editor
             var canvas = new Rect(rect.x + 10f, rect.y + 84f, rect.width - 20f, rect.height - 96f);
             var meshPanel = PartsMeshPanelRect(canvas);
             var overlay = PartsCanvasVisibilityOverlayRect(canvas);
+            var dialBar = PartsDialBarRect(canvas);
             Event overlayEvt = Event.current;
             if (overlayEvt.type == EventType.MouseDown
                 && overlayEvt.button == 0
-                && (overlay.Contains(overlayEvt.mousePosition) || meshPanel.Contains(overlayEvt.mousePosition)))
+                && (overlay.Contains(overlayEvt.mousePosition) || meshPanel.Contains(overlayEvt.mousePosition)
+                    || dialBar.Contains(overlayEvt.mousePosition)))
                 ReleasePartsCanvasCapture();
 
             EditorGUI.DrawRect(canvas, new Color(0.07f, 0.08f, 0.1f));
             // Input in window space; draw clipped so art cannot spill into the timeline.
             if (_partsMarqueeActive || _partsDragActive ||
-                (!overlay.Contains(Event.current.mousePosition) && !meshPanel.Contains(Event.current.mousePosition)))
+                (!overlay.Contains(Event.current.mousePosition) && !meshPanel.Contains(Event.current.mousePosition)
+                 && !dialBar.Contains(Event.current.mousePosition)))
                 HandlePartsCanvasInput(canvas, partsCanvasControlId);
             GUI.BeginClip(canvas);
             try
@@ -1781,6 +1784,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsWarpBox(canvas);
             DrawPartsCanvasVisibilityOverlay(overlay);
             DrawPartsMeshPanel(meshPanel);
+            DrawPartsDialBar(canvas);
         }
 
         /// <summary>Warp and Edit Mesh swap Onion / Debug / Root for what matters there: vertices, lines, triangles, FFD.</summary>
@@ -1927,6 +1931,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsFfdDragB = -1;
             EndPartsBrush();
             _partsDragUndoPending = null;
+            _partsDialDragging = false;
             _partsMarqueeActive = false;
             _partsWarpBox = false;
             _partsMeshDrag = false;
@@ -4286,6 +4291,14 @@ namespace InvertLab.Sprites.DOTS.Editor
                 {
                     if (!TryBeginPartsFfdDrag(canvas, evt.mousePosition, controlId))
                         _status = "FFD: drag a white grid point. Apply (Enter) or Cancel (Esc) to leave FFD.";
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                // Twist / Pinch / Bloat: click places a dial with a -1..1 bar.
+                if (TryBeginPartsDial(canvas, evt, controlId))
+                {
                     evt.Use();
                     Repaint();
                     return;
