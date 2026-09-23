@@ -204,7 +204,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             ClearPartsKeySelection();
             if (key != null)
                 _partsSelectedKeys.Add(key);
-            _partsPreviewTime = time;
+            _partsPreviewTime = key != null ? key.Time : time; // the needle on the key's frame
             _status = result.WroteKey ? $"Keyed at {time:F3}s" : (result.Reason ?? "Key failed");
             Repaint();
         }

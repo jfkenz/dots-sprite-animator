@@ -5093,6 +5093,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     _status = keyResult.Reason;
                     return; // temp overlay still active so the drag remains visible
                 }
+                SnapPartsPlayheadToFrame(); // the key went on the nearest frame: show it under the needle
                 if (!_partsDragActive)
                 {
                     _partsHasTempPose = false;
@@ -5678,6 +5679,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 includeAppearance: _partsKeyPoseIncludesAppearance);
             _partsHasTempPose = false;
             SaveDirty();
+            if (result.WroteKey)
+                SnapPartsPlayheadToFrame();
             if (!result.WroteKey && result.Rejected)
                 _status = result.Reason ?? "Key Pose failed";
             else if (result.WroteAppearance)
@@ -5994,7 +5997,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (_partsKeyMarqueeOp == SelectionOp.Replace)
                     ClearPartsKeySelection();
                 float u = Mathf.InverseLerp(keyArea.x, keyArea.xMax, evt.mousePosition.x);
-                _partsPreviewTime = Mathf.Clamp01(u) * duration;
+                _partsPreviewTime = evt.shift
+                    ? Mathf.Clamp01(u) * duration
+                    : SpritePartsAuthoringOps.SnapTime(Mathf.Clamp01(u) * duration, _partsDisplayFps, duration);
                 _partsPlaying = false;
                 EndPartsKeyMarquee();
                 evt.Use();
@@ -6071,14 +6076,14 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (raw == EventType.MouseDrag)
             {
-                ScrubPartsPlayhead(scrubRect, duration, evt.mousePosition.x, snap: false);
+                // Frames (so keys land under the needle); Shift scrubs freely.
+                ScrubPartsPlayhead(scrubRect, duration, evt.mousePosition.x, snap: !evt.shift);
                 evt.Use();
                 Repaint();
                 return;
             }
 
-            if (evt.shift)
-                ScrubPartsPlayhead(scrubRect, duration, evt.mousePosition.x, snap: true);
+            ScrubPartsPlayhead(scrubRect, duration, evt.mousePosition.x, snap: !evt.shift);
             GUIUtility.hotControl = 0;
             _partsScrubHotControl = 0;
             _partsScrubbing = false;
@@ -6102,13 +6107,21 @@ namespace InvertLab.Sprites.DOTS.Editor
                 GUIUtility.hotControl = controlId;
                 GUIUtility.keyboardControl = 0;
                 GUI.FocusControl(null);
-                // Continuous scrub while dragging (Clips-style). No SnapTime here "
-                // Display FPS only affects step buttons / keyed snap, not the needle.
-                ScrubPartsPlayhead(scrubRect, duration, evt.mousePosition.x, snap: false);
+                // Scrub snaps to Display FPS frames (where keys go); hold Shift to scrub freely.
+                ScrubPartsPlayhead(scrubRect, duration, evt.mousePosition.x, snap: !evt.shift);
                 _partsPlaying = false;
                 evt.Use();
                 Repaint();
             }
+        }
+
+        /// <summary>Moves the needle onto the nearest Display FPS frame (where keys are written).</summary>
+        void SnapPartsPlayheadToFrame()
+        {
+            var clip = CurrentPartsClip;
+            if (clip == null)
+                return;
+            _partsPreviewTime = SpritePartsAuthoringOps.SnapTime(_partsPreviewTime, _partsDisplayFps, Mathf.Max(1e-3f, clip.Duration));
         }
 
         void ScrubPartsPlayhead(Rect scrubRect, float duration, float mouseX, bool snap)

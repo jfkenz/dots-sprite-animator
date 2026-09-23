@@ -78,6 +78,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         var pose = SampleLocalPoseForSlot(slot.SlotId, _partsPreviewTime);
                         SpritePartsAuthoringOps.ApplyPoseEdit(_profile, _partsMode, _partsSelectedClip, slot.SlotId,
                             _partsPreviewTime, pose, true, _partsDisplayFps);
+                        SnapPartsPlayheadToFrame();
                         SaveDirty();
                     }
                 }
