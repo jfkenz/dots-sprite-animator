@@ -1670,6 +1670,23 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _partsSoftSelect = GUI.Toggle(new Rect(tx, ty, 48f, 20f), _partsSoftSelect,
                     new GUIContent("Soft", "Soft selection: neighbours follow with a falloff. Size / Feather in the inspector."));
                 tx += 52f;
+                if (PartsFfdActive())
+                {
+                    if (GUI.Button(new Rect(tx, ty, 58f, 20f), new GUIContent("Apply", "Keep the FFD result (Enter)."), _primaryStyle))
+                        ApplyPartsFfd();
+                    tx += 60f;
+                    if (GUI.Button(new Rect(tx, ty, 58f, 20f), new GUIContent("Cancel", "Undo the FFD bend (Esc).")))
+                        CancelPartsFfd();
+                    tx += 62f;
+                }
+                else
+                {
+                    if (GUI.Button(new Rect(tx, ty, 44f, 20f), new GUIContent("FFD",
+                            "Free Form Deformation: a grid of points around the selected vertices (or the whole mesh). " +
+                            "Drag a point to bend everything inside. Grid size in the Mesh panel.")))
+                        BeginPartsFfd();
+                    tx += 48f;
+                }
             }
             if (_partsCanvasTool == PartsCanvasTool.Move || _partsCanvasTool == PartsCanvasTool.Rotate)
             {
@@ -1871,6 +1888,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsWarpNeedsMesh = false;
             _partsVertexAxis = 0;
             _partsMeshPanning = false;
+            _partsFfdDrag = -1;
             _partsMarqueeActive = false;
             _partsWarpBox = false;
             _partsMeshDrag = false;
@@ -4218,6 +4236,16 @@ namespace InvertLab.Sprites.DOTS.Editor
                     return;
                 }
 
+                // FFD owns the canvas while it is on: grab a grid point, anything else is ignored.
+                if (PartsFfdActive())
+                {
+                    if (!TryBeginPartsFfdDrag(canvas, evt.mousePosition, controlId))
+                        _status = "FFD: drag a white grid point. Apply (Enter) or Cancel (Esc) to leave FFD.";
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
                 // X / Y arrows on the selected vertices: move along one axis (the square moves freely).
                 if (_partsCanvasTool == PartsCanvasTool.Warp
                     && _partsMode == SpritePartsStudioMode.Animate
@@ -4240,6 +4268,24 @@ namespace InvertLab.Sprites.DOTS.Editor
                     && TryPickPartsWarpVertex(canvas, evt.mousePosition, out string warpSlot, out int warpPoint))
                 {
                     BeginPartsWarpDrag(controlId, warpSlot, warpPoint, evt.mousePosition, evt.shift);
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+
+                // A line of the selected part: both of its ends (Shift adds them), dragged together.
+                if (_partsCanvasTool == PartsCanvasTool.Warp
+                    && _partsMode == SpritePartsStudioMode.Animate
+                    && TryPickPartsWarpLine(canvas, evt.mousePosition, out int lineA, out int lineB))
+                {
+                    SetWarpSelectionSlot(CurrentPartsSlot.SlotId);
+                    if (!evt.shift)
+                        _partsWarpSelection.Clear();
+                    if (!_partsWarpSelection.Contains(lineA))
+                        _partsWarpSelection.Add(lineA);
+                    if (!_partsWarpSelection.Contains(lineB))
+                        _partsWarpSelection.Add(lineB);
+                    BeginPartsWarpDrag(controlId, CurrentPartsSlot.SlotId, lineA, evt.mousePosition, false);
                     evt.Use();
                     Repaint();
                     return;

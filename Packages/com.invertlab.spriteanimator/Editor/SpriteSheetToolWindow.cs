@@ -6294,6 +6294,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return;
             }
 
+            // FFD: Enter keeps the bend, Esc takes it back.
+            if (_studioTab == StudioTab.Parts && PartsFfdActive() && _partsFfdDrag < 0 && !IsEditingAnyTextField()
+                && (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter || evt.keyCode == KeyCode.Escape))
+            {
+                if (evt.keyCode == KeyCode.Escape)
+                    CancelPartsFfd();
+                else
+                    ApplyPartsFfd();
+                evt.Use();
+                return;
+            }
+
             if (_studioTab == StudioTab.Parts &&
                 !evt.control && !evt.command && !evt.alt &&
                 (evt.keyCode == KeyCode.Q || evt.keyCode == KeyCode.W || evt.keyCode == KeyCode.E ||

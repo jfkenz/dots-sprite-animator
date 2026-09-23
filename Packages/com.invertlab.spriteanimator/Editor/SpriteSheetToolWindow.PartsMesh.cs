@@ -331,19 +331,27 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.BeginGUI();
             if (!virtualQuad)
             {
-                Handles.color = new Color(1f, 0.6f, 0.2f, 0.45f);
+                // Solid lines: 1px AA lines broke up into dashes at shallow angles.
+                Handles.color = new Color(1f, 0.62f, 0.25f, 0.75f);
                 int tris = lattice.IndexCount - lattice.IndexCount % 3;
                 for (int t = 0; t < tris; t += 3)
                 {
                     int a = lattice.GetIndex(t), b = lattice.GetIndex(t + 1), c = lattice.GetIndex(t + 2);
                     if ((uint)a >= (uint)pts.Length || (uint)b >= (uint)pts.Length || (uint)c >= (uint)pts.Length)
                         continue;
-                    Handles.DrawAAPolyLine(1f, pts[a], pts[b], pts[c], pts[a]);
+                    Handles.DrawAAPolyLine(1.75f, pts[a], pts[b], pts[c], pts[a]);
+                }
+                // The line under the mouse: click it to pick both of its vertices.
+                if (!PartsFfdActive() && !_partsWarpActive && _partsWarpHover < 0
+                    && TryPickPartsWarpLine(canvas, Event.current.mousePosition, out int la, out int lb))
+                {
+                    Handles.color = Color.white;
+                    Handles.DrawAAPolyLine(3f, pts[la], pts[lb]);
                 }
             }
             Handles.color = virtualQuad ? new Color(1f, 1f, 1f, 0.35f) : new Color(1f, 0.6f, 0.2f, 0.95f);
             for (int i = 0; i < hull; i++)
-                Handles.DrawAAPolyLine(virtualQuad ? 1f : 2f, pts[i], pts[(i + 1) % hull]);
+                Handles.DrawAAPolyLine(virtualQuad ? 1.5f : 2.5f, pts[i], pts[(i + 1) % hull]);
 
             var red = new Color(0.9f, 0.2f, 0.15f, 1f);
             var green = new Color(0.2f, 0.95f, 0.35f, 1f);
@@ -412,7 +420,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.color = Color.yellow;
             Handles.DrawWireDisc(joint, Vector3.forward, 6f);
             Handles.EndGUI();
-            if (_partsVertexTool == PartsVertexTool.Translate && TryGetWarpSelectionCentre(canvas, out var axisOrigin))
+            if (PartsFfdActive())
+                DrawPartsFfd(canvas);
+            else if (_partsVertexTool == PartsVertexTool.Translate && TryGetWarpSelectionCentre(canvas, out var axisOrigin))
                 DrawPartsAxisGizmo(axisOrigin);
 
             if (virtualQuad)
@@ -434,11 +444,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                 && TryPickPartsWarpVertex(canvas, mouse, out string slotId, out int point)
                 && SpritePartIdUtility.Canonical(slotId) == SpritePartIdUtility.Canonical(selected.SlotId))
                 next = point;
-            if (next == _partsWarpHover)
+            long line = next < 0 && TryPickPartsWarpLine(canvas, mouse, out int la, out int lb) ? ((long)la << 32) | (uint)lb : -1;
+            if (next == _partsWarpHover && line == _partsWarpHoverLine && !PartsFfdActive())
                 return;
             _partsWarpHover = next;
+            _partsWarpHoverLine = line;
             Repaint();
         }
+
+        long _partsWarpHoverLine = -1;
 
         /// <summary>
         /// Selected part first (mesh vertices, or image corners when it has no mesh yet),
@@ -550,6 +564,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void ApplyPartsWarpDrag(Rect canvas, Vector2 mouse)
         {
+            if (_partsFfdDrag >= 0)
+            {
+                ApplyPartsFfdDrag(canvas, mouse);
+                return;
+            }
             if (!_partsWarpActive || _partsWarpSelection.Count == 0)
                 return;
             mouse = ConstrainPartsAxis(_partsDragStartMouse, mouse);
@@ -731,6 +750,38 @@ namespace InvertLab.Sprites.DOTS.Editor
             => _partsVertexAxis == 1 ? new Vector2(mouse.x, start.y)
                 : _partsVertexAxis == 2 ? new Vector2(start.x, mouse.y)
                 : mouse;
+
+        /// <summary>The mesh line of the selected part under the mouse (Warp), by its two vertices.</summary>
+        bool TryPickPartsWarpLine(Rect canvas, Vector2 mouse, out int a, out int b)
+        {
+            a = b = -1;
+            var slot = CurrentPartsSlot;
+            if (slot?.Mesh == null || !slot.Mesh.HasMesh
+                || !TryGetPartsWarpLayout(canvas, slot.SlotId, out var rect, out var joint, out float guiDeg,
+                    out bool flipX, out bool flipY))
+                return false;
+            var lattice = DeformTarget(ShownLattice(slot.SlotId), out bool virtualQuad);
+            if (virtualQuad)
+                return false;
+            float best = PartsMeshEdgeSnap;
+            int tris = lattice.IndexCount - lattice.IndexCount % 3;
+            for (int t = 0; t < tris; t++)
+            {
+                int p = lattice.GetIndex(t);
+                int q = lattice.GetIndex(t % 3 == 2 ? t - 2 : t + 1);
+                if ((uint)p >= (uint)lattice.PointCount || (uint)q >= (uint)lattice.PointCount)
+                    continue;
+                float d = SpritePartsMeshOps.DistanceToSegment(mouse,
+                    PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, lattice.GetPoint(p)),
+                    PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, lattice.GetPoint(q)));
+                if (d > best)
+                    continue;
+                best = d;
+                a = p;
+                b = q;
+            }
+            return a >= 0;
+        }
 
         /// <summary>Centre of the selected Warp vertices on screen.</summary>
         bool TryGetWarpSelectionCentre(Rect canvas, out Vector2 centre)

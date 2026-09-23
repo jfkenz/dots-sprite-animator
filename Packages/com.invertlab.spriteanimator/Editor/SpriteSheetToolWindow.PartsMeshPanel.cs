@@ -63,7 +63,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPanelMeshSection(slot);
                 DrawPanelSelectionSection(slot);
                 if (!IsPartsMeshEdit())
+                {
+                    DrawPanelFfdSection();
                     DrawPartsMeshToolsSection();
+                }
                 else if (_partsMeshTool == PartsMeshTool.Modify)
                     DrawPanelSoftForModifyHint();
                 DrawPartsWeightsInspector(slot);
