@@ -1811,7 +1811,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             const float pad = 8f;
             const float h = 24f;
-            float w = PartsMeshDisplayOverlay() ? 332f : 244f;
+            float w = PartsMeshDisplayOverlay() ? 390f : 244f;
             return new Rect(canvas.xMax - w - pad, canvas.yMax - h - pad, w, h);
         }
 
@@ -1832,6 +1832,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Triangles", "Show the yellow hidden lines Make Polygons adds inside your outline (AnyPortrait's hidden edges).");
                 DrawPartsVisibilityToggle(ref x, y, 44f, ref _partsShowFfd,
                     "FFD", "Show the FFD grid while FFD is on.");
+                DrawPartsVisibilityToggle(ref x, y, 54f, ref _partsDeformOnion,
+                    "Ghost", "Warp: the previous (blue) and next (green) deform key's mesh as faint wireframes.");
                 return;
             }
             using (new EditorGUI.DisabledScope(_partsMode == SpritePartsStudioMode.Rig))

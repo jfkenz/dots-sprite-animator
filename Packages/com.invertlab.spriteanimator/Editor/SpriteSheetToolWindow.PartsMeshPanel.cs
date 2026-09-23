@@ -66,6 +66,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     DrawPanelMirrorSection(slot);
                 if (!IsPartsMeshEdit())
                 {
+                    DrawPanelDeformToolsSection();
                     DrawPanelBrushSection();
                     DrawPanelFfdSection();
                     DrawPartsMeshToolsSection();

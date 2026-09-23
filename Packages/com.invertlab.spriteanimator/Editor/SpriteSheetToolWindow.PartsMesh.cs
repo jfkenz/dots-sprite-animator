@@ -332,6 +332,8 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             Handles.BeginGUI();
             if (!virtualQuad)
+                DrawPartsDeformOnion(slot, rect, joint, guiDeg, flipX, flipY); // neighbouring deform keys, faint
+            if (!virtualQuad)
             {
                 // Solid lines (1px AA broke into dashes). Automatic triangle lines dim, your edges cyan.
                 int tris = lattice.IndexCount - lattice.IndexCount % 3;
