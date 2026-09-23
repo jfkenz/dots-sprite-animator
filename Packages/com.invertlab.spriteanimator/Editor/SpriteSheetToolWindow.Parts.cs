@@ -1670,6 +1670,20 @@ namespace InvertLab.Sprites.DOTS.Editor
                 _partsSoftSelect = GUI.Toggle(new Rect(tx, ty, 48f, 20f), _partsSoftSelect,
                     new GUIContent("Soft", "Soft selection: neighbours follow with a falloff. Size / Feather in the inspector."));
                 tx += 52f;
+                // What dragging a vertex selection does (also in the Mesh panel). One vertex always moves.
+                var vt = (PartsVertexTool)GUI.Toolbar(new Rect(tx, ty, 168f, 20f), (int)_partsVertexTool,
+                    new[]
+                    {
+                        new GUIContent("Move", "Drag moves the selected vertices."),
+                        new GUIContent("Rotate", "Drag turns 2+ selected vertices around their centre."),
+                        new GUIContent("Scale", "Drag grows / shrinks 2+ selected vertices from their centre."),
+                    });
+                if (vt != _partsVertexTool)
+                {
+                    _partsVertexTool = vt;
+                    Repaint();
+                }
+                tx += 172f;
                 if (PartsFfdActive())
                 {
                     if (GUI.Button(new Rect(tx, ty, 58f, 20f), new GUIContent("Apply", "Keep the FFD result (Enter)."), _primaryStyle))
@@ -4271,7 +4285,6 @@ namespace InvertLab.Sprites.DOTS.Editor
                 // X / Y arrows on the selected vertices: move along one axis (the square moves freely).
                 if (_partsCanvasTool == PartsCanvasTool.Warp
                     && _partsMode == SpritePartsStudioMode.Animate
-                    && _partsVertexTool == PartsVertexTool.Translate
                     && TryGetWarpSelectionCentre(canvas, out var axisOrigin))
                 {
                     int axis = HitPartsAxisGizmo(axisOrigin, evt.mousePosition);

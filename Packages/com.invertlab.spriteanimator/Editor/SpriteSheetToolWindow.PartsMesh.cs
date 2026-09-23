@@ -429,7 +429,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.EndGUI();
             if (PartsFfdActive())
                 DrawPartsFfd(canvas);
-            else if (_partsVertexTool == PartsVertexTool.Translate && TryGetWarpSelectionCentre(canvas, out var axisOrigin))
+            else if (TryGetWarpSelectionCentre(canvas, out var axisOrigin)) // arrows always move, whatever the vertex tool
                 DrawPartsAxisGizmo(axisOrigin);
 
             if (virtualQuad)
@@ -625,9 +625,11 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             float angle = 0f;
             float scale = 1f;
-            if (_partsVertexTool == PartsVertexTool.Rotate && (a - pivot).sqrMagnitude > 16f)
+            // An arrow drag always moves; so does Rotate / Scale on a single vertex (it would turn around itself).
+            var vertexTool = _partsVertexAxis != 0 || _partsWarpSelection.Count < 2 ? PartsVertexTool.Translate : _partsVertexTool;
+            if (vertexTool == PartsVertexTool.Rotate && (a - pivot).sqrMagnitude > 16f)
                 angle = Vector2.SignedAngle(a - pivot, b - pivot);
-            else if (_partsVertexTool == PartsVertexTool.Scale && (a - pivot).sqrMagnitude > 16f)
+            else if (vertexTool == PartsVertexTool.Scale && (a - pivot).sqrMagnitude > 16f)
                 scale = (b - pivot).magnitude / (a - pivot).magnitude;
 
             var lattice = start;
@@ -637,7 +639,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (w <= 0f)
                     continue;
                 Vector2 p = local[i];
-                Vector2 moved = _partsVertexTool switch
+                Vector2 moved = vertexTool switch
                 {
                     PartsVertexTool.Rotate => pivot + (Vector2)(Quaternion.Euler(0f, 0f, angle * w) * (p - pivot)),
                     PartsVertexTool.Scale => pivot + (p - pivot) * (1f + (scale - 1f) * w),
