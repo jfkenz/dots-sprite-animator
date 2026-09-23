@@ -150,11 +150,18 @@ namespace InvertLab.Sprites.DOTS.Tests
                 new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0f), new Vector2(0f, 1f),
             };
             Assert.IsNull(SpritePartsMeshOps.FromOutline(bowtie));
+        }
 
+        [Test]
+        public void MovingVertices_KeepsTheTriangles_AndMayLeaveTheImage()
+        {
             var mesh = SpritePartsMeshOps.CreateQuad();
-            Assert.IsFalse(SpritePartsMeshOps.TrySetVertices(mesh, new[] { 0, 1 }, new[] { new Vector2(1f, 0f), new Vector2(0f, 0f) }),
-                "Swapping two corners turns the hull into a bowtie.");
-            Assert.AreEqual(Vector2.zero, mesh.Vertices[0], "A rejected move leaves the mesh alone.");
+            Assert.IsTrue(SpritePartsMeshOps.TryAddInteriorVertex(mesh, new Vector2(0.5f, 0.5f), out int centre, out _));
+            var before = (int[])mesh.Triangles.Clone();
+            Assert.IsTrue(SpritePartsMeshOps.TrySetVertices(mesh, new[] { centre, 2 },
+                new[] { new Vector2(0.9f, 0.2f), new Vector2(1.4f, 1.3f) }));
+            CollectionAssert.AreEqual(before, mesh.Triangles, "Moving never changes which vertices are joined.");
+            Assert.AreEqual(new Vector2(1.4f, 1.3f), mesh.Vertices[2], "Past the image edge is allowed.");
         }
 
         [Test]

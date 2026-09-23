@@ -455,21 +455,20 @@ namespace InvertLab.Sprites.DOTS
 
         /// <summary>
         /// Moves vertices in texture space (the image stays put, the mesh slides over it).
-        /// Fails, leaving the mesh unchanged, when the hull would cross itself.
+        /// Only positions change: the triangles stay as they are, like AnyPortrait. Re-triangulating on
+        /// every move made other lines jump while dragging and refused moves that bent the outline.
         /// </summary>
         public static bool TrySetVertices(SpritePartMeshDef mesh, IReadOnlyList<int> indices, IReadOnlyList<Vector2> positions)
         {
             if (mesh?.Vertices == null || indices == null || positions == null || indices.Count != positions.Count)
                 return false;
-            var next = mesh.Clone();
+            var verts = (Vector2[])mesh.Vertices.Clone();
             for (int i = 0; i < indices.Count; i++)
             {
-                if ((uint)indices[i] < (uint)next.Vertices.Length)
-                    next.Vertices[indices[i]] = ClampUv(positions[i]);
+                if ((uint)indices[i] < (uint)verts.Length)
+                    verts[indices[i]] = ClampUv(positions[i]);
             }
-            if (!Retriangulate(next))
-                return false;
-            Assign(mesh, next);
+            mesh.Vertices = verts;
             return true;
         }
 
