@@ -83,11 +83,33 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         /// <summary>
-        /// Makes the polygons as soon as every vertex sits inside a closed loop of edges, so the mesh works
-        /// without pressing Make Polygons. Never removes anything: with a vertex outside the loop the
-        /// drawing stays as it is. Part of the same undo step as the edit before it.
+        /// While drawing (AnyPortrait): no triangles appear on their own. This only works out the hint under
+        /// the image and which vertices sit outside the closed loop (drawn yellow).
         /// </summary>
-        void AutoMakeMeshPolygons()
+        void UpdateMeshDraftHint() => AutoMakeMeshPolygons(false);
+
+        /// <summary>
+        /// Leaving Create / Edit Mesh with a closed outline and no polygons: ask, like AnyPortrait's
+        /// "edge work is not completed" dialog. Make Polygons itself asks again before removing vertices.
+        /// </summary>
+        void AskMakeMeshPolygons()
+        {
+            var mesh = MeshEditSlot()?.Mesh;
+            if (mesh == null || !SpritePartsMeshOps.IsDraft(mesh) || mesh.VertexCount < 3 || (mesh.Edges?.Length ?? 0) < 6)
+                return;
+            if (!SpritePartsMeshOps.TryMakePolygons(mesh.Clone(), out _, out _))
+                return; // no closed loop yet: nothing to offer
+            if (EditorUtility.DisplayDialog("Make Polygons",
+                    "The mesh has a closed outline but no polygons yet, so the part still draws as a rectangle.\n\nMake the polygons now?",
+                    "Make Polygons", "Not now"))
+                MakeMeshPolygons();
+        }
+
+        /// <summary>
+        /// <paramref name="make"/> false: hint only (see <see cref="UpdateMeshDraftHint"/>). True: makes the
+        /// polygons when every vertex sits inside a closed loop, never removing anything.
+        /// </summary>
+        void AutoMakeMeshPolygons(bool make)
         {
             _partsMeshAutoPolygons = false;
             _partsMeshDraftHint = null;
@@ -111,6 +133,11 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 _partsMeshDraftHint = _partsMeshOutsideLoop.Count + (_partsMeshOutsideLoop.Count == 1 ? " vertex is" : " vertices are")
                     + " outside the closed loop (yellow). Join or delete them, or Make Polygons removes them.";
+                return;
+            }
+            if (!make)
+            {
+                _partsMeshDraftHint = "loop closed. Press Make Polygons.";
                 return;
             }
             _partsMeshDraftHint = null;
@@ -180,7 +207,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             int pen = (uint)_partsMeshPen < (uint)n ? _partsMeshPen : -1;
             int hit = ctrl && n > 0 ? NearestMeshVertex(mesh, uv, pen) : HitMeshVertex(sprite, mesh, mouse);
             int ea = -1, eb = -1;
-            bool onEdge = hit < 0 && HitMeshGraphEdge(sprite, mesh, mouse, out ea, out eb);
+            bool onEdge = hit < 0 && HitMeshGraphEdge(sprite, mesh, mouse, out ea, out eb,
+                hidden: _partsCreateMode == PartsCreateMode.Edge); // the Edge tool turns hidden lines too
 
             if (_partsCreateMode == PartsCreateMode.Edge)
             {
@@ -201,9 +229,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 else if (onEdge)
                 {
-                    _status = EditMeshDraft("Turn Mesh Edge", w => SpritePartsMeshOps.TryTurnGraphEdge(w, ea, eb) ? IdentityRemap(n) : null)
-                        ? "Edge turned."
-                        : "That edge cannot turn: it needs a triangle on both sides.";
+                    TurnMeshLine(ea, eb);
                 }
                 else
                 {
@@ -300,7 +326,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 return;
             }
-            if (hit < 0 && HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out int ea, out int eb))
+            if (hit < 0 && HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out int ea, out int eb, hidden: true))
             {
                 var lineMenu = new GenericMenu();
                 AddMeshLineMenuItems(lineMenu, mesh, ea, eb, MeshGuiToUv(sprite, evt.mousePosition));
@@ -503,11 +529,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             CapturePartsMeshDrag(controlId);
         }
 
-        static bool HitMeshGraphEdge(Rect sprite, SpritePartMeshDef mesh, Vector2 mouse, out int a, out int b)
+        /// <summary>
+        /// The line under the mouse: the outline and your edges, plus the hidden triangle lines when
+        /// <paramref name="hidden"/> and they are shown (only Turn and the line menu use those, like AnyPortrait).
+        /// </summary>
+        bool HitMeshGraphEdge(Rect sprite, SpritePartMeshDef mesh, Vector2 mouse, out int a, out int b, bool hidden = false)
         {
             a = b = -1;
             float best = PartsMeshEdgeSnap;
-            foreach (var e in SpritePartsMeshOps.GraphEdges(mesh))
+            foreach (var e in SpritePartsMeshOps.GraphEdges(mesh, hidden && _partsMeshShowHiddenLines))
             {
                 float d = SpritePartsMeshOps.DistanceToSegment(mouse,
                     MeshUvToGui(sprite, mesh.Vertices[e.x]), MeshUvToGui(sprite, mesh.Vertices[e.y]));
@@ -561,7 +591,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             bool cut = Event.current.shift && !ctrl;
             int pen = (uint)_partsMeshPen < (uint)n ? _partsMeshPen : -1;
 
-            if (_partsWarpHover < 0 && !ctrl && HitMeshGraphEdge(sprite, mesh, mouse, out int ha, out int hb))
+            if (_partsWarpHover < 0 && !ctrl && HitMeshGraphEdge(sprite, mesh, mouse, out int ha, out int hb,
+                    hidden: _partsCreateMode == PartsCreateMode.Edge))
                 DrawMeshLine(MeshUvToGui(sprite, mesh.Vertices[ha]), MeshUvToGui(sprite, mesh.Vertices[hb]), Color.white, 3f);
 
             if (_partsMeshTool != PartsMeshTool.Create || pen < 0 || _partsCreateMode == PartsCreateMode.Vertex)

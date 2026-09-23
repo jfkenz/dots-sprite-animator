@@ -13,8 +13,11 @@ namespace InvertLab.Sprites.DOTS
         public static bool IsDraft(SpritePartMeshDef mesh)
             => mesh != null && !mesh.HasMesh && mesh.HullCount == 0;
 
-        /// <summary>Every drawn line once: hull outline, user edges and triangle sides.</summary>
-        public static List<Vector2Int> GraphEdges(SpritePartMeshDef mesh)
+        /// <summary>
+        /// Every line once: hull outline, user edges and, when <paramref name="triangles"/>, the triangle
+        /// sides the triangulation added (AnyPortrait keeps those hidden).
+        /// </summary>
+        public static List<Vector2Int> GraphEdges(SpritePartMeshDef mesh, bool triangles = true)
         {
             var list = new List<Vector2Int>();
             int n = mesh?.VertexCount ?? 0;
@@ -39,7 +42,7 @@ namespace InvertLab.Sprites.DOTS
             }
             for (int i = 0; mesh.Edges != null && i + 1 < mesh.Edges.Length; i += 2)
                 Add(mesh.Edges[i], mesh.Edges[i + 1]);
-            for (int t = 0; mesh.HasMesh && t + 2 < mesh.Triangles.Length; t += 3)
+            for (int t = 0; triangles && mesh.HasMesh && t + 2 < mesh.Triangles.Length; t += 3)
             {
                 Add(mesh.Triangles[t], mesh.Triangles[t + 1]);
                 Add(mesh.Triangles[t + 1], mesh.Triangles[t + 2]);
@@ -49,7 +52,8 @@ namespace InvertLab.Sprites.DOTS
         }
 
         /// <summary>
-        /// Turns the mesh into a draft: same vertices, every drawn line becomes an edge, no triangles.
+        /// Turns the mesh into a draft: same vertices, the outline and your edges become edges, no triangles
+        /// (the hidden triangle lines are not turned into edges; Make Polygons adds them again).
         /// False when it already is one.
         /// </summary>
         public static bool ToDraft(SpritePartMeshDef mesh)
@@ -60,7 +64,7 @@ namespace InvertLab.Sprites.DOTS
             {
                 Vertices = mesh.Vertices == null ? Array.Empty<Vector2>() : (Vector2[])mesh.Vertices.Clone(),
                 HullCount = 0,
-                Edges = Flatten(GraphEdges(mesh)),
+                Edges = Flatten(GraphEdges(mesh, false)),
                 Triangles = null,
             };
             Assign(mesh, next);

@@ -341,7 +341,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                         continue;
                     bool userEdge = slot.Mesh != null && SpritePartsMeshOps.HasEdge(slot.Mesh, a, b);
                     if (userEdge ? !_partsWarpShowLines
-                            : !_partsMeshShowAutoLines || SpritePartsMeshOps.IsHullEdge(slot.Mesh, a, b))
+                            : !_partsMeshShowHiddenLines || SpritePartsMeshOps.IsHullEdge(slot.Mesh, a, b))
                         continue;
                     Handles.color = userEdge ? new Color(0.3f, 0.85f, 1f, 0.9f) : PartsMeshAutoLine;
                     Handles.DrawAAPolyLine(userEdge ? 2f : 1.5f, pts[a], pts[b]);
@@ -778,6 +778,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 int q = lattice.GetIndex(t % 3 == 2 ? t - 2 : t + 1);
                 if ((uint)p >= (uint)lattice.PointCount || (uint)q >= (uint)lattice.PointCount)
                     continue;
+                if (IsMeshAutoLine(slot.Mesh, p, q))
+                    continue; // hidden triangle lines are not picked (AnyPortrait)
                 float d = SpritePartsMeshOps.DistanceToSegment(mouse,
                     PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, lattice.GetPoint(p)),
                     PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, lattice.GetPoint(q)));
@@ -984,6 +986,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 return false;
             if (_partsFfdSession != null && _partsFfdSession.On && _partsFfdSession.Mesh)
                 ApplyPartsFfd(); // leaving Edit Mesh keeps the FFD result
+            AskMakeMeshPolygons();
             var left = MeshEditSlot()?.Mesh;
             _partsMeshEditSlotId = null;
             _partsMeshPen = -1;
@@ -1002,7 +1005,9 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         void SetPartsMeshTool(PartsMeshTool tool)
         {
-            // No automatic Make Polygons here: on a half-drawn mesh it would drop vertices outside the loop.
+            // Leaving Create with a closed outline and no polygons: ask (AnyPortrait does the same).
+            if (_partsMeshTool == PartsMeshTool.Create && tool != PartsMeshTool.Create)
+                AskMakeMeshPolygons();
             _partsMeshTool = tool;
             _partsMeshEdgeFrom = -1;
             _partsMeshPen = -1;
@@ -1169,7 +1174,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         void DrawPartsMeshEdit(Rect canvas)
         {
             if (_partsMeshAutoPolygons && !_partsMeshDrag && !_partsWarpBox)
-                AutoMakeMeshPolygons();
+                UpdateMeshDraftHint();
             var slot = MeshEditSlot();
             try
             {
@@ -1231,11 +1236,13 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         /// <summary>Show the automatic triangle lines (Mesh panel). Off hides them; the triangles stay.</summary>
-        [SerializeField] bool _partsMeshShowAutoLines; // off: like AnyPortrait, only the lines you drew show
+        /// <summary>Hidden triangle lines (AnyPortrait's hidden edges), yellow like AnyPortrait. Shown by default.</summary>
+        [SerializeField] bool _partsMeshShowHiddenLines = true;
         [SerializeField] bool _partsShowFfd = true;
         [SerializeField] bool _partsWarpShowVerts = true;
         [SerializeField] bool _partsWarpShowLines = true;
-        static readonly Color PartsMeshAutoLine = new Color(1f, 0.62f, 0.25f, 0.32f);
+        // AnyPortrait's hidden-edge yellow (1, 1, 0, 0.7), a little softer so it reads under the outline.
+        static readonly Color PartsMeshAutoLine = new Color(1f, 0.95f, 0.15f, 0.6f);
 
         /// <summary>A triangle line the triangulation made: not the outline and not an edge you drew.</summary>
         static bool IsMeshAutoLine(SpritePartMeshDef mesh, int a, int b)
@@ -1324,7 +1331,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 // Solid anti-aliased lines (rotated rects broke thin diagonals into dashes under the clip).
                 Handles.BeginGUI();
-                if (mesh.HasMesh && _partsMeshShowAutoLines)
+                if (mesh.HasMesh && _partsMeshShowHiddenLines)
                 {
                     // Automatic triangle lines (not the outline, not your edges): dim, like AnyPortrait's hidden edges.
                     Handles.color = PartsMeshAutoLine;
@@ -1902,7 +1909,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             var mesh = slot?.Mesh;
             var menu = new GenericMenu();
             int hit = HitMeshVertex(sprite, mesh, mouse);
-            if (mesh != null && hit < 0 && HitMeshGraphEdge(sprite, mesh, mouse, out int la, out int lb))
+            if (mesh != null && hit < 0 && HitMeshGraphEdge(sprite, mesh, mouse, out int la, out int lb, hidden: true))
             {
                 // A line under the mouse: its own actions (add vertex in the middle, divide, turn, ...).
                 AddMeshLineMenuItems(menu, mesh, la, lb, MeshGuiToUv(sprite, mouse));

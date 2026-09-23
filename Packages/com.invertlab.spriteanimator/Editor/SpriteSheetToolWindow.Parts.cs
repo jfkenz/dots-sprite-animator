@@ -1794,8 +1794,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                     "Vertices", "Show the mesh vertices (Warp).");
                 DrawPartsVisibilityToggle(ref x, y, 50f, ref _partsWarpShowLines,
                     "Lines", "Show the outline and the edges you drew.");
-                DrawPartsVisibilityToggle(ref x, y, 78f, ref _partsMeshShowAutoLines,
-                    "Triangles", "Show the dim lines the triangulation adds between your lines.");
+                DrawPartsVisibilityToggle(ref x, y, 78f, ref _partsMeshShowHiddenLines,
+                    "Triangles", "Show the yellow hidden lines Make Polygons adds inside your outline (AnyPortrait's hidden edges).");
                 DrawPartsVisibilityToggle(ref x, y, 44f, ref _partsShowFfd,
                     "FFD", "Show the FFD grid while FFD is on.");
                 return;

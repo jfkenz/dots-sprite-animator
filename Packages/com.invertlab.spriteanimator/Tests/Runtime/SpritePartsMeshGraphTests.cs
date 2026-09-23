@@ -122,12 +122,12 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
-        public void ToDraft_Turns_Every_Line_Into_An_Edge_And_Back()
+        public void ToDraft_Keeps_The_Outline_And_Your_Edges_Not_The_Hidden_Diagonal()
         {
             var mesh = SpritePartsMeshOps.CreateQuad();
             Assert.IsTrue(SpritePartsMeshOps.ToDraft(mesh));
             Assert.IsTrue(SpritePartsMeshOps.IsDraft(mesh));
-            Assert.AreEqual(5 * 2, mesh.Edges.Length, "4 outline edges and the diagonal.");
+            Assert.AreEqual(4 * 2, mesh.Edges.Length, "The 4 outline edges; the automatic diagonal stays hidden.");
             Assert.IsTrue(SpritePartsMeshOps.TryMakePolygons(mesh, out var remap, out _));
             Assert.AreEqual(4, mesh.VertexCount);
             Assert.AreEqual(1f, Area(mesh), 1e-4f);
@@ -139,6 +139,7 @@ namespace InvertLab.Sprites.DOTS.Tests
         {
             var mesh = SpritePartsMeshOps.CreateQuad();
             SpritePartsMeshOps.ToDraft(mesh);
+            SpritePartsMeshOps.TryAddEdge(mesh, 0, 2); // a drawn diagonal
             int a = -1, b = -1;
             foreach (var e in SpritePartsMeshOps.GraphEdges(mesh))
             {
