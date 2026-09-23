@@ -87,6 +87,18 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ? mesh.VertexCount + " vertices   " + mesh.HullCount + " hull   " + mesh.Triangles.Length / 3 + " triangles"
                     + (mesh.HasWeights ? "   " + mesh.BoneCount + " bones" : string.Empty)
                 : "No mesh. The part draws as a rectangle.", _mutedStyle);
+            if (mesh != null && mesh.HasMesh)
+            {
+                bool show = EditorGUILayout.ToggleLeft(new GUIContent("Show triangles",
+                        "The dim lines the triangulation adds between your lines. Hiding them changes nothing: " +
+                        "every mesh is drawn as triangles, and a 4-sided shape always has a diagonal."),
+                    _partsMeshShowTriangles);
+                if (show != _partsMeshShowTriangles)
+                {
+                    _partsMeshShowTriangles = show;
+                    Repaint();
+                }
+            }
 
             if (IsPartsMeshEdit())
             {

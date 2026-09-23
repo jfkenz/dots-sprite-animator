@@ -152,6 +152,42 @@ namespace InvertLab.Sprites.DOTS.Tests
             Assert.IsNull(SpritePartsMeshOps.FromOutline(bowtie));
         }
 
+        static HashSet<long> TriangleLines(SpritePartMeshDef mesh)
+        {
+            var set = new HashSet<long>();
+            for (int t = 0; t + 2 < mesh.Triangles.Length; t += 3)
+            {
+                for (int e = 0; e < 3; e++)
+                {
+                    int a = mesh.Triangles[t + e], b = mesh.Triangles[t + (e + 1) % 3];
+                    set.Add(a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a);
+                }
+            }
+            return set;
+        }
+
+        [Test]
+        public void AddingAVertex_KeepsTheOtherLines()
+        {
+            // Two long thin triangles (0-2 diagonal) that a fresh Delaunay would flip to 1-3.
+            var mesh = new SpritePartMeshDef
+            {
+                Vertices = new[] { new Vector2(0f, 0f), new Vector2(1f, 0.45f), new Vector2(1f, 1f), new Vector2(0f, 0.55f) },
+                HullCount = 4,
+                Edges = System.Array.Empty<int>(),
+                Triangles = new[] { 0, 1, 2, 0, 2, 3 }, // not an edge, just how it is joined now
+            };
+            var before = TriangleLines(mesh);
+            Assert.IsTrue(before.Contains(2), "Line 0-2 is there before the edit.");
+
+            Assert.IsTrue(SpritePartsMeshOps.TryAddInteriorVertex(mesh, new Vector2(0.75f, 0.6f), out int added, out _));
+            var after = TriangleLines(mesh);
+            foreach (long line in before)
+                Assert.IsTrue(after.Contains(line), "Line " + (line >> 32) + "-" + (line & 0xffffffff) + " survived the new vertex.");
+            Assert.AreEqual(4, mesh.Triangles.Length / 3, "Only the triangle holding the new vertex was split.");
+            Assert.AreEqual(4, added);
+        }
+
         [Test]
         public void MovingVertices_KeepsTheTriangles_AndMayLeaveTheImage()
         {

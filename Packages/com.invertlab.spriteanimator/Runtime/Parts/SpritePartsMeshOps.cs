@@ -60,6 +60,76 @@ namespace InvertLab.Sprites.DOTS
             return true;
         }
 
+        /// <summary>
+        /// Rebuilds <paramref name="next"/>'s triangles after a local edit while keeping the lines of
+        /// <paramref name="old"/> (mapped through <paramref name="remap"/>, null = same indices) wherever they
+        /// still fit, so only the area around the edit changes (AnyPortrait keeps its lines too).
+        /// A kept line is dropped when it touches a removed vertex, runs through a new vertex, crosses the
+        /// hull, a user edge or another kept line, or is <paramref name="dropA"/>-<paramref name="dropB"/>.
+        /// </summary>
+        static bool RetriangulateKeeping(SpritePartMeshDef next, SpritePartMeshDef old, int[] remap, int dropA = -1, int dropB = -1)
+        {
+            if (old == null || !old.HasMesh)
+                return Retriangulate(next);
+            var v = next.Vertices;
+            int n = v.Length;
+            int h = next.HullCount;
+            var isOld = new bool[n];
+            for (int i = 0; i < old.VertexCount; i++)
+            {
+                int r = remap == null ? i : (i < remap.Length ? remap[i] : -1);
+                if ((uint)r < (uint)n)
+                    isOld[r] = true;
+            }
+            var fixedSegs = new List<(int a, int b)>();
+            var taken = new HashSet<long>();
+            for (int i = 0; i < h; i++)
+            {
+                fixedSegs.Add((i, (i + 1) % h));
+                taken.Add(Key(i, (i + 1) % h));
+            }
+            var constraints = new List<int>(next.Edges ?? Array.Empty<int>());
+            for (int i = 0; i + 1 < constraints.Count; i += 2)
+            {
+                fixedSegs.Add((constraints[i], constraints[i + 1]));
+                taken.Add(Key(constraints[i], constraints[i + 1]));
+            }
+            var kept = new List<(int a, int b)>();
+            for (int t = 0; t + 2 < old.Triangles.Length; t += 3)
+            {
+                for (int e = 0; e < 3; e++)
+                {
+                    int oa = old.Triangles[t + e], ob = old.Triangles[t + (e + 1) % 3];
+                    int a = remap == null ? oa : (oa < remap.Length ? remap[oa] : -1);
+                    int b = remap == null ? ob : (ob < remap.Length ? remap[ob] : -1);
+                    if ((uint)a >= (uint)n || (uint)b >= (uint)n || a == b || !taken.Add(Key(a, b)))
+                        continue;
+                    if ((a == dropA && b == dropB) || (a == dropB && b == dropA))
+                        continue;
+                    bool ok = true;
+                    for (int x = 0; x < n && ok; x++)
+                        ok = isOld[x] || x == a || x == b || DistanceToSegment(v[x], v[a], v[b]) > 1e-4f;
+                    foreach (var s in fixedSegs)
+                        ok = ok && (s.a == a || s.a == b || s.b == a || s.b == b || !SegmentsCross(v[a], v[b], v[s.a], v[s.b]));
+                    foreach (var s in kept)
+                        ok = ok && (s.a == a || s.a == b || s.b == a || s.b == b || !SegmentsCross(v[a], v[b], v[s.a], v[s.b]));
+                    if (!ok)
+                        continue;
+                    kept.Add((a, b));
+                }
+            }
+            foreach (var k in kept)
+            {
+                constraints.Add(k.a);
+                constraints.Add(k.b);
+            }
+            var tris = Triangulate(v, h, constraints.ToArray());
+            if (tris == null)
+                return false;
+            next.Triangles = tris;
+            return true;
+        }
+
         public static bool HasEdge(SpritePartMeshDef mesh, int a, int b)
         {
             if (mesh?.Edges == null)
@@ -134,7 +204,7 @@ namespace InvertLab.Sprites.DOTS
                 HullCount = mesh.HullCount + 1,
                 Edges = RemapEdges(mesh.Edges, remap),
             };
-            if (!Retriangulate(next))
+            if (!RetriangulateKeeping(next, mesh, remap))
                 return false;
             Assign(mesh, next, remap);
             index = at;
@@ -265,8 +335,9 @@ namespace InvertLab.Sprites.DOTS
             }
             edges.Add(a); edges.Add(index);
             edges.Add(index); edges.Add(b);
+            var before = work.Clone();
             work.Edges = edges.ToArray();
-            if (!Retriangulate(work))
+            if (!RetriangulateKeeping(work, before, null, a, b))
                 return false;
             Assign(mesh, work);
             return true;
@@ -345,7 +416,7 @@ namespace InvertLab.Sprites.DOTS
                 HullCount = mesh.HullCount,
                 Edges = mesh.Edges == null ? Array.Empty<int>() : (int[])mesh.Edges.Clone(),
             };
-            if (!Retriangulate(next))
+            if (!RetriangulateKeeping(next, mesh, null))
                 return false;
             remap = Identity(n);
             Assign(mesh, next);
@@ -398,7 +469,7 @@ namespace InvertLab.Sprites.DOTS
                 Assign(mesh, next, remap);
                 return true;
             }
-            if (!Retriangulate(next))
+            if (!RetriangulateKeeping(next, mesh, remap))
                 return false;
             Assign(mesh, next, remap);
             return true;
@@ -420,7 +491,7 @@ namespace InvertLab.Sprites.DOTS
                 mesh.Edges = next.Edges; // draft: no triangles until Make Polygons
                 return true;
             }
-            if (!Retriangulate(next))
+            if (!RetriangulateKeeping(next, mesh, null))
                 return false;
             Assign(mesh, next);
             return true;
@@ -447,7 +518,7 @@ namespace InvertLab.Sprites.DOTS
                 mesh.Edges = next.Edges;
                 return true;
             }
-            if (!Retriangulate(next))
+            if (!RetriangulateKeeping(next, mesh, null, a, b))
                 return false;
             Assign(mesh, next);
             return true;

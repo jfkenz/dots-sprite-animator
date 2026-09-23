@@ -299,7 +299,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 SpritePartsOnion.DisposeSample(blob, poses, matrices);
             }
 
-            if (!_partsShowDebug || _partsCanvasTool != PartsCanvasTool.Warp || _partsMode != SpritePartsStudioMode.Animate)
+            // The Warp handles are the tool itself, so they show even with Debug (labels, gizmos) off.
+            if (_partsCanvasTool != PartsCanvasTool.Warp || _partsMode != SpritePartsStudioMode.Animate)
                 return;
             GUI.BeginClip(canvas);
             try
@@ -331,15 +332,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.BeginGUI();
             if (!virtualQuad)
             {
-                // Solid lines: 1px AA lines broke up into dashes at shallow angles.
-                Handles.color = new Color(1f, 0.62f, 0.25f, 0.75f);
+                // Solid lines (1px AA broke into dashes). Automatic triangle lines dim, your edges cyan.
                 int tris = lattice.IndexCount - lattice.IndexCount % 3;
-                for (int t = 0; t < tris; t += 3)
+                for (int t = 0; t < tris; t++)
                 {
-                    int a = lattice.GetIndex(t), b = lattice.GetIndex(t + 1), c = lattice.GetIndex(t + 2);
-                    if ((uint)a >= (uint)pts.Length || (uint)b >= (uint)pts.Length || (uint)c >= (uint)pts.Length)
+                    int a = lattice.GetIndex(t), b = lattice.GetIndex(t % 3 == 2 ? t - 2 : t + 1);
+                    if ((uint)a >= (uint)pts.Length || (uint)b >= (uint)pts.Length)
                         continue;
-                    Handles.DrawAAPolyLine(1.75f, pts[a], pts[b], pts[c], pts[a]);
+                    bool userEdge = slot.Mesh != null && SpritePartsMeshOps.HasEdge(slot.Mesh, a, b);
+                    if (!userEdge && (!_partsMeshShowTriangles || SpritePartsMeshOps.IsHullEdge(slot.Mesh, a, b)))
+                        continue;
+                    Handles.color = userEdge ? new Color(0.3f, 0.85f, 1f, 0.9f) : PartsMeshAutoLine;
+                    Handles.DrawAAPolyLine(userEdge ? 2f : 1.5f, pts[a], pts[b]);
                 }
                 // The line under the mouse: click it to pick both of its vertices.
                 if (!PartsFfdActive() && !_partsWarpActive && _partsWarpHover < 0
@@ -1208,6 +1212,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUI.Label(new Rect(bx + 44f, by + 1f, 50f, 16f), Mathf.RoundToInt(_partsMeshZoom * 100f) + "%", _mutedStyle);
         }
 
+        /// <summary>Show the automatic triangle lines (Mesh panel). Off hides them; the triangles stay.</summary>
+        [SerializeField] bool _partsMeshShowTriangles = true;
+        static readonly Color PartsMeshAutoLine = new Color(1f, 0.62f, 0.25f, 0.32f);
+
+        /// <summary>A triangle line the triangulation made: not the outline and not an edge you drew.</summary>
+        static bool IsMeshAutoLine(SpritePartMeshDef mesh, int a, int b)
+            => !SpritePartsMeshOps.IsHullEdge(mesh, a, b) && !SpritePartsMeshOps.HasEdge(mesh, a, b);
+
         /// <summary>One solid anti-aliased line (Repaint only).</summary>
         static void DrawMeshLine(Vector2 a, Vector2 b, Color color, float width)
         {
@@ -1291,11 +1303,15 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 // Solid anti-aliased lines (rotated rects broke thin diagonals into dashes under the clip).
                 Handles.BeginGUI();
-                if (mesh.HasMesh)
+                if (mesh.HasMesh && _partsMeshShowTriangles)
                 {
-                    Handles.color = new Color(1f, 0.62f, 0.25f, 0.7f);
+                    // Automatic triangle lines (not the outline, not your edges): dim, like AnyPortrait's hidden edges.
+                    Handles.color = PartsMeshAutoLine;
                     foreach (var e in SpritePartsMeshOps.GraphEdges(mesh))
-                        Handles.DrawAAPolyLine(1.5f, MeshUvToGui(sprite, mesh.Vertices[e.x]), MeshUvToGui(sprite, mesh.Vertices[e.y]));
+                    {
+                        if (IsMeshAutoLine(mesh, e.x, e.y))
+                            Handles.DrawAAPolyLine(1.25f, MeshUvToGui(sprite, mesh.Vertices[e.x]), MeshUvToGui(sprite, mesh.Vertices[e.y]));
+                    }
                 }
                 Handles.color = new Color(1f, 0.6f, 0.2f, 1f);
                 for (int i = 0; i < hull; i++)
