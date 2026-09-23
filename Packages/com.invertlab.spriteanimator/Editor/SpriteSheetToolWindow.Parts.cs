@@ -5664,6 +5664,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             DrawPartsChannelFilter(new Rect(rect.x + 446f, appY, 330f, 16f));
             DrawPartsDopesheetToggles(new Rect(rect.x + 780f, appY, 160f, 16f));
             DrawPartsGraphToggle(new Rect(rect.x + 944f, appY, 52f, 16f));
+            DrawPartsBreakdown(new Rect(rect.x + 1004f, appY, 230f, 16f));
             float tracksTop = rect.y + 48f;
             float tracksHeight = rect.height - 54f;
             var tracksRect = new Rect(rect.x + 8f, tracksTop, rect.width - 16f, tracksHeight);
