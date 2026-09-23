@@ -794,7 +794,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsMeshTool = slot.Mesh.HasMesh ? PartsMeshTool.Modify : PartsMeshTool.Create;
             _status = slot.Mesh.HasMesh
                 ? "Edit Mesh. 1 Modify, 2 Create, 3 Delete. Esc returns."
-                : "No mesh yet. Click around the image to draw the hull, or press New / Trace.";
+                : "No mesh yet. Create: click to add vertices joined by edges, close the loop, then Make Polygons. Or press New / Trace.";
             Repaint();
         }
 
@@ -802,6 +802,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (!IsPartsMeshEdit())
                 return false;
+            if (_partsMeshTool == PartsMeshTool.Create)
+                MakeMeshPolygonsIfDraft();
+            var left = MeshEditSlot()?.Mesh;
             _partsMeshEditSlotId = null;
             _partsMeshPen = -1;
             _partsMeshDrag = false;
@@ -810,20 +813,24 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsWarpBox = false;
             _partsWarpSelection.Clear();
             _partsWarpIndex = -1;
-            _status = "Left Edit Mesh.";
+            _status = left != null && SpritePartsMeshOps.IsDraft(left) && left.VertexCount > 0
+                ? "Left Edit Mesh. The mesh has no polygons yet, so the part draws as a rectangle."
+                : "Left Edit Mesh.";
             Repaint();
             return true;
         }
 
         void SetPartsMeshTool(PartsMeshTool tool)
         {
+            if (_partsMeshTool == PartsMeshTool.Create && tool != PartsMeshTool.Create)
+                MakeMeshPolygonsIfDraft();
             _partsMeshTool = tool;
             _partsMeshEdgeFrom = -1;
             _partsMeshPen = -1;
             _status = tool == PartsMeshTool.Modify
                 ? "Modify: drag vertices to fit the image. The image stays flat."
                 : tool == PartsMeshTool.Create
-                    ? "Create (pen): click to add points joined by edges, click the first point to close. Shift cuts, Ctrl snaps, Enter ends."
+                    ? "Create: click to add vertices joined by edges, right-click deletes. Close the loop, then Make Polygons."
                     : tool == PartsMeshTool.Delete
                         ? "Delete: click a vertex or an edge."
                         : "Weights: click a joint square to bind or pick it, drag to paint (Shift removes).";
@@ -928,7 +935,9 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (GUI.Button(new Rect(banner.x + 4f, banner.y + 3f, 46f, 18f), "Back", _partsTabStyle))
                 TryExitPartsMeshEdit();
             GUI.Label(new Rect(banner.x + 54f, banner.y + 4f, banner.width - 60f, 16f),
-                "Edit Mesh: " + name + "   Del deletes   Right-click for more   Esc returns", _mutedStyle);
+                "Edit Mesh: " + name + (_partsMeshTool == PartsMeshTool.Create
+                    ? "   Right-click deletes   Shift crossings   Ctrl snap   Esc returns"
+                    : "   Del deletes   Right-click for more   Esc returns"), _mutedStyle);
             float bx = banner.x + 4f;
             float by = banner.y + 24f;
             MeshToolButton(ref bx, by, 62f, "1 Modify", PartsMeshTool.Modify);
@@ -978,9 +987,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                     DrawGuiLine(pc, pa, faint, 1f);
                 }
             }
-            // Free points (Auto Connect off) have no drawn outline until the mesh exists.
-            bool freePoints = mesh != null && !mesh.HasMesh && !_partsMeshAutoConnect;
-            for (int i = 0; i < hull && !freePoints; i++)
+            for (int i = 0; i < hull; i++)
             {
                 if (i == hull - 1 && hull < 3)
                     break;
@@ -1001,7 +1008,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_partsMeshEdgeFrom >= 0 && _partsMeshEdgeFrom < n)
                 DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[_partsMeshEdgeFrom]), MeshUvToGui(sprite, _partsMeshMouseUv), new Color(0.3f, 0.85f, 1f, 0.8f), 1.5f);
             else
-                DrawMeshPenPreview(sprite, mesh);
+                DrawMeshCreatePreview(sprite, mesh);
 
             for (int i = 0; i < n; i++)
             {
@@ -1015,7 +1022,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             string stats = mesh != null && mesh.HasMesh
                 ? n + " vertices   " + hull + " hull   " + mesh.Triangles.Length / 3 + " triangles"
-                : n > 0 ? (_partsMeshAutoConnect ? n + " hull points. Keep clicking around the image." : n + " free points. The mesh appears at 3.") : "No mesh. The part draws as a rectangle.";
+                : n > 0 ? n + " vertices   " + (mesh.Edges?.Length ?? 0) / 2 + " edges   no polygons yet: close a loop, then Make Polygons"
+                : "No mesh. The part draws as a rectangle.";
             GUI.Label(new Rect(sprite.x, sprite.yMax + 6f, sprite.width, 16f), stats, _mutedStyle);
         }
 
@@ -1068,6 +1076,24 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
             }
 
+            if (_partsMeshTool == PartsMeshTool.Create && canvas.Contains(evt.mousePosition)
+                && !PartsMeshBanner(canvas).Contains(evt.mousePosition))
+            {
+                // AnyPortrait: right-click deletes (no context menu here).
+                if (evt.type == EventType.MouseDown && evt.button == 1)
+                {
+                    CreateRightClick(sprite, evt, mesh);
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+                if (evt.type == EventType.ContextClick || (evt.type == EventType.MouseUp && evt.button == 1))
+                {
+                    evt.Use();
+                    return;
+                }
+            }
+
             bool rightClick = evt.type == EventType.ContextClick
                 || (evt.button == 1 && evt.type == EventType.MouseUp);
             if (rightClick && canvas.Contains(evt.mousePosition))
@@ -1114,19 +1140,7 @@ namespace InvertLab.Sprites.DOTS.Editor
 
             if (_partsMeshTool == PartsMeshTool.Create)
             {
-                bool ctrl = evt.control || evt.command;
-                bool penLive = (uint)_partsMeshPen < (uint)mesh.VertexCount;
-                if (hit >= 0 && !penLive && !ctrl && mesh.HasMesh)
-                {
-                    // Start the chain here; dragging to another vertex also draws an edge.
-                    SelectOnly(hit);
-                    _partsMeshPen = hit;
-                    _partsMeshEdgeFrom = hit;
-                    CapturePartsMeshDrag(controlId);
-                    _status = "Pen at vertex " + hit + ". Click to draw from here, Enter ends.";
-                }
-                else
-                    PenClick(sprite, evt.mousePosition, hit, evt.shift && !ctrl, ctrl);
+                CreateLeftClick(sprite, evt, controlId, mesh);
                 evt.Use();
                 Repaint();
                 return;
@@ -1335,7 +1349,6 @@ namespace InvertLab.Sprites.DOTS.Editor
             var slot = MeshEditSlot();
             if (slot?.Mesh == null || indices == null || indices.Count == 0)
                 return;
-            bool hadMesh = slot.Mesh.HasMesh;
             var work = slot.Mesh.Clone();
             if (!SpritePartsMeshOps.TryRemoveVertices(work, indices, out var remap))
             {
@@ -1345,8 +1358,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             RecordPartsUndo("Delete Mesh Vertices");
             slot.Mesh = work;
             _partsMeshPen = -1;
-            if (hadMesh)
-                SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
+            SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
             _partsWarpSelection.Clear();
             _partsWarpIndex = -1;
             _partsWarpHover = -1;

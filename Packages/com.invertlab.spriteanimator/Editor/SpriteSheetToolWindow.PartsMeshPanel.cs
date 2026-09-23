@@ -89,19 +89,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 var tool = (PartsMeshTool)GUILayout.Toolbar((int)_partsMeshTool,
                     new[] { new GUIContent("Modify", "1: drag vertices; the image stays flat"),
-                            new GUIContent("Create", "2: pen - click points joined by edges, Shift cut, Ctrl snap, Enter ends"),
+                            new GUIContent("Create", "2: draw vertices and edges, then Make Polygons"),
                             new GUIContent("Delete", "3: click a vertex or edge"),
                             new GUIContent("Weights", "4: bind bones and paint weights") },
                     GUILayout.Height(20f));
                 if (tool != _partsMeshTool)
                     SetPartsMeshTool(tool);
                 if (_partsMeshTool == PartsMeshTool.Create)
-                    _partsMeshAutoConnect = EditorGUILayout.ToggleLeft(
-                        new GUIContent("Auto Connect",
-                            "On: each click joins the new vertex to the previous one with an edge. " +
-                            "Off: clicks add free vertices; Shift (cut) and Ctrl (snap) still draw an edge. " +
-                            "Triangle lines always appear: a mesh is drawn as triangles."),
-                        _partsMeshAutoConnect);
+                    DrawPanelCreateSection(mesh);
                 EditorGUILayout.BeginHorizontal();
                 if (GUILayout.Button(new GUIContent("New", "The four image corners")))
                     ResetPartsMeshToQuad();
@@ -127,6 +122,26 @@ namespace InvertLab.Sprites.DOTS.Editor
                 }
                 EditorGUILayout.EndHorizontal();
             }
+        }
+
+        void DrawPanelCreateSection(SpritePartMeshDef mesh)
+        {
+            _partsCreateMode = (PartsCreateMode)GUILayout.Toolbar((int)_partsCreateMode,
+                new[] { new GUIContent("Vertex+Edge", "Click: add a vertex joined to the last one. Click a vertex: join it. Click an edge: add a vertex on it."),
+                        new GUIContent("Vertex", "Click: add a vertex, no edge. Right-click: delete a vertex."),
+                        new GUIContent("Edge", "Click two vertices to join them. Click an edge to turn it. Right-click: delete an edge.") },
+                GUILayout.Height(20f));
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button(new GUIContent("Auto Link", "Add edges between the vertices so the shape can be filled. Check them after.")))
+                AutoLinkMeshEdges();
+            bool draft = mesh != null && SpritePartsMeshOps.IsDraft(mesh) && mesh.VertexCount > 0;
+            if (GUILayout.Button(new GUIContent("Make Polygons", "Fill every closed loop of edges with triangles"), draft ? _primaryStyle : GUI.skin.button))
+                MakeMeshPolygons();
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.LabelField(draft
+                    ? "No polygons yet. Close the loop (click the first vertex), then Make Polygons."
+                    : "Right-click deletes. Shift: vertex at each crossing. Ctrl: snap. Shift+right-click keeps edges.",
+                EditorStyles.wordWrappedMiniLabel);
         }
 
         // ------------------------------------------------------------------ selection values
@@ -285,7 +300,9 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             GUILayout.Space(8f);
             string help = IsPartsMeshEdit()
-                ? "Keys: 1 Modify  2 Create  3 Delete  4 Weights  Del delete  Ctrl+A all  Esc done.\nRight-click: edges, generate, trace."
+                ? _partsMeshTool == PartsMeshTool.Create
+                    ? "Keys: 1 Modify  2 Create  3 Delete  4 Weights  Enter ends the chain  Esc done.\nLeaving Create makes the polygons."
+                    : "Keys: 1 Modify  2 Create  3 Delete  4 Weights  Del delete  Ctrl+A all  Esc done.\nRight-click: edges, generate, trace."
                 : "Drag a vertex, or drag inside the green box to move the selection.\nDouble-click a part to edit its mesh. Q moves the whole part.";
             EditorGUILayout.LabelField(help, EditorStyles.wordWrappedMiniLabel);
         }

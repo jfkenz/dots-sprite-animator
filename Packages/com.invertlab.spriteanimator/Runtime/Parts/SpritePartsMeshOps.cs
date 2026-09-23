@@ -12,7 +12,7 @@ namespace InvertLab.Sprites.DOTS
     /// deform keys can follow with <see cref="RemapDeform"/>.
     /// Coordinates are texture space of the part image: 0..1, y up.
     /// </summary>
-    public static class SpritePartsMeshOps
+    public static partial class SpritePartsMeshOps
     {
         public const int MaxVertices = SpritePartsLattice.MaxVertices;
         const float Eps = 1e-7f;
@@ -197,29 +197,7 @@ namespace InvertLab.Sprites.DOTS
             remap = new int[n];
             if (n == 0)
                 return new SpritePartMeshDef { Vertices = Array.Empty<Vector2>(), Edges = Array.Empty<int>() };
-            var order = new List<int>(n);
-            for (int i = 0; i < n; i++)
-                order.Add(i);
-            order.Sort((a, b) =>
-            {
-                int c = points[a].x.CompareTo(points[b].x);
-                return c != 0 ? c : points[a].y.CompareTo(points[b].y);
-            });
-            // Andrew's monotone chain, counter-clockwise, collinear points left inside.
-            var hull = new List<int>(n + 1);
-            for (int pass = 0; pass < 2; pass++)
-            {
-                int start = hull.Count;
-                for (int k = 0; k < n; k++)
-                {
-                    int i = pass == 0 ? order[k] : order[n - 1 - k];
-                    while (hull.Count >= start + 2
-                           && Orient(points[hull[hull.Count - 2]], points[hull[hull.Count - 1]], points[i]) <= Eps)
-                        hull.RemoveAt(hull.Count - 1);
-                    hull.Add(i);
-                }
-                hull.RemoveAt(hull.Count - 1);
-            }
+            var hull = ConvexHull(points, n);
             bool closed = hull.Count >= 3;
             var used = new bool[n];
             var verts = new List<Vector2>(n);
@@ -437,6 +415,11 @@ namespace InvertLab.Sprites.DOTS
             var edges = new List<int>(mesh.Edges ?? Array.Empty<int>()) { a, b };
             var next = mesh.Clone();
             next.Edges = edges.ToArray();
+            if (IsDraft(mesh))
+            {
+                mesh.Edges = next.Edges; // draft: no triangles until Make Polygons
+                return true;
+            }
             if (!Retriangulate(next))
                 return false;
             Assign(mesh, next);
@@ -459,6 +442,11 @@ namespace InvertLab.Sprites.DOTS
             }
             var next = mesh.Clone();
             next.Edges = edges.ToArray();
+            if (IsDraft(mesh))
+            {
+                mesh.Edges = next.Edges;
+                return true;
+            }
             if (!Retriangulate(next))
                 return false;
             Assign(mesh, next);

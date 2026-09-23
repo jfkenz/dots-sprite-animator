@@ -4,38 +4,34 @@ using UnityEngine;
 
 namespace InvertLab.Sprites.DOTS.Editor
 {
-    // Create tool = the pen from the old lattice editor, on top of the Spine mesh data:
-    //   click        add a point, joined by an edge to the previous one (the pen)
-    //   click point  connect the pen to it; with no pen, start the chain there
-    //   first point  closes the outline while the hull is still being drawn
-    //   Shift        cut: every user edge the stroke crosses gains a vertex
-    //   Ctrl         snap: connect to the nearest vertex
-    //   Enter        end the chain
-    // Outside the hull a click adds a hull vertex, inside it an interior vertex.
+    // Create tool, the AnyPortrait mesh workflow: draw vertices and edges freely, then Make Polygons
+    // fills every closed loop with triangles. Until then the mesh is a draft (no triangles).
+    //   Vertex+Edge  click: add a vertex joined to the last one; click a vertex: join it; click an edge: add a vertex on it
+    //   Vertex       click: add a vertex (no edge)
+    //   Edge         click two vertices: join them; click an edge: turn it
+    //   Right-click  delete a vertex or an edge; on empty space, end the chain
+    //   Shift        click: a vertex where the new edge crosses each edge; Shift+right-click keeps the edges
+    //   Ctrl         snap to the nearest vertex
     public sealed partial class SpriteSheetToolWindow
     {
+        enum PartsCreateMode
+        {
+            VertexEdge = 0,
+            Vertex = 1,
+            Edge = 2,
+        }
+
         int _partsMeshPen = -1;
-        /// <summary>On: a pen click joins the new vertex to the previous one. Off: free vertices.</summary>
-        [SerializeField] bool _partsMeshAutoConnect = true;
+        [SerializeField] PartsCreateMode _partsCreateMode = PartsCreateMode.VertexEdge;
 
         string MeshFullMessage()
-            => "Mesh is full (" + SpritePartsMeshOps.MaxVertices + " vertices). Delete or merge some vertices first.";
+            => "Mesh is full (" + SpritePartsMeshOps.MaxVertices + " vertices). Delete some vertices first.";
 
         void EndMeshPen()
         {
             _partsMeshPen = -1;
-            _status = "Pen ended. Click to start a new chain.";
+            _status = "Chain ended. Click to start a new one.";
             Repaint();
-        }
-
-        static int[] ComposeRemap(int[] total, int[] step)
-        {
-            if (step == null)
-                return total;
-            var result = new int[total.Length];
-            for (int i = 0; i < total.Length; i++)
-                result[i] = total[i] >= 0 && total[i] < step.Length ? step[total[i]] : -1;
-            return result;
         }
 
         static int[] IdentityRemap(int n)
@@ -46,245 +42,234 @@ namespace InvertLab.Sprites.DOTS.Editor
             return map;
         }
 
-        /// <summary>One pen click in Create. <paramref name="hit"/> = vertex under the mouse or -1.</summary>
-        void PenClick(Rect sprite, Vector2 mouse, int hit, bool cut, bool snap)
+        /// <summary>
+        /// One Create edit: runs on a draft copy of the mesh, then commits it (undo, deform keys, save).
+        /// <paramref name="edit"/> returns the remap from old to new vertices, or null when nothing changed.
+        /// </summary>
+        bool EditMeshDraft(string label, System.Func<SpritePartMeshDef, int[]> edit)
         {
             var slot = MeshEditSlot();
             if (slot == null)
-                return;
-            var mesh = slot.Mesh ??= new SpritePartMeshDef();
-            Vector2 uv = MeshGuiToUv(sprite, mouse);
-
-            // Outline still open: points go around the image in click order.
-            if (!mesh.HasMesh)
-            {
-                if (hit == 0 && mesh.VertexCount >= 3)
-                {
-                    _partsMeshPen = -1;
-                    _status = "Outline closed. Click inside for interior vertices.";
-                    return;
-                }
-                if (hit >= 0)
-                {
-                    SelectWarpVertex(hit, false);
-                    return;
-                }
-                if (!_partsMeshAutoConnect)
-                {
-                    PlaceFreePoint(slot, mesh, uv);
-                    return;
-                }
-                var pending = mesh.Clone();
-                if (!SpritePartsMeshOps.TryAppendHullVertex(pending, uv, out int added))
-                {
-                    _status = MeshFullMessage();
-                    return;
-                }
-                RecordPartsUndo("Pen Hull Point");
-                slot.Mesh = pending;
-                _partsMeshPen = added;
-                SelectOnly(added);
-                SaveDirty();
-                _status = pending.HasMesh
-                    ? "Hull point " + added + ". Click the first point to close, or keep going."
-                    : "Hull point " + added + ". Keep clicking around the image.";
-                return;
-            }
-
-            // Auto Connect off: every click is a free vertex (Ctrl / Shift still draw from the pen).
-            int pen = (uint)_partsMeshPen < (uint)mesh.VertexCount && (_partsMeshAutoConnect || snap || cut)
-                ? _partsMeshPen
-                : -1;
-            if (snap && pen >= 0)
-                hit = NearestMeshVertex(mesh, uv, pen);
-
-            var work = mesh.Clone();
-            int[] total = IdentityRemap(mesh.VertexCount);
-            int target = hit;
-            string what;
-            if (target < 0)
-            {
-                if (!TryPlaceMeshVertex(work, sprite, uv, out target, out var placed, out what))
-                {
-                    _status = work.VertexCount >= SpritePartsMeshOps.MaxVertices
-                        ? MeshFullMessage()
-                        : "A vertex there would make the hull cross itself.";
-                    return;
-                }
-                total = ComposeRemap(total, placed);
-                if (pen >= 0)
-                    pen = placed != null ? placed[pen] : pen;
-            }
-            else
-                what = "Vertex " + target;
-
-            if (pen < 0 || pen == target)
-            {
-                if (hit >= 0 && target == hit)
-                {
-                    // Clicking a point with no pen starts the chain there.
-                    _partsMeshPen = target;
-                    SelectOnly(target);
-                    _status = "Pen at vertex " + target + ". Click to draw from here.";
-                    return;
-                }
-                CommitPen(slot, mesh, work, total, "Pen Point");
-                _partsMeshPen = target;
-                SelectOnly(target);
-                _status = _partsMeshAutoConnect
-                    ? what + ". Next click draws an edge from it."
-                    : what + " (free, Auto Connect off).";
-                return;
-            }
-
-            int from = pen;
-            if (cut)
-                from = CutAcross(work, from, ref target, ref total);
-            if (from != target && !SpritePartsMeshOps.IsHullEdge(work, from, target)
-                && !SpritePartsMeshOps.TryAddEdge(work, from, target))
-                _status = "Could not add that edge.";
-            else
-                _status = (cut ? "Cut to " : "Edge to ") + target;
-            CommitPen(slot, mesh, work, total, cut ? "Pen Cut" : "Pen Edge");
-            _partsMeshPen = target;
-            SelectOnly(target);
+                return false;
+            var before = slot.Mesh ?? new SpritePartMeshDef();
+            var work = before.Clone();
+            SpritePartsMeshOps.ToDraft(work);
+            var remap = edit(work);
+            if (remap == null)
+                return false;
+            RecordPartsUndo(label);
+            slot.Mesh = work;
+            SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
+            SaveDirty();
+            return true;
         }
 
-        /// <summary>Auto Connect off, no mesh yet: free points; the outermost ones become the outline.</summary>
-        void PlaceFreePoint(SpritePartSlotDef slot, SpritePartMeshDef mesh, Vector2 uv)
+        void CreateLeftClick(Rect sprite, Event evt, int controlId, SpritePartMeshDef mesh)
         {
-            if (mesh.VertexCount >= SpritePartsMeshOps.MaxVertices)
+            bool ctrl = evt.control || evt.command;
+            bool cut = evt.shift && !ctrl;
+            Vector2 uv = MeshGuiToUv(sprite, evt.mousePosition);
+            int n = mesh.VertexCount;
+            int pen = (uint)_partsMeshPen < (uint)n ? _partsMeshPen : -1;
+            int hit = ctrl && n > 0 ? NearestMeshVertex(mesh, uv, pen) : HitMeshVertex(sprite, mesh, evt.mousePosition);
+            int ea = -1, eb = -1;
+            bool onEdge = hit < 0 && HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out ea, out eb);
+
+            if (_partsCreateMode == PartsCreateMode.Edge)
+            {
+                if (hit >= 0 && pen >= 0 && pen != hit)
+                {
+                    int from = pen, to = hit;
+                    if (EditMeshDraft(cut ? "Cut Mesh Edge" : "Add Mesh Edge",
+                            w => SpritePartsMeshOps.TryConnectGraph(w, from, to, cut) ? IdentityRemap(n) : null))
+                        _status = "Edge " + from + " - " + to + ". Click another vertex to go on, right-click to stop.";
+                    _partsMeshPen = to;
+                    SelectOnly(to);
+                }
+                else if (hit >= 0)
+                {
+                    _partsMeshPen = hit;
+                    SelectOnly(hit);
+                    _status = "From vertex " + hit + ". Click the vertex to join it to.";
+                }
+                else if (onEdge)
+                {
+                    _status = EditMeshDraft("Turn Mesh Edge", w => SpritePartsMeshOps.TryTurnGraphEdge(w, ea, eb) ? IdentityRemap(n) : null)
+                        ? "Edge turned."
+                        : "That edge cannot turn: it needs a triangle on both sides.";
+                }
+                else
+                {
+                    _partsMeshPen = -1;
+                    _status = "Edge: click a vertex, then the vertex to join it to.";
+                }
+                return;
+            }
+
+            if (hit >= 0)
+            {
+                if (_partsCreateMode == PartsCreateMode.VertexEdge && pen >= 0 && pen != hit)
+                {
+                    int from = pen, to = hit;
+                    if (EditMeshDraft(cut ? "Cut Mesh Edge" : "Add Mesh Edge",
+                            w => SpritePartsMeshOps.TryConnectGraph(w, from, to, cut) ? IdentityRemap(n) : null))
+                        _status = "Joined " + from + " - " + to + ". Right-click empty space to stop the chain.";
+                    _partsMeshPen = to;
+                    SelectOnly(to);
+                    return;
+                }
+                // Pick the vertex: the chain goes on from it, and dragging moves it.
+                SelectOnly(hit);
+                _partsMeshPen = _partsCreateMode == PartsCreateMode.VertexEdge ? hit : -1;
+                BeginMeshVertexDrag(evt, controlId, mesh);
+                _status = "Vertex " + hit + ". Drag to move" + (_partsMeshPen >= 0 ? ", or click to draw from it." : ".");
+                return;
+            }
+
+            if (n >= SpritePartsMeshOps.MaxVertices)
             {
                 _status = MeshFullMessage();
                 return;
             }
-            var points = new List<Vector2>(mesh.Vertices ?? System.Array.Empty<Vector2>()) { uv };
-            var next = SpritePartsMeshOps.FromPoints(points, out var remap);
-            RecordPartsUndo("Place Mesh Point");
-            slot.Mesh = next;
+            bool chain = _partsCreateMode == PartsCreateMode.VertexEdge && pen >= 0;
+            int added = -1;
+            bool ok = EditMeshDraft(onEdge ? "Add Vertex On Edge" : "Add Mesh Vertex", w =>
+            {
+                bool placed = onEdge
+                    ? SpritePartsMeshOps.TrySplitGraphEdge(w, ea, eb, uv, out added)
+                    : SpritePartsMeshOps.TryAddGraphVertex(w, uv, out added);
+                if (!placed)
+                    return null;
+                if (chain)
+                    SpritePartsMeshOps.TryConnectGraph(w, pen, added, cut);
+                return IdentityRemap(n);
+            });
+            if (!ok)
+            {
+                _status = "Could not add a vertex there.";
+                return;
+            }
+            SelectOnly(added);
+            _partsMeshPen = _partsCreateMode == PartsCreateMode.VertexEdge ? added : -1;
+            var now = MeshEditSlot()?.Mesh;
+            _status = "Vertex " + added + (onEdge ? " on the edge" : string.Empty)
+                + (chain ? ", joined to " + pen : string.Empty)
+                + ". " + (now != null && now.VertexCount >= 3 ? "Close the loop, then Make Polygons." : "Keep clicking.");
+        }
+
+        void CreateRightClick(Rect sprite, Event evt, SpritePartMeshDef mesh)
+        {
+            int n = mesh.VertexCount;
+            int hit = HitMeshVertex(sprite, mesh, evt.mousePosition);
+            if (hit >= 0 && _partsCreateMode != PartsCreateMode.Edge)
+            {
+                bool keep = evt.shift;
+                int[] removed = null;
+                if (EditMeshDraft("Delete Mesh Vertex", w =>
+                    {
+                        SpritePartsMeshOps.TryRemoveGraphVertex(w, hit, keep, out removed);
+                        return removed;
+                    }))
+                {
+                    _partsWarpSelection.Clear();
+                    _partsWarpIndex = -1;
+                    _partsWarpHover = -1;
+                    _partsMeshPen = (uint)_partsMeshPen < (uint)n && removed != null ? removed[_partsMeshPen] : -1;
+                    _status = "Vertex deleted" + (keep ? ", its edges joined." : ".");
+                }
+                return;
+            }
+            if (hit < 0 && _partsCreateMode != PartsCreateMode.Vertex
+                && HitMeshGraphEdge(sprite, mesh, evt.mousePosition, out int ea, out int eb))
+            {
+                if (EditMeshDraft("Delete Mesh Edge", w => SpritePartsMeshOps.TryRemoveEdge(w, ea, eb) ? IdentityRemap(n) : null))
+                    _status = "Edge deleted.";
+                return;
+            }
             _partsMeshPen = -1;
-            SelectOnly(remap[points.Count - 1]);
+            _partsWarpSelection.Clear();
+            _partsWarpIndex = -1;
+            _status = "Chain ended.";
+        }
+
+        /// <summary>Make Polygons: triangles in every closed loop of edges; the mesh is usable again.</summary>
+        void MakeMeshPolygons()
+        {
+            var slot = MeshEditSlot();
+            if (slot?.Mesh == null || slot.Mesh.VertexCount == 0)
+            {
+                _status = "Add vertices and edges first.";
+                return;
+            }
+            var work = slot.Mesh.Clone();
+            SpritePartsMeshOps.ToDraft(work);
+            if (!SpritePartsMeshOps.TryMakePolygons(work, out var remap, out string message))
+            {
+                _status = message;
+                return;
+            }
+            RecordPartsUndo("Make Polygons");
+            slot.Mesh = work;
+            SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, remap, work.VertexCount);
+            _partsMeshPen = -1;
+            _partsWarpSelection.Clear();
+            _partsWarpIndex = -1;
+            _partsWarpHover = -1;
             SaveDirty();
-            _status = next.HasMesh
-                ? "Mesh around " + next.VertexCount + " points (" + next.HullCount + " outline). Keep clicking to add more."
-                : points.Count + " free points. The mesh appears at 3.";
+            _status = message;
+            Repaint();
         }
 
-        /// <summary>
-        /// Cut: every outline (hull) or user edge crossed by from-&gt;to gains a vertex at the crossing,
-        /// and the chain runs through them. Splitting a hull edge shifts indices, so the next
-        /// crossing is searched again on the updated mesh each time.
-        /// </summary>
-        int CutAcross(SpritePartMeshDef work, int from, ref int to, ref int[] total)
+        /// <summary>Leaving Create with a draft: fill it, like pressing Make Polygons. Quiet when there is nothing yet.</summary>
+        void MakeMeshPolygonsIfDraft()
         {
-            int prev = from;
-            for (int guard = 0; guard < SpritePartsMeshOps.MaxVertices; guard++)
+            var mesh = MeshEditSlot()?.Mesh;
+            if (mesh != null && SpritePartsMeshOps.IsDraft(mesh) && mesh.VertexCount >= 3 && (mesh.Edges?.Length ?? 0) >= 6)
+                MakeMeshPolygons();
+        }
+
+        void AutoLinkMeshEdges()
+        {
+            var slot = MeshEditSlot();
+            int n = slot?.Mesh?.VertexCount ?? 0;
+            if (n < 3)
             {
-                if (!TryFirstCrossing(work, prev, to, out int ea, out int eb, out var p))
-                    break;
-                if (work.VertexCount >= SpritePartsMeshOps.MaxVertices)
-                {
-                    _status = MeshFullMessage() + " The cut stopped early.";
-                    break;
-                }
-                // Hull and user edges are split (keeping them as edges); a triangle line just gets a vertex.
-                bool stored = SpritePartsMeshOps.IsHullEdge(work, ea, eb) || SpritePartsMeshOps.HasEdge(work, ea, eb);
-                int x;
-                int[] step;
-                bool ok = stored
-                    ? SpritePartsMeshOps.TrySplitEdgeAt(work, ea, eb, p, out x, out step)
-                    : SpritePartsMeshOps.TryAddInteriorVertex(work, p, out x, out step);
-                if (!ok)
-                    break;
-                total = ComposeRemap(total, step);
-                if (step != null)
-                {
-                    prev = step[prev];
-                    to = step[to];
-                }
-                SpritePartsMeshOps.TryAddEdge(work, prev, x);
-                prev = x;
+                _status = "Auto Link needs at least 3 vertices.";
+                return;
             }
-            return prev;
+            int added = 0;
+            EditMeshDraft("Auto Link Edges", w =>
+            {
+                added = SpritePartsMeshOps.AutoLinkGraph(w);
+                return added > 0 ? IdentityRemap(n) : null;
+            });
+            _status = added > 0 ? "Auto Link added " + added + " edges. Check them, then Make Polygons." : "No edges to add.";
         }
 
-        /// <summary>Nearest drawn line (hull, user edge or triangle side) crossed by from-&gt;to, skipping lines that touch either end.</summary>
-        static bool TryFirstCrossing(SpritePartMeshDef mesh, int from, int to, out int ea, out int eb, out Vector2 point)
+        void BeginMeshVertexDrag(Event evt, int controlId, SpritePartMeshDef mesh)
         {
-            ea = eb = -1;
-            point = default;
-            float best = float.MaxValue;
-            foreach (var (a, b) in CuttableEdges(mesh))
+            _partsMeshDrag = true;
+            _partsMeshMoved = false;
+            _partsMeshDragStart = mesh.Clone();
+            _partsDragStartMouse = evt.mousePosition;
+            CapturePartsMeshDrag(controlId);
+        }
+
+        static bool HitMeshGraphEdge(Rect sprite, SpritePartMeshDef mesh, Vector2 mouse, out int a, out int b)
+        {
+            a = b = -1;
+            float best = PartsMeshEdgeSnap;
+            foreach (var e in SpritePartsMeshOps.GraphEdges(mesh))
             {
-                if (a == from || b == from || a == to || b == to)
+                float d = SpritePartsMeshOps.DistanceToSegment(mouse,
+                    MeshUvToGui(sprite, mesh.Vertices[e.x]), MeshUvToGui(sprite, mesh.Vertices[e.y]));
+                if (d > best)
                     continue;
-                if (!SpritePartsMeshOps.TrySegmentHit(mesh.Vertices[from], mesh.Vertices[to], mesh.Vertices[a], mesh.Vertices[b], out float t, out var p)
-                    || t >= best)
-                    continue;
-                best = t;
-                ea = a;
-                eb = b;
-                point = p;
+                best = d;
+                a = e.x;
+                b = e.y;
             }
-            return ea >= 0;
-        }
-
-        static IEnumerable<(int a, int b)> CuttableEdges(SpritePartMeshDef mesh)
-        {
-            int n = mesh?.VertexCount ?? 0;
-            int h = Mathf.Min(mesh?.HullCount ?? 0, n);
-            for (int i = 0; h >= 3 && i < h; i++)
-                yield return (i, (i + 1) % h);
-            for (int i = 0; mesh?.Edges != null && i + 1 < mesh.Edges.Length; i += 2)
-            {
-                if ((uint)mesh.Edges[i] < (uint)n && (uint)mesh.Edges[i + 1] < (uint)n)
-                    yield return (mesh.Edges[i], mesh.Edges[i + 1]);
-            }
-            // Triangle sides (each interior side appears twice; the duplicate just finds the same crossing).
-            for (int t = 0; mesh?.Triangles != null && t + 2 < mesh.Triangles.Length; t += 3)
-            {
-                for (int e = 0; e < 3; e++)
-                {
-                    int a = mesh.Triangles[t + e];
-                    int b = mesh.Triangles[t + (e + 1) % 3];
-                    if (a < b && (uint)b < (uint)n)
-                        yield return (a, b);
-                }
-            }
-        }
-
-        /// <summary>Hull edge snap, interior vertex, or a new hull vertex outside the outline.</summary>
-        bool TryPlaceMeshVertex(SpritePartMeshDef work, Rect sprite, Vector2 uv, out int index, out int[] remap, out string what)
-        {
-            index = -1;
-            remap = null;
-            what = "Vertex";
-            if (work.VertexCount >= SpritePartsMeshOps.MaxVertices)
-                return false;
-            float px = 1f / Mathf.Max(1f, Mathf.Min(sprite.width, sprite.height));
-            int edge = SpritePartsMeshOps.NearestHullEdge(work, uv, out float distance);
-            if (edge >= 0 && distance <= PartsMeshEdgeSnap * px)
-            {
-                int next = (edge + 1) % work.HullCount;
-                what = "Hull vertex";
-                return SpritePartsMeshOps.TrySplitEdgeAt(work, edge, next, uv, out index, out remap);
-            }
-            if (SpritePartsMeshOps.IsInsideHull(work, uv))
-            {
-                what = "Interior vertex";
-                return SpritePartsMeshOps.TryAddInteriorVertex(work, uv, out index, out remap);
-            }
-            what = "Hull vertex";
-            return SpritePartsMeshOps.TryInsertHullVertexAuto(work, uv, out index, out remap);
-        }
-
-        void CommitPen(SpritePartSlotDef slot, SpritePartMeshDef before, SpritePartMeshDef after, int[] total, string label)
-        {
-            RecordPartsUndo(label);
-            slot.Mesh = after;
-            if (before.HasMesh && after.VertexCount != before.VertexCount)
-                SpritePartsAuthoringOps.RemapSlotDeforms(_profile, slot.SlotId, total, after.VertexCount);
-            SaveDirty();
+            return a >= 0;
         }
 
         void SelectOnly(int index)
@@ -312,48 +297,47 @@ namespace InvertLab.Sprites.DOTS.Editor
             return best;
         }
 
-        /// <summary>Rubber band from the pen to the mouse, with cut markers while Shift is held.</summary>
-        void DrawMeshPenPreview(Rect sprite, SpritePartMeshDef mesh)
+        /// <summary>Hovered edge, and the line from the last vertex to the mouse (cut markers with Shift).</summary>
+        void DrawMeshCreatePreview(Rect sprite, SpritePartMeshDef mesh)
         {
-            if (_partsMeshTool != PartsMeshTool.Create || mesh?.Vertices == null || Event.current.type != EventType.Repaint)
+            if (_partsMeshTool != PartsMeshTool.Create || mesh?.Vertices == null || Event.current.type != EventType.Repaint
+                || _partsMeshDrag)
                 return;
             Vector2 mouseUv = _partsMeshMouseUv;
             if (mouseUv.x < -0.2f || mouseUv.x > 1.2f || mouseUv.y < -0.2f || mouseUv.y > 1.2f)
                 return;
+            Vector2 mouse = MeshUvToGui(sprite, mouseUv);
             int n = mesh.VertexCount;
-            if (!mesh.HasMesh)
-            {
-                if (n == 0 || !_partsMeshAutoConnect)
-                    return;
-                var faint = new Color(1f, 0.72f, 0.25f, 0.8f);
-                DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[n - 1]), MeshUvToGui(sprite, mouseUv), faint, 1.5f);
-                if (n >= 2)
-                    DrawGuiLine(MeshUvToGui(sprite, mouseUv), MeshUvToGui(sprite, mesh.Vertices[0]), new Color(1f, 0.72f, 0.25f, 0.3f), 1f);
-                return;
-            }
-            if ((uint)_partsMeshPen >= (uint)n)
-                return;
             bool ctrl = Event.current.control || Event.current.command;
             bool cut = Event.current.shift && !ctrl;
-            if (!_partsMeshAutoConnect && !ctrl && !cut)
-                return; // free vertices: no rubber band
+            int pen = (uint)_partsMeshPen < (uint)n ? _partsMeshPen : -1;
+
+            if (_partsWarpHover < 0 && !ctrl && HitMeshGraphEdge(sprite, mesh, mouse, out int ha, out int hb))
+                DrawGuiLine(MeshUvToGui(sprite, mesh.Vertices[ha]), MeshUvToGui(sprite, mesh.Vertices[hb]), Color.white, 3f);
+
+            if (pen < 0 || _partsCreateMode == PartsCreateMode.Vertex)
+                return;
             Vector2 target = mouseUv;
             if (ctrl)
             {
-                int near = NearestMeshVertex(mesh, mouseUv, _partsMeshPen);
+                int near = NearestMeshVertex(mesh, mouseUv, pen);
                 if (near >= 0)
                     target = mesh.Vertices[near];
             }
-            Vector2 from = mesh.Vertices[_partsMeshPen];
+            else if (_partsWarpHover >= 0)
+                target = mesh.Vertices[_partsWarpHover];
+            else if (_partsCreateMode == PartsCreateMode.Edge)
+                return; // the Edge tool only joins existing vertices
+            Vector2 from = mesh.Vertices[pen];
             var line = ctrl ? new Color(0.35f, 0.95f, 1f, 0.95f) : new Color(1f, 0.72f, 0.25f, 0.9f);
             DrawGuiLine(MeshUvToGui(sprite, from), MeshUvToGui(sprite, target), line, 1.5f);
             if (!cut)
                 return;
-            foreach (var (ea, eb) in CuttableEdges(mesh))
+            foreach (var e in SpritePartsMeshOps.GraphEdges(mesh))
             {
-                if (ea == _partsMeshPen || eb == _partsMeshPen)
+                if (e.x == pen || e.y == pen)
                     continue;
-                if (!SpritePartsMeshOps.TrySegmentHit(from, target, mesh.Vertices[ea], mesh.Vertices[eb], out _, out var p))
+                if (!SpritePartsMeshOps.TrySegmentHit(from, target, mesh.Vertices[e.x], mesh.Vertices[e.y], out _, out var p))
                     continue;
                 Vector2 g = MeshUvToGui(sprite, p);
                 EditorGUI.DrawRect(new Rect(g.x - 3f, g.y - 3f, 6f, 6f), new Color(1f, 0.95f, 0.4f, 1f));
