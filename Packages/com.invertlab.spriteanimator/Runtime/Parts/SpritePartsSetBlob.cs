@@ -215,6 +215,10 @@ namespace InvertLab.Sprites.DOTS
         public int IntPayload;
         public float FloatPayload;
         public ulong TextHash;
+        /// <summary>Index into the character's <see cref="SpritePartsAudioBank"/> (-1 = no sound).</summary>
+        public int AudioIndex;
+        public float Volume;
+        public float Balance;
     }
 
     public struct SpritePartsTrackBlob
@@ -380,6 +384,10 @@ namespace InvertLab.Sprites.DOTS
             public int IntPayload;
             public float FloatPayload;
             public string TextPayload;
+            /// <summary>-1 = no sound. Index 0 counts only with a Volume above 0, so a default input stays silent.</summary>
+            public int AudioIndex;
+            public float Volume;
+            public float Balance;
         }
 
         public struct SkinBindingInput
@@ -627,6 +635,9 @@ namespace InvertLab.Sprites.DOTS
                             IntPayload = ev.IntPayload,
                             FloatPayload = ev.FloatPayload,
                             TextHash = string.IsNullOrEmpty(ev.TextPayload) ? 0UL : SpriteAnimSetBuilder.Fnv(ev.TextPayload),
+                            AudioIndex = ev.AudioIndex > 0 || (ev.AudioIndex == 0 && ev.Volume > 0f) ? ev.AudioIndex : -1,
+                            Volume = math.saturate(ev.Volume),
+                            Balance = math.clamp(ev.Balance, -1f, 1f),
                         });
                     }
                     events.Sort((a, b) => a.Time.CompareTo(b.Time));

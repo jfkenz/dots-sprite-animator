@@ -376,11 +376,25 @@ namespace InvertLab.Sprites.DOTS
         public static SpritePartsSetBuilder.ClipInput[] CreateClips(IReadOnlyList<SpritePartsClipDef> list)
             => CreateClips(list, null);
 
+        /// <summary>The distinct sounds the clips' events play, in a fixed order (the audio bank baked with the blob).</summary>
+        public static AudioClip[] EventAudio(IReadOnlyList<SpritePartsClipDef> list)
+        {
+            var result = new List<AudioClip>();
+            if (list == null)
+                return result.ToArray();
+            foreach (var clip in list)
+                foreach (var e in clip?.Events ?? new List<SpritePartsEventMarker>())
+                    if (e?.Audio != null && !result.Contains(e.Audio))
+                        result.Add(e.Audio);
+            return result.ToArray();
+        }
+
         public static SpritePartsSetBuilder.ClipInput[] CreateClips(
             IReadOnlyList<SpritePartsClipDef> list, SpriteSheetProfile profile)
         {
             if (list == null)
                 return Array.Empty<SpritePartsSetBuilder.ClipInput>();
+            var audio = new List<AudioClip>(EventAudio(list));
             var result = new SpritePartsSetBuilder.ClipInput[list.Count];
             for (int i = 0; i < list.Count; i++)
             {
@@ -447,6 +461,9 @@ namespace InvertLab.Sprites.DOTS
                         {
                             Time = e.Time, Id = e.EventId, IntPayload = e.IntPayload, FloatPayload = e.FloatPayload,
                             TextPayload = e.TextPayload,
+                            AudioIndex = e.Audio != null ? audio.IndexOf(e.Audio) : -1,
+                            Volume = e.Audio != null ? e.Volume : 0f,
+                            Balance = e.Balance,
                         }).ToArray(),
                     ValueTracks = (clip.ValueTracks ?? new List<SpritePartsValueTrackDef>()).FindAll(t => t != null)
                         .ConvertAll(t => new SpritePartsSetBuilder.ValueTrackInput

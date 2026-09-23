@@ -427,11 +427,16 @@ namespace InvertLab.Sprites.DOTS
         public int IntPayload;
         public float FloatPayload;
         public string TextPayload = string.Empty;
+        /// <summary>Played when the event fires (Spine's audio events). None = silent.</summary>
+        public AudioClip Audio;
+        [Range(0f, 1f)] public float Volume = 1f;
+        /// <summary>Stereo pan: -1 left, 0 centre, 1 right.</summary>
+        [Range(-1f, 1f)] public float Balance;
 
         public SpritePartsEventMarker Clone() => new SpritePartsEventMarker
         {
             Time = Time, EventId = EventId, IntPayload = IntPayload, FloatPayload = FloatPayload,
-            TextPayload = TextPayload ?? string.Empty,
+            TextPayload = TextPayload ?? string.Empty, Audio = Audio, Volume = Volume, Balance = Balance,
         };
     }
 

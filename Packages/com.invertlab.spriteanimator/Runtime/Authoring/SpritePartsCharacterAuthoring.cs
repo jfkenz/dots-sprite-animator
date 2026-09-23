@@ -173,7 +173,16 @@ namespace InvertLab.Sprites.DOTS
                 AddBuffer<SpritePartSocketWorld>(root);
                 AddBuffer<SpritePartHitboxBinding>(root);
                 AddBuffer<SpritePartHitboxWorld>(root);
+                AddBuffer<SpritePartsMixEntry>(root);
                 AddComponent(root, new SpritePartsPoseDiagnostics { PreviousClipIndex = -1 });
+                // Event sounds: the clips the blob's AudioIndex values point at.
+                var eventAudio = SpritePartsClipConversion.EventAudio(profile.PartsClips);
+                if (eventAudio.Length > 0)
+                {
+                    foreach (var sound in eventAudio)
+                        DependsOn(sound);
+                    AddComponentObject(root, new SpritePartsAudioBank { Clips = eventAudio });
+                }
                 BakeOverrides(authoring, ovBuf, ref partsBlob.Value);
                 BakeLayers(authoring, layerBuf, ref partsBlob.Value);
 

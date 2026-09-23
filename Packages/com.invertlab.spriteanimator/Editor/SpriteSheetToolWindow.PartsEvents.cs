@@ -225,6 +225,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             int iv = EditorGUILayout.IntField(new GUIContent("Int", "Sent with the event (SpriteAnimEventBuffer.IntPayload)"), ev.IntPayload);
             float fv = EditorGUILayout.FloatField(new GUIContent("Float", "Sent with the event (FloatPayload)"), ev.FloatPayload);
             string tv = EditorGUILayout.TextField(new GUIContent("Text", "Sent as a hash (TextHash = SpriteAnimSetBuilder.Fnv(text))"), ev.TextPayload ?? string.Empty);
+            EditorGUILayout.BeginHorizontal();
+            var audio = (AudioClip)EditorGUILayout.ObjectField(new GUIContent("Audio", "Played when the event fires (2D)"), ev.Audio, typeof(AudioClip), false);
+            using (new EditorGUI.DisabledScope(ev.Audio == null))
+            {
+                if (GUILayout.Button(new GUIContent("▶", "Listen"), EditorStyles.miniButton, GUILayout.Width(24f)))
+                    PreviewPartsEventAudio(ev.Audio);
+            }
+            EditorGUILayout.EndHorizontal();
+            float volume = ev.Volume, balance = ev.Balance;
+            if (ev.Audio != null)
+            {
+                volume = EditorGUILayout.Slider(new GUIContent("Volume"), ev.Volume, 0f, 1f);
+                balance = EditorGUILayout.Slider(new GUIContent("Balance", "Stereo pan: -1 left, 1 right"), ev.Balance, -1f, 1f);
+            }
             if (EditorGUI.EndChangeCheck())
             {
                 RecordPartsUndo("Edit Event");
@@ -239,6 +253,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 ev.IntPayload = iv;
                 ev.FloatPayload = fv;
                 ev.TextPayload = tv;
+                ev.Audio = audio;
+                ev.Volume = volume;
+                ev.Balance = balance;
                 SaveDirty();
                 Repaint();
             }
@@ -258,9 +275,23 @@ namespace InvertLab.Sprites.DOTS.Editor
                 bool hit = to > from
                     ? (from <= 1e-6f ? ev.Time >= from : ev.Time > from) && ev.Time <= to
                     : loop && to < from && (ev.Time > from || ev.Time <= to);
-                if (hit)
-                    _partsEventFlash.Add((PartsEventName(ev.EventId), PartsEventColor(ev.EventId), until));
+                if (!hit)
+                    continue;
+                _partsEventFlash.Add((PartsEventName(ev.EventId), PartsEventColor(ev.EventId), until));
+                if (ev.Audio != null)
+                    PreviewPartsEventAudio(ev.Audio);
             }
+        }
+
+        /// <summary>Plays a clip in the editor (Unity's AudioUtil preview, found by reflection; silent if missing).</summary>
+        static void PreviewPartsEventAudio(AudioClip clip)
+        {
+            if (clip == null)
+                return;
+            var util = typeof(AudioImporter).Assembly.GetType("UnityEditor.AudioUtil");
+            var play = util?.GetMethod("PlayPreviewClip", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public,
+                null, new[] { typeof(AudioClip), typeof(int), typeof(bool) }, null);
+            play?.Invoke(null, new object[] { clip, 0, false });
         }
 
         void DrawPartsEventFlash(Rect canvas)

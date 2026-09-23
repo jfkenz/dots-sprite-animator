@@ -60,10 +60,15 @@ namespace InvertLab.Sprites.DOTS
                 if (hits.Length == 0)
                     return;
                 SpriteAnimEvents.Ensure(em, tick.Entity);
+                var bank = em.HasComponent<SpritePartsAudioBank>(tick.Entity)
+                    ? em.GetComponentObject<SpritePartsAudioBank>(tick.Entity)
+                    : null;
                 var buffer = em.GetBuffer<SpriteAnimEventBuffer>(tick.Entity);
                 for (int h = 0; h < hits.Length; h++)
                 {
                     ref var ev = ref clip.Events[hits[h]];
+                    if (bank?.Clips != null && ev.AudioIndex >= 0 && ev.AudioIndex < bank.Clips.Length)
+                        SpritePartsAudio.Play(tick.Entity, bank.Clips[ev.AudioIndex], ev.Volume, ev.Balance);
                     buffer.Add(new SpriteAnimEventBuffer
                     {
                         Id = ev.Id,
