@@ -237,7 +237,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         static bool SetPendingVertices(SpritePartMeshDef mesh, List<int> ids, List<Vector2> positions)
         {
             for (int k = 0; k < ids.Count; k++)
-                mesh.Vertices[ids[k]] = new Vector2(Mathf.Clamp01(positions[k].x), Mathf.Clamp01(positions[k].y));
+                mesh.Vertices[ids[k]] = SpritePartsMeshOps.ClampUv(positions[k]);
             return true;
         }
 

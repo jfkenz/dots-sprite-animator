@@ -76,7 +76,7 @@ namespace InvertLab.Sprites.DOTS
             var verts = new Vector2[n + 1];
             if (n > 0)
                 Array.Copy(mesh.Vertices, verts, n);
-            verts[n] = Clamp01(uv);
+            verts[n] = ClampUv(uv);
             var next = new SpritePartMeshDef { Vertices = verts, HullCount = 0, Edges = mesh.Edges ?? Array.Empty<int>() };
             Assign(mesh, next, Identity(n));
             index = n;

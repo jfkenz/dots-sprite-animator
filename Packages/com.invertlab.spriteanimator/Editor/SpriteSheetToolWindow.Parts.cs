@@ -1869,6 +1869,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             _partsDragActive = false;
             _partsWarpActive = false;
             _partsWarpNeedsMesh = false;
+            _partsVertexAxis = 0;
+            _partsMeshPanning = false;
             _partsMarqueeActive = false;
             _partsWarpBox = false;
             _partsMeshDrag = false;
@@ -4073,11 +4075,13 @@ namespace InvertLab.Sprites.DOTS.Editor
                          GUIUtility.hotControl == _partsCanvasHotControl ||
                          GUIUtility.hotControl == 0);
 
-            if (!canvas.Contains(evt.mousePosition) && !ours && !_partsDragActive && !_partsMarqueeActive)
+            if (!canvas.Contains(evt.mousePosition) && !ours && !_partsDragActive && !_partsMarqueeActive && !_partsMeshPanning)
                 return;
 
-            // Canvas camera: scroll zooms toward cursor; MMB / Alt+LMB pans.
-            if (HandlePartsCanvasNavigation(canvas, evt, controlId))
+            // Canvas camera: scroll zooms toward cursor; MMB / Alt+LMB pans. Edit Mesh has its own camera.
+            if (IsPartsMeshEdit()
+                    ? HandlePartsMeshNavigation(canvas, evt, controlId)
+                    : HandlePartsCanvasNavigation(canvas, evt, controlId))
                 return;
 
             if (HandlePartsMarquee(canvas, evt, controlId))
@@ -4212,6 +4216,23 @@ namespace InvertLab.Sprites.DOTS.Editor
                     evt.Use();
                     Repaint();
                     return;
+                }
+
+                // X / Y arrows on the selected vertices: move along one axis (the square moves freely).
+                if (_partsCanvasTool == PartsCanvasTool.Warp
+                    && _partsMode == SpritePartsStudioMode.Animate
+                    && _partsVertexTool == PartsVertexTool.Translate
+                    && TryGetWarpSelectionCentre(canvas, out var axisOrigin))
+                {
+                    int axis = HitPartsAxisGizmo(axisOrigin, evt.mousePosition);
+                    if (axis != 0)
+                    {
+                        BeginPartsWarpDrag(controlId, CurrentPartsSlot.SlotId, _partsWarpSelection[0], evt.mousePosition, false);
+                        _partsVertexAxis = axis;
+                        evt.Use();
+                        Repaint();
+                        return;
+                    }
                 }
 
                 if (_partsCanvasTool == PartsCanvasTool.Warp

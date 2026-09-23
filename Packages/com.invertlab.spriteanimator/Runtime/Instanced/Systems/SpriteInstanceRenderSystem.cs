@@ -411,6 +411,8 @@ namespace InvertLab.Sprites.DOTS
 
             var vertices = new Vector3[vertCount];
             var uvs = new Vector2[vertCount];
+            var crops = new Vector4[vertCount];
+            var insets = new Vector2[vertCount];
             var colors = new Color[vertCount];
             var indices = new int[indexCount];
             float aspect = rec.CellAspect > 0.01f ? rec.CellAspect : 1f;
@@ -433,9 +435,12 @@ namespace InvertLab.Sprites.DOTS
                 for (int k = 0; k < verts; k++)
                 {
                     vertices[vbase + k] = (Vector3)WarpPointWorld(data, SpriteRenderResources.WarpScratch[pointBase + k], aspect);
-                    float2 uv = math.clamp(SpriteRenderResources.WarpUvScratch[pointBase + k], inset, 1f - inset);
-                    float2 atlas = data.CropST.zw + uv * data.CropST.xy;
-                    uvs[vbase + k] = new Vector2(atlas.x, atlas.y);
+                    // Cell-space UV, unclamped: vertices may sit past the image. The shader maps it into the
+                    // sheet per pixel and leaves the outside empty (no bleed from the neighbouring cell).
+                    float2 uv = SpriteRenderResources.WarpUvScratch[pointBase + k];
+                    uvs[vbase + k] = new Vector2(uv.x, uv.y);
+                    crops[vbase + k] = new Vector4(data.CropST.x, data.CropST.y, data.CropST.z, data.CropST.w);
+                    insets[vbase + k] = new Vector2(inset.x, inset.y);
                     colors[vbase + k] = new Color(data.Color.x, data.Color.y, data.Color.z, data.Color.w);
                 }
                 for (int k = 0; k < inds; k++)
@@ -456,6 +461,8 @@ namespace InvertLab.Sprites.DOTS
                 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(vertices);
             mesh.SetUVs(0, uvs);
+            mesh.SetUVs(1, crops);
+            mesh.SetUVs(2, insets);
             mesh.SetColors(colors);
             mesh.SetIndices(indices, MeshTopology.Triangles, 0);
             mesh.bounds = bounds;

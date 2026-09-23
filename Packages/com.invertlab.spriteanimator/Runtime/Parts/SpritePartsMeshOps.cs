@@ -10,7 +10,7 @@ namespace InvertLab.Sprites.DOTS
     /// the triangulation, and triangles are always generated (constrained Delaunay).
     /// Every topology change returns a remap (old index to new index, -1 = removed) so
     /// deform keys can follow with <see cref="RemapDeform"/>.
-    /// Coordinates are texture space of the part image: 0..1, y up.
+    /// Coordinates are texture space of the part image: 0..1 is the image, y up; vertices may go past it.
     /// </summary>
     public static partial class SpritePartsMeshOps
     {
@@ -43,7 +43,7 @@ namespace InvertLab.Sprites.DOTS
             int n = Mathf.Min(outline.Count, MaxVertices);
             var verts = new Vector2[n];
             for (int i = 0; i < n; i++)
-                verts[i] = Clamp01(outline[i]);
+                verts[i] = ClampUv(outline[i]);
             var mesh = new SpritePartMeshDef { Vertices = verts, HullCount = n, Edges = Array.Empty<int>() };
             return Retriangulate(mesh) ? mesh : null;
         }
@@ -124,7 +124,7 @@ namespace InvertLab.Sprites.DOTS
                 return false;
             int at = hullEdge + 1;
             var verts = new List<Vector2>(mesh.Vertices);
-            verts.Insert(at, Clamp01(uv));
+            verts.Insert(at, ClampUv(uv));
             remap = new int[n];
             for (int i = 0; i < n; i++)
                 remap[i] = i < at ? i : i + 1;
@@ -150,7 +150,7 @@ namespace InvertLab.Sprites.DOTS
             index = -1;
             if (mesh == null || mesh.VertexCount >= MaxVertices || mesh.VertexCount != mesh.HullCount)
                 return false;
-            var verts = new List<Vector2>(mesh.Vertices ?? Array.Empty<Vector2>()) { Clamp01(uv) };
+            var verts = new List<Vector2>(mesh.Vertices ?? Array.Empty<Vector2>()) { ClampUv(uv) };
             mesh.Vertices = verts.ToArray();
             mesh.HullCount = verts.Count;
             mesh.Edges ??= Array.Empty<int>();
@@ -206,7 +206,7 @@ namespace InvertLab.Sprites.DOTS
                 foreach (int i in hull)
                 {
                     remap[i] = verts.Count;
-                    verts.Add(Clamp01(points[i]));
+                    verts.Add(ClampUv(points[i]));
                     used[i] = true;
                 }
             }
@@ -215,7 +215,7 @@ namespace InvertLab.Sprites.DOTS
                 if (used[i])
                     continue;
                 remap[i] = verts.Count;
-                verts.Add(Clamp01(points[i]));
+                verts.Add(ClampUv(points[i]));
             }
             var mesh = new SpritePartMeshDef
             {
@@ -465,7 +465,7 @@ namespace InvertLab.Sprites.DOTS
             for (int i = 0; i < indices.Count; i++)
             {
                 if ((uint)indices[i] < (uint)next.Vertices.Length)
-                    next.Vertices[indices[i]] = Clamp01(positions[i]);
+                    next.Vertices[indices[i]] = ClampUv(positions[i]);
             }
             if (!Retriangulate(next))
                 return false;
@@ -902,7 +902,15 @@ namespace InvertLab.Sprites.DOTS
 
         static float DistanceSq(Vector2 a, Vector2 b) => (a - b).sqrMagnitude;
 
-        static Vector2 Clamp01(Vector2 p) => new Vector2(Mathf.Clamp01(p.x), Mathf.Clamp01(p.y));
+        /// <summary>
+        /// Vertices may sit outside the image (Spine / AnyPortrait do this to leave room for deforms);
+        /// that area draws transparent. Limited to one image size past each side.
+        /// </summary>
+        public const float MinUv = -1f;
+        public const float MaxUv = 2f;
+
+        public static Vector2 ClampUv(Vector2 p)
+            => new Vector2(Mathf.Clamp(p.x, MinUv, MaxUv), Mathf.Clamp(p.y, MinUv, MaxUv));
 
         static long Key(int a, int b) => a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
 

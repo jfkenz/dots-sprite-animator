@@ -201,6 +201,21 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void Vertices_May_Sit_Past_The_Image_Edge()
+        {
+            var mesh = Draft(new Vector2(-0.3f, -0.2f), new Vector2(1.4f, 0f), new Vector2(0.5f, 1.25f), new Vector2(5f, 5f));
+            Assert.AreEqual(-0.3f, mesh.Vertices[0].x, 1e-6f);
+            Assert.AreEqual(1.25f, mesh.Vertices[2].y, 1e-6f);
+            Assert.AreEqual(SpritePartsMeshOps.MaxUv, mesh.Vertices[3].x, 1e-6f, "Clamped to one image size past the edge.");
+            Loop(mesh, 3);
+            SpritePartsMeshOps.TryRemoveGraphVertex(mesh, 3, false, out _);
+            Assert.IsTrue(SpritePartsMeshOps.TryMakePolygons(mesh, out _, out _));
+            var lattice = SpritePartsLattice.FromMesh(mesh);
+            Assert.IsTrue(lattice.HasMesh);
+            Assert.AreEqual(-0.3f, lattice.GetUv(0).x + lattice.GetUv(1).x + lattice.GetUv(2).x - 1.4f - 0.5f, 1e-5f);
+        }
+
+        [Test]
         public void AutoLink_Fills_The_Loop_With_Edges()
         {
             var mesh = Draft(

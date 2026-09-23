@@ -20,6 +20,8 @@ Shader "Hidden/InvertLab/Parts Warp Preview"
             #pragma fragment frag
             #include "UnityCG.cginc"
             sampler2D _MainTex;
+            // Cell in the sheet (xy = min, zw = size). TEXCOORD0 is cell space: past 0..1 is empty.
+            float4 _CellRect;
             struct appdata
             {
                 float4 vertex : POSITION;
@@ -42,7 +44,8 @@ Shader "Hidden/InvertLab/Parts Warp Preview"
             }
             fixed4 frag(v2f i) : SV_Target
             {
-                fixed4 c = tex2D(_MainTex, i.uv);
+                clip(min(min(i.uv.x, i.uv.y), min(1.0 - i.uv.x, 1.0 - i.uv.y)));
+                fixed4 c = tex2D(_MainTex, _CellRect.xy + saturate(i.uv) * _CellRect.zw);
                 #ifndef UNITY_COLORSPACE_GAMMA
                 c.rgb = LinearToGammaSpace(c.rgb);
                 #endif

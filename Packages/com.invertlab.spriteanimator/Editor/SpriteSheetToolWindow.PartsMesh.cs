@@ -46,6 +46,11 @@ namespace InvertLab.Sprites.DOTS.Editor
         int _partsMeshEdgeFrom = -1;
         Vector2 _partsMeshMouseUv;
         bool _partsWarpNeedsMesh;
+        float _partsMeshZoom = 1f;
+        Vector2 _partsMeshPan;
+        bool _partsMeshPanning;
+        Vector2 _partsMeshPanStartMouse;
+        Vector2 _partsMeshPanStart;
         // Spine Mesh Tools view: how a vertex drag transforms the selection, and soft selection.
         [SerializeField] PartsVertexTool _partsVertexTool = PartsVertexTool.Translate;
         [SerializeField] bool _partsSoftSelect = true;
@@ -210,6 +215,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Mathf.Max(0.0001f, uv.width - padU * 2f), Mathf.Max(0.0001f, uv.height - padV * 2f));
             mat.mainTexture = tex;
             mat.color = Color.white;
+            // Vertices may sit past the image: texcoords stay in cell space, the shader maps and clips them.
+            mat.SetVector("_CellRect", new Vector4(uv.xMin, uv.yMin, uv.width, uv.height));
             if (!mat.SetPass(0))
                 return;
 
@@ -232,7 +239,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 Vector2 screen = GUIUtility.GUIToScreenPoint(gui);
                 float2 t = lattice.GetUv(v);
                 GL.Color(tint);
-                GL.TexCoord(new Vector2(Mathf.Lerp(uv.xMin, uv.xMax, t.x), Mathf.Lerp(uv.yMin, uv.yMax, t.y)));
+                GL.TexCoord(new Vector2(t.x, t.y));
                 GL.Vertex3(screen.x - origin.x, screen.y - origin.y, 0f);
             }
             GL.End();
@@ -405,6 +412,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             Handles.color = Color.yellow;
             Handles.DrawWireDisc(joint, Vector3.forward, 6f);
             Handles.EndGUI();
+            if (_partsVertexTool == PartsVertexTool.Translate && TryGetWarpSelectionCentre(canvas, out var axisOrigin))
+                DrawPartsAxisGizmo(axisOrigin);
 
             if (virtualQuad)
             {
@@ -543,6 +552,7 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             if (!_partsWarpActive || _partsWarpSelection.Count == 0)
                 return;
+            mouse = ConstrainPartsAxis(_partsDragStartMouse, mouse);
             if ((mouse - _partsDragStartMouse).sqrMagnitude < 4f)
                 return;
             if (_partsWarpNeedsMesh)
@@ -672,6 +682,105 @@ namespace InvertLab.Sprites.DOTS.Editor
         }
 
         /// <summary>Screen box around the selected vertices of the current part (the draggable "square").</summary>
+        // ------------------------------------------------------------------ axis gizmo (move vertices along X or Y)
+
+        const float PartsAxisLength = 44f;
+        const int PartsAxisFree = 3;
+
+        /// <summary>0 = off, 1 = X only, 2 = Y only, 3 = free (the centre square). Set while a vertex drag runs.</summary>
+        int _partsVertexAxis;
+
+        /// <summary>Which part of the arrows gizmo at <paramref name="origin"/> is under the mouse (0 = none).</summary>
+        static int HitPartsAxisGizmo(Vector2 origin, Vector2 mouse)
+        {
+            if (Mathf.Abs(mouse.x - origin.x) <= 6f && Mathf.Abs(mouse.y - origin.y) <= 6f)
+                return PartsAxisFree;
+            if (SpritePartsMeshOps.DistanceToSegment(mouse, origin + new Vector2(8f, 0f), origin + new Vector2(PartsAxisLength + 6f, 0f)) <= 6f)
+                return 1;
+            if (SpritePartsMeshOps.DistanceToSegment(mouse, origin - new Vector2(0f, 8f), origin - new Vector2(0f, PartsAxisLength + 6f)) <= 6f)
+                return 2;
+            return 0;
+        }
+
+        /// <summary>Red X arrow, green Y arrow and a centre square, like the part Move gizmo.</summary>
+        void DrawPartsAxisGizmo(Vector2 origin)
+        {
+            if (Event.current.type != EventType.Repaint)
+                return;
+            int hover = _partsVertexAxis != 0 ? _partsVertexAxis : HitPartsAxisGizmo(origin, Event.current.mousePosition);
+            var red = hover == 1 ? new Color(1f, 0.85f, 0.3f, 1f) : new Color(0.95f, 0.22f, 0.18f, 1f);
+            var green = hover == 2 ? new Color(1f, 0.85f, 0.3f, 1f) : new Color(0.25f, 0.9f, 0.3f, 1f);
+            Handles.BeginGUI();
+            Vector2 xEnd = origin + new Vector2(PartsAxisLength, 0f);
+            Vector2 yEnd = origin - new Vector2(0f, PartsAxisLength);
+            Handles.color = red;
+            Handles.DrawAAPolyLine(3f, origin, xEnd);
+            Handles.DrawAAConvexPolygon(xEnd + new Vector2(9f, 0f), xEnd + new Vector2(0f, -5f), xEnd + new Vector2(0f, 5f));
+            Handles.color = green;
+            Handles.DrawAAPolyLine(3f, origin, yEnd);
+            Handles.DrawAAConvexPolygon(yEnd + new Vector2(0f, -9f), yEnd + new Vector2(-5f, 0f), yEnd + new Vector2(5f, 0f));
+            Handles.EndGUI();
+            var square = new Rect(origin.x - 5f, origin.y - 5f, 10f, 10f);
+            EditorGUI.DrawRect(square, hover == PartsAxisFree ? new Color(1f, 0.85f, 0.3f, 0.9f) : new Color(0.3f, 0.8f, 1f, 0.85f));
+            EditorGUIUtility.AddCursorRect(new Rect(origin.x + 6f, origin.y - 6f, PartsAxisLength + 6f, 12f), MouseCursor.ResizeHorizontal);
+            EditorGUIUtility.AddCursorRect(new Rect(origin.x - 6f, origin.y - PartsAxisLength - 6f, 12f, PartsAxisLength), MouseCursor.ResizeVertical);
+        }
+
+        /// <summary>The mouse held to the locked axis (screen space) while an arrow is dragged.</summary>
+        Vector2 ConstrainPartsAxis(Vector2 start, Vector2 mouse)
+            => _partsVertexAxis == 1 ? new Vector2(mouse.x, start.y)
+                : _partsVertexAxis == 2 ? new Vector2(start.x, mouse.y)
+                : mouse;
+
+        /// <summary>Centre of the selected Warp vertices on screen.</summary>
+        bool TryGetWarpSelectionCentre(Rect canvas, out Vector2 centre)
+        {
+            centre = default;
+            var slot = CurrentPartsSlot;
+            if (slot == null || _partsWarpSelection.Count == 0
+                || SpritePartIdUtility.Canonical(slot.SlotId) != _partsWarpSelectionSlotId)
+                return false;
+            if (!TryGetPartsWarpLayout(canvas, slot.SlotId, out var rect, out var joint, out float guiDeg,
+                    out bool flipX, out bool flipY))
+                return false;
+            var lattice = DeformTarget(ShownLattice(slot.SlotId), out _);
+            int count = 0;
+            foreach (int s in _partsWarpSelection)
+            {
+                if ((uint)s >= (uint)lattice.PointCount)
+                    continue;
+                centre += PartsWarpPointGui(rect, joint, guiDeg, flipX, flipY, lattice.GetPoint(s));
+                count++;
+            }
+            if (count == 0)
+                return false;
+            centre /= count;
+            return true;
+        }
+
+        /// <summary>Modify always; Create only between chains, so the arrows never catch the next click.</summary>
+        bool MeshAxisGizmoShown()
+            => _partsMeshTool == PartsMeshTool.Modify
+               || (_partsMeshTool == PartsMeshTool.Create && _partsMeshPen < 0);
+
+        /// <summary>Centre of the selected Edit Mesh vertices on screen.</summary>
+        bool TryGetMeshSelectionCentre(Rect sprite, SpritePartMeshDef mesh, out Vector2 centre)
+        {
+            centre = default;
+            int count = 0;
+            foreach (int s in _partsWarpSelection)
+            {
+                if ((uint)s >= (uint)(mesh?.VertexCount ?? 0))
+                    continue;
+                centre += MeshUvToGui(sprite, mesh.Vertices[s]);
+                count++;
+            }
+            if (count == 0)
+                return false;
+            centre /= count;
+            return true;
+        }
+
         bool TryGetWarpSelectionBox(Rect canvas, out Rect box)
         {
             box = default;
@@ -803,6 +912,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 slot.Mesh = new SpritePartMeshDef();
             _partsMeshTool = slot.Mesh.HasMesh ? PartsMeshTool.Modify : PartsMeshTool.Create;
             _partsMeshAutoPolygons = true; // an earlier drawing that is already closed gets its polygons
+            _partsMeshZoom = 0.8f; // a little room around the image: vertices may sit past its edge
+            _partsMeshPan = Vector2.zero;
             _status = slot.Mesh.HasMesh
                 ? "Edit Mesh. 1 Modify, 2 Create, 3 Delete. Esc returns."
                 : "No mesh yet. Create: click to add vertices joined by edges, close the loop, then Make Polygons. Or press New / Trace.";
@@ -877,12 +988,71 @@ namespace InvertLab.Sprites.DOTS.Editor
                 h = availH;
                 w = h * aspect;
             }
-            sprite = new Rect(canvas.x + (canvas.width - reserve - w) * 0.5f, canvas.y + 62f + (availH - h) * 0.5f, w, h);
+            var fit = new Rect(canvas.x + (canvas.width - reserve - w) * 0.5f, canvas.y + 62f + (availH - h) * 0.5f, w, h);
+            // Edit Mesh has its own camera: scroll zooms toward the mouse, MMB / Alt+drag pans.
+            Vector2 size = fit.size * _partsMeshZoom;
+            sprite = new Rect(fit.center + _partsMeshPan - size * 0.5f, size);
             return true;
         }
 
+        /// <summary>Edit Mesh camera input. True when the event was used.</summary>
+        bool HandlePartsMeshNavigation(Rect canvas, Event evt, int controlId)
+        {
+            if (evt.type == EventType.ScrollWheel && canvas.Contains(evt.mousePosition)
+                && !PartsMeshPanelRect(canvas).Contains(evt.mousePosition)
+                && TryGetPartsMeshEditLayout(canvas, out var sprite, out _, out _))
+            {
+                // Keep the point under the mouse fixed while zooming.
+                Vector2 t = (evt.mousePosition - sprite.position) / new Vector2(Mathf.Max(1f, sprite.width), Mathf.Max(1f, sprite.height));
+                float zoom = Mathf.Clamp(_partsMeshZoom * (evt.delta.y > 0f ? 1f / 1.15f : 1.15f), 0.2f, 16f);
+                Vector2 fitSize = sprite.size / _partsMeshZoom;
+                Vector2 fitCenter = sprite.center - _partsMeshPan;
+                Vector2 size = fitSize * zoom;
+                _partsMeshPan = evt.mousePosition - t * size + size * 0.5f - fitCenter;
+                _partsMeshZoom = zoom;
+                evt.Use();
+                Repaint();
+                return true;
+            }
+            bool panButton = evt.button == 2 || (evt.button == 0 && evt.alt);
+            if (evt.type == EventType.MouseDown && panButton && canvas.Contains(evt.mousePosition))
+            {
+                _partsMeshPanning = true;
+                _partsMeshPanStartMouse = evt.mousePosition;
+                _partsMeshPanStart = _partsMeshPan;
+                GUIUtility.hotControl = controlId;
+                evt.Use();
+                return true;
+            }
+            if (!_partsMeshPanning)
+                return false;
+            if (evt.type == EventType.MouseDrag)
+            {
+                _partsMeshPan = _partsMeshPanStart + (evt.mousePosition - _partsMeshPanStartMouse);
+                evt.Use();
+                Repaint();
+                return true;
+            }
+            if (evt.rawType == EventType.MouseUp)
+            {
+                _partsMeshPanning = false;
+                if (GUIUtility.hotControl == controlId)
+                    GUIUtility.hotControl = 0;
+                evt.Use();
+                return true;
+            }
+            return false;
+        }
+
+        void FitPartsMeshView()
+        {
+            _partsMeshZoom = 0.8f;
+            _partsMeshPan = Vector2.zero;
+            Repaint();
+        }
+
         static Rect PartsMeshBanner(Rect canvas)
-            => new Rect(canvas.x + 8f, canvas.y + 8f, Mathf.Min(canvas.width - 16f, 690f), 46f);
+            => new Rect(canvas.x + 8f, canvas.y + 8f, Mathf.Min(canvas.width - 16f, 790f), 46f);
 
         static Vector2 MeshUvToGui(Rect sprite, Vector2 uv)
             => new Vector2(Mathf.Lerp(sprite.xMin, sprite.xMax, uv.x), Mathf.Lerp(sprite.yMax, sprite.yMin, uv.y));
@@ -892,10 +1062,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 (gui.x - sprite.xMin) / Mathf.Max(1f, sprite.width),
                 (sprite.yMax - gui.y) / Mathf.Max(1f, sprite.height));
 
+        /// <summary>Mouse to mesh space. Past the image edge is allowed, up to <see cref="SpritePartsMeshOps.ClampUv"/>.</summary>
         static Vector2 MeshGuiToUv(Rect sprite, Vector2 gui)
-            => new Vector2(
-                Mathf.Clamp01((gui.x - sprite.xMin) / Mathf.Max(1f, sprite.width)),
-                Mathf.Clamp01((sprite.yMax - gui.y) / Mathf.Max(1f, sprite.height)));
+            => SpritePartsMeshOps.ClampUv(MeshGuiToUvFree(sprite, gui));
 
         static int HitMeshVertex(Rect sprite, SpritePartMeshDef mesh, Vector2 mouse, int except = -1)
         {
@@ -942,6 +1111,19 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (_partsMeshAutoPolygons && !_partsMeshDrag && !_partsWarpBox)
                 AutoMakeMeshPolygons();
             var slot = MeshEditSlot();
+            try
+            {
+                DrawPartsMeshEditView(canvas, slot);
+            }
+            finally
+            {
+                // Last, so a zoomed-in image never covers the toolbar.
+                DrawPartsMeshBanner(canvas, slot);
+            }
+        }
+
+        void DrawPartsMeshBanner(Rect canvas, SpritePartSlotDef slot)
+        {
             string name = slot != null && !string.IsNullOrEmpty(slot.Name) ? slot.Name : _partsMeshEditSlotId;
             var banner = PartsMeshBanner(canvas);
             EditorGUI.DrawRect(banner, new Color(0.12f, 0.18f, 0.28f, 0.94f));
@@ -969,7 +1151,14 @@ namespace InvertLab.Sprites.DOTS.Editor
             bx += 72f;
             if (GUI.Button(new Rect(bx, by, 62f, 18f), new GUIContent("Remove", "Back to a rigid rectangle."), _partsTabStyle))
                 RemovePartsMesh();
+            bx += 72f;
+            if (GUI.Button(new Rect(bx, by, 40f, 18f), new GUIContent("Fit", "Reset zoom and pan. Scroll zooms, middle-drag or Alt+drag pans."), _partsTabStyle))
+                FitPartsMeshView();
+            GUI.Label(new Rect(bx + 44f, by + 1f, 50f, 16f), Mathf.RoundToInt(_partsMeshZoom * 100f) + "%", _mutedStyle);
+        }
 
+        void DrawPartsMeshEditView(Rect canvas, SpritePartSlotDef slot)
+        {
             if (!TryGetPartsMeshEditLayout(canvas, out var sprite, out var app, out var sheet))
             {
                 GUI.Label(new Rect(canvas.x + 12f, canvas.y + 62f, canvas.width - 24f, 20f), "This part has no art.", _mutedStyle);
@@ -1035,6 +1224,8 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (i == _partsWarpHover)
                     DrawGuiRectOutline(new Rect(p.x - s * 0.5f - 2f, p.y - s * 0.5f - 2f, s + 4f, s + 4f), Color.white, 1f);
             }
+            if (MeshAxisGizmoShown() && !_partsWarpBox && TryGetMeshSelectionCentre(sprite, mesh, out var axisOrigin))
+                DrawPartsAxisGizmo(axisOrigin);
             string stats = mesh != null && mesh.HasMesh
                 ? n + " vertices   " + hull + " hull   " + mesh.Triangles.Length / 3 + " triangles"
                 : n > 0 ? n + " vertices   " + (mesh.Edges?.Length ?? 0) / 2 + " edges   no polygons yet: "
@@ -1136,6 +1327,18 @@ namespace InvertLab.Sprites.DOTS.Editor
             GUI.FocusControl(null);
 
             int hit = HitMeshVertex(sprite, mesh, evt.mousePosition);
+            if (MeshAxisGizmoShown() && TryGetMeshSelectionCentre(sprite, mesh, out var axisOrigin))
+            {
+                int axis = HitPartsAxisGizmo(axisOrigin, evt.mousePosition);
+                if (axis != 0 && !(axis == PartsAxisFree && hit >= 0 && !_partsWarpSelection.Contains(hit)))
+                {
+                    BeginMeshVertexDrag(evt.mousePosition, controlId, mesh);
+                    _partsVertexAxis = axis;
+                    evt.Use();
+                    Repaint();
+                    return;
+                }
+            }
             if (_partsMeshTool == PartsMeshTool.Delete)
             {
                 if (hit >= 0)
@@ -1284,6 +1487,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             var slot = MeshEditSlot();
             if (slot == null || _partsMeshDragStart?.Vertices == null)
                 return;
+            mouse = ConstrainPartsAxis(_partsDragStartMouse, mouse);
             if (!_partsMeshMoved && (mouse - _partsDragStartMouse).sqrMagnitude < 9f)
                 return;
             if (!_partsMeshMoved)
@@ -1308,7 +1512,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             {
                 // Hull still being drawn: nothing to triangulate yet.
                 for (int k = 0; k < indices.Count; k++)
-                    next.Vertices[indices[k]] = new Vector2(Mathf.Clamp01(positions[k].x), Mathf.Clamp01(positions[k].y));
+                    next.Vertices[indices[k]] = SpritePartsMeshOps.ClampUv(positions[k]);
                 slot.Mesh = next;
                 _partsMeshAutoPolygons = true; // a moved vertex may now sit inside the loop
             }
