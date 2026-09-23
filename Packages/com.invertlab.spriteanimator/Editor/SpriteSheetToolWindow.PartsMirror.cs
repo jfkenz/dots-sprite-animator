@@ -200,6 +200,33 @@ namespace InvertLab.Sprites.DOTS.Editor
 
         // ------------------------------------------------------------------ Live Mirror while creating (Edit Mesh)
 
+        /// <summary>
+        /// Live Mirror preview in Create: the mirrored copy of the line being drawn (from the pen vertex's twin),
+        /// and a square where each twin of the new vertex will land. Nothing on the axis (it is its own mirror).
+        /// </summary>
+        void DrawMirrorPreview(Rect sprite, Vector2? from, Vector2 target)
+        {
+            if (!_partsMirrorLive || Event.current.type != EventType.Repaint)
+                return;
+            var ghost = new Color(PartsMirrorColor.r, PartsMirrorColor.g, PartsMirrorColor.b, 0.8f);
+            foreach (var (fx, fy) in SpritePartsMeshOps.MirrorFlips(_partsMirrorMode))
+            {
+                Vector2 mt = SpritePartsMeshOps.MirrorPoint(target, _partsMirrorAxis, _partsMirrorAxisY, fx, fy);
+                bool targetMoves = (mt - target).sqrMagnitude > 1e-10f;
+                if (from.HasValue)
+                {
+                    Vector2 mf = SpritePartsMeshOps.MirrorPoint(from.Value, _partsMirrorAxis, _partsMirrorAxisY, fx, fy);
+                    if (targetMoves || (mf - from.Value).sqrMagnitude > 1e-10f)
+                        DrawMeshLine(MeshUvToGui(sprite, mf), MeshUvToGui(sprite, mt), ghost, 1.5f);
+                }
+                if (targetMoves)
+                {
+                    Vector2 g = MeshUvToGui(sprite, mt);
+                    DrawGuiRectOutline(new Rect(g.x - 4f, g.y - 4f, 8f, 8f), ghost, 1.5f);
+                }
+            }
+        }
+
         /// <summary>A new vertex close to an axis lands on it, so it is its own mirror instead of getting a twin.</summary>
         Vector2 SnapToMirrorAxes(Vector2 uv)
         {

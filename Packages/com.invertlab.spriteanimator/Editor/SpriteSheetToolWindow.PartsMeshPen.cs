@@ -618,6 +618,10 @@ namespace InvertLab.Sprites.DOTS.Editor
                     hidden: _partsCreateMode == PartsCreateMode.Edge))
                 DrawMeshLine(MeshUvToGui(sprite, mesh.Vertices[ha]), MeshUvToGui(sprite, mesh.Vertices[hb]), Color.white, 3f);
 
+            // Live Mirror: where the next click's twins will land.
+            if (_partsMeshTool == PartsMeshTool.Create && _partsWarpHover < 0 && !ctrl && _partsCreateMode != PartsCreateMode.Edge
+                && (pen < 0 || _partsCreateMode == PartsCreateMode.Vertex))
+                DrawMirrorPreview(sprite, null, SnapToMirrorAxes(mouseUv));
             if (_partsMeshTool != PartsMeshTool.Create || pen < 0 || _partsCreateMode == PartsCreateMode.Vertex)
                 return;
             Vector2 target = mouseUv;
@@ -631,9 +635,12 @@ namespace InvertLab.Sprites.DOTS.Editor
                 target = mesh.Vertices[_partsWarpHover];
             else if (_partsCreateMode == PartsCreateMode.Edge)
                 return; // the Edge tool only joins existing vertices
+            else
+                target = SnapToMirrorAxes(target); // a new vertex near an axis lands on it
             Vector2 from = mesh.Vertices[pen];
             var line = ctrl ? new Color(0.35f, 0.95f, 1f, 0.95f) : new Color(1f, 0.72f, 0.25f, 0.9f);
             DrawMeshLine(MeshUvToGui(sprite, from), MeshUvToGui(sprite, target), line, 1.5f);
+            DrawMirrorPreview(sprite, from, target);
             if (!cut)
                 return;
             foreach (var e in SpritePartsMeshOps.GraphEdges(mesh))
