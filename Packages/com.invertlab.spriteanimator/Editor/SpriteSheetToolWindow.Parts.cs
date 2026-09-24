@@ -1593,6 +1593,20 @@ namespace InvertLab.Sprites.DOTS.Editor
             return ids[Mathf.Clamp(next, 0, ids.Count - 1)];
         }
 
+        /// <summary>Skins previewed on top of the preview skin, in the order turned on.</summary>
+        [NonSerialized] readonly List<string> _partsCombinedSkins = new List<string>();
+
+        void RebuildPartsSkinPreview()
+        {
+            _partsSkinPreviewOverrides.Clear();
+            foreach (var kv in SpritePartsAuthoringOps.ApplySkinPreview(_profile, _partsPreviewSkinId))
+                _partsSkinPreviewOverrides[kv.Key] = kv.Value;
+            foreach (string id in _partsCombinedSkins)
+                foreach (var kv in SpritePartsAuthoringOps.ApplySkinPreview(_profile, id))
+                    _partsSkinPreviewOverrides[kv.Key] = kv.Value;
+            Repaint();
+        }
+
         void DrawPartsSkinsInspector()
         {
             if (!PartsSection("SKINS", _profile.PartsSkins.Count + " skin" + (_profile.PartsSkins.Count == 1 ? "" : "s")))
@@ -1627,10 +1641,39 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (next != selected)
             {
                 _partsPreviewSkinId = _profile.PartsSkins[next].SkinId;
-                _partsSkinPreviewOverrides.Clear();
-                var preview = SpritePartsAuthoringOps.ApplySkinPreview(_profile, _partsPreviewSkinId);
-                foreach (var kv in preview)
-                    _partsSkinPreviewOverrides[kv.Key] = kv.Value;
+                _partsCombinedSkins.Remove(SpritePartIdUtility.Canonical(_partsPreviewSkinId));
+                RebuildPartsSkinPreview();
+            }
+
+            // Combined skins (Spine 4): more skins on top of the preview skin, in order, like SpriteParts.AddSkin.
+            if (_profile.PartsSkins.Count > 1)
+            {
+                EditorGUILayout.LabelField(new GUIContent("Add on top", "Preview other skins over this one (SpriteParts.AddSkin / SetSkins in the game)"),
+                    EditorStyles.miniBoldLabel);
+                EditorGUILayout.BeginHorizontal();
+                int shown = 0;
+                foreach (var skin in _profile.PartsSkins)
+                {
+                    if (skin == null || SpritePartIdUtility.Canonical(skin.SkinId) == SpritePartIdUtility.Canonical(_partsPreviewSkinId))
+                        continue;
+                    string id = SpritePartIdUtility.Canonical(skin.SkinId);
+                    bool on = _partsCombinedSkins.Contains(id);
+                    bool next2 = GUILayout.Toggle(on, skin.Name, EditorStyles.miniButton);
+                    if (next2 != on)
+                    {
+                        if (next2)
+                            _partsCombinedSkins.Add(id);
+                        else
+                            _partsCombinedSkins.Remove(id);
+                        RebuildPartsSkinPreview();
+                    }
+                    if (++shown % 3 == 0)
+                    {
+                        EditorGUILayout.EndHorizontal();
+                        EditorGUILayout.BeginHorizontal();
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
             }
 
             var slot = CurrentPartsSlot;
@@ -1649,6 +1692,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsAppearancePixelsPerUnit(currentApp);
             }
 
+            if (_partsCombinedSkins.Count > 0)
+                EditorGUILayout.LabelField("Combined preview: turn the skins on top off to save this skin alone.", EditorStyles.wordWrappedMiniLabel);
+            using (new EditorGUI.DisabledScope(_partsCombinedSkins.Count > 0))
             if (GUILayout.Button("Save Skin"))
             {
                 RecordPartsUndo("Save Parts Skin");
@@ -1660,6 +1706,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             if (GUILayout.Button("Clear Preview Overrides"))
             {
                 _partsSkinPreviewOverrides.Clear();
+                _partsCombinedSkins.Clear();
                 _status = "Cleared skin preview";
             }
             GUILayout.Space(6f);

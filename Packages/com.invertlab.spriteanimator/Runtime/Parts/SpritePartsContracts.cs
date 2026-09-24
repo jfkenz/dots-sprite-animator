@@ -135,4 +135,14 @@ namespace InvertLab.Sprites.DOTS
     {
         public ulong SkinIdHash;
     }
+
+    /// <summary>
+    /// The skins active together, in the order applied (Spine 4 combined skins: body + outfit + weapon). A part a
+    /// clip sprite key releases goes back to the last listed skin that sets it, else its default.
+    /// </summary>
+    [InternalBufferCapacity(4)]
+    public struct SpritePartsActiveSkinEntry : IBufferElementData
+    {
+        public ulong SkinIdHash;
+    }
 }

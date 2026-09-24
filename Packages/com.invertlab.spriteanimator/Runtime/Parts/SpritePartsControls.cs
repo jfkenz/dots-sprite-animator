@@ -438,6 +438,95 @@ namespace InvertLab.Sprites.DOTS
         /// </summary>
         public static bool ApplySkin(EntityManager em, Entity root, string skinId)
         {
+            if (!ApplySkinPatch(em, root, skinId, out ulong hash))
+                return false;
+            SetActiveSkins(em, root, hash, replace: true);
+            return true;
+        }
+
+        /// <summary>
+        /// Adds a skin on top of the active ones (Spine 4 combined skins): its parts change, the rest stay. Adding one
+        /// already active moves it to the top.
+        /// </summary>
+        public static bool AddSkin(EntityManager em, Entity root, string skinId)
+        {
+            if (!ApplySkinPatch(em, root, skinId, out ulong hash))
+                return false;
+            SetActiveSkins(em, root, hash, replace: false);
+            return true;
+        }
+
+        /// <summary>Takes a skin off: the parts go back to their defaults and the remaining skins, in order.</summary>
+        public static bool RemoveSkin(EntityManager em, Entity root, string skinId)
+        {
+            if (!IsPartsRoot(em, root) || !em.HasBuffer<SpritePartsActiveSkinEntry>(root))
+                return false;
+            ulong hash = SpritePartIdUtility.Hash(SpritePartIdUtility.Canonical(skinId ?? string.Empty));
+            var list = em.GetBuffer<SpritePartsActiveSkinEntry>(root);
+            var keep = new System.Collections.Generic.List<ulong>();
+            bool found = false;
+            for (int i = 0; i < list.Length; i++)
+            {
+                if (list[i].SkinIdHash == hash)
+                    found = true;
+                else
+                    keep.Add(list[i].SkinIdHash);
+            }
+            if (!found)
+                return false;
+            ReapplySkins(em, root, keep);
+            return true;
+        }
+
+        /// <summary>Exactly these skins, in this order (later ones win where they overlap).</summary>
+        public static bool SetSkins(EntityManager em, Entity root, params string[] skinIds)
+        {
+            if (!IsPartsRoot(em, root))
+                return false;
+            var hashes = new System.Collections.Generic.List<ulong>();
+            foreach (string id in skinIds ?? System.Array.Empty<string>())
+                hashes.Add(SpritePartIdUtility.Hash(SpritePartIdUtility.Canonical(id ?? string.Empty)));
+            return ReapplySkins(em, root, hashes);
+        }
+
+        /// <summary>The number of skins active together.</summary>
+        public static int ActiveSkinCount(EntityManager em, Entity root)
+            => em.Exists(root) && em.HasBuffer<SpritePartsActiveSkinEntry>(root) ? em.GetBuffer<SpritePartsActiveSkinEntry>(root).Length : 0;
+
+        static bool ReapplySkins(EntityManager em, Entity root, System.Collections.Generic.List<ulong> hashes)
+        {
+            if (!ResetSkin(em, root))
+                return false;
+            var blob = em.GetComponentData<SpritePartsSetRef>(root).Set;
+            bool ok = true;
+            foreach (ulong hash in hashes)
+            {
+                string id = null;
+                for (int s = 0; s < blob.Value.SkinPatches.Length && id == null; s++)
+                    if (blob.Value.SkinPatches[s].SkinIdHash == hash)
+                        id = blob.Value.SkinPatches[s].SkinId.ToString();
+                ok &= id != null && AddSkin(em, root, id);
+            }
+            return ok;
+        }
+
+        static void SetActiveSkins(EntityManager em, Entity root, ulong hash, bool replace)
+        {
+            if (!em.HasBuffer<SpritePartsActiveSkinEntry>(root))
+                em.AddBuffer<SpritePartsActiveSkinEntry>(root);
+            var list = em.GetBuffer<SpritePartsActiveSkinEntry>(root);
+            if (replace)
+                list.Clear();
+            for (int i = list.Length - 1; i >= 0; i--)
+                if (list[i].SkinIdHash == hash)
+                    list.RemoveAt(i);
+            list.Add(new SpritePartsActiveSkinEntry { SkinIdHash = hash });
+        }
+
+        /// <summary>Validates then writes one skin patch (atomic); records it as the last applied skin.</summary>
+        static bool ApplySkinPatch(EntityManager em, Entity root, string skinId, out ulong skinHash)
+        {
+            skinHash = 0;
             if (!IsPartsRoot(em, root) || !em.HasBuffer<SpritePartLink>(root))
                 return false;
             var blob = em.GetComponentData<SpritePartsSetRef>(root).Set;
@@ -447,6 +536,7 @@ namespace InvertLab.Sprites.DOTS
             int skinIndex = SpritePartsPlayback.FindSkinIndex(ref set, skinId);
             if (skinIndex < 0)
                 return false;
+            skinHash = set.SkinPatches[skinIndex].SkinIdHash;
 
             ref var skin = ref set.SkinPatches[skinIndex];
             var links = em.GetBuffer<SpritePartLink>(root);
@@ -533,6 +623,8 @@ namespace InvertLab.Sprites.DOTS
                 em.AddComponentData(root, active);
             else
                 em.SetComponentData(root, active);
+            if (em.HasBuffer<SpritePartsActiveSkinEntry>(root))
+                em.GetBuffer<SpritePartsActiveSkinEntry>(root).Clear();
             return true;
         }
 
@@ -609,9 +701,28 @@ namespace InvertLab.Sprites.DOTS
             if (!wasKeyed)
                 return;
 
-            // Restore skin binding if active, else default appearance.
+            // Restore the last active skin that sets this part (combined skins), else the default appearance.
             int restore = -1;
-            if (em.HasComponent<SpritePartsActiveSkin>(root))
+            if (em.HasBuffer<SpritePartsActiveSkinEntry>(root))
+            {
+                var active = em.GetBuffer<SpritePartsActiveSkinEntry>(root);
+                for (int a = active.Length - 1; a >= 0 && restore < 0; a--)
+                {
+                    for (int s = 0; s < set.SkinPatches.Length && restore < 0; s++)
+                    {
+                        if (set.SkinPatches[s].SkinIdHash != active[a].SkinIdHash)
+                            continue;
+                        ref var skin = ref set.SkinPatches[s];
+                        for (int b = 0; b < skin.Bindings.Length; b++)
+                            if (skin.Bindings[b].SlotIndex == slotIndex)
+                            {
+                                restore = skin.Bindings[b].AppearanceIndex;
+                                break;
+                            }
+                    }
+                }
+            }
+            else if (em.HasComponent<SpritePartsActiveSkin>(root))
             {
                 ulong skinHash = em.GetComponentData<SpritePartsActiveSkin>(root).SkinIdHash;
                 if (skinHash != 0)
