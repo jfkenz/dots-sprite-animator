@@ -10,7 +10,7 @@ namespace InvertLab.Sprites.DOTS
     /// LookAt, facing, sockets/hitboxes, then joint transforms. Gameplay writes
     /// <see cref="SpritePartsPoseOverride"/>, never part LocalTransform.
     /// </summary>
-    public static class SpritePartsPoseWriter
+    public static partial class SpritePartsPoseWriter
     {
         public static SpritePartsPlayer DefaultPlayer(int clipIndex, bool playing = true)
         {
@@ -746,7 +746,14 @@ namespace InvertLab.Sprites.DOTS
             var blob = em.GetComponentData<SpritePartsSetRef>(root).Set;
             if (!blob.IsCreated)
                 return;
-            EnsureBuffers(em, root);
+            if (!em.HasComponent<SpritePartsBuffersReady>(root) || em.GetComponentData<SpritePartsBuffersReady>(root).For != blob)
+            {
+                EnsureBuffers(em, root);
+                if (em.HasComponent<SpritePartsBuffersReady>(root))
+                    em.SetComponentData(root, new SpritePartsBuffersReady { For = blob });
+                else
+                    em.AddComponentData(root, new SpritePartsBuffersReady { For = blob });
+            }
             ref var set = ref blob.Value;
             int n = set.Slots.Length;
             var player = em.GetComponentData<SpritePartsPlayer>(root);
@@ -758,41 +765,26 @@ namespace InvertLab.Sprites.DOTS
                 : default;
 
             byte diag = 0;
-            if (em.HasBuffer<SpritePartLink>(root) && em.HasBuffer<SpritePartFinalPose>(root))
+            // "Gameplay wrote a part's transform": the part loop compares each part's transform (read before it is
+            // written anyway) with last frame's pose, so the check costs no extra reads. Off once it has been reported.
+            var oldDiag = em.HasComponent<SpritePartsPoseDiagnostics>(root) ? em.GetComponentData<SpritePartsPoseDiagnostics>(root) : default;
+            bool checkFought = (oldDiag.LoggedFlags & SpritePartsPoseDiagnostics.GameplayWroteTransform) == 0;
+            if (!checkFought)
+                diag |= SpritePartsPoseDiagnostics.GameplayWroteTransform;
+            var lastFinal = default(NativeArray<SpritePartFinalPose>);
+            if (checkFought && em.HasBuffer<SpritePartFinalPose>(root))
             {
-                var prevFinal = em.GetBuffer<SpritePartFinalPose>(root);
-                var links = em.GetBuffer<SpritePartLink>(root);
-                if (prevFinal.Length == n)
-                {
-                    for (int i = 0; i < links.Length; i++)
-                    {
-                        var part = links[i].Part;
-                        int slot = links[i].SlotIndex;
-                        if (part == Entity.Null || part == root || !em.Exists(part) || slot < 0 || slot >= n)
-                            continue;
-                        if (em.HasComponent<SpritePartPhysicsOwned>(part))
-                            continue;
-                        if (prevFinal[slot].PhysicsSkipped != 0)
-                            continue; // First animation write after physics releases ownership.
-                        if (!em.HasComponent<LocalTransform>(part))
-                            continue;
-                        var last = new SpritePartsSampler.Pose
-                        {
-                            Position = prevFinal[slot].Position,
-                            Rotation = prevFinal[slot].Rotation,
-                            Scale = prevFinal[slot].Scale,
-                        };
-                        if (TransformsFought(em.GetComponentData<LocalTransform>(part), last))
-                            diag |= SpritePartsPoseDiagnostics.GameplayWroteTransform;
-                    }
-                }
+                var prev = em.GetBuffer<SpritePartFinalPose>(root);
+                if (prev.Length == n)
+                    lastFinal = new NativeArray<SpritePartFinalPose>(prev.AsNativeArray(), Allocator.Temp);
             }
 
-            var basePoses = new NativeArray<SpritePartsSampler.Pose>(n, Allocator.Temp);
-            var finalLocal = new NativeArray<SpritePartsSampler.Pose>(n, Allocator.Temp);
-            var localToRoot = new NativeArray<float4x4>(n, Allocator.Temp);
-            var sources = new NativeArray<SpritePartPoseSource>(n, Allocator.Temp);
-            var apps = new NativeArray<int>(n, Allocator.Temp);
+            // TempJob: the Burst job (EvaluateFast) writes these.
+            var basePoses = new NativeArray<SpritePartsSampler.Pose>(n, Allocator.TempJob);
+            var finalLocal = new NativeArray<SpritePartsSampler.Pose>(n, Allocator.TempJob);
+            var localToRoot = new NativeArray<float4x4>(n, Allocator.TempJob);
+            var sources = new NativeArray<SpritePartPoseSource>(n, Allocator.TempJob);
+            var apps = new NativeArray<int>(n, Allocator.TempJob);
             try
             {
                 bool flipX = false, flipY = false;
@@ -827,7 +819,7 @@ namespace InvertLab.Sprites.DOTS
                     extras.Jiggle = jiggle.AsNativeArray();
                 }
 
-                Evaluate(ref set, player, overrides, layers, basePoses, finalLocal, localToRoot, sources, apps,
+                EvaluateFast(blob, player, overrides, layers, basePoses, finalLocal, localToRoot, sources, apps,
                     rootWorld, flipX, flipY, extras);
 
                 WritePoseBuffers(em, root, basePoses, finalLocal, sources, n);
@@ -840,6 +832,7 @@ namespace InvertLab.Sprites.DOTS
                 if (em.HasBuffer<SpritePartLink>(root))
                 {
                     var links = em.GetBuffer<SpritePartLink>(root);
+                    bool hasFinals = em.HasBuffer<SpritePartFinalPose>(root);
                     for (int i = 0; i < links.Length; i++)
                     {
                         var part = links[i].Part;
@@ -849,22 +842,31 @@ namespace InvertLab.Sprites.DOTS
                         if (slot < 0 || slot >= n)
                             continue;
                         bool physics = em.HasComponent<SpritePartPhysicsOwned>(part);
-                        if (em.HasBuffer<SpritePartFinalPose>(root) && slot < em.GetBuffer<SpritePartFinalPose>(root).Length)
+                        if (hasFinals)
                         {
                             var finals = em.GetBuffer<SpritePartFinalPose>(root);
-                            var fp = finals[slot];
-                            fp.PhysicsSkipped = physics ? (byte)1 : (byte)0;
-                            finals[slot] = fp;
+                            if (slot < finals.Length && finals[slot].PhysicsSkipped != (physics ? 1 : 0))
+                            {
+                                var fp = finals[slot];
+                                fp.PhysicsSkipped = physics ? (byte)1 : (byte)0;
+                                finals[slot] = fp;
+                            }
                         }
                         if (physics)
                             continue;
                         // Weighted meshes follow their bound bones (Spine weights); keys stay pre-skin.
                         var partPose = finalLocal[slot];
                         SpritePartsSkinning.Apply(ref set, slot, localToRoot, ref partPose.Lattice);
-                        if (deferred)
-                            SpritePartsPoseUtility.ApplyPartTransform(em, part, partPose, commands);
-                        else
-                            SpritePartsPoseUtility.ApplyPartTransform(em, part, partPose);
+                        SpritePartsPoseUtility.ApplyPartTransform(em, part, partPose, commands, deferred, out var before, out bool hadTransform);
+                        if (hadTransform && lastFinal.IsCreated && lastFinal[slot].PhysicsSkipped == 0)
+                        {
+                            var last = new SpritePartsSampler.Pose
+                            {
+                                Position = lastFinal[slot].Position, Rotation = lastFinal[slot].Rotation, Scale = lastFinal[slot].Scale,
+                            };
+                            if (TransformsFought(before, last))
+                                diag |= SpritePartsPoseDiagnostics.GameplayWroteTransform;
+                        }
                         if (deferred)
                             SpriteParts.ApplySampledAppearance(em, root, part, slot, apps[slot], ref set, commands);
                         else
@@ -876,13 +878,19 @@ namespace InvertLab.Sprites.DOTS
                     SpritePartsPoseUtility.ApplyFacing(em, root, commands);
                 else
                     SpritePartsPoseUtility.ApplyFacing(em, root);
-                ComposeAttachmentWorld(em, root, ref set, finalLocal, localToRoot, rootWorld, flipX, flipY);
+                // Socket / hitbox world poses only when something is bound (they read every part's hierarchy).
+                bool sockets = em.HasBuffer<SpritePartSocketBinding>(root) && em.GetBuffer<SpritePartSocketBinding>(root).Length > 0;
+                bool hitboxes = em.HasBuffer<SpritePartHitboxBinding>(root) && em.GetBuffer<SpritePartHitboxBinding>(root).Length > 0;
+                if (sockets || hitboxes)
+                    ComposeAttachmentWorld(em, root, ref set, finalLocal, localToRoot, rootWorld, flipX, flipY);
                 WriteSockets(em, root, localToRoot);
                 WriteHitboxes(em, root, localToRoot);
                 WriteDiagnostics(em, root, player, diag, commands, deferred);
             }
             finally
             {
+                if (lastFinal.IsCreated)
+                    lastFinal.Dispose();
                 basePoses.Dispose();
                 finalLocal.Dispose();
                 localToRoot.Dispose();

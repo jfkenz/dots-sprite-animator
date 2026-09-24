@@ -881,14 +881,25 @@ namespace InvertLab.Sprites.DOTS
 
         internal static void ApplyPartTransform(EntityManager em, Entity part, in SpritePartsSampler.Pose pose,
             EntityCommandBuffer commands, bool deferred)
+            => ApplyPartTransform(em, part, pose, commands, deferred, out _, out _);
+
+        /// <param name="before">The part's LocalTransform before this write (the pose writer checks it for gameplay writes).</param>
+        internal static void ApplyPartTransform(EntityManager em, Entity part, in SpritePartsSampler.Pose pose,
+            EntityCommandBuffer commands, bool deferred, out LocalTransform before, out bool hadTransform)
         {
-            if (!em.HasComponent<LocalTransform>(part))
+            before = default;
+            hadTransform = em.HasComponent<LocalTransform>(part);
+            if (!hadTransform)
                 return;
-            var lt = em.GetComponentData<LocalTransform>(part);
+            // Writes only what changed: unchanged parts keep their change version (and skip the write).
+            var old = em.GetComponentData<LocalTransform>(part);
+            before = old;
+            var lt = old;
             lt.Position = new float3(pose.Position.x, pose.Position.y, 0f);
             lt.Rotation = quaternion.RotateZ(math.radians(pose.Rotation));
             lt.Scale = 1f;
-            em.SetComponentData(part, lt);
+            if (!math.all(lt.Position == old.Position) || !math.all(lt.Rotation.value == old.Rotation.value) || lt.Scale != old.Scale)
+                em.SetComponentData(part, lt);
 
             // Scale and shear (Spine) go in the post-transform; LocalTransform keeps position and rotation.
             var scaleMatrix = math.all(pose.Shear == float2.zero)
@@ -896,7 +907,7 @@ namespace InvertLab.Sprites.DOTS
                 : SpritePartsHierarchy.ShearScaleMatrix(pose.Scale, pose.Shear);
             if (!em.HasComponent<PostTransformMatrix>(part))
                 AddComponent(em, part, new PostTransformMatrix { Value = scaleMatrix }, commands, deferred);
-            else
+            else if (!SameMatrix(em.GetComponentData<PostTransformMatrix>(part).Value, scaleMatrix))
                 em.SetComponentData(part, new PostTransformMatrix { Value = scaleMatrix });
 
             var lattice = new SpritePartLattice { Value = pose.Lattice };
@@ -905,7 +916,7 @@ namespace InvertLab.Sprites.DOTS
                 if (!pose.Lattice.IsIdentity)
                     AddComponent(em, part, lattice, commands, deferred);
             }
-            else
+            else if (!pose.Lattice.IsIdentity || !em.GetComponentData<SpritePartLattice>(part).Value.IsIdentity)
                 em.SetComponentData(part, lattice);
         }
 
@@ -928,9 +939,12 @@ namespace InvertLab.Sprites.DOTS
                 return;
             if (!em.HasComponent<PostTransformMatrix>(visual))
                 AddComponent(em, visual, new PostTransformMatrix { Value = matrix }, commands, deferred);
-            else
+            else if (!SameMatrix(em.GetComponentData<PostTransformMatrix>(visual).Value, matrix))
                 em.SetComponentData(visual, new PostTransformMatrix { Value = matrix });
         }
+
+        static bool SameMatrix(in float4x4 a, in float4x4 b)
+            => math.all(a.c0 == b.c0) && math.all(a.c1 == b.c1) && math.all(a.c2 == b.c2) && math.all(a.c3 == b.c3);
     }
 }
 

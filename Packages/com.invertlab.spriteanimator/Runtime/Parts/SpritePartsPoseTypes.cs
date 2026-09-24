@@ -170,6 +170,12 @@ namespace InvertLab.Sprites.DOTS
         public byte LoggedFlags;
     }
 
+    /// <summary>Buffers made for this blob (so the pose writer does not re-check them every frame).</summary>
+    public struct SpritePartsBuffersReady : IComponentData
+    {
+        public BlobAssetReference<SpritePartsSetBlob> For;
+    }
+
     /// <summary>
     /// Physics/gameplay owns this part's LocalTransform and PostTransformMatrix.
     /// Attachment export follows its current ECS Parent hierarchy. This marker
