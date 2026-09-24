@@ -13,6 +13,56 @@ namespace InvertLab.Sprites.DOTS.Editor
     {
         static Dictionary<string, SpritePartsAuthoringOps.PoseValue> s_partsPoseClipboard;
 
+        // Ghost clip: another clip's pose drawn under the one being edited (match the end of Idle to the start of Run).
+        [SerializeField] string _partsGhostClipId = string.Empty;
+        [SerializeField] int _partsGhostAt = 1; // 0 start, 1 end, 2 seconds
+        [SerializeField] float _partsGhostSeconds;
+
+        /// <summary>The ghost clip's index and time, or false when off.</summary>
+        bool TryPartsGhostClip(out int clipIndex, out float time)
+        {
+            clipIndex = string.IsNullOrEmpty(_partsGhostClipId) ? -1 : SpritePartsAuthoringOps.FindClipIndex(_profile, _partsGhostClipId);
+            time = 0f;
+            if (clipIndex < 0 || _partsMode != SpritePartsStudioMode.Animate)
+                return false;
+            float duration = Mathf.Max(1e-3f, _profile.PartsClips[clipIndex].Duration);
+            time = _partsGhostAt == 0 ? 0f : _partsGhostAt == 1 ? duration : Mathf.Clamp(_partsGhostSeconds, 0f, duration);
+            return true;
+        }
+
+        void DrawPartsGhostClipInspector()
+        {
+            if (_profile == null || _partsMode != SpritePartsStudioMode.Animate)
+                return;
+            bool on = TryPartsGhostClip(out int ghostClip, out _);
+            if (!PartsSection("GHOST CLIP", on ? _profile.PartsClips[ghostClip].Name : "off"))
+                return;
+            var names = new List<string> { "(off)" };
+            var ids = new List<string> { string.Empty };
+            foreach (var c in _profile.PartsClips)
+            {
+                if (c == null)
+                    continue;
+                names.Add(c.Name);
+                ids.Add(SpritePartIdUtility.Canonical(c.ClipId));
+            }
+            EditorGUI.BeginChangeCheck();
+            int choice = EditorGUILayout.Popup(new GUIContent("Clip", "Draw this clip's pose as a green ghost under the canvas"),
+                Mathf.Max(0, ids.IndexOf(SpritePartIdUtility.Canonical(_partsGhostClipId ?? string.Empty))), names.ToArray());
+            int at = GUILayout.Toolbar(_partsGhostAt, new[] { "Start", "End", "Time" }, EditorStyles.miniButton);
+            float seconds = _partsGhostSeconds;
+            if (at == 2)
+                seconds = EditorGUILayout.FloatField(new GUIContent("Seconds"), _partsGhostSeconds);
+            if (EditorGUI.EndChangeCheck())
+            {
+                _partsGhostClipId = ids[choice];
+                _partsGhostAt = at;
+                _partsGhostSeconds = Mathf.Max(0f, seconds);
+                Repaint();
+            }
+            EditorGUILayout.LabelField("Match poses between clips: the end of one to the start of the next.", EditorStyles.wordWrappedMiniLabel);
+        }
+
         void DrawPartsPoseTools(Rect r)
         {
             if (CurrentPartsClip == null || _partsMode != SpritePartsStudioMode.Animate)

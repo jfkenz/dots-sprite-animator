@@ -783,6 +783,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsParamsInspector();
                 DrawPartsTransitionsInspector();
                 DrawPartsLayerPreviewInspector();
+                DrawPartsGhostClipInspector();
                 DrawPartsMasksInspector();
                 DrawPartsSpriteGroupsInspector();
                 DrawPartsBlendSpacesInspector();
@@ -2636,6 +2637,21 @@ namespace InvertLab.Sprites.DOTS.Editor
                         {
                             SpritePartsOnion.DisposeSample(gBlob, gPoses, gMats);
                         }
+                    }
+                }
+
+                if (TryPartsGhostClip(out int ghostClip, out float ghostTime)
+                    && SpritePartsOnion.TrySampleCharacter(_profile, ghostClip, ghostTime, Allocator.Temp,
+                        out var cBlob, out var cPoses, out var cMats, out _))
+                {
+                    try
+                    {
+                        DrawPartsPoseQuads(canvas, ref cBlob.Value, cPoses, cMats, new Color(0.4f, 1f, 0.55f, 0.35f),
+                            pickable: false, sampleTime: ghostTime, drawArt: true);
+                    }
+                    finally
+                    {
+                        SpritePartsOnion.DisposeSample(cBlob, cPoses, cMats);
                     }
                 }
 
