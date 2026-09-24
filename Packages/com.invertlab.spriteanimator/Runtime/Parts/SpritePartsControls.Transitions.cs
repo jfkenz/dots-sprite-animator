@@ -467,6 +467,8 @@ namespace InvertLab.Sprites.DOTS
                 SpritePartsTransitions.TickTint(ref tint, dt);
                 em.SetComponentData(root, tint);
             }
+            if (!paused && em.HasComponent<SpritePartsAutoBlink>(root))
+                TickAutoBlink(em, root, ref set, dt);
             if (paused || !em.HasBuffer<SpritePartsQueueEntry>(root))
                 return;
             // The first entry of each track (0 = base) waits on what plays there; due ones start after the scan.

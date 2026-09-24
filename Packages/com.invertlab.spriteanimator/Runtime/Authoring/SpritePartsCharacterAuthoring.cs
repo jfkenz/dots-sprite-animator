@@ -175,6 +175,18 @@ namespace InvertLab.Sprites.DOTS
                 AddBuffer<SpritePartHitboxWorld>(root);
                 AddBuffer<SpritePartsMixEntry>(root);
                 AddComponent(root, new SpritePartsPoseDiagnostics { PreviousClipIndex = -1 });
+                // Auto blink: the first sprite group with a blink state.
+                foreach (var group in profile.PartsSpriteGroups ?? new List<SpritePartsSpriteGroupDef>())
+                {
+                    if (group == null || string.IsNullOrEmpty(group.BlinkState))
+                        continue;
+                    int g = SpriteParts.FindSpriteGroup(ref partsBlob.Value, group.Name);
+                    int s = SpriteParts.FindSpriteGroupState(ref partsBlob.Value, g, group.BlinkState);
+                    if (s >= 0)
+                        AddComponent(root, SpriteParts.NewAutoBlink(g, s, group.BlinkEvery.x, group.BlinkEvery.y, group.BlinkClose,
+                            (uint)authoring.name.GetHashCode() * 2654435761u + 1u));
+                    break;
+                }
                 // Event sounds: the clips the blob's AudioIndex values point at.
                 var eventAudio = SpritePartsClipConversion.EventAudio(profile.PartsClips);
                 if (eventAudio.Length > 0)

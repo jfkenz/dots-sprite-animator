@@ -499,6 +499,12 @@ namespace InvertLab.Sprites.DOTS
         public string Name = "Eyes";
         public List<string> SlotIds = new();
         public List<SpritePartsSpriteGroupStateDef> States = new();
+        /// <summary>Auto blink: the state shown briefly at random times (empty = off).</summary>
+        public string BlinkState = string.Empty;
+        /// <summary>Seconds between blinks, random between x and y.</summary>
+        public Vector2 BlinkEvery = new Vector2(2f, 5f);
+        /// <summary>Seconds the blink state shows.</summary>
+        public float BlinkClose = 0.12f;
     }
 
     [Serializable]

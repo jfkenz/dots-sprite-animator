@@ -126,6 +126,41 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void Auto_Blink_Closes_For_A_Moment_And_Yields_To_Gameplay()
+        {
+            var blob = Build();
+            using var world = new World("parts-blink");
+            var em = world.EntityManager;
+            var created = SpritePartsEntityFactory.Create(em, blob, float3.zero);
+            try
+            {
+                Assert.IsTrue(SpriteParts.EnableAutoBlink(em, created.Root, "Eyes", "Closed", 0.5f, 0.5f, 0.1f));
+                var system = world.GetOrCreateSystem<SpritePartsPlayerSystem>();
+                double time = 0;
+                void Tick(float dt)
+                {
+                    time += dt;
+                    world.SetTime(new Unity.Core.TimeData(time, dt));
+                    system.Update(world.Unmanaged);
+                }
+                Tick(0.4f);
+                Assert.AreEqual(-1, SpriteParts.GetSpriteGroup(em, created.Root, "Eyes"));
+                Tick(0.2f);
+                Assert.AreEqual(1, SpriteParts.GetSpriteGroup(em, created.Root, "Eyes"), "Blink: closed.");
+                Tick(0.15f);
+                Assert.AreEqual(-1, SpriteParts.GetSpriteGroup(em, created.Root, "Eyes"), "Open again.");
+                SpriteParts.SetSpriteGroup(em, created.Root, "Eyes", "Open");
+                Tick(0.6f);
+                Assert.AreEqual(0, SpriteParts.GetSpriteGroup(em, created.Root, "Eyes"), "Gameplay's state is left alone.");
+            }
+            finally
+            {
+                created.Parts.Dispose();
+                blob.Dispose();
+            }
+        }
+
+        [Test]
         public void SetSpriteGroup_Finds_States_By_Name()
         {
             var blob = Build();

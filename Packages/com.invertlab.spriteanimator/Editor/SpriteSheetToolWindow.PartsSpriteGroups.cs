@@ -164,6 +164,36 @@ namespace InvertLab.Sprites.DOTS.Editor
                     EditorGUILayout.EndHorizontal();
                 }
                 bool addState = GUILayout.Button(new GUIContent("Add State", "A new state holding the sprites the parts show now"), EditorStyles.miniButton);
+                // Auto blink: a state shown briefly at random times, in the game.
+                EditorGUI.BeginChangeCheck();
+                var blinkNames = new List<string> { "Auto blink: off" };
+                foreach (var st in group.States)
+                    blinkNames.Add("Blink to " + (st?.Name ?? "?"));
+                int blinkChoice = EditorGUILayout.Popup(Mathf.Max(0, group.States.FindIndex(st => st != null && st.Name == group.BlinkState) + 1),
+                    blinkNames.ToArray());
+                Vector2 every = group.BlinkEvery;
+                float close = group.BlinkClose;
+                if (blinkChoice > 0)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    float old = EditorGUIUtility.labelWidth;
+                    EditorGUIUtility.labelWidth = 40f;
+                    every.x = EditorGUILayout.FloatField(new GUIContent("Every", "Seconds between blinks: random between these"), every.x);
+                    EditorGUIUtility.labelWidth = 14f;
+                    every.y = EditorGUILayout.FloatField(new GUIContent("-"), every.y);
+                    EditorGUIUtility.labelWidth = 40f;
+                    close = EditorGUILayout.FloatField(new GUIContent("Hold", "Seconds the blink state shows"), close);
+                    EditorGUIUtility.labelWidth = old;
+                    EditorGUILayout.EndHorizontal();
+                }
+                if (EditorGUI.EndChangeCheck())
+                {
+                    RecordPartsUndo("Auto Blink");
+                    group.BlinkState = blinkChoice > 0 ? group.States[blinkChoice - 1].Name : string.Empty;
+                    group.BlinkEvery = new Vector2(Mathf.Max(0.05f, every.x), Mathf.Max(0.05f, every.y));
+                    group.BlinkClose = Mathf.Max(0.01f, close);
+                    SaveDirty();
+                }
                 EditorGUILayout.EndVertical();
 
                 if (showState != -2)
