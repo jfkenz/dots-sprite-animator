@@ -90,8 +90,16 @@ namespace InvertLab.Sprites.DOTS
         /// (empty = everything above). Never drawn. Can be switched on / off by clip keys.
         /// </summary>
         public bool IsClipShape;
+        /// <summary>The outline of a clip shape or a bounding box (this part's space, world units).</summary>
         public Vector2[] ClipPolygon;
         public string ClipEndSlotId = string.Empty;
+        /// <summary>Point (Spine's point attachment): an invisible spot with a direction (muzzle, hand grip). SpriteParts.TryGetPoint.</summary>
+        public bool IsPoint;
+        /// <summary>
+        /// Bounding box (Spine's bounding box attachment): an invisible polygon (<see cref="ClipPolygon"/>) for hit tests.
+        /// SpriteParts.BoundingBoxContains / GetBoundingBox. Deform keys move it.
+        /// </summary>
+        public bool IsBoundingBox;
         /// <summary>Bone length in world units along its +X axis (editor drawing, IK tips). 0 = 1.</summary>
         public float BoneLength = 1f;
         /// <summary>

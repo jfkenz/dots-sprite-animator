@@ -81,6 +81,7 @@ namespace InvertLab.Sprites.DOTS
         public float2 Position;
         public float Rotation;
         public float2 Scale;
+        public float2 Shear;
         public byte PhysicsSkipped;
     }
 

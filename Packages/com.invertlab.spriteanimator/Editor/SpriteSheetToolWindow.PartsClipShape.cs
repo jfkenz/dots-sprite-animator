@@ -15,6 +15,8 @@ namespace InvertLab.Sprites.DOTS.Editor
     public sealed partial class SpriteSheetToolWindow
     {
         static readonly Color ClipShapeColor = new Color(1f, 0.35f, 0.55f, 0.95f);
+        static readonly Color BoundingBoxColor = new Color(1f, 0.85f, 0.25f, 0.95f);
+        static readonly Color PointColor = new Color(1f, 0.6f, 0.2f, 0.95f);
         int _clipPointDrag = -1;
         int _clipDragControl;
 
@@ -76,7 +78,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             }
             pts[n] = pts[0];
             Handles.BeginGUI();
-            var color = selected ? ClipShapeColor : new Color(ClipShapeColor.r, ClipShapeColor.g, ClipShapeColor.b, 0.45f);
+            var baseColor = def.IsBoundingBox ? BoundingBoxColor : ClipShapeColor;
+            var color = selected ? baseColor : new Color(baseColor.r, baseColor.g, baseColor.b, 0.45f);
             Handles.color = color;
             if (selected)
                 Handles.DrawAAPolyLine(2f, pts);
@@ -88,7 +91,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 for (int i = 0; i < n; i++)
                 {
                     bool hot = i == _clipPointDrag;
-                    EditorGUI.DrawRect(new Rect(pts[i].x - 4f, pts[i].y - 4f, 8f, 8f), hot ? Color.white : ClipShapeColor);
+                    EditorGUI.DrawRect(new Rect(pts[i].x - 4f, pts[i].y - 4f, 8f, 8f), hot ? Color.white : baseColor);
                 }
             }
             Handles.EndGUI();
@@ -135,7 +138,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         {
             var slot = CurrentPartsSlot;
             bool animate = _partsMode == SpritePartsStudioMode.Animate && CurrentPartsClip != null;
-            if (slot == null || !slot.IsClipShape || slot.ClipPolygon == null || (_partsMode != SpritePartsStudioMode.Rig && !animate)
+            if (slot == null || !(slot.IsClipShape || slot.IsBoundingBox) || slot.ClipPolygon == null
+                || (_partsMode != SpritePartsStudioMode.Rig && !animate)
                 || slot.EditorLocked || evt.alt)
             {
                 _clipPointDrag = -1;
@@ -201,7 +205,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 if (point < 0)
                     return false; // not on a point: the normal canvas menu
                 if (n <= 3)
-                    _status = "A clip shape needs at least 3 points.";
+                    _status = "An outline needs at least 3 points.";
                 else
                 {
                     RecordPartsUndo("Delete Clip Point");
@@ -244,6 +248,76 @@ namespace InvertLab.Sprites.DOTS.Editor
             evt.Use();
             Repaint();
             return true;
+        }
+
+        /// <summary>A point part: a crosshair with an arrow along its X axis (its direction).</summary>
+        void DrawPartsPoint(Rect canvas, float4x4 localToRoot, bool selected)
+        {
+            if (Event.current.type != EventType.Repaint)
+                return;
+            Vector2 at = WorldToCanvas(canvas, localToRoot.c3.xy);
+            float2 dir = math.normalizesafe(localToRoot.c0.xy, new float2(1f, 0f));
+            Vector2 tip = at + new Vector2(dir.x, -dir.y) * 26f;
+            Handles.BeginGUI();
+            Handles.color = selected ? PointColor : new Color(PointColor.r, PointColor.g, PointColor.b, 0.5f);
+            Handles.DrawWireDisc(at, Vector3.forward, 6f);
+            Handles.DrawAAPolyLine(selected ? 2.5f : 1.5f, at, tip);
+            Vector2 side = new Vector2(dir.y, dir.x) * 5f;
+            Handles.DrawAAConvexPolygon(tip + new Vector2(dir.x, -dir.y) * 6f, tip + side, tip - side);
+            Handles.EndGUI();
+        }
+
+        void AddPartsAttachment(bool box)
+        {
+            var parent = CurrentPartsSlot;
+            RecordPartsUndo(box ? "Add Bounding Box" : "Add Point");
+            var result = parent != null
+                ? SpritePartsAuthoringOps.TryAddChildPart(_profile, parent.SlotId, out var part)
+                : SpritePartsAuthoringOps.TryAddPart(_profile, string.Empty, out part);
+            if (part == null)
+            {
+                _status = result.Reason;
+                return;
+            }
+            part.DefaultAppearanceId = string.Empty;
+            if (box)
+            {
+                part.IsBoundingBox = true;
+                part.ClipPolygon = parent != null && SpritePartsSkinning.TryResolveQuad(_profile, parent, out var size, out var pivot)
+                    ? ImageRect(size, pivot)
+                    : new[] { new Vector2(-0.5f, -0.5f), new Vector2(0.5f, -0.5f), new Vector2(0.5f, 0.5f), new Vector2(-0.5f, 0.5f) };
+            }
+            else
+                part.IsPoint = true;
+            string baseName = (parent != null ? parent.Name + " " : "") + (box ? "Box" : "Point");
+            SpritePartsAuthoringOps.TryRenameDisplayName(_profile, part.SlotId,
+                SpritePartsAuthoringOps.UniqueSiblingDisplayName(_profile, part.ParentSlotId, baseName));
+            SaveDirty();
+            SelectPartsSlotId(part.SlotId, false, false);
+            _status = box
+                ? "Bounding box added: shape it in Rig (drag points, click an edge to add). SpriteParts.BoundingBoxContains(..., \"" + part.Name + "\", point)."
+                : "Point added: move and turn it like any part. SpriteParts.TryGetPoint(..., \"" + part.Name + "\", out pos, out angle).";
+        }
+
+        /// <summary>POINTS & BOXES: add them; for a selected one, how the game reads it.</summary>
+        void DrawPartsAttachmentsInspector()
+        {
+            if (_profile == null || !PartsSection("POINTS & BOXES", "points and hit boxes"))
+                return;
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button(new GUIContent("Add Point", "An invisible spot with a direction under the selected part (muzzle, grip, foot)")))
+                AddPartsAttachment(false);
+            if (GUILayout.Button(new GUIContent("Add Bounding Box", "An invisible outline under the selected part for hit tests")))
+                AddPartsAttachment(true);
+            EditorGUILayout.EndHorizontal();
+            var slot = CurrentPartsSlot;
+            if (slot != null && slot.IsPoint)
+                EditorGUILayout.LabelField("In the game: SpriteParts.TryGetPoint(em, e, \"" + slot.Name + "\", out pos, out angle).", EditorStyles.wordWrappedMiniLabel);
+            else if (slot != null && slot.IsBoundingBox)
+                EditorGUILayout.LabelField("In the game: SpriteParts.BoundingBoxContains(em, e, \"" + slot.Name + "\", point) or GetBoundingBox. " +
+                                           "Rig shapes it; Animate keys its deform.", EditorStyles.wordWrappedMiniLabel);
+            else
+                EditorGUILayout.LabelField("Points and boxes follow their parent part and can be keyed like any part.", EditorStyles.wordWrappedMiniLabel);
         }
 
         void DrawPartsClipShapeInspector(SpritePartSlotDef slot, bool partLocked)

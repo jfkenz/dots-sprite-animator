@@ -970,6 +970,7 @@ namespace InvertLab.Sprites.DOTS
                         Position = finalLocal[i].Position,
                         Rotation = finalLocal[i].Rotation,
                         Scale = finalLocal[i].Scale,
+                        Shear = finalLocal[i].Shear,
                     };
             }
             if (em.HasBuffer<SpritePartPoseSource>(root))
@@ -995,7 +996,7 @@ namespace InvertLab.Sprites.DOTS
             return math.abs(diff) > 1.5f;
         }
 
-        static float4x4 CurrentEntityWorld(EntityManager em, Entity entity)
+        internal static float4x4 CurrentEntityWorld(EntityManager em, Entity entity)
         {
             float4x4 world = EntityLocalMatrix(em, entity);
             Entity current = entity;

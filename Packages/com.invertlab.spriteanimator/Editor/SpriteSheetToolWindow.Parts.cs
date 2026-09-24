@@ -779,6 +779,7 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsIkInspector();
                 DrawPartsTransformConstraintsInspector();
                 DrawPartsPathConstraintsInspector();
+                DrawPartsAttachmentsInspector();
                 DrawPartsJiggleInspector();
                 DrawPartsParamsInspector();
                 DrawPartsTransitionsInspector();
@@ -3272,9 +3273,15 @@ namespace InvertLab.Sprites.DOTS.Editor
                         DrawPartsBone(joint, matrices[i], boneDef.BoneLength, IsPartsBlobSlotSelected(ref set, i), pickable);
                     continue;
                 }
-                if (boneDef != null && boneDef.IsClipShape)
+                if (boneDef != null && boneDef.IsPoint)
                 {
-                    // Clip shapes have no image: their outline on the main pose only.
+                    if (pickable)
+                        DrawPartsPoint(canvas, matrices[i], IsPartsBlobSlotSelected(ref set, i));
+                    continue;
+                }
+                if (boneDef != null && (boneDef.IsClipShape || boneDef.IsBoundingBox))
+                {
+                    // Clip shapes and bounding boxes have no image: their outline on the main pose only.
                     if (pickable)
                     {
                         // Its keyed deform at this time, as the game clips with it.

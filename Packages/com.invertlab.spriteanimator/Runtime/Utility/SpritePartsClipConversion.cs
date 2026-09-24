@@ -292,7 +292,8 @@ namespace InvertLab.Sprites.DOTS
             for (int i = 0; i < list.Count; i++)
             {
                 var s = list[i];
-                string defaultApp = s.IsBone || s.IsClipShape || s.IsPath ? string.Empty : s.DefaultAppearanceId; // bones, clip shapes and paths have no image
+                bool imageless = s.IsBone || s.IsClipShape || s.IsPath || s.IsPoint || s.IsBoundingBox;
+                string defaultApp = imageless ? string.Empty : s.DefaultAppearanceId; // bones, shapes, paths, points, boxes have no image
                 if (!string.IsNullOrWhiteSpace(defaultApp)
                     && SpritePartsValidation.FindAppearanceIndex(profile, defaultApp) < 0)
                     defaultApp = string.Empty;
@@ -312,12 +313,13 @@ namespace InvertLab.Sprites.DOTS
                     DefaultAppearanceId = defaultApp,
                     DrawRank = s.DrawRank,
                     // A bone never draws itself, but its children do (Hidden is per slot here).
-                    Hidden = s.IsBone || s.IsClipShape || s.IsPath || SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
+                    Hidden = imageless || SpritePartsAuthoringOps.SlotOrAncestorHidden(profile, s.SlotId)
                         ? (byte)1 : (byte)0,
                     Mesh = SpritePartsLattice.FromMesh(s.Mesh),
                     ClipMaskSlotId = s.ClipMaskSlotId,
                     IsClipShape = s.IsClipShape,
-                    ClipPolygon = s.IsClipShape && s.ClipPolygon != null
+                    IsBoundingBox = s.IsBoundingBox,
+                    ClipPolygon = (s.IsClipShape || s.IsBoundingBox) && s.ClipPolygon != null
                         ? Array.ConvertAll(s.ClipPolygon, v => new float2(v.x, v.y))
                         : null,
                     ClipEndSlotId = s.IsClipShape ? s.ClipEndSlotId : null,

@@ -180,6 +180,8 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<float2> ClipPolygon;
         /// <summary>The last slot (in draw order) a clip shape clips; -1 = every slot above it.</summary>
         public int ClipEndIndex;
+        /// <summary>1 = a bounding box: <see cref="ClipPolygon"/> is its outline (no clipping).</summary>
+        public byte IsBoundingBox;
         /// <summary>1 = a path: <see cref="PathPoints"/> (this slot's space) is a smooth curve through them.</summary>
         public byte IsPath;
         public byte PathClosed;
@@ -328,6 +330,8 @@ namespace InvertLab.Sprites.DOTS
             public bool IsClipShape;
             public float2[] ClipPolygon;
             public string ClipEndSlotId;
+            /// <summary>A bounding box: <see cref="ClipPolygon"/> is kept as its outline.</summary>
+            public bool IsBoundingBox;
             public bool IsPath;
             public float2[] PathPoints;
             public bool PathClosed;
@@ -1236,6 +1240,14 @@ namespace InvertLab.Sprites.DOTS
             {
                 var src = slots[i];
                 slotArr[i].ClipEndIndex = -1;
+                if (src.IsBoundingBox && !src.IsClipShape && src.ClipPolygon != null && src.ClipPolygon.Length >= 3)
+                {
+                    slotArr[i].IsBoundingBox = 1;
+                    var boxArr = builder.Allocate(ref slotArr[i].ClipPolygon, src.ClipPolygon.Length);
+                    for (int k = 0; k < src.ClipPolygon.Length; k++)
+                        boxArr[k] = src.ClipPolygon[k];
+                    continue;
+                }
                 if (!src.IsClipShape)
                     continue;
                 slotArr[i].IsClipShape = 1;
