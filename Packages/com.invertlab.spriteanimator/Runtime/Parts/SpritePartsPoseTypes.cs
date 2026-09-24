@@ -114,6 +114,8 @@ namespace InvertLab.Sprites.DOTS
         public int Track;
         /// <summary>Seconds to fade out when an own-clock clip that plays once reaches its end (0 = hold the last pose).</summary>
         public float EndFade;
+        /// <summary>Clip seconds played on the layer's own clock (not wrapped): queued track clips wait on it.</summary>
+        public float Played;
     }
 
     [InternalBufferCapacity(4)]

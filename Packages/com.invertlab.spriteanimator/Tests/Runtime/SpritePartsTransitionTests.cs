@@ -290,6 +290,27 @@ namespace InvertLab.Sprites.DOTS.Tests
         }
 
         [Test]
+        public void Track_Queues_Wait_For_Their_Own_Track()
+        {
+            using var rig = new Rig(BuildTracks());
+            SpriteParts.Play(rig.Em, rig.Root, "Run", force: true, crossfadeSeconds: 0f);
+            SpriteParts.PlayLayer(rig.Em, rig.Root, 1, "Shoot", fadeSeconds: 0f, endFadeSeconds: 0f);
+            Assert.IsTrue(SpriteParts.QueueLayer(rig.Em, rig.Root, 1, "Wave", fadeSeconds: 0f));
+            Assert.IsTrue(SpriteParts.Queue(rig.Em, rig.Root, "Run", delay: 5f));
+            rig.Tick(0.3f);
+            Assert.AreEqual(1f, rig.ArmX, 1e-4f, "Shoot is still playing.");
+            rig.Tick(0.3f);
+            Assert.AreEqual(2f, rig.ArmX, 1e-4f, "Shoot played through: Wave took the track.");
+            Assert.AreEqual(1, SpriteParts.QueuedCount(rig.Em, rig.Root), "The base queue waits on the base clip.");
+            SpriteParts.Play(rig.Em, rig.Root, "Run", force: true, crossfadeSeconds: 0f);
+            Assert.AreEqual(0, SpriteParts.QueuedCount(rig.Em, rig.Root), "Play clears the base queue.");
+
+            Assert.IsTrue(SpriteParts.QueueLayer(rig.Em, rig.Root, 2, "Shoot", fadeSeconds: 0f));
+            rig.Tick(0.01f);
+            Assert.AreEqual(0, SpriteParts.QueuedCount(rig.Em, rig.Root), "An empty track starts at once.");
+        }
+
+        [Test]
         public void Named_Masks_Limit_A_Layer_To_Their_Parts()
         {
             var transitions = new SpritePartsSetBuilder.TransitionsInput

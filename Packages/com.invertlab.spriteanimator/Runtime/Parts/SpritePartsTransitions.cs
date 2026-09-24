@@ -36,6 +36,12 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>Blend space to play instead of a clip (-1 = none), at <see cref="BlendValue"/>.</summary>
         public int BlendSpace;
         public float BlendValue;
+        /// <summary>0 = the base clip; above 0 = a layer track (<see cref="SpriteParts.QueueLayer"/>).</summary>
+        public int Track;
+        /// <summary>Layer tracks: part mask bits, end fade and additive for the clip when it starts.</summary>
+        public uint SlotMask;
+        public float EndFade;
+        public byte Additive;
     }
 
     /// <summary>Colour and alpha over the whole character (every part), on the root. Keys and part tints stay.</summary>
@@ -442,6 +448,26 @@ namespace InvertLab.Sprites.DOTS
             return player.PlayedSeconds >= next.ExitNormalized * duration + next.Delay - 1e-5f;
         }
 
+        /// <summary>
+        /// True when a queued layer-track clip is due: the clip on its track has played its exit point plus the delay,
+        /// or the track is empty.
+        /// </summary>
+        public static bool TrackQueueDue(ref SpritePartsSetBlob set, DynamicBuffer<SpritePartsAnimLayer> layers, bool hasLayers,
+            in SpritePartsQueueEntry next)
+        {
+            if (!hasLayers)
+                return true;
+            for (int i = layers.Length - 1; i >= 0; i--)
+            {
+                var layer = layers[i];
+                if (layer.Track != next.Track || layer.TargetWeight <= 0f || layer.ClipIndex < 0 || layer.ClipIndex >= set.Clips.Length)
+                    continue;
+                float duration = set.Clips[layer.ClipIndex].Duration;
+                return layer.Played >= next.ExitNormalized * duration + next.Delay - 1e-5f;
+            }
+            return true;
+        }
+
         // ---- Layers ----
 
         /// <summary>Fades layer weights and runs own-clock layers. Removes layers whose fade to 0 ended with RemoveAtZero.</summary>
@@ -477,6 +503,8 @@ namespace InvertLab.Sprites.DOTS
                     float from = layer.Time;
                     layer.Time = SpritePartsPlayback.Tick(layer.Time, 1f, clip.SpeedMultiplier, clip.Duration,
                         clip.WrapMode, 1, 0, dt).TimeSeconds;
+                    if (math.isfinite(clip.SpeedMultiplier))
+                        layer.Played += dt * math.abs(clip.SpeedMultiplier);
                     if (events.IsCreated && clip.Events.Length > 0 && layer.Weight > 1e-6f)
                         events.Add(new SpritePartsEventFiring.Tick
                         {

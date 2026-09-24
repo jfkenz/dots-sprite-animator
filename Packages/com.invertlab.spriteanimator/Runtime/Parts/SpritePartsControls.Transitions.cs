@@ -51,10 +51,46 @@ namespace InvertLab.Sprites.DOTS
             });
         }
 
-        public static void ClearQueue(EntityManager em, Entity e)
+        /// <summary>Clears the clips queued on <paramref name="track"/> (0 = the base clip's queue).</summary>
+        public static void ClearQueue(EntityManager em, Entity e, int track = 0)
         {
-            if (em.Exists(e) && em.HasBuffer<SpritePartsQueueEntry>(e))
-                em.GetBuffer<SpritePartsQueueEntry>(e).Clear();
+            if (!em.Exists(e) || !em.HasBuffer<SpritePartsQueueEntry>(e))
+                return;
+            var queue = em.GetBuffer<SpritePartsQueueEntry>(e);
+            for (int i = queue.Length - 1; i >= 0; i--)
+                if (queue[i].Track == track)
+                    queue.RemoveAt(i);
+        }
+
+        /// <summary>
+        /// Plays <paramref name="clipName"/> on a layer track after the clip there has played once (plus
+        /// <paramref name="delay"/> seconds; negative starts the crossfade early), or now if the track is empty
+        /// (Spine's addAnimation on track 1, 2...). Settings are those of <see cref="PlayLayer"/>.
+        /// </summary>
+        public static bool QueueLayer(EntityManager em, Entity root, int track, string clipName, float delay = 0f,
+            float fadeSeconds = -1f, string maskName = null, float endFadeSeconds = 0.2f, bool additive = false)
+        {
+            if (track <= 0 || !TryClip(em, root, clipName, out int index) || !TrySet(em, root, out var blob))
+                return false;
+            if (!TryMaskBits(ref blob.Value, maskName, out uint mask))
+                return false;
+            return Enqueue(em, root, new SpritePartsQueueEntry
+            {
+                ClipIndex = index, Delay = delay, Crossfade = fadeSeconds, ExitNormalized = 1f, BlendSpace = -1,
+                Track = track, SlotMask = mask, EndFade = math.max(0f, endFadeSeconds), Additive = additive ? (byte)1 : (byte)0,
+            });
+        }
+
+        static bool TryMaskBits(ref SpritePartsSetBlob set, string maskName, out uint bits)
+        {
+            bits = 0;
+            if (string.IsNullOrEmpty(maskName))
+                return true;
+            int m = SpritePartsTransitions.FindMask(ref set, maskName);
+            if (m < 0)
+                return false;
+            bits = set.Masks[m].Bits;
+            return true;
         }
 
         public static int QueuedCount(EntityManager em, Entity e)
@@ -204,15 +240,18 @@ namespace InvertLab.Sprites.DOTS
         {
             if (track <= 0 || !TryClip(em, root, clipName, out int index) || !TrySet(em, root, out var blob))
                 return false;
+            if (!TryMaskBits(ref blob.Value, maskName, out uint mask))
+                return false;
+            ClearQueue(em, root, track);
+            return StartLayer(em, root, track, index, mask, fadeSeconds, endFadeSeconds, additive);
+        }
+
+        static bool StartLayer(EntityManager em, Entity root, int track, int index, uint mask, float fadeSeconds,
+            float endFadeSeconds, bool additive)
+        {
+            if (!TrySet(em, root, out var blob) || index < 0 || index >= blob.Value.Clips.Length)
+                return false;
             ref var set = ref blob.Value;
-            uint mask = 0;
-            if (!string.IsNullOrEmpty(maskName))
-            {
-                int m = SpritePartsTransitions.FindMask(ref set, maskName);
-                if (m < 0)
-                    return false;
-                mask = set.Masks[m].Bits;
-            }
             SpritePartsPoseWriter.EnsureBuffers(em, root);
             var buf = em.GetBuffer<SpritePartsAnimLayer>(root);
             int previous = -1;
@@ -243,6 +282,7 @@ namespace InvertLab.Sprites.DOTS
             layer.Additive = additive ? (byte)1 : (byte)0;
             layer.OwnClock = 1;
             layer.Time = 0f;
+            layer.Played = 0f;
             layer.EndFade = math.max(0f, endFadeSeconds);
             layer.RemoveAtZero = 1;
             layer.TargetWeight = 1f;
@@ -429,13 +469,47 @@ namespace InvertLab.Sprites.DOTS
             }
             if (paused || !em.HasBuffer<SpritePartsQueueEntry>(root))
                 return;
+            // The first entry of each track (0 = base) waits on what plays there; due ones start after the scan.
             var queue = em.GetBuffer<SpritePartsQueueEntry>(root);
-            if (queue.Length == 0 || !SpritePartsTransitions.QueueDue(ref set, player, queue[0]))
+            if (queue.Length == 0)
                 return;
-            var next = queue[0];
-            queue.RemoveAt(0);
-            if (next.ClipIndex >= 0 && next.ClipIndex < set.Clips.Length)
-                StartClip(em, root, next.ClipIndex, next.Crossfade, next.BlendSpace, next.BlendValue);
+            bool hasLayers = em.HasBuffer<SpritePartsAnimLayer>(root);
+            var layers = hasLayers ? em.GetBuffer<SpritePartsAnimLayer>(root) : default;
+            var seen = new NativeList<int>(4, Allocator.Temp);
+            var due = new NativeList<SpritePartsQueueEntry>(2, Allocator.Temp);
+            try
+            {
+                for (int q = 0; q < queue.Length; q++)
+                {
+                    var entry = queue[q];
+                    if (seen.Contains(entry.Track))
+                        continue;
+                    seen.Add(entry.Track);
+                    bool ready = entry.Track == 0
+                        ? SpritePartsTransitions.QueueDue(ref set, player, entry)
+                        : SpritePartsTransitions.TrackQueueDue(ref set, layers, hasLayers, entry);
+                    if (!ready)
+                        continue;
+                    due.Add(entry);
+                    queue.RemoveAt(q);
+                    q--;
+                }
+                for (int i = 0; i < due.Length; i++)
+                {
+                    var next = due[i];
+                    if (next.ClipIndex < 0 || next.ClipIndex >= set.Clips.Length)
+                        continue;
+                    if (next.Track == 0)
+                        StartClip(em, root, next.ClipIndex, next.Crossfade, next.BlendSpace, next.BlendValue);
+                    else
+                        StartLayer(em, root, next.Track, next.ClipIndex, next.SlotMask, next.Crossfade, next.EndFade, next.Additive != 0);
+                }
+            }
+            finally
+            {
+                seen.Dispose();
+                due.Dispose();
+            }
         }
     }
 }
