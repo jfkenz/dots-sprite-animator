@@ -22,6 +22,8 @@ namespace InvertLab.Sprites.DOTS
         public BlobArray<SpritePartsTransformBlob> TransformConstraints;
         /// <summary>Path constraints, solved after transform constraints.</summary>
         public BlobArray<SpritePartsPathBlob> PathConstraints;
+        /// <summary>Sprite groups: each state sets several parts' sprites at once.</summary>
+        public BlobArray<SpritePartsSpriteGroupBlob> SpriteGroups;
         /// <summary>Crossfade times per clip pair (-1 From = any clip).</summary>
         public BlobArray<SpritePartsMixBlob> Mixes;
         public float DefaultMix;
@@ -30,6 +32,18 @@ namespace InvertLab.Sprites.DOTS
         public byte FadeOutEvents;
         public BlobArray<SpritePartsMaskBlob> Masks;
         public BlobArray<SpritePartsBlendSpaceBlob> BlendSpaces;
+    }
+
+    public struct SpritePartsSpriteGroupBlob
+    {
+        public FixedString64Bytes Name;
+        public BlobArray<SpritePartsSpriteGroupStateBlob> States;
+    }
+
+    public struct SpritePartsSpriteGroupStateBlob
+    {
+        public FixedString64Bytes Name;
+        public BlobArray<SpritePartsSkinBindingBlob> Bindings;
     }
 
     public struct SpritePartsTransformBlob
@@ -415,6 +429,18 @@ namespace InvertLab.Sprites.DOTS
             public string AppearanceId;
         }
 
+        public struct SpriteGroupInput
+        {
+            public string Name;
+            public SpriteGroupStateInput[] States;
+        }
+
+        public struct SpriteGroupStateInput
+        {
+            public string Name;
+            public SkinBindingInput[] Bindings;
+        }
+
         public struct IkInput
         {
             /// <summary>Clips key its Mix and bend by this name.</summary>
@@ -533,7 +559,8 @@ namespace InvertLab.Sprites.DOTS
             ParamInput[] parameters = null,
             TransitionsInput transitions = null,
             TransformInput[] transforms = null,
-            PathInput[] paths = null)
+            PathInput[] paths = null,
+            SpriteGroupInput[] spriteGroups = null)
         {
             if (slots == null || slots.Length == 0)
                 throw new ArgumentException("Parts set requires at least one slot.");
@@ -927,6 +954,28 @@ namespace InvertLab.Sprites.DOTS
                     pc.MixTranslate = math.saturate(p.MixTranslate);
                 }
 
+                // Sprite groups: unknown parts or sprites in a state are dropped.
+                spriteGroups ??= Array.Empty<SpriteGroupInput>();
+                var groupArr = builder.Allocate(ref root.SpriteGroups, spriteGroups.Length);
+                for (int g = 0; g < spriteGroups.Length; g++)
+                {
+                    groupArr[g].Name = Truncate64(spriteGroups[g].Name);
+                    var states = spriteGroups[g].States ?? Array.Empty<SpriteGroupStateInput>();
+                    var stateArr = builder.Allocate(ref groupArr[g].States, states.Length);
+                    for (int s = 0; s < states.Length; s++)
+                    {
+                        stateArr[s].Name = Truncate64(states[s].Name);
+                        var bindings = new System.Collections.Generic.List<SpritePartsSkinBindingBlob>();
+                        foreach (var b in states[s].Bindings ?? Array.Empty<SkinBindingInput>())
+                            if (slotIndex.TryGetValue(SpritePartIdUtility.Canonical(b.SlotId ?? string.Empty), out int si)
+                                && appIndex.TryGetValue(SpritePartIdUtility.Canonical(b.AppearanceId ?? string.Empty), out int ai))
+                                bindings.Add(new SpritePartsSkinBindingBlob { SlotIndex = si, AppearanceIndex = ai });
+                        var bindArr = builder.Allocate(ref stateArr[s].Bindings, bindings.Count);
+                        for (int k = 0; k < bindings.Count; k++)
+                            bindArr[k] = bindings[k];
+                    }
+                }
+
                 // Keyed values: each track drives every IK / jiggle / parameter with its name.
                 for (int ci = 0; ci < clips.Length; ci++)
                 {
@@ -966,6 +1015,11 @@ namespace InvertLab.Sprites.DOTS
                             case SpritePartsValueKind.PathMix:
                                 for (int k = 0; k < pathNames.Count; k++)
                                     if (pathNames[k] == target)
+                                        targets.Add(k);
+                                break;
+                            case SpritePartsValueKind.SpriteGroup:
+                                for (int k = 0; k < spriteGroups.Length; k++)
+                                    if ((spriteGroups[k].Name ?? string.Empty).Trim() == target)
                                         targets.Add(k);
                                 break;
                         }

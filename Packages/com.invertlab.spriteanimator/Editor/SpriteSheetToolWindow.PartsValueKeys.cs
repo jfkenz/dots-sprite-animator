@@ -51,6 +51,10 @@ namespace InvertLab.Sprites.DOTS.Editor
             SpritePartsValueKind.IkMix => "IK Mix",
             SpritePartsValueKind.IkBend => "IK Bend",
             SpritePartsValueKind.JiggleMix => "Jiggle",
+            SpritePartsValueKind.TransformMix => "Transform",
+            SpritePartsValueKind.PathPosition => "Path Pos",
+            SpritePartsValueKind.PathMix => "Path Mix",
+            SpritePartsValueKind.SpriteGroup => "Sprites",
             _ => "Param",
         };
 
@@ -59,6 +63,8 @@ namespace InvertLab.Sprites.DOTS.Editor
             SpritePartsValueKind.IkMix => new Color(1f, 0.45f, 0.75f),
             SpritePartsValueKind.IkBend => new Color(0.85f, 0.4f, 1f),
             SpritePartsValueKind.JiggleMix => new Color(0.4f, 0.9f, 0.75f),
+            SpritePartsValueKind.SpriteGroup => new Color(1f, 0.8f, 0.35f),
+            SpritePartsValueKind.TransformMix or SpritePartsValueKind.PathMix or SpritePartsValueKind.PathPosition => new Color(0.95f, 0.55f, 0.35f),
             _ => new Color(0.45f, 0.75f, 1f),
         };
 

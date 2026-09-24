@@ -20,6 +20,8 @@ namespace InvertLab.Sprites.DOTS
             public NativeArray<float> TransformMix;
             public NativeArray<float> PathPosition;
             public NativeArray<float> PathMix;
+            /// <summary>Keyed state per sprite group (-1 = not keyed).</summary>
+            public NativeArray<float> GroupState;
 
             public bool IsCreated => IkMix.IsCreated;
 
@@ -32,6 +34,7 @@ namespace InvertLab.Sprites.DOTS
                 if (TransformMix.IsCreated) TransformMix.Dispose();
                 if (PathPosition.IsCreated) PathPosition.Dispose();
                 if (PathMix.IsCreated) PathMix.Dispose();
+                if (GroupState.IsCreated) GroupState.Dispose();
             }
         }
 
@@ -46,7 +49,7 @@ namespace InvertLab.Sprites.DOTS
                 return 0f;
             if (time <= keys[0].Time)
                 return keys[0].Value;
-            bool held = stepped || track.Kind == (byte)SpritePartsValueKind.IkBend;
+            bool held = stepped || track.Kind == (byte)SpritePartsValueKind.IkBend || track.Kind == (byte)SpritePartsValueKind.SpriteGroup;
             for (int i = 0; i + 1 < keys.Length; i++)
             {
                 if (time >= keys[i + 1].Time)
@@ -94,7 +97,10 @@ namespace InvertLab.Sprites.DOTS
                 Lerp(values.PathPosition, incomingValues.PathPosition, incoming);
                 Lerp(values.PathMix, incomingValues.PathMix, incoming);
                 if (incoming >= 0.5f)
+                {
                     values.IkBend.CopyFrom(incomingValues.IkBend);
+                    values.GroupState.CopyFrom(incomingValues.GroupState);
+                }
             }
             finally
             {
@@ -114,7 +120,10 @@ namespace InvertLab.Sprites.DOTS
                 TransformMix = new NativeArray<float>(set.TransformConstraints.Length, Allocator.Temp),
                 PathPosition = new NativeArray<float>(set.PathConstraints.Length, Allocator.Temp),
                 PathMix = new NativeArray<float>(set.PathConstraints.Length, Allocator.Temp),
+                GroupState = new NativeArray<float>(set.SpriteGroups.Length, Allocator.Temp),
             };
+            for (int i = 0; i < set.SpriteGroups.Length; i++)
+                v.GroupState[i] = -1f;
             for (int i = 0; i < set.TransformConstraints.Length; i++)
                 v.TransformMix[i] = 1f;
             for (int i = 0; i < set.PathConstraints.Length; i++)
@@ -179,6 +188,10 @@ namespace InvertLab.Sprites.DOTS
                         case SpritePartsValueKind.PathMix:
                             if (target < v.PathMix.Length)
                                 v.PathMix[target] = math.saturate(value);
+                            break;
+                        case SpritePartsValueKind.SpriteGroup:
+                            if (target < v.GroupState.Length)
+                                v.GroupState[target] = math.round(value);
                             break;
                     }
                 }

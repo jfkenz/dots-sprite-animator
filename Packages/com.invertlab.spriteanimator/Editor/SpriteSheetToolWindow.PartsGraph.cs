@@ -48,7 +48,7 @@ namespace InvertLab.Sprites.DOTS.Editor
             public byte Ease(int i) => OwnCurve(i) ? (byte)SpriteEaseMode.Bezier : Keys != null ? Keys[i].EaseMode : ValueKeys[i].EaseMode;
             public Vector4 Curve(int i) => OwnCurve(i) ? ChannelCurve(Keys[i].Separate, Channel) : Keys != null ? Keys[i].Curve : ValueKeys[i].Curve;
             public object Key(int i) => Keys != null ? Keys[i] : ValueKeys[i];
-            public bool Held => Keys == null && ValueKind == SpritePartsValueKind.IkBend;
+            public bool Held => Keys == null && (ValueKind == SpritePartsValueKind.IkBend || ValueKind == SpritePartsValueKind.SpriteGroup);
         }
 
         // Drag state. The scale is frozen while dragging so the curve does not refit under the mouse.

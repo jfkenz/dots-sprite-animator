@@ -63,7 +63,7 @@ namespace InvertLab.Sprites.DOTS
                 var skins = CreateSkins(bakeProfile);
                 blob = SpritePartsSetBuilder.Build(allocator, slots, appearances, clips, skins, CreateIk(bakeProfile),
                     CreateJiggles(bakeProfile), CreateParams(bakeProfile), CreateTransitions(bakeProfile),
-                    CreateTransforms(bakeProfile), CreatePaths(bakeProfile));
+                    CreateTransforms(bakeProfile), CreatePaths(bakeProfile), CreateSpriteGroups(bakeProfile));
                 return true;
             }
             catch (Exception ex)
@@ -117,6 +117,25 @@ namespace InvertLab.Sprites.DOTS
                 OffsetScale = new float2(c.OffsetScale.x, c.OffsetScale.y),
                 Local = c.Local,
                 Relative = c.Relative,
+            }).ToArray();
+        }
+
+        public static SpritePartsSetBuilder.SpriteGroupInput[] CreateSpriteGroups(SpriteSheetProfile profile)
+        {
+            var list = profile?.PartsSpriteGroups;
+            if (list == null || list.Count == 0)
+                return Array.Empty<SpritePartsSetBuilder.SpriteGroupInput>();
+            return list.FindAll(g => g != null).ConvertAll(g => new SpritePartsSetBuilder.SpriteGroupInput
+            {
+                Name = g.Name,
+                States = (g.States ?? new List<SpritePartsSpriteGroupStateDef>()).FindAll(s => s != null)
+                    .ConvertAll(s => new SpritePartsSetBuilder.SpriteGroupStateInput
+                    {
+                        Name = s.Name,
+                        Bindings = (s.Bindings ?? new List<SpritePartsSkinBindingDef>()).FindAll(b => b != null)
+                            .ConvertAll(b => new SpritePartsSetBuilder.SkinBindingInput { SlotId = b.SlotId, AppearanceId = b.AppearanceId })
+                            .ToArray(),
+                    }).ToArray(),
             }).ToArray();
         }
 
@@ -567,7 +586,8 @@ namespace InvertLab.Sprites.DOTS
                     CreateParams(profile),
                     CreateTransitions(profile),
                     CreateTransforms(profile),
-                    CreatePaths(profile));
+                    CreatePaths(profile),
+                    CreateSpriteGroups(profile));
                 return true;
             }
             catch (Exception ex)
@@ -623,7 +643,8 @@ namespace InvertLab.Sprites.DOTS
                     CreateParams(profile),
                     CreateTransitions(profile),
                     CreateTransforms(profile),
-                    CreatePaths(profile));
+                    CreatePaths(profile),
+                    CreateSpriteGroups(profile));
                 return true;
             }
             catch (Exception ex)

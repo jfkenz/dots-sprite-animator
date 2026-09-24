@@ -764,6 +764,7 @@ namespace InvertLab.Sprites.DOTS
                 PartsParams = source.PartsParams,
                 PartsTransformConstraints = source.PartsTransformConstraints,
                 PartsPathConstraints = source.PartsPathConstraints,
+                PartsSpriteGroups = source.PartsSpriteGroups,
                 PartsMixes = source.PartsMixes,
                 PartsDefaultMix = source.PartsDefaultMix,
                 PartsDefaultMixEase = source.PartsDefaultMixEase,

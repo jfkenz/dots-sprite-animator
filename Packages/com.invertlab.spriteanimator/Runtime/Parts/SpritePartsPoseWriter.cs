@@ -196,13 +196,14 @@ namespace InvertLab.Sprites.DOTS
                         appearClip == player.ClipIndex ? player.TimeSeconds : player.PreviousTimeSeconds);
             }
 
-            ApplyAnimationLayers(ref set, player, layers, finalLocal, sources);
+            ApplyAnimationLayers(ref set, player, layers, finalLocal, sources, appearances);
             // Keyed IK / jiggle / parameter values of the playing clips (setup values when none are keyed).
             var keyed = extras.KeyedPoseOnly
                 ? default
                 : SpritePartsValueTracks.Resolve(ref set, player, incoming, extras.ParamValues, extras.Stepped);
             try
             {
+                ApplySpriteGroups(ref set, keyed.GroupState, extras.GroupStates, appearances);
                 if (set.Params.Length > 0 && !extras.KeyedPoseOnly)
                     SpritePartsParams.Apply(ref set, player.ClipIndex, keyed.IsCreated ? keyed.Params : extras.ParamValues, finalLocal);
                 ApplyLocalOverrides(overrides, finalLocal, sources, n);
@@ -250,12 +251,40 @@ namespace InvertLab.Sprites.DOTS
         /// parts its clip keys (SlotMask 0 = all of those). A layer follows the player's clock unless it has its own;
         /// an additive layer adds its change from the setup pose.
         /// </summary>
+        /// <summary>
+        /// Sprite groups: a state keyed in the clip sets the sprites of parts that have no sprite key of their own;
+        /// a state set by gameplay (<see cref="SpriteParts.SetSpriteGroup"/>) wins over both.
+        /// </summary>
+        static void ApplySpriteGroups(ref SpritePartsSetBlob set, NativeArray<float> keyedStates, NativeArray<int> gameplayStates,
+            NativeArray<int> appearances)
+        {
+            if (set.SpriteGroups.Length == 0 || !appearances.IsCreated)
+                return;
+            for (int g = 0; g < set.SpriteGroups.Length; g++)
+            {
+                int keyed = keyedStates.IsCreated && g < keyedStates.Length ? (int)keyedStates[g] : -1;
+                int forced = gameplayStates.IsCreated && g < gameplayStates.Length ? gameplayStates[g] : -1;
+                ref var group = ref set.SpriteGroups[g];
+                int state = forced >= 0 ? forced : keyed;
+                if (state < 0 || state >= group.States.Length)
+                    continue;
+                ref var bindings = ref group.States[state].Bindings;
+                for (int b = 0; b < bindings.Length; b++)
+                {
+                    int slot = bindings[b].SlotIndex;
+                    if (slot >= 0 && slot < appearances.Length && (forced >= 0 || appearances[slot] < 0))
+                        appearances[slot] = bindings[b].AppearanceIndex;
+                }
+            }
+        }
+
         static void ApplyAnimationLayers(
             ref SpritePartsSetBlob set,
             in SpritePartsPlayer player,
             NativeArray<SpritePartsAnimLayer> layers,
             NativeArray<SpritePartsSampler.Pose> finalLocal,
-            NativeArray<SpritePartPoseSource> sources)
+            NativeArray<SpritePartPoseSource> sources,
+            NativeArray<int> appearances = default)
         {
             if (!layers.IsCreated || layers.Length == 0)
                 return;
@@ -284,6 +313,13 @@ namespace InvertLab.Sprites.DOTS
                         continue;
                     if (SpritePartsSampler.TrackIndexForSlot(ref layerClip, i) < 0)
                         continue; // not keyed by the layer's clip: the base pose stays
+                    // Sprite keys of a layer at half weight or more show (Spine's attachment threshold).
+                    if (appearances.IsCreated && i < appearances.Length && w >= 0.5f && incoming < 0)
+                    {
+                        int app = SpritePartsSampler.SampleAppearanceIndex(ref set, layer.ClipIndex, i, time);
+                        if (app >= 0)
+                            appearances[i] = app;
+                    }
                     float wi = incoming >= 0 && SpritePartsSampler.TrackIndexForSlot(ref set.Clips[incoming], i) >= 0 ? 1f : w;
                     SpritePartsSampler.SampleSlot(ref set, layer.ClipIndex, i, time, out var pose);
                     finalLocal[i] = layer.Additive != 0
@@ -669,6 +705,16 @@ namespace InvertLab.Sprites.DOTS
             NativeArray<SpritePartsSampler.Pose> localPoses,
             NativeArray<float4x4> localToRoot,
             in SpritePartsEvalExtras extras)
+            => EvaluateEditor(ref set, player, default, localPoses, localToRoot, extras);
+
+        /// <summary>Editor evaluation of a player state with layers on top (layer previews).</summary>
+        public static void EvaluateEditor(
+            ref SpritePartsSetBlob set,
+            in SpritePartsPlayer player,
+            NativeArray<SpritePartsAnimLayer> layers,
+            NativeArray<SpritePartsSampler.Pose> localPoses,
+            NativeArray<float4x4> localToRoot,
+            in SpritePartsEvalExtras extras)
         {
             int n = set.Slots.Length;
             var emptyOv = new NativeArray<SpritePartsPoseOverride>(0, Allocator.Temp);
@@ -677,7 +723,7 @@ namespace InvertLab.Sprites.DOTS
             var apps = new NativeArray<int>(n, Allocator.Temp);
             try
             {
-                Evaluate(ref set, player, emptyOv, default, basePoses, localPoses, localToRoot, sources, apps,
+                Evaluate(ref set, player, emptyOv, layers, basePoses, localPoses, localToRoot, sources, apps,
                     float4x4.identity, false, false, extras);
             }
             finally
@@ -766,6 +812,8 @@ namespace InvertLab.Sprites.DOTS
                     extras.Blend = em.GetComponentData<SpritePartsBlendState>(root);
                     extras.HasBlend = true;
                 }
+                if (set.SpriteGroups.Length > 0 && em.HasBuffer<SpritePartsSpriteGroupState>(root))
+                    extras.GroupStates = em.GetBuffer<SpritePartsSpriteGroupState>(root).AsNativeArray().Reinterpret<int>();
                 if (set.Params.Length > 0 && em.HasBuffer<SpritePartsParamValue>(root))
                     extras.ParamValues = em.GetBuffer<SpritePartsParamValue>(root).AsNativeArray().Reinterpret<float>();
                 if (set.Jiggles.Length > 0 && em.HasBuffer<SpritePartJiggleState>(root))

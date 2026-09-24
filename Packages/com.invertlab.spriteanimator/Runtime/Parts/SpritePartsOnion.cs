@@ -154,6 +154,40 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>The editor's crossfade preview (TRANSITIONS section). The game never reads it.</summary>
         public static MixPreviewState PreviewMix;
 
+        /// <summary>Editor layer preview: a clip played over the open one like SpriteParts.PlayLayer.</summary>
+        public struct LayerPreviewState
+        {
+            public bool Active;
+            public int ClipIndex;
+            /// <summary>Profile mask name (empty = every part the clip keys).</summary>
+            public string Mask;
+            public bool Additive;
+            /// <summary>Seconds into the open clip where the layer clip starts.</summary>
+            public float Start;
+        }
+
+        /// <summary>The editor's layer preview (LAYER PREVIEW section). The game never reads it.</summary>
+        public static LayerPreviewState PreviewLayer;
+
+        /// <summary>The preview layer at <paramref name="timeSeconds"/> of the open clip (not created when off). Temp.</summary>
+        static NativeArray<SpritePartsAnimLayer> PreviewLayers(ref SpritePartsSetBlob set, float timeSeconds)
+        {
+            var p = PreviewLayer;
+            if (!p.Active || p.ClipIndex < 0 || p.ClipIndex >= set.Clips.Length)
+                return default;
+            uint mask = 0;
+            int m = string.IsNullOrEmpty(p.Mask) ? -1 : SpritePartsTransitions.FindMask(ref set, p.Mask);
+            if (m >= 0)
+                mask = set.Masks[m].Bits;
+            var layers = new NativeArray<SpritePartsAnimLayer>(1, Allocator.Temp);
+            layers[0] = new SpritePartsAnimLayer
+            {
+                ClipIndex = p.ClipIndex, Weight = 1f, TargetWeight = 1f, SlotMask = mask, Additive = p.Additive ? (byte)1 : (byte)0,
+                OwnClock = 1, Time = math.max(0f, timeSeconds - p.Start), Track = 1,
+            };
+            return layers;
+        }
+
         /// <summary>
         /// Build a pose-only blob and sample all slots at time (local + root matrices), as shown: IK and,
         /// with <see cref="PreviewPhysics"/>, jiggle. Caller must <see cref="DisposeSample"/>.
@@ -215,9 +249,18 @@ namespace InvertLab.Sprites.DOTS
             try
             {
                 int clips = blob.Value.Clips.Length;
-                if (PreviewMix.Active && PreviewMix.To >= 0 && PreviewMix.To < clips && PreviewMix.From < clips)
-                    SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, PreviewMix.Player(), localPoses, localToRoot,
+                bool mix = PreviewMix.Active && PreviewMix.To >= 0 && PreviewMix.To < clips && PreviewMix.From < clips;
+                var layers = PreviewLayers(ref blob.Value, timeSeconds);
+                if (mix || layers.IsCreated)
+                {
+                    var player = mix ? PreviewMix.Player() : SpritePartsPoseWriter.DefaultPlayer(clipIndex, playing: false);
+                    if (!mix)
+                        player.TimeSeconds = timeSeconds;
+                    SpritePartsPoseWriter.EvaluateEditor(ref blob.Value, player, layers, localPoses, localToRoot,
                         new SpritePartsEvalExtras { ParamValues = values, Stepped = PreviewStepped });
+                    if (layers.IsCreated)
+                        layers.Dispose();
+                }
                 else if (PreviewPhysics && blob.Value.Jiggles.Length > 0)
                     EvaluateWithPhysics(profile, ref blob.Value, clipIndex, timeSeconds, values, localPoses, localToRoot);
                 else

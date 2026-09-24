@@ -37,7 +37,7 @@ namespace InvertLab.Sprites.DOTS
                 if (time >= keys[i + 1].Time)
                     continue;
                 var a = keys[i];
-                if (kind == SpritePartsValueKind.IkBend || a.EaseMode == (byte)SpriteEaseMode.Step)
+                if (kind == SpritePartsValueKind.IkBend || kind == SpritePartsValueKind.SpriteGroup || a.EaseMode == (byte)SpriteEaseMode.Step)
                 {
                     value = a.Value;
                     return true;

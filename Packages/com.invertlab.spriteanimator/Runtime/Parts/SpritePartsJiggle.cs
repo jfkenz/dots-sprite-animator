@@ -32,6 +32,8 @@ namespace InvertLab.Sprites.DOTS
         /// <summary>The blend space playing (and one fading out), when <see cref="HasBlend"/>.</summary>
         public SpritePartsBlendState Blend;
         public bool HasBlend;
+        /// <summary>Gameplay sprite-group states, one per group (-1 = let the clip decide). Not created = none.</summary>
+        public NativeArray<int> GroupStates;
     }
 
     /// <summary>

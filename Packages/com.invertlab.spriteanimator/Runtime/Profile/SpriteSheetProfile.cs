@@ -1411,6 +1411,8 @@ namespace InvertLab.Sprites.DOTS
         public List<SpritePartsTransformConstraintDef> PartsTransformConstraints = new();
         /// <summary>Path constraints (parts follow a path part's curve).</summary>
         public List<SpritePartsPathConstraintDef> PartsPathConstraints = new();
+        /// <summary>Sprite groups (parts whose sprites change together: eyes, mouth).</summary>
+        public List<SpritePartsSpriteGroupDef> PartsSpriteGroups = new();
         /// <summary>Crossfade time per clip pair; <see cref="PartsDefaultMix"/> for pairs not listed.</summary>
         public List<SpritePartsMixDef> PartsMixes = new();
         public float PartsDefaultMix;

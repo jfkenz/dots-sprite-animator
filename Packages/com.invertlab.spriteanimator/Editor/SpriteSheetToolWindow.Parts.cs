@@ -782,7 +782,9 @@ namespace InvertLab.Sprites.DOTS.Editor
                 DrawPartsJiggleInspector();
                 DrawPartsParamsInspector();
                 DrawPartsTransitionsInspector();
+                DrawPartsLayerPreviewInspector();
                 DrawPartsMasksInspector();
+                DrawPartsSpriteGroupsInspector();
                 DrawPartsBlendSpacesInspector();
             }
 
@@ -3094,9 +3096,8 @@ namespace InvertLab.Sprites.DOTS.Editor
         SpritePartAppearanceDef ResolvePartsPreviewAppearance(SpritePartSlotDef slot, float sampleTime)
         {
             if (slot == null) return null;
-            string id = SpritePartsAuthoringOps.ResolvePreviewAppearanceId(
-                _profile, slot, _partsSelectedClip, sampleTime, _partsSkinPreviewOverrides);
-            return SpritePartsAuthoringOps.FindAppearance(_profile, id);
+            // Group previews, layer preview and group keys too, in the game's order.
+            return SpritePartsAuthoringOps.FindAppearance(_profile, ResolvePartsPreviewAppearanceId(slot, sampleTime));
         }
 
         bool TryGetPartsSlotDrawRect(

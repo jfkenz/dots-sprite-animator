@@ -485,6 +485,28 @@ namespace InvertLab.Sprites.DOTS
         PathPosition = 5,
         /// <summary>A path constraint's overall mix (scales its rotate / translate mixes).</summary>
         PathMix = 6,
+        /// <summary>A sprite group's state (its index), held until the next key.</summary>
+        SpriteGroup = 7,
+    }
+
+    /// <summary>
+    /// A sprite group: parts whose sprites change together (both eyes open / half / closed; a mouth set). Each state
+    /// sets every listed part's sprite at once. Clips key the state; gameplay sets it with SpriteParts.SetSpriteGroup.
+    /// </summary>
+    [Serializable]
+    public class SpritePartsSpriteGroupDef
+    {
+        public string Name = "Eyes";
+        public List<string> SlotIds = new();
+        public List<SpritePartsSpriteGroupStateDef> States = new();
+    }
+
+    [Serializable]
+    public class SpritePartsSpriteGroupStateDef
+    {
+        public string Name = "Open";
+        /// <summary>Part -> sprite (appearance id) in this state. Parts not listed keep their sprite.</summary>
+        public List<SpritePartsSkinBindingDef> Bindings = new();
     }
 
     [Serializable]
